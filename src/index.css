@@ -1,0 +1,236 @@
+@tailwind base;
+@tailwind components;
+@layer components {
+	.checkbox-default {
+		@apply w-6 h-6 bg-checkbox-bg border-gray-300 rounded-md;
+	}
+
+	.checkbox-default:checked {
+		@apply bg-checkbox-checked border-green-500;
+	}
+
+	.custom-scrollbar {
+		overflow: overlay; /* Chỉ hoạt động trên WebKit */
+		/* scrollbar-gutter: stable; Giữ vị trí scrollbar ổn định */
+	}
+}
+@tailwind utilities;
+@keyframes bounce {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-10px);
+	}
+}
+
+.bounce {
+	animation: bounce 1s infinite;
+}
+
+.bounce:nth-child(1) {
+	animation-delay: 0s;
+}
+.bounce:nth-child(2) {
+	animation-delay: 0.1s;
+}
+.bounce:nth-child(3) {
+	animation-delay: 0.2s;
+}
+.bounce:nth-child(4) {
+	animation-delay: 0.3s;
+}
+.bounce:nth-child(5) {
+	animation-delay: 0.4s;
+}
+.bounce:nth-child(6) {
+	animation-delay: 0.5s;
+}
+.bounce:nth-child(7) {
+	animation-delay: 0.6s;
+}
+.bounce:nth-child(8) {
+	animation-delay: 0.7s;
+}
+.bounce:nth-child(9) {
+	animation-delay: 0.8s;
+}
+.bounce:nth-child(10) {
+	animation-delay: 0.9s;
+}
+
+:root {
+	font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+	line-height: 1.5;
+	font-weight: 400;
+
+	color-scheme: light dark;
+	color: rgba(255, 255, 255, 0.87);
+	background-color: #ffffff;
+
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+a {
+	font-weight: 500;
+	color: #646cff;
+	text-decoration: inherit;
+}
+a:hover {
+	color: #535bf2;
+}
+
+body {
+	margin: 0;
+	display: flex;
+	place-items: center;
+	min-width: 320px;
+	min-height: 100vh;
+	width: 100vw;
+	color: black;
+	background-color: #f1f1f1;
+	overflow-x: hidden;
+}
+
+h1 {
+	font-size: 3.2em;
+	line-height: 1.1;
+}
+
+button {
+	border-radius: 8px;
+	border: 1px solid transparent;
+	padding: 0.6em 1.2em;
+	font-size: 1em;
+	font-weight: 500;
+	font-family: inherit;
+	background-color: #ffffff;
+	cursor: pointer;
+	transition: border-color 0.25s;
+}
+button:hover {
+	border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+	outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		color: #213547;
+		background-color: #ffffff;
+	}
+	a:hover {
+		color: #747bff;
+	}
+	button {
+		background-color: #f9f9f9;
+	}
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+::-webkit-scrollbar-track {
+	background: #f1f1f1;
+	border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+	background: #888;
+	border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: #555;
+}
+
+/* Add these custom scrollbar styles */
+.scrollbar-thin::-webkit-scrollbar {
+	width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+	background: #f1f1f1;
+	border-radius: 10px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+	background: #888;
+	border-radius: 10px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+	background: #555;
+}
+
+.scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
+	background: #d1d5db;
+}
+
+.scrollbar-track-gray-100::-webkit-scrollbar-track {
+	background: #f3f4f6;
+}
+
+/* Thêm dấu nhấp nháy khi label có focus */
+.caret-black:empty:before {
+	content: '';
+	display: inline-block;
+	width: 1px;
+	height: 1.2em;
+	background: black;
+	margin-left: 2px;
+	animation: caret-blink 0.8s step-end infinite;
+}
+
+@keyframes caret-blink {
+	50% {
+		opacity: 0;
+	}
+}
+
+.datepicker-full-width .react-datepicker-wrapper,
+.datepicker-full-width .react-datepicker__input-container,
+.datepicker-full-width .react-datepicker__input-container input {
+	width: 100%;
+}
+
+.react-datepicker__triangle {
+	display: none;
+}
+
+.react-datepicker__header {
+	background-color: white;
+}
+
+.react-datepicker__current-month,
+.react-datepicker-time__header,
+.react-datepicker-year-header {
+	color: black;
+}
+
+.react-datepicker__day-name,
+.react-datepicker__day,
+.react-datepicker__time-name {
+	color: black;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+	background-color: black;
+	color: white;
+}
+
+.react-datepicker__day--today {
+	font-weight: bold;
+	color: black;
+}
+

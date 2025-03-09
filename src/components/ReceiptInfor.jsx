@@ -1,0 +1,1103 @@
+import * as React from 'react';
+const { useContext, useState, useEffect } = React;
+import TinyMceInput from './Input';
+import { GlobalContext } from '../contexts/GlobalContext';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import Breadcrumb from './Breadcrumb';
+import FilterBar from './FilterBar';
+import { NavLink, useSearchParams, useNavigate } from 'react-router-dom';
+import { PiDownloadSimpleBold } from 'react-icons/pi';
+import { CgFileDocument } from 'react-icons/cg';
+import { TiBusinessCard } from 'react-icons/ti';
+import { MdOutlineContactPhone } from 'react-icons/md';
+import { FaTrashAlt } from 'react-icons/fa';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import CreateReceipt from './CreateReceipt';
+import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
+
+const ReceiptInfor = ({ receipt }) => {
+	const { setCurrentTitlePage, currentUser, technicians, status, purposes, formatDate, getIdenByUid, identityCache } =
+		useContext(GlobalContext);
+	const [listAnalytes, setListAnalytes] = useState([]);
+	const [currentReceipt, setCurrentReceipt] = useState(null);
+	const [editingField, setEditingField] = useState(null);
+	const [inputValue, setInputValue] = useState('');
+	const [isEditorVisible, setIsEditorVisible] = useState(false);
+	const [viewMode, setViewMode] = useState('sample'); // 'analyte' or 'sample'
+	const [isAddingSample, setIsAddingSample] = useState(false);
+	const [newSample, setNewSample] = useState({
+		sample_name: '',
+		matrix: '',
+		sample_description: '',
+		sample_volume: '',
+		purpose: '',
+		additional_request: '',
+	});
+	const [sampleInformation, setSampleInformation] = useState([
+		{ fname: 'Số lô / LOT no.', fvalue: '' },
+		{ fname: 'Ngày SX / mfg.', fvalue: '' },
+		{ fname: 'Nơi SX / mfr.', fvalue: '' },
+		{ fname: 'HSD / exp.', fvalue: '' },
+	]);
+	const [checkConfirm, setCheckConfirm] = useState(false);
+	const defaultFields = sampleInformation;
+	let key,isfetch = false;
+	const [searchParams] = useSearchParams(); // Changed to useSearchParams
+	const receipt_uid = searchParams.get('receipt_uid');
+	const navigate = useNavigate();
+	const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
+	const [deleteItemId, setDeleteItemId] = useState(null);
+	const [deleteType, setDeleteType] = useState(null);
+	// State to store user information fetched from API
+	const [userInfo, setUserInfo] = useState({});
+
+	useEffect(() => {
+		setCurrentTitlePage('Tiếp nhận mẫu');
+	}, []);
+
+	const fetchReceipt = async () => {
+		try {
+			const response = await apiGet(`https://black.irdop.org/khsi19me/db/get/receipt_full/${receipt_uid}`);
+			console.log(response.status);
+			if (response.status === 200) {
+				setCurrentReceipt(response.data);
+				setListAnalytes(response.data.samples.flatMap((sample) => sample.analysis));
+
+				// Fetch user information for created_by_uid and modified_by_uid
+				if (response.data.created_by_uid) {
+					fetchUserIdentity(response.data.created_by_uid);
+				}
+				if (response.data.modified_by_uid) {
+					fetchUserIdentity(response.data.modified_by_uid);
+				}
+			} else if (response.status === 401) {
+				navigate('/login');
+			}
+		} catch (error) {
+			console.error('Error fetching receipt:', error);
+		}
+	};
+
+	// Function to fetch user identity information
+	const fetchUserIdentity = async (uid) => {
+		if (identityCache[uid]) {
+			setUserInfo((prev) => ({ ...prev, [uid]: identityCache[uid] }));
+			return;
+		}
+
+		try {
+			const userData = await getIdenByUid(uid);
+			if (userData) {
+				setUserInfo((prev) => ({ ...prev, [uid]: userData }));
+			}
+		} catch (error) {
+			console.error(`Error fetching user info for ${uid}:`, error);
+		}
+	};
+
+	useEffect(() => {
+		if (receipt_uid && isfetch === false) {
+			isfetch = true;
+			fetchReceipt();
+		}
+	}, []);
+
+	// Function to get user name from identity
+	const getUserName = (uid) => {
+		if (!uid) return '';
+		if (userInfo[uid]?.identity_name) {
+			return userInfo[uid].identity_name;
+		}
+		if (uid === currentUser?.identity_uid) {
+			return currentUser.identity_name;
+		}
+		return uid; // Fallback to UID if name not found
+	};
+
+	if (!currentReceipt) {
+		return <div>Loading...</div>;
+	}
+
+	const handleResultValueClick = (order) => {
+		setEditingField(`result_value-${order.sample_id}-${order.id}`);
+
+		setInputValue(order.result_value ? String(order.result_value) : ''); // Đảm bảo giá trị là chuỗi
+		setIsEditorVisible(true);
+	};
+
+	const handleResultUnitClick = (order) => {
+		setEditingField(`result_unit-${order.sample_id}-${order.id}`);
+		setInputValue(order.result_unit ? String(order.result_unit) : ''); // Đảm bảo giá trị là chuỗi
+		setIsEditorVisible(true);
+	};
+
+	// Kiểm tra phím nhập vào, nếu là enter thì log ra giá trị vừa nhập
+	const handleKeyDown = (e, newValue) => {
+		key = e.key;
+		if (key === 'Enter') {
+			setInputValue(newValue);
+			const updatedAnalytes = listAnalytes.map((item) => {
+				if (item.id === parseInt(editingField.split('-')[2]) && item.sample_uid === editingField.split('-')[1]) {
+					if (editingField.startsWith('result_value')) {
+						return { ...item, result_value: newValue };
+					} else if (editingField.startsWith('result_unit')) {
+						return { ...item, result_unit: newValue };
+					}
+				}
+				return item;
+			});
+
+			setListAnalytes(updatedAnalytes);
+			setIsEditorVisible(false);
+			setEditingField(null);
+			handleNotify(newValue);
+		}
+	};
+
+	const handleSaveContent = (newValue) => {
+		if (key !== 'Enter') {
+			setInputValue(newValue);
+			const updatedAnalytes = listAnalytes.map((item) => {
+				if (item.id === parseInt(editingField.split('-')[2]) && item.sample_uid === editingField.split('-')[1]) {
+					if (editingField.startsWith('result_value')) {
+						return { ...item, result_value: newValue };
+					} else if (editingField.startsWith('result_unit')) {
+						return { ...item, result_unit: newValue };
+					}
+				}
+				return item;
+			});
+
+			setListAnalytes(updatedAnalytes);
+			setIsEditorVisible(false);
+			setEditingField(null);
+			handleNotify(newValue);
+		}
+	};
+
+	const processHtmlString = (htmlString) => {
+		return htmlString
+			.replace(/<p>/g, '') // Bỏ thẻ mở <p>
+			.replace(/<\/p>/g, '') // Bỏ thẻ đóng </p>
+			.replace(/<sub>(.*?)<\/sub>/g, '_$1_') // Thay <sub>...</sub> bằng _..._
+			.replace(/<sup>(.*?)<\/sup>/g, '^$1^'); // Thay <sup>...</sup> bằng ^...^
+	};
+
+	const handleNotify = (data) => {
+		toast.success(`Kết quả vừa nhập: ${processHtmlString(data)}`, {
+			autoClose: 3000, // Tự động đóng sau 3 giây
+		});
+	};
+
+	const handleViewModeChange = (mode) => {
+		setViewMode(mode);
+	};
+
+	const getSampleUid = (sample_id) => {
+		const sample = currentReceipt.samples.find((sample) => sample.id === sample_id);
+		return sample ? sample.sample_uid : '';
+	};
+
+	const getTechnicianName = (technician_uid) => {
+		const technician = technicians.find((tech) => tech.identity_uid === technician_uid);
+		return technician ? `${technician.identity_name} (${technician.alias})` : '';
+	};
+
+	const handleAddSample = () => {
+		setIsAddingSample(true);
+	};
+
+	const handleSaveNewSample = async () => {
+		setCheckConfirm(true);
+		const requiredFields = ['sample_name', 'matrix', 'sample_description', 'sample_volume', 'purpose'];
+		const isValid = requiredFields.every((field) => newSample[field].trim() !== '');
+
+		if (!isValid) {
+			toast.error('Vui lòng nhập đầy đủ thông tin bắt buộc.', {
+				autoClose: 3000,
+			});
+			return;
+		}
+
+		const newSampleData = {
+			receipt_id: currentReceipt.id,
+			...newSample,
+			sample_information: JSON.stringify([
+				{ fname: 'Tên mẫu / name.', fvalue: newSample?.sample_name || '' },
+				...sampleInformation,
+				{ fname: 'Mô tả / desc.', fvalue: newSample?.sample_description || '' },
+				{ fname: 'Ngày tiếp nhận / Receipt date.', fvalue: ensureValidDate(currentReceipt.receipt_date) || '' },
+			]),
+			created_by_uid: currentUser.identity_uid,
+			modified_by_uid: currentUser.identity_uid,
+		};
+		console.log(newSampleData);
+		try {
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/sample', { sample: newSampleData });
+			if (response.status === 200) {
+				toast.success('Thêm mẫu mới thành công!', {
+					autoClose: 3000,
+				});
+				setNewSample({
+					sample_name: '',
+					matrix: '',
+					sample_description: '',
+					sample_volume: '',
+					purpose: '',
+					additional_request: '',
+				});
+				setSampleInformation((informations) => {
+					return informations.map((info) => {
+						return { ...info, fvalue: '' };
+					});
+				});
+				setCheckConfirm(false);
+				fetchReceipt(); // Fetch updated data
+			} else {
+				toast.error('Thêm mẫu mới thất bại. Vui lòng thử lại.', {
+					autoClose: 3000,
+				});
+			}
+		} catch (error) {
+			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', {
+				autoClose: 3000,
+			});
+		}
+
+		setIsAddingSample(false);
+	};
+
+	const handleCancelAddSample = () => {
+		setIsAddingSample(false);
+		setNewSample({
+			sample_name: '',
+			matrix: '',
+			sample_description: '',
+			sample_volume: '',
+			purpose: '',
+			additional_request: '',
+		});
+		setSampleInformation((informations) => {
+			return informations.map((info) => {
+				return { ...info, fvalue: '' };
+			});
+		});
+		setCheckConfirm(false);
+	};
+
+	const handleNewSampleChange = (e) => {
+		const { name, value } = e.target;
+		setNewSample((prev) => ({ ...prev, [name]: value }));
+	};
+
+	const handleAdditionalFieldChange = (index, field, value) => {
+		const updatedFields = [...sampleInformation];
+		if (field === 'fname') {
+			const selectedField = defaultFields.find((item) => item.fname === value);
+			if (selectedField) {
+				updatedFields[index]['fvalue'] = selectedField.fvalue;
+			} else if (value === 'Khác') {
+				updatedFields[index]['fvalue'] = '';
+			}
+		}
+		if (field === 'other') {
+			updatedFields[index]['other'] = value;
+		}
+		updatedFields[index][field] = value;
+		setSampleInformation(updatedFields);
+	};
+
+	const handleDeleteAdditionalField = (index) => {
+		const updatedFields = sampleInformation.filter((_, i) => i !== index);
+		setSampleInformation(updatedFields);
+	};
+
+	const handleAddAdditionalField = () => {
+		setSampleInformation([...sampleInformation, { fname: '', fvalue: '' }]);
+	};
+
+	const handleDeleteSample = async (sampleId) => {
+		try {
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/delete/sample', {
+				id: sampleId,
+				modified_by_uid: currentUser.identity_uid,
+			});
+			if (response.status === 200) {
+				toast.success('Xóa mẫu thành công!', { autoClose: 3000 });
+				fetchReceipt(); // Fetch updated data
+			} else {
+				toast.error('Xóa mẫu thất bại. Vui lòng thử lại.', { autoClose: 3000 });
+			}
+		} catch (error) {
+			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 3000 });
+		}
+	};
+
+	const handleDeleteReceipt = async () => {
+		try {
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/delete/receipt', {
+				id: currentReceipt.id,
+				modified_by_uid: currentUser.identity_uid,
+			});
+			if (response.status === 200) {
+				toast.success('Xóa tiếp nhận mẫu thành công!', {
+					autoClose: 3000,
+				});
+				// Redirect or update state to reflect deletion
+				fetchReceipt(); // Fetch updated data
+			} else {
+				toast.error('Xóa tiếp nhận mẫu thất bại. Vui lòng thử lại.', {
+					autoClose: 3000,
+				});
+			}
+		} catch (error) {
+			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', {
+				autoClose: 3000,
+			});
+		}
+	};
+
+	const handleInputChange = (e) => {
+		const { name, value } = e.target;
+		const keys = name.split('.');
+		if (keys.length > 1) {
+			setCurrentReceipt((prev) => {
+				const updatedReceipt = { ...prev };
+				let nestedObject = updatedReceipt;
+				for (let i = 0; i < keys.length - 1; i++) {
+					nestedObject = nestedObject[keys[i]];
+				}
+				nestedObject[keys[keys.length - 1]] = value;
+				return updatedReceipt;
+			});
+		} else {
+			setCurrentReceipt((prev) => ({
+				...prev,
+				[name]: value,
+			}));
+		}
+	};
+
+	const handleCustomerSearch = (e) => {
+		const { value } = e.target;
+		setCurrentReceipt((prev) => ({
+			...prev,
+			client: {
+				...prev.client,
+				client_uid: value,
+			},
+		}));
+
+		if (value.length >= 5) {
+			// Implement search logic here
+		}
+	};
+
+	const handleContactSearch = (e) => {
+		const { value } = e.target;
+		setCurrentReceipt((prev) => ({
+			...prev,
+			contact: {
+				...prev.contact,
+				name: value,
+			},
+		}));
+
+		if (value.length >= 5) {
+			// Implement search logic here
+		}
+	};
+
+	const handleSampleInputChange = (e, sampleId) => {
+		const { name, value } = e.target;
+		const updatedSamples = currentReceipt.samples.map((sample) =>
+			sample.id === sampleId ? { ...sample, [name]: value } : sample,
+		);
+		setCurrentReceipt((prev) => ({
+			...prev,
+			samples: updatedSamples,
+		}));
+	};
+
+	const handleSampleSelect = (sampleUid) => {
+		navigate(`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sampleUid}`);
+	};
+
+	const renderAddSampleForm = () => (
+		<div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center">
+			<div className="bg-white p-4 rounded-lg w-1/2">
+				<h2 className="text-2xl font-semibold mb-4">Thêm mẫu mới</h2>
+				<div className="flex">
+					<div className="w-1/2 pr-2">
+						<div className="mb-4">
+							<label className="block text-sm font-medium mb-1 text-start">Tên mẫu</label>
+							<input
+								type="text"
+								name="sample_name"
+								value={newSample.sample_name}
+								onChange={handleNewSampleChange}
+								className={`w-full border rounded p-1 bg-white ${
+									checkConfirm && newSample.sample_name.trim() === '' ? 'border-red-500' : ''
+								}`}
+							/>
+						</div>
+						<div className="mb-4">
+							<label className="block text-sm font-medium mb-1 text-start">Nền mẫu</label>
+							<input
+								type="text"
+								name="matrix"
+								value={newSample.matrix}
+								onChange={handleNewSampleChange}
+								className={`w-full border rounded p-1 bg-white ${
+									checkConfirm && newSample.matrix.trim() === '' ? 'border-red-500' : ''
+								}`}
+							/>
+						</div>
+						<div className="mb-4">
+							<label className="block text-sm font-medium mb-1 text-start">Mô tả</label>
+							<textarea
+								name="sample_description"
+								value={newSample.sample_description}
+								onChange={handleNewSampleChange}
+								className={`w-full border rounded p-1 bg-white resize-none ${
+									checkConfirm && newSample.sample_description.trim() === '' ? 'border-red-500' : ''
+								}`}
+								rows={2}
+							/>
+						</div>
+					</div>
+					<div className="w-1/2 pl-2">
+						<div className="mb-4">
+							<label className="block text-sm font-medium mb-1 text-start">Số lượng</label>
+							<input
+								type="text"
+								name="sample_volume"
+								value={newSample.sample_volume}
+								onChange={handleNewSampleChange}
+								className={`w-full border rounded p-1 bg-white ${
+									checkConfirm && newSample.sample_volume.trim() === '' ? 'border-red-500' : ''
+								}`}
+							/>
+						</div>
+						<div className="mb-4">
+							<label className="block text-sm font-medium mb-1 text-start">Mục đích kiểm nghiệm</label>
+							<select
+								name="purpose"
+								value={newSample.purpose}
+								onChange={handleNewSampleChange}
+								className={`w-full border rounded p-1 bg-white ${
+									checkConfirm && newSample.purpose.trim() === '' ? 'border-red-500' : ''
+								}`}
+							>
+								<option value="">Chọn mục đích kiểm nghiệm</option>
+								{purposes.map((purpose) => (
+									<option key={purpose} value={purpose}>
+										{purpose}
+									</option>
+								))}
+							</select>
+						</div>
+						<div className="mb-4">
+							<label className="block text-sm font-medium mb-1 text-start">Yêu cầu</label>
+							<textarea
+								name="additional_request"
+								value={newSample.additional_request}
+								onChange={handleNewSampleChange}
+								className="w-full border rounded p-1 bg-white resize-none"
+								rows={2}
+							/>
+						</div>
+					</div>
+				</div>
+				<div className="mb-4 flex flex-col">
+					<label className="block text-sm font-medium mb-1 text-start">Thông tin bổ sung</label>
+					{sampleInformation.map((field, index) => (
+						<div key={index} className="flex mb-2">
+							<input
+								value={field.fname}
+								onChange={(e) => handleAdditionalFieldChange(index, 'fname', e.target.value)}
+								className="w-1/3 min-w-36 border rounded p-1 bg-white mr-2"
+							/>
+							<input
+								type="text"
+								value={field.fvalue}
+								onChange={(e) => handleAdditionalFieldChange(index, 'fvalue', e.target.value)}
+								className="w-full border rounded p-1 bg-white"
+							/>
+							<button
+								className="text-red-500 bg-white text-sm rounded-lg p-1 px-4 focus:outline-none text-center ml-2"
+								onClick={() => handleDeleteAdditionalField(index)}
+							>
+								<FaTrashAlt size={20} />
+							</button>
+						</div>
+					))}
+					<button
+						className="bg-sky-500 text-white text-sm rounded-lg p-1 active:bg-sky-600 focus:outline-none w-32"
+						onClick={handleAddAdditionalField}
+					>
+						Thêm thông tin
+					</button>
+				</div>
+				<div className="flex justify-end mt-4">
+					<button className="bg-gray-500 text-white text-sm rounded-lg p-1 mr-2 w-20" onClick={handleCancelAddSample}>
+						Hủy bỏ
+					</button>
+					<button className="bg-green-500 text-white text-sm rounded-lg p-1 w-20" onClick={handleSaveNewSample}>
+						Lưu
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+
+	const handleDeleteConfirm = (id, type) => {
+		setDeleteItemId(id);
+		setIsDeleteConfirmVisible(true);
+		setDeleteType(type);
+	};
+
+	const handleDeleteCancel = () => {
+		setIsDeleteConfirmVisible(false);
+		setDeleteItemId(null);
+	};
+
+	const handleDeleteSampleConfirmAction = async () => {
+		try {
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/delete/sample', {
+				id: deleteItemId,
+				modified_by_uid: currentUser.identity_uid,
+			});
+			console.log(deleteItemId);
+			if (response.status === 200) {
+				toast.success('Xóa mẫu thành công!', { autoClose: 3000 });
+				fetchReceipt(); // Fetch updated data
+			} else {
+				toast.error('Xóa mẫu thất bại. Vui lòng thử lại.', { autoClose: 3000 });
+			}
+		} catch (error) {
+			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 3000 });
+		} finally {
+			setIsDeleteConfirmVisible(false);
+			setDeleteItemId(null);
+		}
+	};
+
+	const handleDeleteAnalysisConfirmAction = async () => {
+		try {
+			const response = await axios.post('https://black.irdop.org/trelw82ki/db/delete/analysis', {
+				id: deleteItemId,
+				modified_by_uid: currentUser.identity_uid,
+			});
+			if (response.status === 200) {
+				toast.success('Xóa chỉ tiêu thành công!', { autoClose: 3000 });
+				fetchReceipt(); // Fetch updated data
+			} else {
+				toast.error('Xóa chỉ tiêu thất bại. Vui lòng thử lại.', { autoClose: 3000 });
+			}
+		} catch (error) {
+			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 3000 });
+		} finally {
+			setIsDeleteConfirmVisible(false);
+			setDeleteItemId(null);
+		}
+	};
+
+	const renderDeleteConfirm = (message, onConfirm) => (
+		<div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
+			<div className="bg-white p-4 rounded-lg w-[400px] h-[200px] relative flex flex-col justify-between">
+				<h2 className="text-2xl font-semibold mb-4">Xác nhận xóa</h2>
+				<p>{message}</p>
+				<div className="flex justify-end mt-4">
+					<button className="bg-gray-500 text-white p-2 rounded mr-2 w-1/4" onClick={handleDeleteCancel}>
+						Hủy bỏ
+					</button>
+					<button className="bg-red-500 text-white p-2 rounded w-1/4" onClick={onConfirm}>
+						Xóa
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+
+	// Function to ensure a date is valid, returning current date as fallback
+	const ensureValidDate = (dateString) => {
+		if (!dateString) return new Date();
+
+		const date = new Date(dateString);
+		return isNaN(date.getTime()) ? new Date() : date;
+	};
+
+	// Function to handle Excel download
+	const handleExcelDownload = async () => {
+		try {
+			// Show loading toast
+			const loadingToastId = toast.info('Đang tải xuống file Excel...', {
+				autoClose: false,
+			});
+
+			// Specify Excel MIME type explicitly
+			const excelMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+			// Using apiGet function with correct headers and responseType
+			const response = await fetch(`https://black.irdop.org/xlsx/download/${receipt_uid}`, {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${localStorage.getItem('token')}`, // Ensure authentication if needed
+				},
+				// Don't set responseType here as fetch handles this differently
+			});
+
+			if (response.ok) {
+				// Get the blob directly from the response
+				const blob = await response.blob();
+
+				// Create a new blob with explicit type to ensure correct handling
+				const excelBlob = new Blob([blob], { type: excelMimeType });
+
+				// Create a URL for the blob
+				const url = window.URL.createObjectURL(excelBlob);
+
+				// For IE/Edge browsers
+				if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+					window.navigator.msSaveOrOpenBlob(excelBlob, `Receipt_${receipt_uid}.xlsx`);
+				} else {
+					// For modern browsers
+					const link = document.createElement('a');
+					link.href = url;
+					link.setAttribute('download', `Receipt_${receipt_uid}.xlsx`);
+					link.style.display = 'none';
+
+					// Append to body, click and remove
+					document.body.appendChild(link);
+					link.click();
+
+					// Clean up after a short delay to ensure download starts
+					setTimeout(() => {
+						document.body.removeChild(link);
+						window.URL.revokeObjectURL(url);
+					}, 200);
+				}
+
+				// Show success toast
+				toast.dismiss(loadingToastId);
+				toast.success('Tải xuống file Excel thành công!', {
+					autoClose: 3000,
+				});
+			} else {
+				// Handle HTTP errors
+				console.error('Error downloading file:', response.status, response.statusText);
+				toast.dismiss(loadingToastId);
+				toast.error(`Không thể tải file Excel (${response.status}). Vui lòng thử lại.`, {
+					autoClose: 3000,
+				});
+			}
+		} catch (error) {
+			console.error('Error downloading Excel file:', error);
+			toast.error('Có lỗi xảy ra khi tải file Excel. Vui lòng thử lại.', {
+				autoClose: 3000,
+			});
+		}
+	};
+
+	return (
+		<div className="w-full">
+			<ToastContainer />
+			<Breadcrumb
+				paths={[
+					{ name: 'Danh sách', link: '/' },
+					{
+						name: `${currentReceipt.receipt_uid}`,
+						link: `/dashboard/receipt?receipt_uid=${currentReceipt.receipt_uid}`,
+					},
+				]}
+			/>
+			<div className="w-full flex justify-end md:justify-between items-center max-h-20 mb-1">
+				<div className=""></div>
+				<div className="flex items-center flex-wrap ">
+					<button
+						className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20"
+						onClick={handleExcelDownload}
+					>
+						<div className="flex items-center ">
+							{'Excel'} <PiDownloadSimpleBold size={20} className="ml-1" />
+						</div>
+					</button>
+					<CreateReceipt receipt={currentReceipt} setUpdatedReceipt={setCurrentReceipt} />
+					<button
+						className="bg-background border-gray-300 text-red-500 font-medium py-0 px-2 rounded-lg w-20"
+						onClick={handleDeleteReceipt}
+					>
+						<div className="flex items-center justify-between ">
+							{'Xóa'} <FaTrashAlt size={15} className="mr-1.5" />
+						</div>
+					</button>
+				</div>
+			</div>
+
+			<div className="rounded-lg w-full p-4 bg-white ">
+				<div className="flex flex-col md:flex-row">
+					<div className={`flex justify-between items-center mt-4 p-2 rounded-md border flex-col md:flex-row w-full`}>
+						<div className="w-full md:w-1/2 flex flex-col items-start">
+							<div className="flex justify-center items-center w-full p-2">
+								<CgFileDocument size={16} className="text-primary" />
+								<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN TIẾP NHẬN</h2>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Số yêu cầu đến:</div>
+								<div className="text-sm w-full flex item-start">
+									<input
+										type="number"
+										name="request_number"
+										className="bg-white border px-1 w-full rounded-lg"
+										value={currentReceipt.request_number}
+										onChange={handleInputChange}
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Mã tiếp nhận:</div>
+								<div className="text-sm w-full flex item-start">
+									<input
+										type="text"
+										name="receipt_uid"
+										className="bg-white border px-1 w-full rounded-lg"
+										value={currentReceipt.receipt_uid}
+										onChange={handleInputChange}
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Ngày tiếp nhận:</div>
+								<div className="text-sm w-full flex item-start rounded-lg border">
+									<DatePicker
+										selected={ensureValidDate(currentReceipt.receipt_date)}
+										onChange={(date) => handleInputChange({ target: { name: 'receipt_date', value: date } })}
+										dateFormat="dd/MM/yyyy"
+										className="bg-white px-1 h py-1.5 rounded-lg focus:outline-none"
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Người tiếp nhận:</div>
+								<div className="text-sm w-full flex item-start">
+									<input
+										type="text"
+										name="created_by_uid"
+										className="bg-white border px-1 w-full rounded-lg"
+										value={getUserName(currentReceipt.created_by_uid)}
+										onChange={handleInputChange}
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Hạn trả kết quả:</div>
+								<div className="text-sm w-full flex item-start rounded-lg border">
+									<DatePicker
+										selected={ensureValidDate(currentReceipt.deadline)}
+										onChange={(date) => handleInputChange({ target: { name: 'deadline', value: date } })}
+										dateFormat="dd/MM/yyyy"
+										className="bg-white px-1 h py-1.5 rounded-lg focus:outline-none"
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Số lượng mẫu:</div>
+								<div className="text-sm w-full flex items-center">
+									<p className="text-center flex items-center w-12 font-medium">{currentReceipt.samples.length}</p>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Ghi chú</div>
+								<div className="text-sm w-full flex item-start">
+									<textarea
+										name="note"
+										className="w-full px-1 border bg-white rounded-lg p-2 pt-1.5 resize-none"
+										rows="3"
+										value={currentReceipt.note}
+										onChange={handleInputChange}
+										disabled
+									/>
+								</div>
+							</div>
+						</div>
+						<div className="w-full md:w-1/2 flex flex-col items-start">
+							<div className="flex justify-center items-center w-full p-2">
+								<div className="flex items-center pl-5">
+									<TiBusinessCard size={16} className="text-primary mr-1 " />
+									<h2 className="text-md font-semibold w-full text-primary">THÔNG TIN KHÁCH HÀNG</h2>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Mã khách hàng:</div>
+								<div className="text-sm w-full flex item-start">
+									<input
+										type="text"
+										name="client.client_uid"
+										className="bg-white border px-1 w-full rounded-lg"
+										value={currentReceipt.client?.client_uid}
+										onChange={handleCustomerSearch}
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Tên công ty/cá nhân:</div>
+								<div className="text-sm w-full flex item-start">
+									<input
+										type="text"
+										name="client.client_name"
+										className="bg-white border px-1 w-full rounded-lg"
+										value={currentReceipt.client?.client_name}
+										onChange={handleInputChange}
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Địa chỉ:</div>
+								<div className="text-sm w-full flex item-start">
+									<input
+										type="text"
+										name="client.client_address"
+										className="bg-white border px-1 w-full rounded-lg"
+										value={currentReceipt.client?.client_address}
+										onChange={handleInputChange}
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Mã số thuế/CCCD:</div>
+								<div className="text-sm w-full flex item-start">
+									<input
+										type="text"
+										name="legal_id"
+										className="bg-white border px-1 w-full rounded-lg"
+										value={currentReceipt.client?.legal_id}
+										onChange={handleInputChange}
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-center items-center w-full p-2">
+								<div className="flex items-center pl-5">
+									<MdOutlineContactPhone size={16} className="text-primary mr-1" />
+									<h2 className="text-md font-semibold w-fit text-primary">THÔNG TIN LIÊN HỆ</h2>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Họ tên:</div>
+								<div className="text-sm w-full flex item-start">
+									<input
+										type="text"
+										name="contact.name"
+										className="bg-white border px-1 w-full rounded-lg"
+										value={currentReceipt.contact?.name}
+										onChange={handleContactSearch}
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Email:</div>
+								<div className="text-sm w-full flex item-start">
+									<input
+										type="text"
+										name="contact.email"
+										className="bg-white border px-1 w-full rounded-lg"
+										value={currentReceipt.contact?.email}
+										onChange={handleInputChange}
+										disabled
+									/>
+								</div>
+							</div>
+							<div className="flex justify-start w-full p-2">
+								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Điện thoại:</div>
+								<div className="text-sm w-full flex item-start">
+									<input
+										type="text"
+										name="contact.phone"
+										className="bg-white border px-1 w-full rounded-lg"
+										value={currentReceipt.contact?.phone}
+										onChange={handleInputChange}
+										disabled
+									/>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div className="bg-white rounded-lg w-full my-4 p-4">
+				<div className="flex justify-between items-start sm:h-10 sm:flex-row flex-col h-[76px] ">
+					<div className="w-full flex justify-start overflow-auto mr-1">
+						<button
+							className={`px-2 py-1 rounded-lg focus:outline-none h-fit min-w-40  ${
+								viewMode === 'sample' ? 'bg-blue-200' : 'bg-gray-200'
+							}`}
+							onClick={() => setViewMode('sample')}
+						>
+							Danh sách mẫu thử
+						</button>
+						<button
+							className={`ml-2 px-2 py-1 rounded-lg focus:outline-none h-fit min-w-40 ${
+								viewMode === 'analyte' ? 'bg-blue-200' : 'bg-gray-200'
+							}`}
+							onClick={() => setViewMode('analyte')}
+						>
+							Danh sách chỉ tiêu
+						</button>
+					</div>
+
+					{viewMode === 'analyte' ? (
+						<FilterBar
+							source={currentReceipt.samples.flatMap((sample) => sample.analysis)}
+							setCurrentList={setListAnalytes}
+							typeSearch={'analysis'}
+							className="absolute right-0"
+						/>
+					) : (
+						<div className="relative">
+							<button className="bg-blue-500 text-white px-1 py-1 rounded-lg w-36" onClick={handleAddSample}>
+								Thêm mẫu mới
+							</button>
+							{isAddingSample && renderAddSampleForm()}
+						</div>
+					)}
+				</div>
+
+				<div className="overflow-x-auto mt-1">
+					{viewMode === 'analyte' ? (
+						<>
+							<div className="overflow-x-auto">
+								<table className="text-black w-full relative z-0">
+									<thead>
+										<tr className="border-y-2">
+											<th className="py-2 border-x w-36 min-w-36">Mã mẫu thử</th>
+											<th className="py-2 border-x w-[22%] min-w-60">Chỉ tiêu</th>
+											<th className="py-2 border-x w-[20%] min-w-44">Phương pháp</th>
+											<th className="py-2 border-x w-1/12 min-w-20">Kết quả</th>
+											<th className="py-2 border-x w-1/12 min-w-20">Đơn vị</th>
+											<th className="py-2 border-x w-1/12 min-w-28">Hạn trả</th>
+											<th className="py-2 border-x w-[12%] min-w-36">Người thực hiện</th>
+											<th className="py-2 border-2 text-center w-14 min-w-14">Xóa</th>
+										</tr>
+									</thead>
+									<tbody>
+										{listAnalytes.map((order) => (
+											<tr key={`${getSampleUid(order.sample_id)}-${order.id}`}>
+												<td className="p-1 border">{getSampleUid(order.sample_id)}</td>
+												<td className="p-1 border text-start">{order.parameter_name}</td>
+												<td className="p-1 border text-start">
+													<span>
+														<p>{order.protocol_code}</p>
+														<p className="text-slate-300 text-sm">{order.protocol_source} </p>
+													</span>
+												</td>
+												<td className="p-1 border relative" onClick={() => handleResultValueClick(order)}>
+													{editingField === `result_value-${order.sample_id}-${order.id}` && isEditorVisible ? (
+														<TinyMceInput value={inputValue} onUpdate={handleSaveContent} onKey={handleKeyDown} />
+													) : (
+														<div dangerouslySetInnerHTML={{ __html: order.result_value || '--' }} />
+													)}
+												</td>
+												<td className="p-1 border relative" onClick={() => handleResultUnitClick(order)}>
+													{editingField === `result_unit-${order.sample_id}-${order.id}` && isEditorVisible ? (
+														<TinyMceInput value={inputValue} onUpdate={handleSaveContent} onKey={handleKeyDown} />
+													) : (
+														<div className="min-h-6" dangerouslySetInnerHTML={{ __html: order.result_unit || '--' }} />
+													)}
+												</td>
+												<td className="p-1 border text-start">{formatDate(order.deadline)}</td>
+												<td className="p-1 border text-start">{getTechnicianName(order.technician_uid)}</td>
+												<td className="p-1 border text-center text-red-500">
+													<button
+														className="text-red-500 bg-white text-sm rounded-lg p-1.5 focus:outline-none text-center"
+														onClick={() => handleDeleteConfirm(order.id, 'analysis')}
+													>
+														<FaTrashAlt size={20} />
+													</button>
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						</>
+					) : (
+						<div className="overflow-x-auto overflow-hidden">
+							<table className="min-w-full text-black">
+								<thead>
+									<tr className="">
+										<th className="py-2 border-2 text-start pl-2 w-36 min-w-36">Mã mẫu thử</th>
+										<th className="py-2 border-2 text-start pl-2 w-[18%] min-w-44">Tên mẫu thử</th>
+										<th className="py-2 border-2 text-start pl-2 w-[12%] min-w-32">Nền mẫu</th>
+										<th className="py-2 border-2 text-start pl-2 w-[20%] min-w-48">Mô tả</th>
+										<th className="py-2 border-2 text-start pl-2 w-32 min-w-32">Trạng thái</th>
+										<th className="py-2 border-2 text-start pl-2 w-28 min-w-28">Mục đích</th>
+										<th className="py-2 border-2 text-start pl-2 w-28 min-w-28">Chỉ tiêu</th>
+										<th className="py-2 border-2 text-start pl-2 w-[14%] min-w-36">Yêu cầu</th>
+										<th className="py-2 border-2 text-center  w-14 min-w-14">Xóa</th>
+									</tr>
+								</thead>
+								<tbody className="border-2">
+									{currentReceipt.samples.map((sample, sampleIndex) => {
+										const totalTests = sample.analysis.length;
+										const completedTests = sample.analysis.filter((order) => order.result_value !== '').length;
+										const pendingTests = totalTests - completedTests;
+
+										return (
+											<tr key={sample.id}>
+												<td className="p-2 border text-start text-text-secondary">
+													<NavLink to={`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`}>
+														{sample.sample_uid}
+													</NavLink>
+												</td>
+												<td className="p-2 border text-start">{sample.sample_name}</td>
+												<td className="p-2 border text-start">
+													{sample.matrix || <span className="text-start block">----</span>}
+												</td>
+												<td className="p-2 border text-start">{sample.sample_description}</td>
+												<td className="p-2 border text-start">{status[sample.status]}</td>
+												<td className="p-2 border text-start">{sample.purpose}</td>
+												<td className="p-2 border text-start">
+													{completedTests} / {pendingTests} / {totalTests}
+												</td>
+												<td className="p-2 border text-start">{sample.additional_request}</td>
+												<td className=" border text-center text-red-500">
+													<button
+														className="text-red-500 bg-white text-sm rounded-lg p-1.5 focus:outline-none text-center"
+														onClick={() => handleDeleteConfirm(sample.id, 'sample')}
+													>
+														<FaTrashAlt size={20} />
+													</button>
+												</td>
+											</tr>
+										);
+									})}
+								</tbody>
+							</table>
+						</div>
+					)}
+				</div>
+			</div>
+			{isDeleteConfirmVisible &&
+				renderDeleteConfirm(
+					'Bạn có chắc chắn muốn xóa mục này?',
+					deleteType === 'sample' ? handleDeleteSampleConfirmAction : handleDeleteAnalysisConfirmAction,
+				)}
+		</div>
+	);
+};
+
+export default ReceiptInfor;
