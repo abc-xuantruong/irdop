@@ -1,11 +1,12 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import FilterBar from './FilterBar';
 import TinyMceInput from './Input';
 import { toast, ToastContainer } from 'react-toastify';
+import { MdOutlineViewList, MdViewModule } from 'react-icons/md';
 
 const ProcessingSample = () => {
 	const { setCurrentTitlePage, formatDate, status, currentUser, technicians } = useContext(GlobalContext);
@@ -17,40 +18,60 @@ const ProcessingSample = () => {
 	const [editableCell, setEditableCell] = useState({ parameterId: null, row: null, column: null, analysisId: null });
 	const [inputValue, setInputValue] = useState('');
 	const [isFilter, setIsFilter] = useState(false); // Add state to track if filtering is active
+	const navigate = useNavigate();
+	const location = useLocation();
 	let isFetch = false;
 
 	const fetchData = async (vm = viewMode) => {
 		try {
 			if (vm === 'v1') {
 				const response = await apiGet('https://black.irdop.org/to82oe92i/db/get/processing_sample/v1');
+				// Ensure data is an array before setting state
+				const data = Array.isArray(response?.data) ? response.data : [];
 				// Store original data
-				setOriginalProcessingSample(response.data);
+				setOriginalProcessingSample(data);
 				// If no filter is active, update the displayed data as well
 				if (!isFilter) {
-					setProcessingSample(response.data);
+					setProcessingSample(data);
 				}
 			} else {
 				const response = await apiGet('https://black.irdop.org/to82oe92i/db/get/processing_sample/v2');
+				// Ensure data is an array before setting state
+				const data = Array.isArray(response?.data) ? response.data : [];
 				// Store original data
-				setOriginalProcessingSample(response.data);
+				setOriginalProcessingSample(data);
 				// If no filter is active, update the displayed data as well
 				if (!isFilter) {
-					setProcessingSample(response.data);
+					setProcessingSample(data);
 				}
 				console.log(response.data);
 			}
 		} catch (error) {
 			console.error('Error fetching processing samples:', error);
+			// Set empty arrays on error to avoid undefined
+			setOriginalProcessingSample([]);
+			if (!isFilter) {
+				setProcessingSample([]);
+			}
 		}
 	};
 
 	useEffect(() => {
 		if (!isFetch) {
 			setCurrentTitlePage('Mẫu đang xử lý');
-			fetchData(viewMode);
+
+			// Get view mode from URL query parameter
+			const queryParams = new URLSearchParams(location.search);
+			const modeFromQuery = queryParams.get('mode');
+
+			// Set view mode based on query parameter or default to 'v1'
+			const initialViewMode = modeFromQuery === 'v1' || modeFromQuery === 'v2' ? modeFromQuery : 'v1';
+			setViewMode(initialViewMode);
+
+			fetchData(initialViewMode);
 			isFetch = true;
 		}
-	}, [viewMode]);
+	}, [location.search]);
 
 	useEffect(() => {
 		const interval = setInterval(() => {
@@ -63,6 +84,8 @@ const ProcessingSample = () => {
 
 	const handleViewModeChange = async (mode) => {
 		setViewMode(mode);
+		// Update URL with the new view mode
+		navigate(`?mode=${mode}`, { replace: true });
 		await fetchData(mode);
 	};
 
@@ -80,15 +103,30 @@ const ProcessingSample = () => {
 
 	const saveAnalysis = async () => {
 		try {
-			await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 				analysis: {
 					...selectedAnalysis,
 					modified_by_uid: currentUser.identity_uid,
 				},
 			});
 			console.log('Analysis saved:', selectedAnalysis);
+
+			if (response.status === 200) {
+				// Update the displayed data
+				const updatedSample = [...processingSample];
+				const parameter = updatedSample.find((p) => p.analyses.some((a) => a.id === selectedAnalysis.id));
+				if (parameter) {
+					const analysisIndex = parameter.analyses.findIndex((a) => a.id === selectedAnalysis.id);
+					parameter.analyses[analysisIndex] = selectedAnalysis;
+					setProcessingSample(updatedSample);
+				}
+				toast.success('Cập nhật thành công');
+			} else {
+				toast.error('Lỗi khi cập nhật kết quả');
+			}
 		} catch (error) {
 			console.error('Error saving analysis:', error);
+			toast.error('Lỗi khi cập nhật kết quả');
 		}
 		closeForm();
 	};
@@ -143,24 +181,58 @@ const ProcessingSample = () => {
 	};
 
 	const moveAnalysisButton = async (parameterId, analysisId, targetStatus) => {
-		const updatedSample = [...processingSample];
-		const parameter = updatedSample.find((p) => p.id == parameterId);
-		const analysis = parameter.analyses.find((a) => a.id == analysisId);
-		analysis.status = targetStatus;
-
-		const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
-			sample: {
-				id: analysis.sample_id,
-				status: targetStatus,
-				modified_by_uid: currentUser.identity_uid,
-			},
-		});
-		if (response.status === 200) {
-			toast.success(`Cập nhập trạng thái mẫu thành công`);
-		} else {
-			toast.error(`Cập nhập trạng thái mẫu thất bại`);
+		// Ensure we have valid data before proceeding
+		if (!Array.isArray(processingSample)) {
+			toast.error('Dữ liệu không hợp lệ');
+			return;
 		}
-		setProcessingSample(updatedSample);
+
+		const updatedSample = [...processingSample];
+		const parameter = updatedSample.find((p) => p?.id == parameterId);
+
+		if (!parameter || !Array.isArray(parameter.analyses)) {
+			toast.error('Không tìm thấy thông tin chỉ tiêu');
+			return;
+		}
+
+		const analysis = parameter.analyses.find((a) => a?.id == analysisId);
+
+		if (!analysis) {
+			toast.error('Không tìm thấy thông tin phân tích');
+			return;
+		}
+
+		const sampleUid = analysis.sample_uid;
+
+		// Update status for all analyses with the same sample_uid across all parameters
+		updatedSample.forEach((param) => {
+			if (param?.analyses && Array.isArray(param.analyses)) {
+				param.analyses.forEach((a) => {
+					if (a && a.sample_uid === sampleUid) {
+						a.status = targetStatus;
+					}
+				});
+			}
+		});
+
+		try {
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
+				sample: {
+					id: analysis.sample_id,
+					status: targetStatus,
+					modified_by_uid: currentUser?.identity_uid || '',
+				},
+			});
+			if (response?.status === 200) {
+				toast.success(`Cập nhập trạng thái mẫu thành công`);
+				setProcessingSample(updatedSample);
+			} else {
+				toast.error(`Cập nhập trạng thái mẫu thất bại`);
+			}
+		} catch (error) {
+			console.error('Error updating sample status:', error);
+			toast.error(`Cập nhập trạng thái mẫu thất bại: ${error.message || 'Lỗi kết nối'}`);
+		}
 	};
 
 	const handleDragStart = (e, parameterId, analysisId) => {
@@ -181,37 +253,62 @@ const ProcessingSample = () => {
 		e.preventDefault();
 	};
 
-	const handleCellClickV2 = (sampleId, analysisId, column, statusSample) => {
-		setEditableCell({ sampleId, analysisId, column, statusSample });
-		const sample = processingSample[statusSample].find((s) => s.sample_uid === sampleId);
-		setInputValue(sample.analyses.find((a) => a.id === analysisId)[column] || '');
+	const handleCellClickV2 = (sampleId, analysisId, column) => {
+		setEditableCell({ sampleId, analysisId, column });
+
+		// Find the sample and analysis in the flattened structure
+		const sample = processingSample.find((s) => s.sample_uid === sampleId);
+		const analysis = sample?.analysis?.find((a) => a.id === analysisId);
+
+		setInputValue(analysis?.[column] || '');
 	};
 
 	const handleSaveContentV2 = async (content, column) => {
-		const updatedSample = { ...processingSample };
-		const sample = updatedSample[editableCell.statusSample].find((s) => s.sample_uid === editableCell.sampleId);
-		const analysis = sample.analyses.find((a) => a.id === editableCell.analysisId);
-		analysis[column] = content;
+		if (!processingSample || !Array.isArray(processingSample) || !editableCell) {
+			toast.error('Dữ liệu không hợp lệ');
+			return;
+		}
+
+		const updatedSamples = [...processingSample];
+		const sampleIndex = updatedSamples.findIndex((s) => s?.sample_uid === editableCell.sampleId);
+
+		if (
+			sampleIndex === -1 ||
+			!updatedSamples[sampleIndex]?.analysis ||
+			!Array.isArray(updatedSamples[sampleIndex].analysis)
+		) {
+			toast.error('Không tìm thấy mẫu');
+			return;
+		}
+
+		const analysisIndex = updatedSamples[sampleIndex].analysis.findIndex((a) => a?.id === editableCell.analysisId);
+
+		if (analysisIndex === -1) {
+			toast.error('Không tìm thấy phân tích');
+			return;
+		}
+
+		updatedSamples[sampleIndex].analysis[analysisIndex][column] = content;
 
 		try {
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 				analysis: {
-					...analysis,
-					modified_by_uid: currentUser.identity_uid,
+					...updatedSamples[sampleIndex].analysis[analysisIndex],
+					modified_by_uid: currentUser?.identity_uid || '',
 				},
 			});
-			if (response.status == 200) toast.success('Cập nhật kết quả thành công');
+			if (response?.status == 200) toast.success('Cập nhật kết quả thành công');
+			setProcessingSample(updatedSamples);
 		} catch (error) {
-			toast.error('Lỗi khi cập nhật kết quả');
+			toast.error(`Lỗi khi cập nhật kết quả: ${error.message || 'Lỗi kết nối'}`);
 		}
 
-		setProcessingSample(updatedSample);
-		setEditableCell({ sampleId: null, analysisId: null, column: null, statusSample: null });
+		setEditableCell({ sampleId: null, analysisId: null, column: null });
 	};
 
 	const handleKeyDownV2 = (e) => {
 		if (e.key === 'Enter') {
-			setEditableCell({ sampleId: null, analysisId: null, column: null, statusSample: null });
+			setEditableCell({ sampleId: null, analysisId: null, column: null });
 			// handleSaveContentV2(inputValue, editableCell.column);
 		}
 	};
@@ -222,15 +319,45 @@ const ProcessingSample = () => {
 		return technician ? technician.identity_name : '----';
 	};
 
+	// Function to categorize samples based on deadline
+	const categorizeSamples = (samples) => {
+		if (!samples || !Array.isArray(samples)) return { expired: [], expiringSoon: [], active: [] };
+
+		const currentDate = new Date();
+		const twoDaysFromNow = new Date();
+		twoDaysFromNow.setDate(currentDate.getDate() + 2);
+
+		const categorized = { expired: [], expiringSoon: [], active: [] };
+
+		samples.forEach((sample) => {
+			// Find the earliest deadline among all analyses
+			const deadlines = sample.analysis?.map((a) => new Date(a.deadline)) || [];
+			// If no deadlines or invalid dates, default to active
+			if (deadlines.length === 0) {
+				categorized.active.push(sample);
+				return;
+			}
+
+			const earliestDeadline = new Date(Math.min(...deadlines.filter((d) => !isNaN(d.getTime()))));
+
+			if (earliestDeadline < currentDate) {
+				categorized.expired.push({ ...sample, analyses: sample.analysis });
+			} else if (earliestDeadline <= twoDaysFromNow) {
+				categorized.expiringSoon.push({ ...sample, analyses: sample.analysis });
+			} else {
+				categorized.active.push({ ...sample, analyses: sample.analysis });
+			}
+		});
+
+		return categorized;
+	};
+
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
 			<Breadcrumb paths={[{}]} />
 
 			<div className="w-full h-full flex justify-between items-center rounded-lg mb-2">
-				<div>
-					<h2 className="text-lg font-medium">Chế độ hiển thị</h2>
-				</div>
 				<div>
 					<button
 						className={`w-40 p-1 ml-1 text-sm font-medium active:bg-sky-400 focus:outline-none ${
@@ -248,26 +375,37 @@ const ProcessingSample = () => {
 					>
 						Mẫu thử
 					</button>
-					<button
+					{/* <button
 						className={`w-40 p-1 ml-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
 							viewMode === 'v3' ? 'bg-teritary' : 'bg-gray-200'
 						}`}
 						onClick={() => handleViewModeChange('v3')}
 					>
 						Tiếp nhận
-					</button>
+					</button> */}
 				</div>
 			</div>
 			<div className="w-full h-full flex flex-col justify-center items-center bg-white rounded-lg p-4 shadow">
-				<FilterBar
-					source={originalProcessingSample} // Pass the original list to FilterBar
-					setCurrentList={setProcessingSample}
-					typeSearch={`${viewMode === 'v1' ? 'processing_v1' : 'processing_v2'}`}
-					setIsFilter={setIsFilter} // Pass the setIsFilter function
-				/>
+				{/* Add legend for color coding - only visible in v1 mode */}
+				{viewMode === 'v1' && (
+					<div className="w-full flex items-center gap-4 mb-1 mt-1 text-sm">
+						<span className="flex items-center">
+							<div className="w-4 h-4 border-2 border-green-500 rounded mr-1"></div>
+							<span>Đã có kết quả</span>
+						</span>
+						<span className="flex items-center">
+							<div className="w-4 h-4 border-2 border-red-500 rounded mr-1"></div>
+							<span>Đã quá hạn</span>
+						</span>
+						<span className="flex items-center">
+							<div className="w-4 h-4 border-2 border-sky-500 rounded mr-1"></div>
+							<span>Chưa có kết quả</span>
+						</span>
+					</div>
+				)}
 				{selectedAnalysis && (
 					<div
-						className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-0"
+						className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-10"
 						onClick={closeForm}
 					>
 						<div className="bg-white p-4 rounded-lg shadow-lg w-96" onClick={(e) => e.stopPropagation()}>
@@ -281,7 +419,7 @@ const ProcessingSample = () => {
 									readOnly
 								/>
 							</div>
-							<div className="mb-2 flex items-center">
+							<div className="mb-2 flex items-center ">
 								<label className="text-start block text-sm font-medium w-24">Kết quả</label>
 								<div className="w-full h-10" onClick={() => handleFormCellClick('result_value')}>
 									{editableCell.column === 'result_value' ? (
@@ -298,7 +436,7 @@ const ProcessingSample = () => {
 									)}
 								</div>
 							</div>
-							<div className="mb-2 flex items-center">
+							<div className="mb-2 flex items-center z-10">
 								<label className="text-start block text-sm font-medium w-24">Đơn vị</label>
 								<div className="w-full h-10" onClick={() => handleFormCellClick('result_unit')}>
 									{editableCell.column === 'result_unit' ? (
@@ -358,326 +496,381 @@ const ProcessingSample = () => {
 				<div className="w-full">
 					{viewMode === 'v1' ? (
 						<>
+							<FilterBar
+								source={originalProcessingSample || []} // Ensure source is always an array
+								setCurrentList={setProcessingSample}
+								typeSearch={'processing_v1'}
+								setIsFilter={setIsFilter} // Pass the setIsFilter function
+							/>
 							<div>
-								{processingSample?.length > 0 &&
+								{Array.isArray(processingSample) && processingSample.length > 0 ? (
 									processingSample.map((parameter, rowIndex) => (
-										<div key={parameter.id} className="flex flex-col p-0 border rounded-lg mb-4 mt-1">
+										<div key={parameter?.id || rowIndex} className="flex flex-col p-0 border rounded-lg mb-4 mt-1">
 											<div className="flex">
 												<div
 													onClick={() => {
-														visibleTables[parameter.id] && toggleTableVisibility(parameter.id);
+														visibleTables[parameter?.id] && toggleTableVisibility(parameter?.id);
 													}}
-													className={`text-base border-r-2 max-w-64 md:min-w-64 min-w-40 p-2 pt-0 hover:bg-slate-50 ${
-														visibleTables[parameter.id] && ' cursor-pointer'
-													}`}
+													className={`text-base border-r-2 max-w-64 md:min-w-64 min-w-40 p-2  hover:bg-slate-50 ${
+														visibleTables[parameter?.id] && ' cursor-pointer'
+													} relative `}
 												>
 													<p className="text-start font-semibold text-primary text-wrap line-clamp-2">
-														{parameter.parameter_name}
+														{parameter?.parameter_name || 'Không có tên'}
 													</p>
 													<span className="flex line-clamp-1">
 														<p className="text-gray-500 font-medium mr-1">
 															{parameter?.protocol_source ? `${parameter.protocol_source}:` : ''}
 														</p>
-														<p className="font-medium">{parameter.protocol_code}</p>
+														<p className="font-medium">{parameter?.protocol_code || ''}</p>
 													</span>
-													<p className="text-start text-sm font-semibold line-clamp-1">{parameter.matrix}</p>
+													<p className="text-start text-sm font-semibold line-clamp-1">{parameter?.matrix || ''}</p>
+
 													<button
-														onClick={() => toggleTableVisibility(parameter.id)}
-														className={`text-center border-slate-200 w-full border-2 p-1 py-0.5 text-sm font-semibold line-clamp-1 focus:outline-none ${
-															visibleTables[parameter.id] && 'hidden'
-														}`}
+														onClick={(e) => {
+															e.stopPropagation();
+															toggleTableVisibility(parameter.id);
+														}}
+														className="absolute top-1 right-1 p-1 rounded-full hover:bg-gray-200 focus:outline-none "
 													>
-														Danh sách mẫu
+														{visibleTables[parameter.id] ? (
+															<MdViewModule size={22} className="text-primary" />
+														) : (
+															<MdOutlineViewList size={22} className="text-primary" />
+														)}
 													</button>
 												</div>
-												<div className="flex flex-col w-full rounded-lg p-0.5 ml-0.5 h-fit min-h-20 text-sm overflow-auto">
-													<div className="flex min-w-[420px]">
-														<div
-															className="md:pr-1 w-[140px] min-w-[140px] min-h-full"
-															onDrop={(e) => handleDrop(e, 3)}
-															onDragOver={handleDragOver}
-														>
-															<div className="h-fit flex flex-col ">
-																{parameter.analyses.map(
-																	(analysis) =>
-																		analysis.status === 3 && (
-																			<button
-																				key={analysis.id}
-																				className={`bg-slate-50 border-2 hover:bg-teritary p-0.5 rounded-lg font-medium m-0.5 w-[130px] h-12 ${
-																					analysis?.result_value
-																						? 'border-primary'
-																						: new Date(analysis.deadline) < new Date()
-																						? 'border-red-500'
-																						: 'border-teritary'
-																				}`}
-																				draggable
-																				onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
-																				onClick={() => handleAnalysisClick(analysis)}
-																			>
-																				{analysis.sample_uid} <br />
-																				{getTechnicianName(analysis.technician_uid)}
-																			</button>
-																		),
-																)}
-															</div>
-														</div>
+												<div className="flex flex-col w-full rounded-lg p-0.5 ml-0.5 min-h-max text-sm overflow-auto">
+													<div className="flex min-w-[420px] h-full">
+														{!visibleTables[parameter.id] && (
+															<>
+																<div
+																	className="md:pr-1 w-[140px] min-w-[140px] min-h-max flex flex-col border-r border-gray-200"
+																	onDrop={(e) => handleDrop(e, 3)}
+																	onDragOver={handleDragOver}
+																>
+																	<div className="font-medium text-center p-1 border-b border-gray-200 ">Mẫu khẩn</div>
+																	<div className="h-fit flex flex-col mt-1">
+																		{!visibleTables[parameter?.id] &&
+																			parameter?.analyses &&
+																			Array.isArray(parameter.analyses) &&
+																			parameter.analyses.map(
+																				(analysis) =>
+																					analysis?.status === 3 && (
+																						<button
+																							key={analysis?.id || `status3-${Math.random()}`}
+																							className={`bg-slate-50 border-2 hover:bg-teritary p-0.5 rounded-lg font-medium m-0.5 w-[130px] h-12 ${
+																								analysis?.result_value
+																									? 'border-green-500'
+																									: analysis?.deadline && new Date(analysis.deadline) < new Date()
+																									? 'border-red-500'
+																									: 'border-sky-500'
+																							}`}
+																							draggable
+																							onDragStart={(e) => handleDragStart(e, parameter?.id, analysis?.id)}
+																							onClick={() => handleAnalysisClick(analysis)}
+																						>
+																							{analysis?.sample_uid || 'N/A'} <br />
+																							{getTechnicianName(analysis?.technician_uid)}
+																						</button>
+																					),
+																			)}
+																	</div>
+																</div>
 
-														<div
-															className="min-h-full border-x-2 px-1 w-full min-w-[140px] justify-start"
-															onDrop={(e) => handleDrop(e, 2)}
-															onDragOver={handleDragOver}
-														>
-															<div className="h-fit flex flex-wrap ">
-																{parameter.analyses.map(
-																	(analysis) =>
-																		analysis.status === 2 && (
-																			<button
-																				key={analysis.id}
-																				className={`bg-slate-50 border-2 hover:bg-teritary p-0.5 rounded-lg font-medium m-0.5 w-[130px] h-12 ${
-																					analysis?.result_value
-																						? 'border-primary'
-																						: new Date(analysis.deadline) < new Date()
-																						? 'border-red-500'
-																						: 'border-teritary'
-																				}`}
-																				draggable
-																				onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
-																				onClick={() => handleAnalysisClick(analysis)}
-																			>
-																				{analysis.sample_uid} <br />
-																				{getTechnicianName(analysis.technician_uid)}
-																			</button>
-																		),
-																)}
-															</div>
-														</div>
+																<div
+																	className="min-h-full border-r border-gray-200 px-1 w-full min-w-[280px] justify-start flex flex-col h-max-content"
+																	onDrop={(e) => handleDrop(e, 2)}
+																	onDragOver={handleDragOver}
+																>
+																	<div className="font-medium text-center p-1 border-b border-gray-200 ">
+																		Mẫu thường
+																	</div>
+																	<div className="min-h-max flex flex-wrap mt-1">
+																		{!visibleTables[parameter.id] &&
+																			parameter.analyses &&
+																			Array.isArray(parameter.analyses) && // Add this check
+																			parameter.analyses.map(
+																				(analysis) =>
+																					analysis.status === 2 && (
+																						<button
+																							key={analysis.id}
+																							className={`bg-slate-50 border-2 hover:bg-teritary p-0.5 rounded-lg font-medium m-0.5 w-[130px] h-12 ${
+																								analysis?.result_value
+																									? 'border-green-500'
+																									: new Date(analysis.deadline) < new Date()
+																									? 'border-red-500'
+																									: 'border-sky-500'
+																							}`}
+																							draggable
+																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
+																							onClick={() => handleAnalysisClick(analysis)}
+																						>
+																							{analysis.sample_uid} <br />
+																							{getTechnicianName(analysis.technician_uid)}
+																						</button>
+																					),
+																			)}
+																	</div>
+																</div>
 
-														<div
-															className=" pl-1 xl:w-[280px] min-w-[140px] w-[140px] xl:min-w-[280px] min-h-full"
-															onDrop={(e) => handleDrop(e, 1)}
-															onDragOver={handleDragOver}
-														>
-															<div className="flex flex-wrap h-fit">
-																{parameter.analyses.map(
-																	(analysis) =>
-																		analysis.status === 1 && (
-																			<button
-																				key={analysis.id}
-																				className={`bg-slate-50 border-2 hover:bg-teritary p-0.5 rounded-lg font-medium m-0.5 w-[130px] h-12 ${
-																					analysis?.result_value
-																						? 'border-primary'
-																						: new Date(analysis.deadline) < new Date()
-																						? 'border-red-500'
-																						: 'border-teritary'
-																				}`}
-																				draggable
-																				onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
-																				onClick={() => handleAnalysisClick(analysis)}
-																			>
-																				{analysis.sample_uid} <br />
-																				{getTechnicianName(analysis.technician_uid)}
-																			</button>
-																		),
-																)}
-															</div>
-														</div>
-													</div>
-													{visibleTables[parameter.id] && (
-														<table className="w-full border-collapse border border-gray-200 mt-1">
-															<thead>
-																<tr>
-																	<th className="border p-2 min-w-32">Mã mẫu</th>
-																	<th className="border p-2 min-w-20">Kết quả</th>
-																	<th className="border p-2 min-w-24">Đơn vị</th>
-																	<th className="border p-2 min-w-24">LOD/LOQ</th>
-																	<th className="border p-2 min-w-28">Hạn trả</th>
-																</tr>
-															</thead>
-															<tbody>
-																{parameter.analyses.map((analysis, sampleIndex) => (
-																	<tr key={analysis.id}>
-																		<td className="border p-2">{analysis.sample_uid}</td>
-																		<td
-																			className="p-1 pb-0 border relative"
-																			onClick={() =>
-																				handleCellClick(parameter.id, sampleIndex, 'result_value', analysis.id)
-																			}
-																		>
-																			<div className="hover:border-purple-500 hover:border rounded">
-																				{editableCell.parameterId === parameter.id &&
-																				editableCell.row === sampleIndex &&
-																				editableCell.column === 'result_value' &&
-																				editableCell.analysisId === analysis.id ? (
-																					<TinyMceInput
-																						value={inputValue}
-																						onUpdate={(content) => handleSaveContent(content, 'result_value')}
-																						onKey={handleKeyDown}
-																					/>
-																				) : (
-																					<div
-																						dangerouslySetInnerHTML={{ __html: `${analysis.result_value || '--'}` }}
-																						className="p-1"
-																					/>
-																				)}
-																			</div>
-																		</td>
-																		<td
-																			className="p-1 pb-0 border relative"
-																			onClick={() =>
-																				handleCellClick(parameter.id, sampleIndex, 'result_unit', analysis.id)
-																			}
-																		>
-																			<div className="hover:border-purple-500 hover:border rounded">
-																				{editableCell.parameterId === parameter.id &&
-																				editableCell.row === sampleIndex &&
-																				editableCell.column === 'result_unit' &&
-																				editableCell.analysisId === analysis.id ? (
-																					<TinyMceInput
-																						value={inputValue}
-																						onUpdate={(content) => handleSaveContent(content, 'result_unit')}
-																						onKey={handleKeyDown}
-																					/>
-																				) : (
-																					<div
-																						dangerouslySetInnerHTML={{ __html: `${analysis.result_unit || '--'}` }}
-																						className="p-1"
-																					/>
-																				)}
-																			</div>
-																		</td>
-																		<td
-																			className="p-1 pb-0 border relative"
-																			onClick={() => handleCellClick(parameter.id, sampleIndex, 'lodq', analysis.id)}
-																		>
-																			<div className="hover:border-purple-500 hover:border rounded">
-																				{editableCell.parameterId === parameter.id &&
-																				editableCell.row === sampleIndex &&
-																				editableCell.column === 'lodq' &&
-																				editableCell.analysisId === analysis.id ? (
-																					<TinyMceInput
-																						value={inputValue}
-																						onUpdate={(content) => handleSaveContent(content, 'lodq')}
-																						onKey={handleKeyDown}
-																					/>
-																				) : (
-																					<div
-																						dangerouslySetInnerHTML={{ __html: `${analysis.lodq || '--'}` }}
-																						className="p-1"
-																					/>
-																				)}
-																			</div>
-																		</td>
-																		<td className="border p-2">
-																			{analysis.deadline ? formatDate(analysis.deadline) : 'N/A'}
-																		</td>
+																<div
+																	className="pl-1 xl:w-[280px] min-w-[140px] w-[140px] xl:min-w-[280px] min-h-full flex flex-col h-max-content"
+																	onDrop={(e) => handleDrop(e, 1)}
+																	onDragOver={handleDragOver}
+																>
+																	<div className="font-medium text-center p-1 border-b border-gray-200 ">Mẫu chờ</div>
+																	<div className="flex flex-wrap h-fit items-start mt-1">
+																		{!visibleTables[parameter.id] &&
+																			parameter.analyses &&
+																			Array.isArray(parameter.analyses) && // Add this check
+																			parameter.analyses.map(
+																				(analysis) =>
+																					analysis.status === 1 && (
+																						<button
+																							key={analysis.id}
+																							className={`bg-slate-50 border-2 hover:bg-teritary p-0.5 rounded-lg font-medium m-0.5 w-[130px] h-12 ${
+																								analysis?.result_value
+																									? 'border-green-500'
+																									: new Date(analysis.deadline) < new Date()
+																									? 'border-red-500'
+																									: 'border-sky-500'
+																							}`}
+																							draggable
+																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
+																							onClick={() => handleAnalysisClick(analysis)}
+																						>
+																							{analysis.sample_uid} <br />
+																							{getTechnicianName(analysis.technician_uid)}
+																						</button>
+																					),
+																			)}
+																	</div>
+																</div>
+															</>
+														)}
+														{visibleTables[parameter.id] && (
+															<table className="w-full border-collapse border border-gray-200 mt-1">
+																<thead>
+																	<tr>
+																		<th className="border p-2 min-w-32">Mã mẫu</th>
+																		<th className="border p-2 min-w-20">Kết quả</th>
+																		<th className="border p-2 min-w-24">Đơn vị</th>
+																		<th className="border p-2 min-w-24">LOD/LOQ</th>
+																		<th className="border p-2 min-w-28">Hạn trả</th>
 																	</tr>
-																))}
-															</tbody>
-														</table>
-													)}
+																</thead>
+																<tbody>
+																	{parameter.analyses &&
+																		Array.isArray(parameter.analyses) && // Add this check
+																		parameter.analyses.map((analysis, sampleIndex) => (
+																			<tr key={analysis.id}>
+																				<td className="border p-2">{analysis.sample_uid}</td>
+																				<td
+																					className="p-1 pb-0 border relative"
+																					onClick={() =>
+																						handleCellClick(parameter.id, sampleIndex, 'result_value', analysis.id)
+																					}
+																				>
+																					<div className="hover:border-purple-500 hover:border rounded">
+																						{editableCell.parameterId === parameter.id &&
+																						editableCell.row === sampleIndex &&
+																						editableCell.column === 'result_value' &&
+																						editableCell.analysisId === analysis.id ? (
+																							<TinyMceInput
+																								value={inputValue}
+																								onUpdate={(content) => handleSaveContent(content, 'result_value')}
+																								onKey={handleKeyDown}
+																							/>
+																						) : (
+																							<div
+																								dangerouslySetInnerHTML={{ __html: `${analysis.result_value || '--'}` }}
+																								className="p-1"
+																							/>
+																						)}
+																					</div>
+																				</td>
+																				<td
+																					className="p-1 pb-0 border relative"
+																					onClick={() =>
+																						handleCellClick(parameter.id, sampleIndex, 'result_unit', analysis.id)
+																					}
+																				>
+																					<div className="hover:border-purple-500 hover:border rounded">
+																						{editableCell.parameterId === parameter.id &&
+																						editableCell.row === sampleIndex &&
+																						editableCell.column === 'result_unit' &&
+																						editableCell.analysisId === analysis.id ? (
+																							<TinyMceInput
+																								value={inputValue}
+																								onUpdate={(content) => handleSaveContent(content, 'result_unit')}
+																								onKey={handleKeyDown}
+																							/>
+																						) : (
+																							<div
+																								dangerouslySetInnerHTML={{ __html: `${analysis.result_unit || '--'}` }}
+																								className="p-1"
+																							/>
+																						)}
+																					</div>
+																				</td>
+																				<td
+																					className="p-1 pb-0 border relative"
+																					onClick={() =>
+																						handleCellClick(parameter.id, sampleIndex, 'lodq', analysis.id)
+																					}
+																				>
+																					<div className="hover:border-purple-500 hover:border rounded">
+																						{editableCell.parameterId === parameter.id &&
+																						editableCell.row === sampleIndex &&
+																						editableCell.column === 'lodq' &&
+																						editableCell.analysisId === analysis.id ? (
+																							<TinyMceInput
+																								value={inputValue}
+																								onUpdate={(content) => handleSaveContent(content, 'lodq')}
+																								onKey={handleKeyDown}
+																							/>
+																						) : (
+																							<div
+																								dangerouslySetInnerHTML={{ __html: `${analysis.lodq || '--'}` }}
+																								className="p-1"
+																							/>
+																						)}
+																					</div>
+																				</td>
+																				<td className="border p-2">
+																					{analysis.deadline ? formatDate(analysis.deadline) : 'N/A'}
+																				</td>
+																			</tr>
+																		))}
+																</tbody>
+															</table>
+														)}
+													</div>
 												</div>
 											</div>
 										</div>
-									))}
+									))
+								) : (
+									<div className="w-full text-center py-4 text-gray-500">Không có dữ liệu mẫu đang xử lý</div>
+								)}
 							</div>
 						</>
 					) : (
-						viewMode === 'v2' &&
-						processingSample?.expired && (
-							<div className="w-full min-h-20 flex flex-col justify-between">
-								{['expired', 'expiringSoon', 'active'].map((statusDeadline, index) => (
-									<div key={statusDeadline} className="w-full mb-4 flex flex-wrap justify-between">
-										<h2 className="text-xl font-medium mb-2 w-full text-start text-primary">
-											{['Đã quá hạn', 'Sắp hết hạn (dưới 2 ngày)', 'Mẫu thường'][index]}
-										</h2>
-										{processingSample[statusDeadline].map((sample) => (
-											<div
-												key={sample.sample_uid}
-												className="p-2 border rounded-lg mb-4 flex items-start  lg:w-[49.5%] w-full lg:overflow-hidden overflow-auto"
-											>
-												<div className="text-start">
-													<button className="bg-slate-50 border-2 border-sky-500 p-1 max-h-fit rounded-md min-w-32 text-start">
-														{sample.sample_uid}
-													</button>
-													<p className="text-primary font-medium line-clamp-2">{sample.matrix}</p>
-													<p className={`${sample.status === 3 ? 'text-red-500 font-semibold' : ''} `}>
-														{status[sample.status]}
-													</p>
-												</div>
-												{Array.isArray(sample.analyses) ? (
-													<table className="w-full border-collapse border border-gray-300 ml-1 text-sm min-w-[450px] md:min-w-[340px]">
-														<thead>
-															<tr className="bg-gray-100">
-																<th className="border p-1 text-start w-[84px]">Hạn trả</th>
-																<th className="border p-1 text-start">Phép thử</th>
-																<th className="border p-1 text-start w-20">Đơn vị</th>
-																<th className="border p-1 text-start w-20">Kết quả</th>
-															</tr>
-														</thead>
-														<tbody>
-															{sample.analyses.map((item) => (
-																<tr key={item.id} className="border">
-																	<td className="border p-1 text-start">{formatDate(item.deadline)}</td>
-																	<td className="border p-1 text-start">
-																		<span>
-																			<p className="line-clamp-2">{item.parameter_name}</p>
-																			<p className="text-slate-500 hover:text-black hover:font-semibold cursor-pointer">
-																				{item.protocol_code}
-																			</p>
-																		</span>
-																	</td>
-																	<td
-																		className="border p-1 text-start"
-																		onClick={() =>
-																			handleCellClickV2(sample.sample_uid, item.id, 'result_unit', statusDeadline)
-																		}
-																	>
-																		<div className="hover:border-purple-500 hover:border rounded">
-																			{editableCell.sampleId === sample.sample_uid &&
-																			editableCell.analysisId === item.id &&
-																			editableCell.column === 'result_unit' ? (
-																				<TinyMceInput
-																					value={inputValue}
-																					onUpdate={(content) => handleSaveContentV2(content, 'result_unit')}
-																					onKey={handleKeyDownV2}
-																				/>
-																			) : (
-																				<div dangerouslySetInnerHTML={{ __html: `${item.result_unit || '--'}` }} />
-																			)}
-																		</div>
-																	</td>
-																	<td
-																		className="border p-1 text-start"
-																		onClick={() =>
-																			handleCellClickV2(sample.sample_uid, item.id, 'result_value', statusDeadline)
-																		}
-																	>
-																		<div className="hover:border-purple-500 hover:border rounded">
-																			{editableCell.sampleId === sample.sample_uid &&
-																			editableCell.analysisId === item.id &&
-																			editableCell.column === 'result_value' ? (
-																				<TinyMceInput
-																					value={inputValue}
-																					onUpdate={(content) => handleSaveContentV2(content, 'result_value')}
-																					onKey={handleKeyDownV2}
-																				/>
-																			) : (
-																				<div dangerouslySetInnerHTML={{ __html: `${item.result_value || '--'}` }} />
-																			)}
-																		</div>
-																	</td>
+						viewMode === 'v2' && (
+							<>
+								<FilterBar
+									source={originalProcessingSample || []} // Ensure source is always an array
+									setCurrentList={setProcessingSample}
+									typeSearch={'processing_v2'}
+									setIsFilter={setIsFilter} // Pass the setIsFilter function
+								/>
+								<div className="w-full min-h-20 flex flex-col mt-1">
+									<div className="w-full mb-4 flex flex-wrap justify-between">
+										{Array.isArray(processingSample) && processingSample.length > 0 ? (
+											processingSample.map((sample) => (
+												<div
+													key={sample?.sample_uid || `sample-${Math.random()}`}
+													className="p-2 border rounded-lg mb-4 flex items-start lg:w-[49.5%] w-full lg:overflow-hidden overflow-auto"
+												>
+													<div className="text-start">
+														<button className="bg-slate-50 border-2 border-sky-500 p-1 px-0.5 max-h-fit rounded-md min-w-32 text-start">
+															{sample?.sample_uid || 'N/A'}
+														</button>
+														<p className="text-primary font-medium line-clamp-2">{sample?.matrix || ''}</p>
+														<p className={`${sample?.status === 1 ? 'text-red-500 font-semibold' : ''} `}>
+															{status[sample?.status] || 'Không xác định'}
+														</p>
+													</div>
+													{sample?.analysis && Array.isArray(sample.analysis) && sample.analysis.length > 0 ? (
+														<table className="w-full border-collapse border border-gray-300 ml-1 text-sm min-w-[450px] md:min-w-[340px]">
+															<thead>
+																<tr className="bg-gray-100">
+																	<th className="border p-1 text-start w-[88px]">Hạn trả</th>
+																	<th className="border p-1 text-start">Phép thử</th>
+																	<th className="border p-1 text-start w-20">Đơn vị</th>
+																	<th className="border p-1 text-start w-24">Kết quả</th>
 																</tr>
-															))}
-														</tbody>
-													</table>
-												) : (
-													<></>
-												)}
-											</div>
-										))}
+															</thead>
+															<tbody>
+																{sample.analysis.map((item) => {
+																	// Check if deadline has passed
+																	const isDeadlinePassed = item?.deadline
+																		? new Date(item.deadline) <= new Date()
+																		: false;
+
+																	return (
+																		<tr key={item?.id || `analysis-${Math.random()}`} className="border">
+																			<td
+																				className={`border p-1 text-start ${
+																					isDeadlinePassed ? 'text-red-600 font-bold' : ''
+																				}`}
+																			>
+																				{item?.deadline ? formatDate(item.deadline) : 'N/A'}
+																			</td>
+																			<td className="border p-1 text-start">
+																				<span>
+																					<p className="line-clamp-2">{item?.parameter_name || ''}</p>
+																					<p className="text-slate-500 hover:text-black hover:font-semibold cursor-pointer">
+																						{item?.protocol_code || ''}
+																					</p>
+																				</span>
+																			</td>
+																			<td
+																				className="border p-1 text-start"
+																				onClick={() => handleCellClickV2(sample.sample_uid, item.id, 'result_unit')}
+																			>
+																				<div className="border border-white hover:border-purple-500 rounded p-1">
+																					{editableCell.sampleId === sample.sample_uid &&
+																					editableCell.analysisId === item.id &&
+																					editableCell.column === 'result_unit' ? (
+																						<TinyMceInput
+																							value={inputValue}
+																							onUpdate={(content) => handleSaveContentV2(content, 'result_unit')}
+																							onKey={handleKeyDownV2}
+																						/>
+																					) : (
+																						<div dangerouslySetInnerHTML={{ __html: `${item.result_unit || '--'}` }} />
+																					)}
+																				</div>
+																			</td>
+																			<td
+																				className="border p-1 text-start"
+																				onClick={() => handleCellClickV2(sample.sample_uid, item.id, 'result_value')}
+																			>
+																				<div className="border border-white hover:border-purple-500 rounded p-1">
+																					{editableCell.sampleId === sample.sample_uid &&
+																					editableCell.analysisId === item.id &&
+																					editableCell.column === 'result_value' ? (
+																						<TinyMceInput
+																							value={inputValue}
+																							onUpdate={(content) => handleSaveContentV2(content, 'result_value')}
+																							onKey={handleKeyDownV2}
+																						/>
+																					) : (
+																						<div
+																							dangerouslySetInnerHTML={{ __html: `${item.result_value || '--'}` }}
+																							className="line-clamp-5 overflow-hidden"
+																						/>
+																					)}
+																				</div>
+																			</td>
+																		</tr>
+																	);
+																})}
+															</tbody>
+														</table>
+													) : (
+														<div className="ml-2 text-gray-500">Không có dữ liệu phân tích</div>
+													)}
+												</div>
+											))
+										) : (
+											<div className="w-full text-center py-4 text-gray-500">Không có dữ liệu mẫu đang xử lý</div>
+										)}
 									</div>
-								))}
-							</div>
+								</div>
+							</>
 						)
 					)}
 				</div>

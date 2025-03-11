@@ -963,12 +963,7 @@ const ProtocolInfor = () => {
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
-			<Breadcrumb
-				paths={[
-					{ name: 'Thư viện', link: '/library' },
-					{ name: 'Phương pháp', link: '/library/protocol' },
-				]}
-			/>
+			{/* Remove the Breadcrumb component as it's now handled by the parent Library component */}
 			<div className={`w-full h-full mt-2 rounded-lg bg-white p-2 ${receivedData ? 'blur-sm' : ''}`}>
 				<div className="flex justify-between items-center">
 					<div className="relative"></div>

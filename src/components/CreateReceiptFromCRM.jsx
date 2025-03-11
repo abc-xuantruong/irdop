@@ -10,6 +10,8 @@ const CreateReceiptFromCRM = () => {
 	const [crmData, setCrmData] = useState(null);
 	const [error, setError] = useState(null);
 	const [isCreating, setIsCreating] = useState(false);
+	const [urgentSamples, setUrgentSamples] = useState({});
+	const [allUrgent, setAllUrgent] = useState(false);
 	const { formatDate, currentUser } = useContext(GlobalContext);
 	const navigate = useNavigate();
 
@@ -18,6 +20,8 @@ const CreateReceiptFromCRM = () => {
 		setCode('');
 		setCrmData(null);
 		setError(null);
+		setUrgentSamples({});
+		setAllUrgent(false);
 	};
 
 	const closeModal = () => {
@@ -39,6 +43,13 @@ const CreateReceiptFromCRM = () => {
 			} else {
 				setCrmData(response.data);
 				setError(null);
+
+				// Initialize urgent samples state
+				const initialUrgentState = {};
+				response.data.samples.forEach((_, index) => {
+					initialUrgentState[index] = false;
+				});
+				setUrgentSamples(initialUrgentState);
 			}
 		} catch (error) {
 			console.error('Error fetching CRM data:', error);
@@ -49,15 +60,44 @@ const CreateReceiptFromCRM = () => {
 		}
 	};
 
+	// Handle the "all samples urgent" checkbox
+	const handleAllUrgentChange = (e) => {
+		const checked = e.target.checked;
+		setAllUrgent(checked);
+
+		// Create a new object with all samples set to the checked value
+		const newUrgentSamples = {};
+		if (crmData && crmData.samples) {
+			crmData.samples.forEach((_, index) => {
+				newUrgentSamples[index] = checked;
+			});
+		}
+		setUrgentSamples(newUrgentSamples);
+	};
+
+	// Handle individual sample urgent checkbox
+	const handleUrgentChange = (index, checked) => {
+		setUrgentSamples((prev) => ({
+			...prev,
+			[index]: checked,
+		}));
+	};
+
 	const handleCreateReceipt = async () => {
 		if (!crmData) return;
 
 		setIsCreating(true);
 
+		// Add status property to samples based on urgentSamples state
+		const samplesWithStatus = crmData.samples.map((sample, index) => ({
+			...sample,
+			status: urgentSamples[index] ? 1 : 0,
+		}));
+
 		try {
 			const response = await apiPost('https://black.irdop.org/crm/create_receipt', {
 				client: crmData.client,
-				samples: crmData.samples,
+				samples: samplesWithStatus,
 				created_by_uid: currentUser.identity_uid,
 				modified_by_uid: currentUser.identity_uid,
 			});
@@ -140,10 +180,38 @@ const CreateReceiptFromCRM = () => {
 									</div>
 
 									<div className="mb-4 w-full">
-										<h3 className="font-semibold text-lg mb-2">Danh sách mẫu</h3>
+										<div className="flex justify-between items-center mb-2">
+											<h3 className="font-semibold text-lg">Danh sách mẫu</h3>
+											<div className="flex items-center">
+												<input
+													type="checkbox"
+													id="allUrgent"
+													checked={allUrgent}
+													onChange={handleAllUrgentChange}
+													className="mr-2"
+												/>
+												<label htmlFor="allUrgent" className="text-sm font-medium">
+													Mẫu khẩn
+												</label>
+											</div>
+										</div>
 										{crmData.samples.map((sample, index) => (
 											<div key={index} className="mb-4 p-2 border rounded w-full">
-												<h2 className="font-medium text-start text-lg">{sample.sample_name}</h2>
+												<div className="flex justify-between items-center">
+													<h2 className="font-medium text-start text-lg">{sample.sample_name}</h2>
+													<div className="flex items-center">
+														<input
+															type="checkbox"
+															id={`urgent-${index}`}
+															checked={urgentSamples[index] || false}
+															onChange={(e) => handleUrgentChange(index, e.target.checked)}
+															className="mr-2"
+														/>
+														<label htmlFor={`urgent-${index}`} className="text-sm font-medium">
+															Mẫu khẩn
+														</label>
+													</div>
+												</div>
 												<div className="overflow-x-auto">
 													<table className="w-full mt-2">
 														<thead>

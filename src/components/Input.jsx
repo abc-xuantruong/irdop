@@ -28,6 +28,12 @@ const TinyMceInput = ({ value, onUpdate, onKey }) => {
 				editor.on('init', () => {
 					editor.setContent(value);
 					editor.focus();
+
+					// Add z-index to editor container
+					const editorContainer = editor.getContainer();
+					if (editorContainer) {
+						editorContainer.style.zIndex = '100';
+					}
 				});
 
 				editor.on('blur', () => {

@@ -11,7 +11,7 @@ import { PiDownloadSimpleBold } from 'react-icons/pi';
 import { CgFileDocument } from 'react-icons/cg';
 import { TiBusinessCard } from 'react-icons/ti';
 import { MdOutlineContactPhone } from 'react-icons/md';
-import { FaTrashAlt } from 'react-icons/fa';
+import { FaTrashAlt, FaEdit, FaCheck } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import CreateReceipt from './CreateReceipt';
@@ -27,6 +27,7 @@ const ReceiptInfor = ({ receipt }) => {
 	const [isEditorVisible, setIsEditorVisible] = useState(false);
 	const [viewMode, setViewMode] = useState('sample'); // 'analyte' or 'sample'
 	const [isAddingSample, setIsAddingSample] = useState(false);
+	const [isEditMode, setIsEditMode] = useState(false); // Add edit mode state
 	const [newSample, setNewSample] = useState({
 		sample_name: '',
 		matrix: '',
@@ -43,7 +44,8 @@ const ReceiptInfor = ({ receipt }) => {
 	]);
 	const [checkConfirm, setCheckConfirm] = useState(false);
 	const defaultFields = sampleInformation;
-	let key,isfetch = false;
+	let key,
+		isfetch = false;
 	const [searchParams] = useSearchParams(); // Changed to useSearchParams
 	const receipt_uid = searchParams.get('receipt_uid');
 	const navigate = useNavigate();
@@ -52,6 +54,7 @@ const ReceiptInfor = ({ receipt }) => {
 	const [deleteType, setDeleteType] = useState(null);
 	// State to store user information fetched from API
 	const [userInfo, setUserInfo] = useState({});
+	const [isPaymentConfirmVisible, setIsPaymentConfirmVisible] = useState(false);
 
 	useEffect(() => {
 		setCurrentTitlePage('Tiếp nhận mẫu');
@@ -116,9 +119,66 @@ const ReceiptInfor = ({ receipt }) => {
 		return uid; // Fallback to UID if name not found
 	};
 
-	if (!currentReceipt) {
-		return <div>Loading...</div>;
-	}
+	// Toggle edit mode
+	const toggleEditMode = () => {
+		setIsEditMode(!isEditMode);
+	};
+
+	// Handle sample field updates - split into UI update and API call
+	const handleSampleChange = (sampleId, field, newValue) => {
+		// Only update local state for UI responsiveness
+		setCurrentReceipt((prev) => ({
+			...prev,
+			samples: prev.samples.map((sample) => (sample.id === sampleId ? { ...sample, [field]: newValue } : sample)),
+		}));
+	};
+
+	// Function to handle API update after confirmation
+	const handleSampleApiUpdate = async (sampleId, field, newValue) => {
+		try {
+			const payload = {
+				sample: {
+					id: sampleId,
+					[field]: newValue,
+					modified_by_uid: currentUser.identity_uid,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', payload);
+
+			if (response.status === 200) {
+				// Only show toast here, not in handleTextareaKeyDown
+				toast.success(`Cập nhật thông tin thành công!`, { autoClose: 1000 });
+			} else {
+				toast.error(`Lỗi khi cập nhật thông tin mẫu`);
+				fetchReceipt(); // Refresh data on error
+			}
+		} catch (error) {
+			console.error('Error updating sample information:', error);
+			toast.error('Có lỗi xảy ra khi cập nhật thông tin mẫu');
+			fetchReceipt(); // Refresh data on error
+		}
+	};
+
+	// Handle key down event for textareas
+	const handleTextareaKeyDown = (e, sampleId, field, value) => {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault(); // Prevent new line
+			handleSampleApiUpdate(sampleId, field, value);
+
+			// Remove focus from the textarea
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
+		}
+	};
+
+	// Handle select change - immediately update both UI and API
+	const handleSelectChange = (e, sampleId, field) => {
+		const newValue = e.target.value;
+		handleSampleChange(sampleId, field, newValue);
+		handleSampleApiUpdate(sampleId, field, newValue);
+	};
 
 	const handleResultValueClick = (order) => {
 		setEditingField(`result_value-${order.sample_id}-${order.id}`);
@@ -134,46 +194,74 @@ const ReceiptInfor = ({ receipt }) => {
 	};
 
 	// Kiểm tra phím nhập vào, nếu là enter thì log ra giá trị vừa nhập
-	const handleKeyDown = (e, newValue) => {
+	const handleKeyDown = async (e, newValue) => {
 		key = e.key;
 		if (key === 'Enter') {
+			e.preventDefault(); // Prevent default to avoid potential form submissions
 			setInputValue(newValue);
-			const updatedAnalytes = listAnalytes.map((item) => {
-				if (item.id === parseInt(editingField.split('-')[2]) && item.sample_uid === editingField.split('-')[1]) {
-					if (editingField.startsWith('result_value')) {
-						return { ...item, result_value: newValue };
-					} else if (editingField.startsWith('result_unit')) {
-						return { ...item, result_unit: newValue };
-					}
-				}
-				return item;
-			});
-
-			setListAnalytes(updatedAnalytes);
 			setIsEditorVisible(false);
 			setEditingField(null);
-			handleNotify(newValue);
+
+			// Just blur the element without updating
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
 		}
 	};
 
-	const handleSaveContent = (newValue) => {
-		if (key !== 'Enter') {
-			setInputValue(newValue);
-			const updatedAnalytes = listAnalytes.map((item) => {
-				if (item.id === parseInt(editingField.split('-')[2]) && item.sample_uid === editingField.split('-')[1]) {
-					if (editingField.startsWith('result_value')) {
-						return { ...item, result_value: newValue };
-					} else if (editingField.startsWith('result_unit')) {
-						return { ...item, result_unit: newValue };
-					}
-				}
-				return item;
+	// Add this new function to handle API updates for analysis
+	const onUpdateAnalysis = async (analysis) => {
+		try {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				analysis: { ...analysis, modified_by_uid: currentUser.identity_uid },
 			});
 
-			setListAnalytes(updatedAnalytes);
-			setIsEditorVisible(false);
-			setEditingField(null);
-			handleNotify(newValue);
+			if (response.status === 200) {
+				toast.success('Chỉ tiêu đã được cập nhật!');
+			} else {
+				toast.error('Lỗi khi cập nhật chỉ tiêu.');
+			}
+			return analysis;
+		} catch (error) {
+			console.error('Error updating analysis:', error);
+			toast.error('Đã xảy ra lỗi khi cập nhật.');
+			return analysis;
+		}
+	};
+
+	// Replace the existing handleSaveContent function
+	const handleSaveContent = async (newValue) => {
+		setInputValue(newValue);
+		const updatedAnalytes = listAnalytes.map((item) => {
+			if (
+				item.id === parseInt(editingField.split('-')[2]) &&
+				item.sample_id.toString() === editingField.split('-')[1]
+			) {
+				if (editingField.startsWith('result_value')) {
+					return { ...item, result_value: newValue };
+				} else if (editingField.startsWith('result_unit')) {
+					return { ...item, result_unit: newValue };
+				}
+			}
+			return item;
+		});
+
+		setListAnalytes(updatedAnalytes);
+		setIsEditorVisible(false);
+		setEditingField(null);
+
+		try {
+			const analysis = updatedAnalytes.find(
+				(item) =>
+					item.id === parseInt(editingField.split('-')[2]) && item.sample_id.toString() === editingField.split('-')[1],
+			);
+
+			if (analysis) {
+				await onUpdateAnalysis(analysis);
+			}
+		} catch (error) {
+			console.error('Error updating analysis:', error);
+			toast.error('Có lỗi xảy ra khi cập nhật kết quả.');
 		}
 	};
 
@@ -187,7 +275,7 @@ const ReceiptInfor = ({ receipt }) => {
 
 	const handleNotify = (data) => {
 		toast.success(`Kết quả vừa nhập: ${processHtmlString(data)}`, {
-			autoClose: 3000, // Tự động đóng sau 3 giây
+			autoClose: 1000, // Tự động đóng sau 3 giây
 		});
 	};
 
@@ -216,7 +304,7 @@ const ReceiptInfor = ({ receipt }) => {
 
 		if (!isValid) {
 			toast.error('Vui lòng nhập đầy đủ thông tin bắt buộc.', {
-				autoClose: 3000,
+				autoClose: 1000,
 			});
 			return;
 		}
@@ -238,7 +326,7 @@ const ReceiptInfor = ({ receipt }) => {
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/sample', { sample: newSampleData });
 			if (response.status === 200) {
 				toast.success('Thêm mẫu mới thành công!', {
-					autoClose: 3000,
+					autoClose: 1000,
 				});
 				setNewSample({
 					sample_name: '',
@@ -257,12 +345,12 @@ const ReceiptInfor = ({ receipt }) => {
 				fetchReceipt(); // Fetch updated data
 			} else {
 				toast.error('Thêm mẫu mới thất bại. Vui lòng thử lại.', {
-					autoClose: 3000,
+					autoClose: 1000,
 				});
 			}
 		} catch (error) {
 			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', {
-				autoClose: 3000,
+				autoClose: 1000,
 			});
 		}
 
@@ -325,13 +413,13 @@ const ReceiptInfor = ({ receipt }) => {
 				modified_by_uid: currentUser.identity_uid,
 			});
 			if (response.status === 200) {
-				toast.success('Xóa mẫu thành công!', { autoClose: 3000 });
+				toast.success('Xóa mẫu thành công!', { autoClose: 1000 });
 				fetchReceipt(); // Fetch updated data
 			} else {
-				toast.error('Xóa mẫu thất bại. Vui lòng thử lại.', { autoClose: 3000 });
+				toast.error('Xóa mẫu thất bại. Vui lòng thử lại.', { autoClose: 1000 });
 			}
 		} catch (error) {
-			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 3000 });
+			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 1000 });
 		}
 	};
 
@@ -343,18 +431,18 @@ const ReceiptInfor = ({ receipt }) => {
 			});
 			if (response.status === 200) {
 				toast.success('Xóa tiếp nhận mẫu thành công!', {
-					autoClose: 3000,
+					autoClose: 1000,
 				});
 				// Redirect or update state to reflect deletion
 				fetchReceipt(); // Fetch updated data
 			} else {
 				toast.error('Xóa tiếp nhận mẫu thất bại. Vui lòng thử lại.', {
-					autoClose: 3000,
+					autoClose: 1000,
 				});
 			}
 		} catch (error) {
 			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', {
-				autoClose: 3000,
+				autoClose: 1000,
 			});
 		}
 	};
@@ -408,21 +496,6 @@ const ReceiptInfor = ({ receipt }) => {
 		if (value.length >= 5) {
 			// Implement search logic here
 		}
-	};
-
-	const handleSampleInputChange = (e, sampleId) => {
-		const { name, value } = e.target;
-		const updatedSamples = currentReceipt.samples.map((sample) =>
-			sample.id === sampleId ? { ...sample, [name]: value } : sample,
-		);
-		setCurrentReceipt((prev) => ({
-			...prev,
-			samples: updatedSamples,
-		}));
-	};
-
-	const handleSampleSelect = (sampleUid) => {
-		navigate(`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sampleUid}`);
 	};
 
 	const renderAddSampleForm = () => (
@@ -572,13 +645,13 @@ const ReceiptInfor = ({ receipt }) => {
 			});
 			console.log(deleteItemId);
 			if (response.status === 200) {
-				toast.success('Xóa mẫu thành công!', { autoClose: 3000 });
+				toast.success('Xóa mẫu thành công!', { autoClose: 1000 });
 				fetchReceipt(); // Fetch updated data
 			} else {
-				toast.error('Xóa mẫu thất bại. Vui lòng thử lại.', { autoClose: 3000 });
+				toast.error('Xóa mẫu thất bại. Vui lòng thử lại.', { autoClose: 1000 });
 			}
 		} catch (error) {
-			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 3000 });
+			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 1000 });
 		} finally {
 			setIsDeleteConfirmVisible(false);
 			setDeleteItemId(null);
@@ -592,13 +665,13 @@ const ReceiptInfor = ({ receipt }) => {
 				modified_by_uid: currentUser.identity_uid,
 			});
 			if (response.status === 200) {
-				toast.success('Xóa chỉ tiêu thành công!', { autoClose: 3000 });
+				toast.success('Xóa chỉ tiêu thành công!', { autoClose: 1000 });
 				fetchReceipt(); // Fetch updated data
 			} else {
-				toast.error('Xóa chỉ tiêu thất bại. Vui lòng thử lại.', { autoClose: 3000 });
+				toast.error('Xóa chỉ tiêu thất bại. Vui lòng thử lại.', { autoClose: 1000 });
 			}
 		} catch (error) {
-			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 3000 });
+			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 1000 });
 		} finally {
 			setIsDeleteConfirmVisible(false);
 			setDeleteItemId(null);
@@ -685,23 +758,101 @@ const ReceiptInfor = ({ receipt }) => {
 				// Show success toast
 				toast.dismiss(loadingToastId);
 				toast.success('Tải xuống file Excel thành công!', {
-					autoClose: 3000,
+					autoClose: 1000,
 				});
 			} else {
 				// Handle HTTP errors
 				console.error('Error downloading file:', response.status, response.statusText);
 				toast.dismiss(loadingToastId);
 				toast.error(`Không thể tải file Excel (${response.status}). Vui lòng thử lại.`, {
-					autoClose: 3000,
+					autoClose: 1000,
 				});
 			}
 		} catch (error) {
 			console.error('Error downloading Excel file:', error);
 			toast.error('Có lỗi xảy ra khi tải file Excel. Vui lòng thử lại.', {
-				autoClose: 3000,
+				autoClose: 1000,
 			});
 		}
 	};
+
+	// Helper function to check if value is empty or invalid for display
+	const displayValue = (value) => {
+		if (value === null || value === undefined || value === '') {
+			return <span className="text-start block">--</span>;
+		}
+		return value;
+	};
+
+	const handlePayStatusToggle = () => {
+		setIsPaymentConfirmVisible(true);
+	};
+
+	const handlePayStatusChange = async () => {
+		try {
+			const newPayStatus = currentReceipt.pay_status === 1 ? 0 : 1;
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', {
+				receipt: {
+					id: currentReceipt.id,
+					pay_status: newPayStatus,
+					modified_by_uid: currentUser.identity_uid,
+				},
+			});
+
+			if (response.status === 200) {
+				setCurrentReceipt((prev) => ({
+					...prev,
+					pay_status: newPayStatus,
+				}));
+				toast.success(
+					`Đã cập nhật trạng thái thanh toán thành ${newPayStatus === 1 ? 'đã thanh toán' : 'chưa thanh toán'}!`,
+					{
+						autoClose: 1000,
+					},
+				);
+			} else {
+				toast.error('Cập nhật trạng thái thanh toán thất bại!', {
+					autoClose: 1000,
+				});
+			}
+		} catch (error) {
+			console.error('Error updating payment status:', error);
+			toast.error('Có lỗi xảy ra khi cập nhật trạng thái thanh toán.', {
+				autoClose: 1000,
+			});
+		} finally {
+			setIsPaymentConfirmVisible(false);
+		}
+	};
+
+	const handlePayStatusCancel = () => {
+		setIsPaymentConfirmVisible(false);
+	};
+
+	const renderPayStatusConfirm = () => (
+		<div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
+			<div className="bg-white p-4 rounded-lg w-[400px] h-[200px] relative flex flex-col justify-between">
+				<h2 className="text-2xl font-semibold mb-4">Xác nhận thay đổi</h2>
+				<p>
+					{currentReceipt?.pay_status === 1
+						? 'Bạn muốn thay đổi trạng thái thanh toán sang Chưa thanh toán?'
+						: 'Bạn muốn thay đổi trạng thái thanh toán sang Đã thanh toán?'}
+				</p>
+				<div className="flex justify-end mt-4">
+					<button className="bg-gray-500 text-white p-2 rounded mr-2 w-1/4" onClick={handlePayStatusCancel}>
+						Hủy bỏ
+					</button>
+					<button className="bg-blue-500 text-white p-2 rounded w-1/4" onClick={handlePayStatusChange}>
+						Xác nhận
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+
+	if (!currentReceipt) {
+		return <div>Loading...</div>;
+	}
 
 	return (
 		<div className="w-full">
@@ -710,8 +861,8 @@ const ReceiptInfor = ({ receipt }) => {
 				paths={[
 					{ name: 'Danh sách', link: '/' },
 					{
-						name: `${currentReceipt.receipt_uid}`,
-						link: `/dashboard/receipt?receipt_uid=${currentReceipt.receipt_uid}`,
+						name: `${currentReceipt?.receipt_uid}`,
+						link: `/dashboard/receipt?receipt_uid=${currentReceipt?.receipt_uid}`,
 					},
 				]}
 			/>
@@ -739,8 +890,19 @@ const ReceiptInfor = ({ receipt }) => {
 			</div>
 
 			<div className="rounded-lg w-full p-4 bg-white ">
+				{/* Payment Status Indicator */}
+				<div className="flex items-center cursor-pointer justify-end" onClick={handlePayStatusToggle}>
+					<div
+						className={`w-2 h-2 rounded-full mr-2 ${currentReceipt?.pay_status === 1 ? 'bg-green-600' : 'bg-red-500'}`}
+					></div>
+					<span
+						className={`font-medium text-sm ${currentReceipt?.pay_status === 1 ? 'text-green-600' : 'text-red-500'}`}
+					>
+						{currentReceipt?.pay_status === 1 ? 'Đã thanh toán' : 'Chưa thanh toán'}
+					</span>
+				</div>
 				<div className="flex flex-col md:flex-row">
-					<div className={`flex justify-between items-center mt-4 p-2 rounded-md border flex-col md:flex-row w-full`}>
+					<div className={`flex justify-between items-center mt-1 p-2 rounded-md border flex-col md:flex-row w-full`}>
 						<div className="w-full md:w-1/2 flex flex-col items-start">
 							<div className="flex justify-center items-center w-full p-2">
 								<CgFileDocument size={16} className="text-primary" />
@@ -753,7 +915,7 @@ const ReceiptInfor = ({ receipt }) => {
 										type="number"
 										name="request_number"
 										className="bg-white border px-1 w-full rounded-lg"
-										value={currentReceipt.request_number}
+										value={currentReceipt?.request_number}
 										onChange={handleInputChange}
 										disabled
 									/>
@@ -766,7 +928,7 @@ const ReceiptInfor = ({ receipt }) => {
 										type="text"
 										name="receipt_uid"
 										className="bg-white border px-1 w-full rounded-lg"
-										value={currentReceipt.receipt_uid}
+										value={currentReceipt?.receipt_uid}
 										onChange={handleInputChange}
 										disabled
 									/>
@@ -776,7 +938,7 @@ const ReceiptInfor = ({ receipt }) => {
 								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Ngày tiếp nhận:</div>
 								<div className="text-sm w-full flex item-start rounded-lg border">
 									<DatePicker
-										selected={ensureValidDate(currentReceipt.receipt_date)}
+										selected={currentReceipt?.receipt_date}
 										onChange={(date) => handleInputChange({ target: { name: 'receipt_date', value: date } })}
 										dateFormat="dd/MM/yyyy"
 										className="bg-white px-1 h py-1.5 rounded-lg focus:outline-none"
@@ -791,7 +953,7 @@ const ReceiptInfor = ({ receipt }) => {
 										type="text"
 										name="created_by_uid"
 										className="bg-white border px-1 w-full rounded-lg"
-										value={getUserName(currentReceipt.created_by_uid)}
+										value={getUserName(currentReceipt?.created_by_uid)}
 										onChange={handleInputChange}
 										disabled
 									/>
@@ -801,7 +963,7 @@ const ReceiptInfor = ({ receipt }) => {
 								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Hạn trả kết quả:</div>
 								<div className="text-sm w-full flex item-start rounded-lg border">
 									<DatePicker
-										selected={ensureValidDate(currentReceipt.deadline)}
+										selected={currentReceipt?.deadline}
 										onChange={(date) => handleInputChange({ target: { name: 'deadline', value: date } })}
 										dateFormat="dd/MM/yyyy"
 										className="bg-white px-1 h py-1.5 rounded-lg focus:outline-none"
@@ -812,7 +974,7 @@ const ReceiptInfor = ({ receipt }) => {
 							<div className="flex justify-start w-full p-2">
 								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Số lượng mẫu:</div>
 								<div className="text-sm w-full flex items-center">
-									<p className="text-center flex items-center w-12 font-medium">{currentReceipt.samples.length}</p>
+									<p className="text-center flex items-center w-12 font-medium">{currentReceipt?.samples.length}</p>
 								</div>
 							</div>
 							<div className="flex justify-start w-full p-2">
@@ -822,7 +984,7 @@ const ReceiptInfor = ({ receipt }) => {
 										name="note"
 										className="w-full px-1 border bg-white rounded-lg p-2 pt-1.5 resize-none"
 										rows="3"
-										value={currentReceipt.note}
+										value={currentReceipt?.note}
 										onChange={handleInputChange}
 										disabled
 									/>
@@ -843,7 +1005,7 @@ const ReceiptInfor = ({ receipt }) => {
 										type="text"
 										name="client.client_uid"
 										className="bg-white border px-1 w-full rounded-lg"
-										value={currentReceipt.client?.client_uid}
+										value={currentReceipt?.client?.client_uid}
 										onChange={handleCustomerSearch}
 										disabled
 									/>
@@ -856,7 +1018,7 @@ const ReceiptInfor = ({ receipt }) => {
 										type="text"
 										name="client.client_name"
 										className="bg-white border px-1 w-full rounded-lg"
-										value={currentReceipt.client?.client_name}
+										value={currentReceipt?.client?.client_name}
 										onChange={handleInputChange}
 										disabled
 									/>
@@ -869,7 +1031,7 @@ const ReceiptInfor = ({ receipt }) => {
 										type="text"
 										name="client.client_address"
 										className="bg-white border px-1 w-full rounded-lg"
-										value={currentReceipt.client?.client_address}
+										value={currentReceipt?.client?.client_address}
 										onChange={handleInputChange}
 										disabled
 									/>
@@ -882,7 +1044,7 @@ const ReceiptInfor = ({ receipt }) => {
 										type="text"
 										name="legal_id"
 										className="bg-white border px-1 w-full rounded-lg"
-										value={currentReceipt.client?.legal_id}
+										value={currentReceipt?.client?.legal_id}
 										onChange={handleInputChange}
 										disabled
 									/>
@@ -901,7 +1063,7 @@ const ReceiptInfor = ({ receipt }) => {
 										type="text"
 										name="contact.name"
 										className="bg-white border px-1 w-full rounded-lg"
-										value={currentReceipt.contact?.name}
+										value={currentReceipt?.contact?.name}
 										onChange={handleContactSearch}
 										disabled
 									/>
@@ -914,7 +1076,7 @@ const ReceiptInfor = ({ receipt }) => {
 										type="text"
 										name="contact.email"
 										className="bg-white border px-1 w-full rounded-lg"
-										value={currentReceipt.contact?.email}
+										value={currentReceipt?.contact?.email}
 										onChange={handleInputChange}
 										disabled
 									/>
@@ -927,7 +1089,7 @@ const ReceiptInfor = ({ receipt }) => {
 										type="text"
 										name="contact.phone"
 										className="bg-white border px-1 w-full rounded-lg"
-										value={currentReceipt.contact?.phone}
+										value={currentReceipt?.contact?.phone}
 										onChange={handleInputChange}
 										disabled
 									/>
@@ -967,7 +1129,15 @@ const ReceiptInfor = ({ receipt }) => {
 							className="absolute right-0"
 						/>
 					) : (
-						<div className="relative">
+						<div className="flex items-center space-x-2">
+							<button
+								className={`w-[34px] h-[34px] p-2 rounded-lg transition-colors duration-200 border border-gray-400 focus:outline-none ${
+									isEditMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white text-black'
+								}`}
+								onClick={toggleEditMode}
+							>
+								{isEditMode ? <FaCheck /> : <FaEdit />}
+							</button>
 							<button className="bg-blue-500 text-white px-1 py-1 rounded-lg w-36" onClick={handleAddSample}>
 								Thêm mẫu mới
 							</button>
@@ -1043,6 +1213,7 @@ const ReceiptInfor = ({ receipt }) => {
 										<th className="py-2 border-2 text-start pl-2 w-[18%] min-w-44">Tên mẫu thử</th>
 										<th className="py-2 border-2 text-start pl-2 w-[12%] min-w-32">Nền mẫu</th>
 										<th className="py-2 border-2 text-start pl-2 w-[20%] min-w-48">Mô tả</th>
+										<th className="py-2 border-2 text-start pl-2 w-32 min-w-32">Số lượng</th>
 										<th className="py-2 border-2 text-start pl-2 w-32 min-w-32">Trạng thái</th>
 										<th className="py-2 border-2 text-start pl-2 w-28 min-w-28">Mục đích</th>
 										<th className="py-2 border-2 text-start pl-2 w-28 min-w-28">Chỉ tiêu</th>
@@ -1051,7 +1222,7 @@ const ReceiptInfor = ({ receipt }) => {
 									</tr>
 								</thead>
 								<tbody className="border-2">
-									{currentReceipt.samples.map((sample, sampleIndex) => {
+									{currentReceipt?.samples.map((sample, sampleIndex) => {
 										const totalTests = sample.analysis.length;
 										const completedTests = sample.analysis.filter((order) => order.result_value !== '').length;
 										const pendingTests = totalTests - completedTests;
@@ -1059,21 +1230,120 @@ const ReceiptInfor = ({ receipt }) => {
 										return (
 											<tr key={sample.id}>
 												<td className="p-2 border text-start text-text-secondary">
-													<NavLink to={`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`}>
+													<NavLink
+														to={`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`}
+														className="text-primary font-semibold hover:text-[#103667]"
+													>
 														{sample.sample_uid}
 													</NavLink>
 												</td>
-												<td className="p-2 border text-start">{sample.sample_name}</td>
 												<td className="p-2 border text-start">
-													{sample.matrix || <span className="text-start block">----</span>}
+													{isEditMode ? (
+														<textarea
+															value={sample?.sample_name || ''}
+															onChange={(e) => handleSampleChange(sample.id, 'sample_name', e.target.value)}
+															onKeyDown={(e) => handleTextareaKeyDown(e, sample.id, 'sample_name', e.target.value)}
+															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
+															rows={2}
+														/>
+													) : (
+														displayValue(sample.sample_name)
+													)}
 												</td>
-												<td className="p-2 border text-start">{sample.sample_description}</td>
-												<td className="p-2 border text-start">{status[sample.status]}</td>
-												<td className="p-2 border text-start">{sample.purpose}</td>
+												<td className="p-2 border text-start">
+													{isEditMode ? (
+														<textarea
+															value={sample.matrix || ''}
+															onChange={(e) => handleSampleChange(sample.id, 'matrix', e.target.value)}
+															onKeyDown={(e) => handleTextareaKeyDown(e, sample.id, 'matrix', e.target.value)}
+															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
+															rows={2}
+														/>
+													) : (
+														displayValue(sample.matrix)
+													)}
+												</td>
+												<td className="p-2 border text-start">
+													{isEditMode ? (
+														<textarea
+															value={sample.sample_description || ''}
+															onChange={(e) => handleSampleChange(sample.id, 'sample_description', e.target.value)}
+															onKeyDown={(e) =>
+																handleTextareaKeyDown(e, sample.id, 'sample_description', e.target.value)
+															}
+															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
+															rows={2}
+														/>
+													) : (
+														displayValue(sample.sample_description)
+													)}
+												</td>
+												<td className="p-2 border text-start">
+													{isEditMode ? (
+														<textarea
+															value={sample.sample_volume || ''}
+															onChange={(e) => handleSampleChange(sample.id, 'sample_volume', e.target.value)}
+															onKeyDown={(e) => handleTextareaKeyDown(e, sample.id, 'sample_volume', e.target.value)}
+															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
+															rows={2}
+														/>
+													) : (
+														displayValue(sample.sample_volume)
+													)}
+												</td>
+												<td className="p-2 border text-start">
+													{isEditMode ? (
+														<select
+															value={sample.status}
+															onChange={(e) => handleSelectChange(e, sample.id, 'status')}
+															className="p-1 border rounded-md w-full text-sm bg-white"
+														>
+															{status.map((statusName, index) => (
+																<option key={index} value={index}>
+																	{statusName}
+																</option>
+															))}
+														</select>
+													) : (
+														status[sample.status] || <span className="text-start block">--</span>
+													)}
+												</td>
+												<td className="p-2 border text-start">
+													{isEditMode ? (
+														<select
+															value={sample.purpose || ''}
+															onChange={(e) => handleSelectChange(e, sample.id, 'purpose')}
+															className="p-1 border rounded-md w-full text-sm bg-white"
+														>
+															<option value="">--</option>
+															{purposes.map((purpose, index) => (
+																<option key={index} value={purpose}>
+																	{purpose}
+																</option>
+															))}
+														</select>
+													) : (
+														displayValue(sample.purpose)
+													)}
+												</td>
 												<td className="p-2 border text-start">
 													{completedTests} / {pendingTests} / {totalTests}
 												</td>
-												<td className="p-2 border text-start">{sample.additional_request}</td>
+												<td className="p-2 border text-start">
+													{isEditMode ? (
+														<textarea
+															value={sample.additional_request || ''}
+															onChange={(e) => handleSampleChange(sample.id, 'additional_request', e.target.value)}
+															onKeyDown={(e) =>
+																handleTextareaKeyDown(e, sample.id, 'additional_request', e.target.value)
+															}
+															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
+															rows={2}
+														/>
+													) : (
+														displayValue(sample.additional_request)
+													)}
+												</td>
 												<td className=" border text-center text-red-500">
 													<button
 														className="text-red-500 bg-white text-sm rounded-lg p-1.5 focus:outline-none text-center"
@@ -1091,6 +1361,7 @@ const ReceiptInfor = ({ receipt }) => {
 					)}
 				</div>
 			</div>
+			{isPaymentConfirmVisible && renderPayStatusConfirm()}
 			{isDeleteConfirmVisible &&
 				renderDeleteConfirm(
 					'Bạn có chắc chắn muốn xóa mục này?',

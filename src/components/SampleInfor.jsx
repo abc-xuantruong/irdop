@@ -284,7 +284,7 @@ const SampleInfor = () => {
 	const confirmParameterUpdateMode = () => {
 		setUpdateParameterMode(true);
 		setIsParameterWarningVisible(false);
-		toast.info('Đã bật chế độ cập nhật thư viện chỉ tiêu', { autoClose: 3000 });
+		toast.info('Đã bật chế độ cập nhật thư viện chỉ tiêu', { autoClose: 1000 });
 	};
 
 	// Function to handle cancellation of parameter update mode
@@ -727,32 +727,32 @@ const SampleInfor = () => {
 
 	const handleSaveContent = async (newValue) => {
 		console.log(key);
-		if (key !== 'Enter') {
-			setInputValue(newValue);
-			const updatedAnalytes = listAnalytes.map((item) => {
-				if (item.id === parseInt(editingField.split('-')[2])) {
-					if (editingField.startsWith('result_value')) {
-						return { ...item, result_value: newValue };
-					} else if (editingField.startsWith('result_unit')) {
-						return { ...item, result_unit: newValue };
-					} else if (editingField.startsWith('technician_uid')) {
-						return { ...item, technician_uid: newValue };
-					}
+		// if (key !== 'Enter') {
+		setInputValue(newValue);
+		const updatedAnalytes = listAnalytes.map((item) => {
+			if (item.id === parseInt(editingField.split('-')[2])) {
+				if (editingField.startsWith('result_value')) {
+					return { ...item, result_value: newValue };
+				} else if (editingField.startsWith('result_unit')) {
+					return { ...item, result_unit: newValue };
+				} else if (editingField.startsWith('technician_uid')) {
+					return { ...item, technician_uid: newValue };
 				}
-				return item;
-			});
-			setListAnalytes(updatedAnalytes);
-			setIsEditorVisible(false);
-			setEditingField(null);
-
-			try {
-				const analysis = updatedAnalytes.find((item) => item.id === parseInt(editingField.split('-')[2]));
-				await onUpdateAnalysis(analysis);
-			} catch (error) {
-				console.error('Error updating analysis:', error);
-				toast.error('An error occurred while updating analysis.');
 			}
+			return item;
+		});
+		setListAnalytes(updatedAnalytes);
+		setIsEditorVisible(false);
+		setEditingField(null);
+
+		try {
+			const analysis = updatedAnalytes.find((item) => item.id === parseInt(editingField.split('-')[2]));
+			await onUpdateAnalysis(analysis);
+		} catch (error) {
+			console.error('Error updating analysis:', error);
+			toast.error('An error occurred while updating analysis.');
 		}
+		// }
 	};
 
 	const handleKeyDown = async (e, newValue) => {
@@ -768,20 +768,6 @@ const SampleInfor = () => {
 				document.activeElement.blur();
 			}
 		}
-	};
-
-	const processHtmlString = (htmlString) => {
-		return htmlString
-			.replace(/<p>/g, '') // Bỏ thẻ mở <p>
-			.replace(/<\/p>/g, '') // Bỏ thẻ đóng </p>
-			.replace(/<sub>(.*?)<\/sub>/g, '_$1_') // Thay <sub>...</sub> bằng _..._
-			.replace(/<sup>(.*?)<\/sup>/g, '^$1^'); // Thay <sup>...</sup> bằng ^...^
-	};
-
-	const handleNotify = (data) => {
-		// toast.success(`Kết quả vừa nhập: ${processHtmlString(data)}`, {
-		// 	autoClose: 3000, // Tự động đóng sau 3 giây
-		// });
 	};
 
 	const handleEditSample = () => {

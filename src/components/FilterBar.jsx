@@ -24,9 +24,17 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 	const [showFilterOptions, setShowFilterOptions] = useState(false);
 	const [activeFilters, setActiveFilters] = useState(false);
 	const [activeSorts, setActiveSorts] = useState(false);
+	const [activeQuickFilters, setActiveQuickFilters] = useState({
+		deadline: null, // 'today', 'twoDays'
+		status: null, // 0, 1, 2
+	});
 
 	const [sortRows, setSortRows] = useState([{ field: '', order: 'asc' }]);
 	const [filterRows, setFilterRows] = useState([]);
+	const [specialFilters, setSpecialFilters] = useState({
+		deadline: '',
+		status: '',
+	});
 
 	const sortRef = useRef(null);
 	const filterRef = useRef(null);
@@ -118,8 +126,16 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 					{ key: 'technician_uid', value: 'Người thực hiện' },
 				]);
 				break;
+			case 'processing_v2':
+				setCurrentKey([
+					{ key: 'sample_uid', value: 'Mã mẫu thử' },
+					{ key: 'matrix', value: 'Nền mẫu' },
+					{ key: 'result_value', value: 'Kết quả' },
+					{ key: 'result_unit', value: 'Đơn vị' },
+				]);
+				break;
 		}
-	}, []);
+	}, [typeSearch]);
 
 	useEffect(() => {
 		// Initialize filter rows when currentKey changes with one row per key
@@ -135,6 +151,11 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 
 			// Initialize sort rows too
 			setSortRows([{ field: currentKey[0]?.key || '', order: 'asc' }]);
+			// Reset special filters when type changes
+			setSpecialFilters({
+				deadline: '',
+				status: '',
+			});
 		}
 	}, [currentKey]);
 
@@ -286,15 +307,19 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 		return technician ? technician.identity_uid : '';
 	};
 
-	// Apply filters
+	// Apply filters - updated to handle processing_v2 special case
 	const applyFilters = () => {
 		// Only consider filter rows with non-empty values
 		const validFilters = filterRows.filter((row) => row.value && row.value.trim() !== '');
 		console.log(validFilters);
 		console.log(source);
 
-		// If no valid filters, return the original source
-		if (validFilters.length === 0) {
+		// Check if there are any special filters for processing_v2
+		const hasSpecialFilters =
+			typeSearch === 'processing_v2' && (specialFilters.deadline !== '' || specialFilters.status !== '');
+
+		// If no valid filters and no special filters, return the original source
+		if (validFilters.length === 0 && !hasSpecialFilters) {
 			setCurrentList(source);
 			setCurrentFilter([]);
 			setActiveFilters(false);
@@ -304,7 +329,167 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 			return;
 		}
 
-		// Apply the valid filters
+		// Special handling for processing_v2 data type
+		if (typeSearch === 'processing_v2') {
+			let filteredList = [...source];
+
+			// Apply sample-level filters first (sample_uid, matrix)
+			const sampleLevelFilters = validFilters.filter(
+				(filter) => filter.key === 'sample_uid' || filter.key === 'matrix',
+			);
+
+			if (sampleLevelFilters.length > 0) {
+				sampleLevelFilters.forEach((filter, index) => {
+					if (filter.logic === 'AND' || index === 0) {
+						filteredList = filteredList.filter((sample) =>
+							applyOperator(sample[filter.key], filter.operator, filter.value),
+						);
+					} else if (filter.logic === 'OR') {
+						const additionalItems = source.filter((sample) =>
+							applyOperator(sample[filter.key], filter.operator, filter.value),
+						);
+
+						// Add unique items
+						additionalItems.forEach((item) => {
+							if (!filteredList.some((existing) => existing.sample_uid === item.sample_uid)) {
+								filteredList.push(item);
+							}
+						});
+					}
+				});
+			}
+
+			// Apply analysis-level filters (result_value, result_unit)
+			const analysisLevelFilters = validFilters.filter(
+				(filter) => filter.key === 'result_value' || filter.key === 'result_unit',
+			);
+
+			if (analysisLevelFilters.length > 0) {
+				filteredList = filteredList.map((sample) => {
+					// Clone the sample to avoid modifying the original
+					const filteredSample = { ...sample };
+
+					if (!filteredSample.analysis || !Array.isArray(filteredSample.analysis)) {
+						return filteredSample;
+					}
+
+					// Filter the analysis array
+					filteredSample.analysis = filteredSample.analysis.filter((analysis) => {
+						let shouldKeep = true;
+
+						analysisLevelFilters.forEach((filter, index) => {
+							const matches = applyOperator(analysis[filter.key], filter.operator, filter.value);
+
+							if (index === 0) {
+								shouldKeep = matches;
+							} else if (filter.logic === 'AND') {
+								shouldKeep = shouldKeep && matches;
+							} else if (filter.logic === 'OR') {
+								shouldKeep = shouldKeep || matches;
+							}
+						});
+
+						return shouldKeep;
+					});
+
+					return filteredSample;
+				});
+
+				// Remove samples with empty analysis arrays after filtering
+				filteredList = filteredList.filter(
+					(sample) => sample.analysis && Array.isArray(sample.analysis) && sample.analysis.length > 0,
+				);
+			}
+
+			// Apply status filter if selected
+			if (specialFilters.status) {
+				if (specialFilters.status === 'incomplete') {
+					// For incomplete status:
+					// 1. Keep samples that have at least one incomplete analysis
+					// 2. Filter each sample's analysis array to only keep incomplete analyses
+					filteredList = filteredList.filter((sample) => {
+						if (!sample.analysis || !Array.isArray(sample.analysis) || sample.analysis.length === 0) {
+							return false;
+						}
+
+						// Check if any analysis has empty result_value
+						const hasIncompleteAnalysis = sample.analysis.some(
+							(analysis) =>
+								analysis.result_value === '' || analysis.result_value === null || analysis.result_value === undefined,
+						);
+
+						if (hasIncompleteAnalysis) {
+							// Keep only incomplete analyses in this sample
+							sample.analysis = sample.analysis.filter(
+								(analysis) =>
+									analysis.result_value === '' || analysis.result_value === null || analysis.result_value === undefined,
+							);
+							return true;
+						}
+
+						return false;
+					});
+				} else {
+					// For other statuses, use the status code mapping as before
+					const statusMap = {
+						waiting: 0,
+						urgent: 1,
+					};
+
+					filteredList = filteredList.filter((sample) => sample.status === statusMap[specialFilters.status]);
+				}
+			}
+
+			// Apply deadline filter if selected
+			if (specialFilters.deadline) {
+				filteredList = filteredList.filter((sample) => {
+					// Check if sample has analysis array
+					if (!sample.analysis || !Array.isArray(sample.analysis) || sample.analysis.length === 0) {
+						return false;
+					}
+
+					// Get all valid deadlines from analyses
+					const deadlines = sample.analysis
+						.map((a) => (a.deadline ? new Date(a.deadline) : null))
+						.filter((d) => d !== null);
+
+					if (deadlines.length === 0) return false;
+
+					const currentDate = new Date();
+					currentDate.setHours(0, 0, 0, 0); // Start of today
+
+					if (specialFilters.deadline === 'today') {
+						// Check if any deadline is today or past
+						return deadlines.some((deadline) => {
+							const deadlineDate = new Date(deadline);
+							deadlineDate.setHours(0, 0, 0, 0); // Start of deadline day
+							return deadlineDate <= currentDate;
+						});
+					} else if (specialFilters.deadline === 'twoDays') {
+						// Check if any deadline is within next 2 days (not including today)
+						const twoDaysFromNow = new Date();
+						twoDaysFromNow.setDate(currentDate.getDate() + 2);
+						twoDaysFromNow.setHours(23, 59, 59, 999); // End of the second day
+
+						return deadlines.some((deadline) => {
+							const deadlineDate = new Date(deadline);
+							return deadlineDate > currentDate && deadlineDate <= twoDaysFromNow;
+						});
+					}
+
+					return true;
+				});
+			}
+
+			setCurrentList(filteredList);
+			setCurrentFilter(validFilters);
+			setActiveFilters(true);
+			setShowFilterOptions(false);
+			setIsFilter && setIsFilter(true);
+			return;
+		}
+
+		// Regular filtering for other types
 		let filteredList = [...source];
 
 		validFilters.forEach((filter, index) => {
@@ -340,8 +525,6 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 		setCurrentFilter(validFilters);
 		setActiveFilters(true);
 		setShowFilterOptions(false);
-
-		// Set isFilter state to true since filters are applied
 		setIsFilter && setIsFilter(true);
 	};
 
@@ -437,6 +620,12 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 		}));
 		setFilterRows(resetRows);
 
+		// Reset special filters for processing_v2
+		setSpecialFilters({
+			deadline: '',
+			status: '',
+		});
+
 		// Don't reset isFilter state here - only after applying the reset
 		// with applyFilters
 	};
@@ -472,8 +661,107 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 		{ key: '===', value: '≡' },
 	];
 
+	// Apply quick filters for processing_v2
+	const applyQuickFilter = (filterType, value) => {
+		// Toggle filter if the same value is selected again
+		if (activeQuickFilters[filterType] === value) {
+			setActiveQuickFilters((prev) => ({
+				...prev,
+				[filterType]: null,
+			}));
+		} else {
+			setActiveQuickFilters((prev) => ({
+				...prev,
+				[filterType]: value,
+			}));
+		}
+
+		// Apply filters
+		applyProcessingV2Filters();
+	};
+
+	// Reset quick filters
+	const resetQuickFilters = () => {
+		setActiveQuickFilters({
+			deadline: null,
+			status: null,
+		});
+		setCurrentList(source);
+		setIsFilter && setIsFilter(false);
+	};
+
+	// Apply filters for processing_v2 data
+	const applyProcessingV2Filters = () => {
+		if (!source || !Array.isArray(source)) return;
+
+		// Start with all samples
+		let filteredList = [...source];
+		let filterApplied = false;
+
+		// Filter by status if selected
+		if (activeQuickFilters.status !== null) {
+			filteredList = filteredList.filter((sample) => sample.status === activeQuickFilters.status);
+			filterApplied = true;
+		}
+
+		// Filter by deadline
+		if (activeQuickFilters.deadline !== null) {
+			filteredList = filteredList.filter((sample) => {
+				// Check if sample has analysis array
+				if (!sample.analysis || !Array.isArray(sample.analysis) || sample.analysis.length === 0) {
+					return false;
+				}
+
+				// Get all valid deadlines from analyses
+				const deadlines = sample.analysis
+					.map((a) => (a.deadline ? new Date(a.deadline) : null))
+					.filter((d) => d !== null);
+
+				if (deadlines.length === 0) return false;
+
+				const currentDate = new Date();
+				currentDate.setHours(0, 0, 0, 0); // Start of today
+
+				if (activeQuickFilters.deadline === 'today') {
+					// Check if any deadline is today or past
+					return deadlines.some((deadline) => {
+						const deadlineDate = new Date(deadline);
+						deadlineDate.setHours(0, 0, 0, 0); // Start of deadline day
+						return deadlineDate <= currentDate;
+					});
+				} else if (activeQuickFilters.deadline === 'twoDays') {
+					// Check if any deadline is within next 2 days (not including today)
+					const twoDaysFromNow = new Date();
+					twoDaysFromNow.setDate(currentDate.getDate() + 2);
+					twoDaysFromNow.setHours(23, 59, 59, 999); // End of the second day
+
+					const tomorrow = new Date();
+					tomorrow.setDate(currentDate.getDate() + 1);
+					tomorrow.setHours(0, 0, 0, 0); // Start of tomorrow
+
+					return deadlines.some((deadline) => {
+						const deadlineDate = new Date(deadline);
+						return deadlineDate > currentDate && deadlineDate <= twoDaysFromNow;
+					});
+				}
+				return true;
+			});
+			filterApplied = true;
+		}
+
+		setCurrentList(filteredList);
+		setIsFilter && setIsFilter(filterApplied);
+	};
+
+	// Handle special filter change
+	const handleSpecialFilterChange = (filterType, value) => {
+		setSpecialFilters((prev) => ({ ...prev, [filterType]: value }));
+	};
+
 	return (
 		<div className="relative flex flex-col md:flex-row items-center justify-end text-black w-full bg-white rounded-lg leading-none">
+			{/* Remove the quick filters that were here before */}
+
 			<div className="flex flex-col md:flex-row items-center w-full justify-end">
 				<div className="flex items-center">
 					<button
@@ -587,6 +875,45 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 					>
 						<h3 className="font-bold mb-3 border-b pb-2">Lọc dữ liệu</h3>
 
+						{/* Special filters for processing_v2 */}
+						{typeSearch === 'processing_v2' && (
+							<>
+								<div className="mb-3 pb-2 border-b">
+									<div className="flex flex-col gap-2">
+										{/* Deadline filter */}
+										<div className="flex items-center">
+											<label className="w-24 text-sm font-medium text-start">Hạn trả:</label>
+											<select
+												value={specialFilters.deadline}
+												onChange={(e) => handleSpecialFilterChange('deadline', e.target.value)}
+												className="p-1.5 border border-gray-300 rounded bg-white flex-1"
+											>
+												<option value="">-- Tất cả --</option>
+												<option value="today">Hết hạn hôm nay</option>
+												<option value="twoDays">Hết hạn trong 2 ngày</option>
+											</select>
+										</div>
+
+										{/* Status filter */}
+										<div className="flex items-center">
+											<label className="w-24 text-sm font-medium text-start">Trạng thái:</label>
+											<select
+												value={specialFilters.status}
+												onChange={(e) => handleSpecialFilterChange('status', e.target.value)}
+												className="p-1.5 border border-gray-300 rounded bg-white flex-1"
+											>
+												<option value="">-- Tất cả --</option>
+												<option value="waiting">Đang chờ</option>
+												<option value="urgent">Mẫu khẩn</option>
+												<option value="incomplete">Chưa hoàn thành</option>
+											</select>
+										</div>
+									</div>
+								</div>
+							</>
+						)}
+
+						{/* Regular filter rows */}
 						{filterRows.map((row, index) => (
 							<div key={index} className="mb-2 pb-1 border-b">
 								{index > 0 && (
@@ -674,6 +1001,8 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 						</div>
 					</div>
 				)}
+
+				{/* ...existing sorting dropdown... */}
 			</div>
 		</div>
 	);

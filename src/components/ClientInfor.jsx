@@ -458,13 +458,6 @@ const ClientInfor = () => {
 		<div className="w-full h-full relative">
 			<ToastContainer />
 
-			<Breadcrumb
-				paths={[
-					{ name: 'Thư viện', link: '/library' },
-					{ name: 'Khách hàng', link: '/library/client' },
-				]}
-			/>
-
 			<div className="rounded-lg w-full p-4 bg-white flex flex-col h-full ">
 				<div className="flex justify-between items-center mb-2">
 					<h1 className="text-2xl font-bold text-primary text-start">Danh sách khách hàng</h1>

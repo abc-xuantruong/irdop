@@ -23,7 +23,7 @@ export const GlobalProvider = ({ children }) => {
 	const [currentKey, setCurrentKey] = useState([]);
 	const [clients, setClients] = useState(listClients);
 	const [currentUser, setCurrentUser] = useState(null);
-	const status = ['Tiếp nhận', 'Bàn giao', 'Đang thực hiện', 'Khẩn cấp', 'Đã kiểm nghiệm', 'Đã hoàn thành', 'Hủy bỏ'];
+	const status = ['Đang chờ', 'Khẩn', 'Thường', 'Hoàn thành', 'Hủy bỏ'];
 	const purposes = ['Chất lượng', 'Dự án', 'Đề tài', 'Công bố', 'Thầu phụ'];
 
 	const normalizeString = (str) => {

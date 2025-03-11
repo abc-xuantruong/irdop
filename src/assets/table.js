@@ -1,35 +1,43 @@
-const { Pool } = pg;
-global.set('pg', pg);
-global.set('axios', axios);
-// DATABASE CLIENT
-
-// Create a new connection pool with the given configuration
-const pool = new Pool({
-	user: 'postgres', // USERNAME
-	host: 'localhost', // HOST
-	database: 'test_new_ui', // DATABASE NAME
-	password: 'admin', // PASSWORD
-	port: '5432', // PORT
-});
-
-(async () => {
+const { Pool } = global.get('pg');
+let pool;
+// CONNECTING TO LAB DB
+async function connect() {
 	try {
-		// Attempt to connect to the database
-		// const client = await pool.connect();
-		// Set the connected client in the global scope
-		global.set('repoClient', pool);
-		// Log a success message
-		node.warn('[ COMPLETED ] dtb connected');
+		pool = new Pool(JSON.parse(env.get('labDB')));
+
+		if (await testConnection()) {
+			node.warn('[ INFO ] LAB DB pool already connected');
+		} else {
+			await pool.connect();
+			node.warn('[ SUCCESS ] LAB DB pool connected');
+		}
+		global.set('labRepoClient', pool);
 	} catch (error) {
-		// Log an error message if the connection fails
-		node.warn('[ ERROR ] dtb connection failed ' + error.message);
-		console.error(error);
+		node.warn(`[ LAB REPO ERROR ] LABDB connection failed: ${error.stack}`);
+		node.warn(error.stack);
 	}
-})();
+}
 
-const repoClient = global.get('repoClient'); // Postgres client
+async function testConnection() {
+	try {
+		const client = global.get('labRepoClient');
+		const result = await client.query('SELECT 1');
+		return true; // return true if connected
+	} catch (error) {
+		return false;
+	}
+}
 
-// const repoClient = global.get('labRepoClient');
+async function disconnect() {
+	const client = global.get('labRepoClient');
+	await client.end();
+	global.set('labRepoClient', undefined);
+	node.warn('[ INFO ] LAB DB disconnected');
+}
+
+await connect();
+
+const repoClient = global.get('labRepoClient');
 
 /** CREATE */
 
@@ -55,18 +63,22 @@ async function createReport(report) {
 	try {
 		report.ppt_uid = generateReportUID();
 
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete report.created_at;
+		delete report.modified_at;
+
 		const validColumns = await matchValidColumns('report', Object.keys(report));
 		if (validColumns.length === 0) {
 			throw new Error(`Invalid report columns: ${Object.keys(report).join(', ')}`);
 		}
 
 		// replace report.header_section : '-- NH&Aacute;P / DRAFT --' -> report.ppt_uid
-		report.header_section = report.header_section.replace('-- NH&Aacute;P / DRAFT --', report.ppt_uid);
+		report.header_section = report.header_section.replace('-- SƠ BỘ / DRAFT --', report.ppt_uid);
 
 		report.reference = JSON.stringify(report.reference);
 
-		const query = `INSERT INTO report (${validColumns.join(',')}) 
-			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+		const query = `INSERT INTO report (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
 			RETURNING *`;
 
 		const params = validColumns.map((column) => report[column]);
@@ -74,21 +86,28 @@ async function createReport(report) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to create report: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 // Create protocol
 async function createProtocol(protocol) {
 	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete protocol.created_at;
+		delete protocol.modified_at;
+
 		const validColumns = await matchValidColumns('protocol', Object.keys(protocol));
 		if (validColumns.length === 0) {
 			throw new Error(`Invalid protocol columns: ${Object.keys(protocol).join(', ')}`);
 		}
 
 		const query = `
-			INSERT INTO protocol (${validColumns.join(',')}) 
-			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+			INSERT INTO protocol (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
 			RETURNING *`;
 
 		const params = validColumns.map((column) => protocol[column]);
@@ -96,21 +115,28 @@ async function createProtocol(protocol) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to create protocol: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 // Create parameter
 async function createParameter(parameter) {
 	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete parameter.created_at;
+		delete parameter.modified_at;
+
 		const validColumns = await matchValidColumns('parameter', Object.keys(parameter));
 		if (validColumns.length === 0) {
 			throw new Error(`Invalid parameter columns: ${Object.keys(parameter).join(', ')}`);
 		}
 
 		const query = `
-			INSERT INTO parameter (${validColumns.join(',')}) 
-			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+			INSERT INTO parameter (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
 			RETURNING *`;
 
 		const params = validColumns.map((column) => parameter[column]);
@@ -118,7 +144,10 @@ async function createParameter(parameter) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to create parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -129,15 +158,23 @@ async function createBulkParameters(parameters) {
 			throw new Error('Parameters must be a non-empty array');
 		}
 
+		// Remove timestamp fields from each parameter
+		parameters = parameters.map((param) => {
+			const newParam = { ...param };
+			delete newParam.created_at;
+			delete newParam.modified_at;
+			return newParam;
+		});
+
 		const validColumns = await matchValidColumns('parameter', Object.keys(parameters[0]));
 		if (validColumns.length === 0) {
 			throw new Error(`Invalid parameter columns: ${Object.keys(parameters[0]).join(', ')}`);
 		}
 
 		const query = `
-			INSERT INTO parameter (${validColumns.join(',')}) 
+			INSERT INTO parameter (${validColumns.join(',')}, created_at, modified_at) 
 			VALUES ${parameters
-				.map((_, i) => `(${validColumns.map((_, j) => `$${i * validColumns.length + j + 1}`).join(',')})`)
+				.map((_, i) => `(${validColumns.map((_, j) => `$${i * validColumns.length + j + 1}`).join(',')}, NOW(), NOW())`)
 				.join(',')}
 			RETURNING *`;
 
@@ -146,13 +183,20 @@ async function createBulkParameters(parameters) {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to create bulk parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 //create client
 async function createClient(client) {
 	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete client.created_at;
+		delete client.modified_at;
+
 		const validColumns = await matchValidColumns('client', Object.keys(client));
 		if (validColumns.length === 0) {
 			throw new Error(`Invalid client columns: ${Object.keys(client).join(', ')}`);
@@ -161,8 +205,8 @@ async function createClient(client) {
 		client.contacts = JSON.stringify(client?.contacts || []);
 
 		const query = `
-			INSERT INTO client (${validColumns.join(',')}) 
-			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+			INSERT INTO client (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
 			RETURNING *`;
 
 		const params = validColumns.map((column) => client[column]);
@@ -170,21 +214,28 @@ async function createClient(client) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to create client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 // Create analysis
 async function createAnalysis(analysis) {
 	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete analysis.created_at;
+		delete analysis.modified_at;
+
 		const validColumns = await matchValidColumns('analysis', Object.keys(analysis));
 		if (validColumns.length === 0) {
 			throw new Error(`Invalid analysis columns: ${Object.keys(analysis).join(', ')}`);
 		}
 
 		const query = `
-			INSERT INTO analysis (${validColumns.join(',')}) 
-			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+			INSERT INTO analysis (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
 			RETURNING *`;
 
 		const params = validColumns.map((column) => analysis[column]);
@@ -192,12 +243,19 @@ async function createAnalysis(analysis) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to create analysis: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 async function upsertParameterByUid(parameter) {
 	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete parameter.created_at;
+		delete parameter.modified_at;
+
 		// Chỉ lấy các key hợp lệ
 		const validColumns = ['parameter_uid', 'parameter_name', 'matrix', 'protocol_code', 'protocol_source'];
 		const filteredParam = validColumns.reduce((acc, key) => {
@@ -211,13 +269,13 @@ async function upsertParameterByUid(parameter) {
 		}
 
 		const query = `
-			INSERT INTO parameter (${validColumns.join(',')}) 
-			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+			INSERT INTO parameter (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
 			ON CONFLICT (parameter_uid) DO UPDATE 
 			SET ${validColumns
 				.slice(1)
 				.map((col, index) => `${col} = $${index + validColumns.length + 1}`)
-				.join(', ')}
+				.join(', ')}, modified_at = NOW()
 			RETURNING *`;
 
 		// Gộp giá trị cho INSERT và UPDATE
@@ -230,8 +288,10 @@ async function upsertParameterByUid(parameter) {
 		const result = await repoClient.query(query, params);
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
-		throw error; // Ném lỗi để có thể bắt ở nơi khác
+		const enhancedError = new Error(`Failed to upsert parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -242,15 +302,23 @@ async function createBulkAnalysisFromParameters(analyses) {
 			throw new Error('Analyses must be a non-empty array');
 		}
 
+		// Remove timestamp fields from each analysis
+		analyses = analyses.map((analysis) => {
+			const newAnalysis = { ...analysis };
+			delete newAnalysis.created_at;
+			delete newAnalysis.modified_at;
+			return newAnalysis;
+		});
+
 		const validColumns = await matchValidColumns('analysis', Object.keys(analyses[0]));
 		if (validColumns.length === 0) {
 			throw new Error(`Invalid analysis columns: ${Object.keys(analyses[0]).join(', ')}`);
 		}
 
 		const query = `
-			INSERT INTO analysis (${validColumns.join(',')}) 
+			INSERT INTO analysis (${validColumns.join(',')}, created_at, modified_at) 
 			VALUES ${analyses
-				.map((_, i) => `(${validColumns.map((_, j) => `$${i * validColumns.length + j + 1}`).join(',')})`)
+				.map((_, i) => `(${validColumns.map((_, j) => `$${i * validColumns.length + j + 1}`).join(',')}, NOW(), NOW())`)
 				.join(',')}
 			RETURNING *`;
 
@@ -259,12 +327,23 @@ async function createBulkAnalysisFromParameters(analyses) {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to create bulk analyses: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 async function createReceipt(receipt) {
 	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete receipt.created_at;
+		delete receipt.modified_at;
+
+		if (!receipt.receipt_date) {
+			receipt.receipt_date = new Date();
+		}
+
 		// Generate baseUid
 		const now = new Date();
 		const year = now.getFullYear().toString().slice(-2);
@@ -300,10 +379,10 @@ async function createReceipt(receipt) {
 			throw new Error(`Invalid receipt columns: ${Object.keys(receipt).join(', ')}`);
 		}
 
-		// Insert the new receipt
+		// Insert the new receipt with timestamps
 		const insertQuery = `
-			INSERT INTO receipt (${validColumns.join(',')}) 
-			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+			INSERT INTO receipt (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
 			RETURNING *;
 		`;
 
@@ -312,12 +391,19 @@ async function createReceipt(receipt) {
 
 		return insertResult.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to create receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 async function createSample(sample) {
 	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete sample.created_at;
+		delete sample.modified_at;
+
 		// Get the receipt for the sample
 		const receiptQuery = 'SELECT receipt_uid FROM receipt WHERE id = $1';
 		const receiptResult = await repoClient.query(receiptQuery, [sample.receipt_id]);
@@ -358,8 +444,8 @@ async function createSample(sample) {
 		}
 
 		const query = `
-			INSERT INTO sample (${validColumns.join(',')}) 
-			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+			INSERT INTO sample (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
 			RETURNING *`;
 
 		const params = validColumns.map((column) => sample[column]);
@@ -367,14 +453,16 @@ async function createSample(sample) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to create sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 /** READ */
 // Get report by sample UID (SELECT ppt_uid)
 async function getPptUidBySampleUid({ id, sample_uid }) {
-
 	try {
 		if (!id && !sample_uid) throw new Error('Sample id or sample_uid must be not null!');
 		const conditional = id ? 'WHERE id = $1' : 'WHERE sample_uid = $1';
@@ -383,9 +471,11 @@ async function getPptUidBySampleUid({ id, sample_uid }) {
 
 		const result = await repoClient.query(query, param);
 		return result.rows.map((row) => row.ppt_uid);
-		
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get PPT UID: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -400,7 +490,10 @@ async function getReport({ id, ppt_uid }) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get report: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -418,7 +511,10 @@ async function getProtocolById(id) {
 		}
 		return protocol;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get protocol with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -440,7 +536,10 @@ async function getAllProtocols() {
 		return protocols;
 	} catch (error) {
 		await client.query('ROLLBACK');
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get all protocols: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	} finally {
 		client.release();
 	}
@@ -453,13 +552,15 @@ async function getParameter({ id, uid }) {
 		const conditional = id ? 'WHERE id = $1' : 'WHERE parameter_uid = $1';
 		const param = id ? [id] : [uid];
 		const query = 'SELECT * FROM parameter ' + conditional;
-		node.warn(param);
-		node.warn(query);
+
 		const result = await repoClient.query(query, param);
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -483,7 +584,10 @@ async function getBulkParameter({ ids, uids }) {
 		return result.rows;
 	} catch (error) {
 		await client.query('ROLLBACK');
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get bulk parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	} finally {
 		client.release();
 	}
@@ -496,7 +600,10 @@ async function getAllParameters() {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get all parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -509,7 +616,10 @@ async function getParametersByProtocolId(protocol_id) {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get parameters for protocol ID ${protocol_id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -520,7 +630,10 @@ async function getAllReceipt() {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get all receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -534,7 +647,10 @@ async function getReceipt({ id, receipt_uid }) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -545,7 +661,10 @@ async function getAllSample() {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get all samples: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -559,7 +678,10 @@ async function getSample({ id, sample_uid }) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -577,7 +699,10 @@ async function getSampleByReceipt({ id, receipt_uid }) {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get samples by receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -588,7 +713,10 @@ async function getAllAnalysis() {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get all analyses: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -600,7 +728,10 @@ async function getAnalysis({ id }) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get analysis with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -618,7 +749,10 @@ async function getAnalysisBySample({ id, sample_uid }) {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get analyses by sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -636,7 +770,10 @@ async function getAnalysisByReceipt({ id, receipt_uid }) {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get analyses by receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -647,7 +784,10 @@ async function getAllClient() {
 
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get all clients: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -661,7 +801,10 @@ async function getClient({ id, client_uid }) {
 
 		return result.rows[0];
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -675,7 +818,10 @@ async function getTemporaryClient() {
 		const result = await repoClient.query(query);
 		return result.rows.map((row) => ({ receipt_id: row.id, ...row.client, contacts: [row.contact] }));
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get temporary client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -694,7 +840,10 @@ async function getTemporaryContact() {
 			contacts: [row.contact],
 		}));
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get temporary contact: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -712,7 +861,10 @@ async function getClientByReceipt({ id, receipt_uid }) {
 			return result.rows[0].client;
 		}
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get client by receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 /** UPDATE */
@@ -720,14 +872,19 @@ async function getClientByReceipt({ id, receipt_uid }) {
 async function updateProtocol(protocol) {
 	try {
 		if (typeof protocol === 'object' && protocol.id) {
+			// Remove timestamp fields
+			delete protocol.created_at;
+			delete protocol.modified_at;
+
 			const validColumns = await matchValidColumns('protocol', Object.keys(protocol));
 			if (validColumns.length === 0) {
 				throw new Error(`Invalid protocol columns: ${Object.keys(protocol).join(', ')}`);
 			}
 
+			// Include modified_at in the UPDATE statement directly
 			const query = `UPDATE protocol SET ${validColumns
 				.map((column, index) => `${column} = $${index + 2}`)
-				.join(', ')} WHERE id = $1 RETURNING *`;
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
 			const values = [protocol.id, ...validColumns.map((column) => protocol[column])];
 
 			const result = await repoClient.query(query, values);
@@ -737,7 +894,10 @@ async function updateProtocol(protocol) {
 			throw new Error('Invalid protocol');
 		}
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to update protocol: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -745,14 +905,19 @@ async function updateProtocol(protocol) {
 async function updateParameter(parameter) {
 	try {
 		if (typeof parameter === 'object' && parameter.id) {
+			// Remove timestamp fields
+			delete parameter.created_at;
+			delete parameter.modified_at;
+
 			const validColumns = await matchValidColumns('parameter', Object.keys(parameter));
 			if (validColumns.length === 0) {
 				throw new Error(`Invalid parameter columns: ${Object.keys(parameter).join(', ')}`);
 			}
 
+			// Include modified_at in the UPDATE statement directly
 			const query = `UPDATE parameter SET ${validColumns
 				.map((column, index) => `${column} = $${index + 2}`)
-				.join(', ')} WHERE id = $1 RETURNING *`;
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
 			const values = [parameter.id, ...validColumns.map((column) => parameter[column])];
 
 			const result = await repoClient.query(query, values);
@@ -762,21 +927,29 @@ async function updateParameter(parameter) {
 			throw new Error('Invalid parameter');
 		}
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to update parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 async function updateReceipt(receipt) {
 	try {
 		if (typeof receipt === 'object' && receipt.id) {
+			// Remove timestamp fields
+			delete receipt.created_at;
+			delete receipt.modified_at;
+
 			const validColumns = await matchValidColumns('receipt', Object.keys(receipt));
 			if (validColumns.length === 0) {
 				throw new Error(`Invalid receipt columns: ${Object.keys(receipt).join(', ')}`);
 			}
 
+			// Include modified_at in the UPDATE statement directly
 			const query = `UPDATE receipt SET ${validColumns
 				.map((column, index) => `${column} = $${index + 2}`)
-				.join(', ')} WHERE id = $1 RETURNING *`;
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
 			const values = [receipt.id, ...validColumns.map((column) => receipt[column])];
 
 			const result = await repoClient.query(query, values);
@@ -786,13 +959,20 @@ async function updateReceipt(receipt) {
 			throw new Error('Invalid receipt');
 		}
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to update receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 async function updateSample(sample) {
 	try {
 		if (typeof sample === 'object' && sample.id) {
+			// Remove timestamp fields
+			delete sample.created_at;
+			delete sample.modified_at;
+
 			const validColumns = await matchValidColumns('sample', Object.keys(sample));
 			if (validColumns.length === 0) {
 				throw new Error(`Invalid sample columns: ${Object.keys(sample).join(', ')}`);
@@ -800,9 +980,10 @@ async function updateSample(sample) {
 			if (sample?.sample_information) {
 				sample.sample_information = JSON.stringify(sample.sample_information);
 			}
+			// Include modified_at in the UPDATE statement directly
 			const query = `UPDATE sample SET ${validColumns
 				.map((column, index) => `${column} = $${index + 2}`)
-				.join(', ')} WHERE id = $1 RETURNING *`;
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
 			const values = [sample.id, ...validColumns.map((column) => sample[column])];
 			const result = await repoClient.query(query, values);
 
@@ -811,21 +992,29 @@ async function updateSample(sample) {
 			throw new Error('Invalid sample');
 		}
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to update sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 async function updateAnalysis(analysis) {
 	try {
 		if (typeof analysis === 'object' && analysis.id) {
+			// Remove timestamp fields
+			delete analysis.created_at;
+			delete analysis.modified_at;
+
 			const validColumns = await matchValidColumns('analysis', Object.keys(analysis));
 			if (validColumns.length === 0) {
 				throw new Error(`Invalid analysis columns: ${Object.keys(analysis).join(', ')}`);
 			}
 
+			// Include modified_at in the UPDATE statement directly
 			const query = `UPDATE analysis SET ${validColumns
 				.map((column, index) => `${column} = $${index + 2}`)
-				.join(', ')} WHERE id = $1 RETURNING *`;
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
 			const values = [analysis.id, ...validColumns.map((column) => analysis[column])];
 
 			const result = await repoClient.query(query, values);
@@ -835,22 +1024,30 @@ async function updateAnalysis(analysis) {
 			throw new Error('Invalid analysis');
 		}
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to update analysis: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
 async function updateClient(client) {
 	try {
 		if (typeof client === 'object' && client.id) {
+			// Remove timestamp fields
+			delete client.created_at;
+			delete client.modified_at;
+
 			const validColumns = await matchValidColumns('client', Object.keys(client));
 			if (validColumns.length === 0) {
 				throw new Error(`Invalid client columns: ${Object.keys(client).join(', ')}`);
 			}
 			client.contacts = JSON.stringify(client.contacts || []);
 
+			// Include modified_at in the UPDATE statement directly
 			const query = `UPDATE client SET ${validColumns
 				.map((column, index) => `${column} = $${index + 2}`)
-				.join(', ')} WHERE id = $1 RETURNING *`;
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
 			const values = [client.id, ...validColumns.map((column) => client[column])];
 
 			const result = await repoClient.query(query, values);
@@ -860,7 +1057,10 @@ async function updateClient(client) {
 			throw new Error('Invalid client');
 		}
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to update client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -869,6 +1069,10 @@ async function updateTemporaryClient(client) {
 		if (typeof client !== 'object' || !client) {
 			throw new Error('Invalid client');
 		}
+
+		// Remove timestamp fields
+		delete client.created_at;
+		delete client.modified_at;
 
 		if (client.contacts && client.contacts === null) delete client.contact;
 
@@ -896,11 +1100,11 @@ async function updateTemporaryClient(client) {
 		if (client.id) {
 			query = `UPDATE client SET ${validColumns
 				.map((column, index) => `${column} = $${index + 2}`)
-				.join(', ')} WHERE id = $1 RETURNING *`;
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
 			values = [client.id, ...validColumns.map((column) => client[column])];
 		} else {
-			query = `INSERT INTO client (${validColumns.join(',')}) 
-                     VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+			query = `INSERT INTO client (${validColumns.join(',')}, created_at, modified_at) 
+                     VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
                      RETURNING *`;
 			values = validColumns.map((column) => client[column]);
 		}
@@ -921,8 +1125,10 @@ async function updateTemporaryClient(client) {
 
 		return updatedClient;
 	} catch (error) {
-		console.error('Error in updateTemporaryClient:', error);
-		throw error;
+		const enhancedError = new Error(`Failed to update temporary client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -936,7 +1142,10 @@ async function deleteProtocol(id) {
 
 		return { message: 'Protocol deleted successfully' };
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to delete protocol with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -949,7 +1158,10 @@ async function deleteParameter(id) {
 
 		return { message: 'Parameter deleted successfully' };
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to delete parameter with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -973,8 +1185,10 @@ async function deleteAnalysis({ id, ids }) {
 			throw new Error('No valid ID or IDs provided for deletion');
 		}
 	} catch (error) {
-		node.warn(error);
-		return { error: error.message };
+		const enhancedError = new Error(`Failed to delete analysis: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -987,7 +1201,10 @@ async function deleteReceipt(id) {
 
 		return { message: 'Receipt deleted successfully' };
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to delete receipt with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -1000,7 +1217,10 @@ async function deleteSample(id) {
 
 		return { message: 'Sample deleted successfully' };
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to delete sample with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -1013,7 +1233,10 @@ async function deleteClient(id) {
 
 		return { message: 'Client deleted successfully' };
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to delete client with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -1034,13 +1257,14 @@ async function matchValidColumns(table_name, columns) {
 		/** 2. Match columns */
 		// Filter the input columns to include only valid columns
 		const matchedColumns = columns.filter((column) => validColumns.includes(column));
-		node.warn('Matched columns:' + matchedColumns);
 
 		// Return the matched columns
 		return matchedColumns; // if no match return []
 	} catch (error) {
-		// Handle any errors that occur during the operation
-		node.warn(error);
+		const enhancedError = new Error(`Failed to match columns for table ${table_name}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -1054,7 +1278,10 @@ const getTables = async () => {
 		// In danh sách bảng
 		console.log('Danh sách cột:', result.rows);
 	} catch (err) {
-		console.error('Lỗi khi lấy danh sách bảng:', err);
+		const enhancedError = new Error(`Failed to get tables: ${err.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = err;
+		throw enhancedError;
 	} finally {
 		await pool.end();
 	}
@@ -1064,25 +1291,33 @@ const getTables = async () => {
 
 // Search parameter
 async function searchParameter(searchText, matrixValue) {
-	let sqlQuery = `
+	try {
+		let sqlQuery = `
         SELECT * 
         FROM parameter
         WHERE 
             (parameter_name_unaccent ILIKE '%' || $1 || '%' 
+             OR parameter_name ILIKE '%' || $1 || '%' 
              OR similarity(parameter_name_unaccent, $1) > 0.3)
     `;
 
-	const params = [searchText];
+		const params = [searchText];
 
-	if (matrixValue) {
-		sqlQuery += ` ORDER BY similarity(parameter_name_unaccent, $1) DESC, similarity(matrix, $2) DESC `;
-		params.push(matrixValue);
-	} else {
-		sqlQuery += ` ORDER BY similarity(parameter_name_unaccent, $1) DESC`;
+		if (matrixValue) {
+			sqlQuery += ` ORDER BY similarity(parameter_name_unaccent, $1) DESC, similarity(matrix, $2) DESC `;
+			params.push(matrixValue);
+		} else {
+			sqlQuery += ` ORDER BY similarity(parameter_name_unaccent, $1) DESC`;
+		}
+
+		const result = await pool.query(sqlQuery, params);
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to search parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
-
-	const result = await pool.query(sqlQuery, params);
-	return result.rows;
 }
 
 // Search receipt
@@ -1110,7 +1345,10 @@ LIMIT 60;
 		const result = await pool.query(sqlQuery, params);
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to search receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
@@ -1130,7 +1368,10 @@ WHERE
 		const result = await pool.query(sqlQuery);
 		return result.rows;
 	} catch (error) {
-		node.warn(error);
+		const enhancedError = new Error(`Failed to get recent receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 

@@ -1,7 +1,6 @@
 import * as React from 'react';
 const { useContext, useState, useEffect } = React;
 import FilterBar from './FilterBar';
-import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
 import axios from 'axios';
 import { RiEdit2Line } from 'react-icons/ri';
@@ -433,13 +432,7 @@ const AnalyteInfor = () => {
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
-			<Breadcrumb
-				paths={[
-					{ name: 'Thư viện', link: '/library' },
-					{ name: 'Chỉ tiêu', link: '/library/analyte' },
-				]}
-			/>
-			<div className="w-full h-full mt-2 rounded-lg bg-white p-2">
+			<div className="w-full h-full rounded-lg bg-white p-2">
 				<div className="flex justify-between items-center">
 					<div className="relative"></div>
 					<h2 className="text-4xl text-primary font-semibold py-2">Danh sách chỉ tiêu</h2>

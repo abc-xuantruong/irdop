@@ -403,7 +403,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 									</div>
 								</div>
 							</div>
-							<div className="w-full flex flex-col items-center px-2">
+							<div className="w-full flex flex-col items-center px-0">
 								<div className=" w-80 md:w-full">
 									<label className="block p-1 pb-0 text-start text-sm font-medium">Ghi chú</label>
 									<textarea
