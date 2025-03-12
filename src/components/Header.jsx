@@ -74,7 +74,7 @@ const Header = () => {
 									currentPath.includes('/processing') ? 'text-primary' : 'text-teritary hover:text-primary'
 								}`}
 							>
-								Kiểm nghiệm
+								Lab
 							</Link>
 
 							<Link
@@ -159,7 +159,7 @@ const Header = () => {
 											onClick={() => handleNavigate('/processing')}
 											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
 										>
-											Kiểm nghiệm
+											Lab
 										</button>
 										<button
 											onClick={() => handleNavigate('/dashboard')}

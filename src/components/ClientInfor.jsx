@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
-import axios from 'axios';
+import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { toast, ToastContainer } from 'react-toastify';
@@ -26,14 +26,14 @@ const ClientInfor = () => {
 
 	const fetchClients = async () => {
 		const url = 'https://black.irdop.org/hli1o7az/db/get/client';
-		const response = await axios.get(url);
+		const response = await apiGet(url);
 		setClients(response.data);
 		setCurrentList(response.data); // Set current list
 	};
 
 	const fetchTemporaryClients = async () => {
 		const url = 'https://black.irdop.org/hli1o7az/db/get/temporary_client';
-		const response = await axios.get(url);
+		const response = await apiGet(url);
 		setTemporaryClients(response.data);
 		setCurrentList(response.data); // Set current list
 	};
@@ -83,7 +83,7 @@ const ClientInfor = () => {
 					});
 				}
 
-				const response = await axios.post(url, { client: clientWithAuth });
+				const response = await apiPost(url, { client: clientWithAuth });
 				if (response.status === 200) {
 					toast.success('Cập nhật thành công');
 
@@ -151,11 +151,10 @@ const ClientInfor = () => {
 
 	const handleDeleteClick = (clientId) => {
 		if (window.confirm('Bạn có chắc chắn muốn xóa khách hàng này?')) {
-			axios
-				.post('https://black.irdop.org/hli1o7az/db/delete/client', {
-					id: clientId,
-					modified_by_uid: currentUser?.identity_uid,
-				})
+			apiPost('https://black.irdop.org/hli1o7az/db/delete/client', {
+				id: clientId,
+				modified_by_uid: currentUser?.identity_uid,
+			})
 				.then((response) => {
 					if (response.status === 200) {
 						toast.success('Xóa thành công');
@@ -310,7 +309,7 @@ const ClientInfor = () => {
 		}
 
 		try {
-			const response = await axios.post(url, { client: clientWithAuth });
+			const response = await apiPost(url, { client: clientWithAuth });
 			if (response.status === 200) {
 				toast.success('Cập nhật thành công');
 				await fetchTemporaryClients();
@@ -373,8 +372,7 @@ const ClientInfor = () => {
 
 		const url = 'https://black.irdop.org/hli1o7az/db/insert/client';
 
-		axios
-			.post(url, { client: cleanClient })
+		apiPost(url, { client: cleanClient })
 			.then((response) => {
 				if (response.status === 200) {
 					toast.success('Thêm mới thành công');

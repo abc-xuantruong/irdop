@@ -15,7 +15,6 @@ import ClientInfor from './components/ClientInfor';
 import Footer from './components/Footer';
 import Event from './components/Event';
 import ProcessingSample from './components/ProcessingSample';
-import UploadReceiptByTable from './components/UploadReceiptByTable';
 import Report from './components/Report';
 
 const App = () => {

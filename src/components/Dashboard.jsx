@@ -432,9 +432,7 @@ const Dashboard = () => {
 																	{receipt.receipt_uid}
 																</NavLink>
 																<span>
-																	<p className={`line-clamp-${receipt.samples?.length || 1} text-sm font-medium`}>
-																		{receipt.client.client_name}
-																	</p>
+																	<p className={`text-sm font-medium`}>{receipt.client.client_name}</p>
 																</span>
 															</td>
 														)}

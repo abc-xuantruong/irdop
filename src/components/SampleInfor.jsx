@@ -15,7 +15,8 @@ import 'react-toastify/dist/ReactToastify.css';
 import { FaTrashAlt, FaCopy, FaUserCog, FaSave, FaTimes, FaRegTimesCircle, FaDatabase } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import axios from 'axios';
+// Replace axios import with our helper functions
+import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 
 const SampleInfor = () => {
 	const [searchParams] = useSearchParams();
@@ -131,7 +132,7 @@ const SampleInfor = () => {
 
 	const fetchReceiptFull = async () => {
 		try {
-			const response = await axios.get(`https://black.irdop.org/khsi19me/db/get/receipt_full/${receipt_uid}`);
+			const response = await apiGet(`https://black.irdop.org/khsi19me/db/get/receipt_full/${receipt_uid}`);
 			setReceiptFull(response.data);
 			// Update listSampleByReceipt with samples from receiptFull
 			if (response.data && response.data.samples) {
@@ -160,7 +161,7 @@ const SampleInfor = () => {
 		let analyses = receiptFull.samples.find((sample) => sample.sample_uid === sampleUid).analysis;
 		analyses = analyses.map((analysis) => analysis.parameter_id);
 		try {
-			const response = await axios.post('https://black.irdop.org/ha8i0uw2/db/get/bulk/parameter', { ids: analyses });
+			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/get/bulk/parameter', { ids: analyses });
 			setSelectedParameters(response.data);
 
 			setIsDropdownVisible(false);
@@ -178,7 +179,7 @@ const SampleInfor = () => {
 
 	const searchParameters = async (query) => {
 		try {
-			const response = await axios.post('https://black.irdop.org/ha8i0uw2/db/search/parameter', {
+			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/search/parameter', {
 				query,
 				matrix: currentSample.matrix,
 			});
@@ -227,7 +228,7 @@ const SampleInfor = () => {
 				modified_by_uid: currentUser.identity_uid,
 			}));
 
-			const response = await axios.post('https://black.irdop.org/trelw82ki/db/insert/bulk/analysis', {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/insert/bulk/analysis', {
 				analyses: parameters,
 			});
 
@@ -301,7 +302,7 @@ const SampleInfor = () => {
 				updateParameterMode &&
 				(analysis.parameter_name || analysis.matrix || analysis.protocol_code || analysis.protocol_source)
 			) {
-				const parameterResponse = await axios.post('https://black.irdop.org/ha8i0uw2/db/upsert/parameter', {
+				const parameterResponse = await apiPost('https://black.irdop.org/ha8i0uw2/db/upsert/parameter', {
 					parameter: {
 						parameter_uid: analysis.parameter_uid || '',
 						parameter_name: analysis.parameter_name,
@@ -320,7 +321,7 @@ const SampleInfor = () => {
 					};
 
 					// Now update the analysis with the new parameter_id
-					const analysisResponse = await axios.post('https://black.irdop.org/trelw82ki/db/update/analysis', {
+					const analysisResponse = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 						analysis: updatedAnalysis,
 					});
 
@@ -337,7 +338,7 @@ const SampleInfor = () => {
 				}
 			} else {
 				// Standard analysis update without parameter changes
-				const response = await axios.post('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 					analysis: { ...analysis, modified_by_uid: currentUser.identity_uid },
 				});
 
@@ -365,7 +366,7 @@ const SampleInfor = () => {
 				return await updateParameterAndAnalysis(analysis);
 			} else {
 				// Standard analysis update without parameter changes
-				const response = await axios.post('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 					analysis: { ...analysis, modified_by_uid: currentUser.identity_uid },
 				});
 
@@ -393,7 +394,7 @@ const SampleInfor = () => {
 
 			// First upsert the parameter to get a parameter_id if updateParameterMode is true
 			if (updateParameterMode) {
-				const parameterResponse = await axios.post('https://black.irdop.org/ha8i0uw2/db/upsert/parameter', {
+				const parameterResponse = await apiPost('https://black.irdop.org/ha8i0uw2/db/upsert/parameter', {
 					parameter: {
 						id: 0, // Always 0 for new parameters
 						parameter_uid: newParameter.parameter_uid,
@@ -424,7 +425,7 @@ const SampleInfor = () => {
 				modified_by_uid: currentUser.identity_uid,
 			};
 
-			const response = await axios.post('https://black.irdop.org/trelw82ki/db/insert/analysis', {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/insert/analysis', {
 				analysis: analysisToAdd,
 			});
 
@@ -676,7 +677,7 @@ const SampleInfor = () => {
 	useEffect(() => {
 		const fetchSample = async () => {
 			try {
-				const response = await axios.get(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
+				const response = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
 				setSample(response.data);
 				setCurrentSample(response.data);
 				setListAnalytes(response.data.analysis);
@@ -685,12 +686,9 @@ const SampleInfor = () => {
 				if (response.data.sample_information && response.data.sample_information.length > 0) {
 					// The last two items are receipt info, the rest are customer info
 					const sampleInfo = response.data.sample_information || [];
-					const receiptInfoItems = sampleInfo.filter(
-						(item) => item.fname === 'Ngày tiếp nhận / Receipt date.' || item.fname === 'Mã phiếu / Receipt code.',
-					);
-					const customerInfoItems = sampleInfo.filter(
-						(item) => item.fname !== 'Ngày tiếp nhận / Receipt date.' && item.fname !== 'Mã phiếu / Receipt code.',
-					);
+					const index = sampleInfo.findIndex((item) => item.fname.includes('Ngày tiếp nhận'));
+					const receiptInfoItems = sampleInfo.slice(index, sampleInfo.length);
+					const customerInfoItems = sampleInfo.slice(0, index);
 
 					setCustomerInfo(customerInfoItems);
 					setReceiptInfo(receiptInfoItems);
@@ -786,7 +784,7 @@ const SampleInfor = () => {
 			// Combine customerInfo and receiptInfo for saving
 			const combinedInfo = [...customerInfo, ...receiptInfo];
 
-			const response = await axios.post('https://black.irdop.org/to82oe92i/db/update/sample', {
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
 				sample: { ...sample, sample_information: combinedInfo, modified_by_uid: currentUser.identity_uid },
 			});
 
@@ -910,7 +908,7 @@ const SampleInfor = () => {
 		const combinedInfo = [...updatedCustomerInfo, ...updatedReceiptInfo];
 
 		try {
-			const response = await axios.post('https://black.irdop.org/to82oe92i/db/update/sample', {
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
 				sample: { ...sample, sample_information: combinedInfo, modified_by_uid: currentUser.identity_uid },
 			});
 
@@ -1205,7 +1203,7 @@ const SampleInfor = () => {
 
 	const handleRemoveAnalyte = async (id) => {
 		try {
-			const response = await axios.post('https://black.irdop.org/trelw82ki/db/delete/analysis', {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/delete/analysis', {
 				id,
 				modified_by_uid: currentUser.identity_uid,
 			});
@@ -1543,7 +1541,7 @@ const SampleInfor = () => {
 
 	const handleDeleteSampleConfirmAction = async () => {
 		try {
-			const response = await axios.post('https://black.irdop.org/to82oe92i/db/delete/sample', {
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/delete/sample', {
 				id: deleteItemId,
 				modified_by_uid: currentUser.identity_uid,
 			});
@@ -1565,7 +1563,7 @@ const SampleInfor = () => {
 
 	const handleDeleteAnalysisConfirmAction = async () => {
 		try {
-			const response = await axios.post('https://black.irdop.org/trelw82ki/db/delete/analysis', {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/delete/analysis', {
 				id: deleteItemId,
 				modified_by_uid: currentUser.identity_uid,
 			});
@@ -1639,7 +1637,7 @@ const SampleInfor = () => {
 
 	const handleDeleteMultipleConfirmAction = async () => {
 		try {
-			const response = await axios.post('https://black.irdop.org/trelw82ki/db/delete/analysis', {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/delete/analysis', {
 				ids: selectedAnalytes,
 				modified_by_uid: currentUser.identity_uid,
 			});
@@ -1691,7 +1689,7 @@ const SampleInfor = () => {
 			// Make API calls for each analyte separately
 			for (const analyte of updatedAnalytes) {
 				try {
-					await axios.post('https://black.irdop.org/trelw82ki/db/update/analysis', { analysis: analyte });
+					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', { analysis: analyte });
 					successCount++;
 				} catch (error) {
 					console.error(`Error updating analysis ID ${analyte.id}:`, error);

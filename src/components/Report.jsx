@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { GlobalContext } from '../contexts/GlobalContext';
+import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 
 export default function MultiPageEditor() {
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -45,15 +46,14 @@ export default function MultiPageEditor() {
 		const fetchPptList = async () => {
 			if (sample_uid) {
 				try {
-					const response = await fetch(`https://black.irdop.org/to82oe92i/db/sample/get/ppt_uid/${sample_uid}`);
+					const response = await apiGet(`https://black.irdop.org/to82oe92i/db/sample/get/ppt_uid/${sample_uid}`);
 
-					if (!response.ok) {
+					if (response.status !== 200) {
 						throw new Error(`PPT list API request failed with status ${response.status}`);
 					}
 
-					const data = await response.json();
-					console.log('PPT list fetched:', data);
-					setPptList(data);
+					console.log('PPT list fetched:', response.data);
+					setPptList(response.data);
 
 					// Check if a specific ppt_uid was requested in URL
 					if (selected_ppt_uid) {
@@ -74,13 +74,13 @@ export default function MultiPageEditor() {
 	const loadPublishedReport = async (reportId) => {
 		setLoading(true);
 		try {
-			const response = await fetch(`https://black.irdop.org/to82oe92i/db/get/report/${reportId}`);
+			const response = await apiGet(`https://black.irdop.org/to82oe92i/db/get/report/${reportId}`);
 
-			if (!response.ok) {
+			if (response.status !== 200) {
 				throw new Error(`Report API request failed with status ${response.status}`);
 			}
 
-			const reportData = await response.json();
+			const reportData = response.data;
 			console.log('Published report data loaded:', reportData);
 
 			// Update all relevant states with the fetched report data
@@ -228,30 +228,30 @@ export default function MultiPageEditor() {
 		try {
 			setLoading(true);
 			// Fetch sample data
-			const sampleResponse = await fetch(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
+			const sampleResponse = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
 			// Alternative URL: http://127.0.0.1:1880/db/get/sample_full/${sample_uid}
 
-			if (!sampleResponse.ok) {
+			if (sampleResponse.status !== 200) {
 				throw new Error(`Sample API request failed with status ${sampleResponse.status}`);
 			}
 
-			const sampleResult = await sampleResponse.json();
+			const sampleResult = sampleResponse.data;
 			setSampleData(sampleResult);
 			console.log('Sample data fetched:', sampleResult);
 
 			// Get receipt_id from sample data to fetch client info
 			if (sampleResult && sampleResult.receipt_id) {
 				try {
-					const clientResponse = await fetch(
+					const clientResponse = await apiGet(
 						`https://black.irdop.org/hli1o7az/db/receipt/get/client/${sampleResult.receipt_id}`,
 					);
 					// Alternative URL: http://127.0.0.1:1880/db/get/client/${sampleResult.receipt_id}
 
-					if (!clientResponse.ok) {
+					if (clientResponse.status !== 200) {
 						throw new Error(`Client API request failed with status ${clientResponse.status}`);
 					}
 
-					sampleResult.client = await clientResponse.json();
+					sampleResult.client = clientResponse.data;
 				} catch (clientErr) {
 					console.error('Error fetching client data:', clientErr);
 					// Continue with sample data even if client data fails
@@ -564,7 +564,7 @@ export default function MultiPageEditor() {
 					const parameterName = item.parameter_name || '--';
 					const result = item.result_value || '--';
 					const unit = item.result_unit || '--';
-					const protocol = item.protocol_code || '--';
+					const protocol = item?.protocol_source + ' ' + item.protocol_code || '--';
 
 					// Reference cell handling with improved logic
 					let referenceCell = '';
@@ -1165,7 +1165,17 @@ export default function MultiPageEditor() {
 			signatureSection: extractedSections.signatureSection,
 		});
 
-		// Create print window
+		// Create print window with custom title for PDF filename
+		// Format current date as DD-MM-YYYY
+		const today = new Date();
+		const day = String(today.getDate()).padStart(2, '0');
+		const month = String(today.getMonth() + 1).padStart(2, '0');
+		const year = today.getFullYear();
+		const formattedDate = `${day}-${month}-${year}`;
+
+		// Create window title with format: PPT-${sample_uid} DD-MM-YYYY
+		const documentTitle = `PPT-${sample_uid} ${formattedDate}`;
+
 		const printWindow = window.open('', '_blank', 'width=1000,height=1000,toolbar=no,scrollbars=yes');
 		if (!printWindow) {
 			alert('Please allow pop-ups to print the document.');
@@ -1180,7 +1190,7 @@ export default function MultiPageEditor() {
 			bottomMargin: 8, // 0.8cm
 			sideMargin: 10, // 1cm
 			headerSpacing: 5, // spacing between header and content
-			footerSpacing: 0, // removed spacing between content and footer
+			footerSpacing: 5, // removed spacing between content and footer
 		};
 
 		// Get DPI for pixel to mm conversion
@@ -1841,7 +1851,7 @@ export default function MultiPageEditor() {
 				<!DOCTYPE html>
 				<html>
 				<head>
-					<title>Print Document</title>
+					<title>${documentTitle}</title>
 					<meta charset="utf-8">
 					<style>
 						${fontFaces}
@@ -2149,19 +2159,13 @@ export default function MultiPageEditor() {
 			console.log('Publishing new report with data:', requestBody);
 
 			// Send the data to the API
-			const response = await fetch('https://black.irdop.org/to82oe92i/db/insert/ppt', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ report: requestBody }),
-			});
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/ppt', { report: requestBody });
 
-			if (!response.ok) {
+			if (response.status !== 200) {
 				throw new Error(`API request failed with status ${response.status}`);
 			}
 
-			const result = await response.json();
+			const result = response.data;
 			console.log('Published successfully:', result);
 
 			// If we get a ppt_uid back from the API, update our state and URL
