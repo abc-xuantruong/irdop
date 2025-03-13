@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useState } from 'react';
 import { GlobalContext } from '../contexts/GlobalContext';
 import FilterBar from './FilterBar';
 import Breadcrumb from './Breadcrumb';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import CreateReceipt from './CreateReceipt';
 import CreateReceiptFromCRM from './CreateReceiptFromCRM';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
@@ -13,15 +13,22 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
 const Dashboard = () => {
-	const { setCurrentTitlePage, status, purposes, formatDate } = useContext(GlobalContext);
+	const location = useLocation();
+	const navigate = useNavigate();
+	const { setCurrentTitlePage, status, purposes, formatDate, getIdenByUid, identityCache, currentUser } =
+		useContext(GlobalContext);
 	const [currentList, setCurrentList] = useState([]);
 	const [originalList, setOriginalList] = useState([]);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isFilter, setIsFilter] = useState(false); // State to track if filtering is active
+	const [searchTerm, setSearchTerm] = useState('');
 
 	// Remove isEditMode state
 	// Add state to track which field is being edited
 	const [editingField, setEditingField] = useState({ receiptId: null, sampleId: null, field: null });
+
+	// Add state for user information
+	const [userInfo, setUserInfo] = useState({});
 
 	const [showRelativeTime, setShowRelativeTime] = useState(false); // Toggle between date format and relative time
 	const receiptsPerPage = 15;
@@ -29,6 +36,215 @@ const Dashboard = () => {
 	const [hoveredReceiptId, setHoveredReceiptId] = useState(null);
 	const [hoveredSampleId, setHoveredSampleId] = useState(null);
 	let isFetch = false;
+
+	// Date input state
+	const [dateInputValues, setDateInputValues] = useState({});
+	const [isDatePickerFocused, setIsDatePickerFocused] = useState(false);
+	const [tempDateValues, setTempDateValues] = useState({});
+
+	// Function to format date strings entered manually
+	const formatDateString = (dateStr) => {
+		// Remove any existing separators to normalize
+		const normalized = dateStr.replace(/[^0-9]/g, '');
+
+		if (normalized.length === 8) {
+			// Format as DD/MM/YYYY if 8 digits
+			return `${normalized.substring(0, 2)}/${normalized.substring(2, 4)}/${normalized.substring(4)}`;
+		} else if (dateStr.length === 10) {
+			// Replace the 3rd and 6th characters with "/" for 10-char strings
+			return `${dateStr.substring(0, 2)}/${dateStr.substring(3, 5)}/${dateStr.substring(6)}`;
+		}
+
+		// Return original if it doesn't match our patterns
+		return dateStr;
+	};
+
+	// Function to convert DD/MM/YYYY string to Date object
+	const parseDateString = (dateStr) => {
+		if (!dateStr) return null;
+
+		// Handle formatted date strings
+		const parts = dateStr.split('/');
+		if (parts.length === 3) {
+			const day = parseInt(parts[0], 10);
+			const month = parseInt(parts[1], 10) - 1; // Month is 0-based in JS Date
+			const year = parseInt(parts[2], 10);
+
+			if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+				return new Date(year, month, day);
+			}
+		}
+
+		// Fallback to standard parsing
+		const parsedDate = new Date(dateStr);
+		return isNaN(parsedDate.getTime()) ? null : parsedDate;
+	};
+
+	// Handle raw date input change
+	const handleDateInputChange = (receiptId, e) => {
+		setDateInputValues({
+			...dateInputValues,
+			[receiptId]: e.target.value,
+		});
+	};
+
+	// Handle date picker focus
+	const handleDatePickerFocus = (receiptId, currentDate) => {
+		setIsDatePickerFocused(true);
+		setTempDateValues({
+			...tempDateValues,
+			[receiptId]: currentDate,
+		});
+	};
+
+	// Handle date picker blur - only update if value has changed
+	const handleDatePickerBlur = (receiptId, currentDate) => {
+		if (isDatePickerFocused) {
+			// Compare with original value and update if different
+			if (currentDate !== tempDateValues[receiptId]) {
+				handleDeadlineChangeAPI(receiptId, currentDate);
+			}
+			setIsDatePickerFocused(false);
+		}
+	};
+
+	// Handle temporary date change without API call
+	const handleTempDateChange = (receiptId, date) => {
+		// Just update the component state without API call
+		setCurrentList((prevList) => {
+			return prevList.map((receipt) => {
+				if (receipt.id === receiptId) {
+					return { ...receipt, deadline: date };
+				}
+				return receipt;
+			});
+		});
+	};
+
+	// Handle deadline key down for date validation and submission
+	const handleDeadlineKeyDown = (e, receiptId) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+
+			// Check if there's a manual input
+			if (dateInputValues[receiptId]) {
+				const formattedDate = formatDateString(dateInputValues[receiptId]);
+				const parsedDate = parseDateString(formattedDate);
+
+				if (parsedDate) {
+					handleDeadlineChangeAPI(receiptId, parsedDate);
+				} else {
+					toast.error('Định dạng ngày không hợp lệ. Sử dụng định dạng DD/MM/YYYY hoặc DDMMYYYY');
+
+					// Restore original value
+					if (tempDateValues[receiptId]) {
+						handleTempDateChange(receiptId, tempDateValues[receiptId]);
+					}
+				}
+			} else {
+				// If using the date picker directly
+				const receipt = currentList.find((r) => r.id === receiptId);
+				if (receipt && receipt.deadline) {
+					handleDeadlineChangeAPI(receiptId, receipt.deadline);
+				}
+			}
+
+			// Reset state and remove focus
+			setDateInputValues({
+				...dateInputValues,
+				[receiptId]: undefined,
+			});
+			setEditingField({ receiptId: null, sampleId: null, field: null });
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
+		} else if (e.key === 'Escape') {
+			// Revert to original value
+			if (tempDateValues[receiptId]) {
+				handleTempDateChange(receiptId, tempDateValues[receiptId]);
+			}
+
+			setDateInputValues({
+				...dateInputValues,
+				[receiptId]: undefined,
+			});
+			setEditingField({ receiptId: null, sampleId: null, field: null });
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
+		}
+	};
+
+	// Split date handling into two functions:
+	// 1. UI update function
+	const handleDeadlineChange = (receiptId, date) => {
+		handleTempDateChange(receiptId, date);
+	};
+
+	// 2. API update function - only called on explicit confirmation
+	const handleDeadlineChangeAPI = async (receiptId, newDeadline) => {
+		try {
+			// If we have a date, adjust it for GMT+7 timezone
+			let formattedDate = null;
+			if (newDeadline) {
+				// Add 7 hours to account for GMT+7
+				const adjustedDate = new Date(newDeadline);
+				adjustedDate.setHours(adjustedDate.getHours() + 7);
+				formattedDate = adjustedDate.toISOString().split('T')[0];
+			}
+
+			const payload = {
+				receipt: {
+					id: receiptId,
+					deadline: formattedDate,
+					modified_by_uid: currentUser?.identity_uid,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+			if (response.status === 200) {
+				toast.success(`Cập nhật thông tin thành công!`, { autoClose: 1000 });
+				fetchReceipt(); // Fetch new data to update the list
+			} else {
+				toast.error(`Lỗi khi cập nhật hạn trả`);
+			}
+		} catch (error) {
+			console.error('Error updating receipt deadline:', error);
+			toast.error('Có lỗi xảy ra khi cập nhật hạn trả');
+		} finally {
+			setEditingField({ receiptId: null, sampleId: null, field: null });
+		}
+	};
+
+	// Function to fetch user identity information
+	const fetchUserIdentity = async (uid) => {
+		if (identityCache[uid]) {
+			setUserInfo((prev) => ({ ...prev, [uid]: identityCache[uid] }));
+			return;
+		}
+
+		try {
+			const userData = await getIdenByUid(uid);
+			if (userData) {
+				setUserInfo((prev) => ({ ...prev, [uid]: userData }));
+			}
+		} catch (error) {
+			console.error(`Error fetching user info for ${uid}:`, error);
+		}
+	};
+
+	// Function to get user name from identity
+	const getUserName = (uid) => {
+		if (!uid) return '';
+		if (userInfo[uid]?.identity_name) {
+			return userInfo[uid].identity_name;
+		}
+		if (uid === currentUser?.identity_uid) {
+			return currentUser.identity_name;
+		}
+		return uid; // Fallback to UID if name not found
+	};
 
 	// Helper function to check if value is empty or invalid
 	const displayValue = (value) => {
@@ -97,6 +313,38 @@ const Dashboard = () => {
 		setCurrentTitlePage('Danh sách tiếp nhận mẫu');
 	}, [setCurrentTitlePage]);
 
+	// Parse URL search parameters when component mounts
+	useEffect(() => {
+		const queryParams = new URLSearchParams(location.search);
+		const searchQuery = queryParams.get('search');
+
+		if (searchQuery) {
+			setSearchTerm(searchQuery);
+			setIsFilter(true);
+
+			// Fetch search results
+			const fetchSearchResults = async () => {
+				try {
+					const response = await apiPost('https://black.irdop.org/khsi19me/db/search/receipt', {
+						query: searchQuery,
+					});
+					setCurrentList(response.data);
+				} catch (error) {
+					console.error('Error searching receipts:', error);
+					toast.error('Có lỗi xảy ra khi tìm kiếm');
+				}
+			};
+
+			fetchSearchResults();
+		} else {
+			// Still fetch normal data if no search query
+			if (!isFetch) {
+				fetchReceipt();
+				isFetch = true;
+			}
+		}
+	}, [location.search]);
+
 	const fetchReceipt = async () => {
 		try {
 			const response = await apiGet('https://black.irdop.org/khsi19me/db/get/recent_receipt');
@@ -107,6 +355,13 @@ const Dashboard = () => {
 				setCurrentList(response.data);
 			}
 			console.log('Data fetched:', response.data);
+
+			// Fetch user information for all receipts
+			response.data.forEach((receipt) => {
+				if (receipt.created_by_uid) {
+					fetchUserIdentity(receipt.created_by_uid);
+				}
+			});
 		} catch (error) {
 			console.error('Error fetching receipts:', error);
 		}
@@ -225,42 +480,6 @@ const Dashboard = () => {
 		handleSampleChange(receiptId, sampleId, field, newValue);
 	};
 
-	// Handle receipt deadline update
-	const handleDeadlineChange = async (receiptId, newDeadline) => {
-		try {
-			// If we have a date, adjust it for GMT+7 timezone
-			let formattedDate = null;
-			if (newDeadline) {
-				// Add 7 hours to account for GMT+7
-				const adjustedDate = new Date(newDeadline);
-				adjustedDate.setHours(adjustedDate.getHours() + 7);
-				formattedDate = adjustedDate.toISOString().split('T')[0];
-			}
-
-			const payload = {
-				receipt: {
-					id: receiptId,
-					deadline: formattedDate,
-				},
-			};
-
-			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
-
-			if (response.status === 200) {
-				// Change to a more generic success message
-				toast.success(`Cập nhật thông tin thành công!`, { autoClose: 1000 });
-				fetchReceipt(); // Fetch new data to update the list
-			} else {
-				toast.error(`Lỗi khi cập nhật hạn trả`);
-			}
-		} catch (error) {
-			console.error('Error updating receipt deadline:', error);
-			toast.error('Có lỗi xảy ra khi cập nhật hạn trả');
-		} finally {
-			setEditingField({ receiptId: null, sampleId: null, field: null });
-		}
-	};
-
 	// Handle payment status update
 	const handlePaymentStatusChange = async (receiptId, newStatus) => {
 		try {
@@ -287,12 +506,38 @@ const Dashboard = () => {
 		}
 	};
 
+	// Calculate what elements to hide based on the current URL
+	const hideElements = () => {
+		// If we're on the dashboard page and searching for receipts, hide the search in FilterBar
+		if (location.pathname.includes('dashboard') || location.pathname === '/') {
+			return ['search'];
+		}
+		return [];
+	};
+
 	return (
 		<div className="flex flex-col justify-between items-center w-full">
 			<ToastContainer />
 			<Breadcrumb paths={[{ name: 'Danh sách', link: '/' }]} />{' '}
-			<div className="flex justify-between items-center w-full px-4 mb-1">
-				<div></div>
+			<div className="justify-between items-center w-full mb-1 hidden md:flex">
+				<div>
+					{searchTerm && (
+						<div className="text-sm text-gray-600">
+							Kết quả tìm kiếm cho: <span className="font-medium">{searchTerm}</span>
+							<button
+								onClick={() => {
+									setSearchTerm('');
+									setIsFilter(false);
+									navigate('/dashboard');
+									fetchReceipt();
+								}}
+								className="ml-2 text-blue-600 px-2 py-1 bg-background border-2 border-gray-400"
+							>
+								Hủy
+							</button>
+						</div>
+					)}
+				</div>
 				<div className="flex space-x-2 items-center">
 					<CreateReceiptFromCRM />
 					<CreateReceipt />
@@ -306,6 +551,7 @@ const Dashboard = () => {
 							setCurrentList={setCurrentList}
 							typeSearch="receipt"
 							setIsFilter={setIsFilter} // Pass the setIsFilter function
+							hide={hideElements()} // Conditionally hide search
 						/>
 					</div>
 				</div>
@@ -351,9 +597,13 @@ const Dashboard = () => {
 													>
 														{receipt.receipt_uid}
 													</NavLink>
-													<span>
-														<p className="line-clamp-2 text-sm font-medium ">{receipt.client.client_name}</p>
-													</span>
+													<div className="flex flex-col">
+														<p className="text-sm">{receipt.client.client_name}</p>
+														<p className="text-xs text-gray-500">
+															{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
+															{getUserName(receipt.created_by_uid)}
+														</p>
+													</div>
 												</td>
 												<td colSpan="6" className="p-1 text-center text-gray-500">
 													Chưa có thông tin mẫu thử . . .
@@ -376,9 +626,9 @@ const Dashboard = () => {
 													) : (
 														<div className="w-full h-full p-1 rounded">
 															{receipt.pay_status === 1 ? (
-																<span className="font-medium text-green-600">Đã TT</span>
+																<span className="font-medium text-green-600">100%</span>
 															) : (
-																<span className="font-medium text-red-500">Chưa TT</span>
+																<span className="font-medium text-red-500">0%</span>
 															)}
 														</div>
 													)}
@@ -415,7 +665,7 @@ const Dashboard = () => {
 																? 'bg-gray-50'
 																: ''
 														}`}
-														nMouseEnter={() => setHoveredReceiptId(receipt?.receipt_uid)}
+														onMouseEnter={() => setHoveredReceiptId(receipt?.receipt_uid)}
 														onMouseLeave={() => setHoveredReceiptId(null)}
 													>
 														{sampleIndex === 0 && (
@@ -431,9 +681,13 @@ const Dashboard = () => {
 																>
 																	{receipt.receipt_uid}
 																</NavLink>
-																<span>
-																	<p className={`text-sm font-medium`}>{receipt.client.client_name}</p>
-																</span>
+																<div className="flex flex-col">
+																	<p className="text-sm">{receipt.client.client_name}</p>
+																	<p className="text-xs text-gray-500">
+																		{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
+																		{getUserName(receipt.created_by_uid)}
+																	</p>
+																</div>
 															</td>
 														)}
 														<td
@@ -442,7 +696,7 @@ const Dashboard = () => {
 															onMouseLeave={handleSampleMouseLeave}
 														>
 															<NavLink
-																className="text-primary font-semibold hover:text-[#103667]"
+																className="text-primary font-normal hover:text-[#103667]"
 																to={`/dashboard/sample?receipt_uid=${receipt.receipt_uid}&sample_uid=${sample.sample_uid}`}
 															>
 																{sample.sample_uid}
@@ -573,9 +827,9 @@ const Dashboard = () => {
 																) : (
 																	<div className="w-full h-full p-1 rounded align-top">
 																		{receipt.pay_status === 1 ? (
-																			<p className="font-medium text-green-600">Đã TT</p>
+																			<p className="font-medium text-green-600">100%</p>
 																		) : (
-																			<p className="font-medium text-red-500">Chưa TT</p>
+																			<p className="font-medium text-red-500">0%</p>
 																		)}
 																	</div>
 																)}
@@ -595,12 +849,15 @@ const Dashboard = () => {
 																	<DatePicker
 																		selected={receipt.deadline ? new Date(receipt.deadline) : null}
 																		onChange={(date) => handleDeadlineChange(receipt.id, date)}
+																		onBlur={() => handleDatePickerBlur(receipt.id, receipt.deadline)}
+																		onFocus={() => handleDatePickerFocus(receipt.id, receipt.deadline)}
+																		onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
+																		onKeyDown={(e) => handleDeadlineKeyDown(e, receipt.id)}
 																		dateFormat="dd/MM/yyyy"
 																		className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
 																		calendarClassName="text-black"
 																		placeholderText="Chọn hạn trả"
 																		autoFocus
-																		onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
 																	/>
 																) : (
 																	<div className="w-full h-full p-1 rounded">

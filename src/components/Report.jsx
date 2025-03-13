@@ -449,7 +449,7 @@ export default function MultiPageEditor() {
 				const engLabel = parts.length > 1 ? `/ ${parts[1].trim()}` : '';
 
 				return `
-			<div style="display: flex; ${fieldName.includes('Ngày tiếp nhận') && 'margin-top: 4px;'}">
+			<div style="display: flex; ${fieldName.includes('Ngày tiếp nhận') && 'margin-top: 8px;'}">
 				<div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px;">
 					<strong style="font-weight:500">${mainLabel}</strong> ${engLabel}:
 				</div>
@@ -617,22 +617,22 @@ export default function MultiPageEditor() {
     <table style="width: 100%; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
         <thead>
             <tr>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 7%; text-align:left; font-size:12px;">
+                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 6%; text-align:left; font-size:12px;">
                     STT <br> <span style="font-size: 12px; color: gray;">/ No.</span>
                 </th>
                 <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: ${
-									showReference ? '30%' : '37%'
+									showReference ? '25%' : '26%'
 								}; text-align:left; font-size:12px;">
                     Phép thử <br> <span style="font-size: 12px; color: gray;">/ Tests</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 15%; text-align:left; font-size:12px;">
+                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 17%; text-align:left; font-size:12px;">
                     Kết quả <br> <span style="font-size: 12px; color: gray;">/ Test result</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 14%; text-align:left; font-size:12px;">
+                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 11%; text-align:left; font-size:12px;">
                     Đơn vị <br> <span style="font-size: 12px; color: gray;">/ Unit</span>
                 </th>
                 <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: ${
-									showReference ? '19%' : '27%'
+									showReference ? '22%' : '38%'
 								}; text-align:left; font-size:12px;">
                     Phương pháp <br> <span style="font-size: 12px; color: gray;">/ Protocol</span>
                 </th>${referenceHeader}
@@ -651,7 +651,7 @@ export default function MultiPageEditor() {
 <div style="padding-top: 0; display: flex; flex-direction: column; ; margin:0;">
     <div style="padding: 0pt; flex-grow: 1; position: relative;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-			<p style="font-weight: bold; margin:0; font-size:12px; line-height:1.2;">
+			<p style="margin:0; font-size:12px; line-height:1.2;">
 				Nhận xét / Comment:
 			</p>
 		</div>
@@ -669,9 +669,9 @@ export default function MultiPageEditor() {
 	const notesSection = `
 <div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
     <div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
 			<p class="note test_note_title" 
-			   style="font-weight: bold; margin:0; font-size:12px; line-height:1.0; height: fit-content; ">
+			   style="font-weight:bold ; margin:0; font-size:11px; line-height:1.0; height: fit-content; ">
 				Ghi chú / Note:
 			</p>
 		</div>
@@ -1176,7 +1176,7 @@ export default function MultiPageEditor() {
 		// Create window title with format: PPT-${sample_uid} DD-MM-YYYY
 		const documentTitle = `PPT-${sample_uid} ${formattedDate}`;
 
-		const printWindow = window.open('', '_blank', 'width=1000,height=1000,toolbar=no,scrollbars=yes');
+		const printWindow = window.open('', '_blank', 'width=1100,height=1000,toolbar=no,scrollbars=yes');
 		if (!printWindow) {
 			alert('Please allow pop-ups to print the document.');
 			return;
@@ -1187,10 +1187,10 @@ export default function MultiPageEditor() {
 			width: 210,
 			height: 297,
 			topMargin: 15, // 1.5cm
-			bottomMargin: 8, // 0.8cm
+			bottomMargin: 7, // 0.8cm
 			sideMargin: 10, // 1cm
 			headerSpacing: 5, // spacing between header and content
-			footerSpacing: 5, // removed spacing between content and footer
+			footerSpacing: 1, // removed spacing between content and footer
 		};
 
 		// Get DPI for pixel to mm conversion
@@ -1636,21 +1636,38 @@ export default function MultiPageEditor() {
 						remainingHeightPx -= headerHeightPx;
 					}
 
-					// Try to fit as many rows as possible in the first part
+					// Improved row height measurement: Create a complete table with all rows
+					// to accurately measure each row in context
+					const fullTableHTML = `<table ${tableAttributes}>${hasHeader ? tableHeader : ''}<tbody>${rows
+						.map((row) => row.outerHTML)
+						.join('')}</tbody></table>`;
+					measureArea.innerHTML = fullTableHTML;
+
+					// Get all rendered rows to measure actual heights
+					const renderedRows = Array.from(measureArea.querySelectorAll('tbody tr'));
+					const rowHeights = renderedRows.map((row) => {
+						// Use getBoundingClientRect for more accurate height measurement
+						const rect = row.getBoundingClientRect();
+						return rect.height;
+					});
+
+					// Reset measurement area
+					measureArea.innerHTML = '';
+
+					// Try to fit as many rows as possible in the first part using measured heights
 					let rowsInFirstPart = [];
 					let remainingRows = [...rows];
+					let totalUsedHeight = 0;
 
-					// Measure each row and see how many fit on the current page
-					for (let i = 0; i < rows.length; i++) {
-						const row = rows[i];
-						const rowHTML = `<table ${tableAttributes}><tbody>${row.outerHTML}</tbody></table>`;
-						measureArea.innerHTML = rowHTML;
-						const rowHeightPx = measureArea.offsetHeight;
+					// Use measured heights to determine how many rows fit
+					for (let i = 0; i < rows.length && i < rowHeights.length; i++) {
+						const rowHeightPx = rowHeights[i];
 
 						if (rowHeightPx <= remainingHeightPx) {
 							// This row fits
-							rowsInFirstPart.push(row);
+							rowsInFirstPart.push(rows[i]);
 							remainingHeightPx -= rowHeightPx;
+							totalUsedHeight += rowHeightPx;
 							remainingRows.shift();
 						} else {
 							// This row doesn't fit
@@ -1690,10 +1707,11 @@ export default function MultiPageEditor() {
 							currentPageHeightPx = 0;
 
 							// Handle case where header might not leave room for even one row
+							let headerHeightPx = 0;
 							if (hasHeader) {
 								const headerHTML = `<table ${tableAttributes}>${tableHeader}</table>`;
 								measureArea.innerHTML = headerHTML;
-								const headerHeightPx = measureArea.offsetHeight;
+								headerHeightPx = measureArea.offsetHeight;
 								currentPageHeightPx += headerHeightPx;
 							}
 
@@ -1898,7 +1916,26 @@ export default function MultiPageEditor() {
 							transform: translateX(-5mm);
 						}
 						
-						/* Additional styles remain unchanged */
+						/* Additional styles for table rows to preserve height */
+						table {
+							border-collapse: collapse;
+							width: 100%;
+							font-family: 'Gilroy', sans-serif !important;
+							table-layout: fixed; /* Helps with consistent row heights */
+						}
+						
+						table tr {
+							height: auto !important; /* Allow rows to grow with content */
+							page-break-inside: avoid; /* Try to avoid breaking rows across pages */
+						}
+						
+						table td, table th {
+							padding: 6px 8px;
+							border: 1px solid black;
+							vertical-align: top; /* Better alignment for multi-line content */
+							height: auto !important; /* Allow cells to grow with content */
+							line-height: 1.2; /* Ensure consistent line height */
+						}
 						
 						.header {
 							position: absolute;
@@ -1959,12 +1996,6 @@ export default function MultiPageEditor() {
 							font-family: 'Gilroy', sans-serif !important;
 						}
 						
-						table {
-							border-collapse: collapse;
-							width: 100%;
-							font-family: 'Gilroy', sans-serif !important;
-						}
-						
 						img {
 							max-width: 100%;
 						}
@@ -1992,6 +2023,10 @@ export default function MultiPageEditor() {
 							.vlas_icon, .header, .header > div {
 								overflow: visible !important;
 							}
+							
+							/* Preserve table row heights in print mode */
+							table { page-break-inside: auto; }
+							tr { page-break-inside: avoid; }
 						}
 					</style>
 				</head>

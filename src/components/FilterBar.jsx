@@ -4,8 +4,11 @@ import { GlobalContext } from '../contexts/GlobalContext';
 import axios from 'axios';
 import { FiFilter } from 'react-icons/fi';
 import { FaSortAlphaDown, FaPlus, FaTrash } from 'react-icons/fa';
+import { useNavigate, useLocation } from 'react-router-dom';
 
-const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
+const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] }) => {
+	const navigate = useNavigate();
+	const location = useLocation();
 	const {
 		setCurrentSort,
 		setCurrentFilter,
@@ -190,6 +193,13 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 			setIsFilter && setIsFilter(true);
 
 			if (typeSearch === 'receipt') {
+				// Check if current URL contains 'dashboard'
+				if (!location.pathname.includes('dashboard')) {
+					// Redirect to dashboard with search query
+					navigate(`/dashboard?search=${encodeURIComponent(searchTerm)}`);
+					return;
+				}
+
 				try {
 					const response = await axios.post('https://black.irdop.org/khsi19me/db/search/receipt', {
 						query: searchTerm,
@@ -764,34 +774,42 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter }) => {
 
 			<div className="flex flex-col md:flex-row items-center w-full justify-end">
 				<div className="flex items-center">
-					<button
-						ref={sortButtonRef}
-						onClick={toggleSortOptions}
-						className={`p-2 border border-gray-400 rounded-lg ${
-							activeSorts ? 'bg-blue-500 text-white' : 'bg-white'
-						} flex items-center justify-center mr-2`}
-						title="Sắp xếp"
-					>
-						<FaSortAlphaDown />
-					</button>
-					<button
-						ref={filterButtonRef}
-						onClick={toggleFilterOptions}
-						className={`p-2 border border-gray-400 rounded-lg ${
-							activeFilters ? 'bg-blue-500 text-white' : 'bg-white'
-						} flex items-center justify-center mr-2`}
-						title="Lọc"
-					>
-						<FiFilter />
-					</button>
-					<input
-						type="text"
-						value={searchTerm}
-						onChange={handleSearchChange}
-						onKeyPress={handleSearchKeyPress}
-						className="p-1.5 border text-md border-gray-400 rounded-lg bg-white w-60 md:w-auto min-w-60"
-						placeholder="Search..."
-					/>
+					{!hide.includes('sort') && (
+						<button
+							ref={sortButtonRef}
+							onClick={toggleSortOptions}
+							className={`p-2 border border-gray-400 rounded-lg ${
+								activeSorts ? 'bg-blue-500 text-white' : 'bg-white'
+							} flex items-center justify-center mr-2`}
+							title="Sắp xếp"
+						>
+							<FaSortAlphaDown />
+						</button>
+					)}
+
+					{!hide.includes('filter') && (
+						<button
+							ref={filterButtonRef}
+							onClick={toggleFilterOptions}
+							className={`p-2 border border-gray-400 rounded-lg ${
+								activeFilters ? 'bg-blue-500 text-white' : 'bg-white'
+							} flex items-center justify-center mr-2`}
+							title="Lọc"
+						>
+							<FiFilter />
+						</button>
+					)}
+
+					{!hide.includes('search') && (
+						<input
+							type="text"
+							value={searchTerm}
+							onChange={handleSearchChange}
+							onKeyPress={handleSearchKeyPress}
+							className="p-1.5 border text-md border-gray-400 rounded-lg bg-white w-60 md:w-auto min-w-60"
+							placeholder="Search..."
+						/>
+					)}
 				</div>
 
 				{/* Sort dropdown */}

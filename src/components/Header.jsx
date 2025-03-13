@@ -104,7 +104,7 @@ const Header = () => {
 						) : (
 							<>
 								<p
-									className="text-primary cursor-pointer text-end ml-8 text-xl mb-0.5 font-semibold"
+									className="text-primary cursor-pointer text-end ml-8 text-md mb-0.5 font-semibold"
 									onClick={() => setDropdownOpen(!dropdownOpen)}
 								>
 									{displayName}

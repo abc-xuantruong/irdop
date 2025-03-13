@@ -556,7 +556,7 @@ const ProcessingSample = () => {
 																			Array.isArray(parameter.analyses) &&
 																			parameter.analyses.map(
 																				(analysis) =>
-																					analysis?.status === 3 && (
+																					analysis?.status === 1 && (
 																						<button
 																							key={analysis?.id || `status3-${Math.random()}`}
 																							className={`bg-slate-50 border-2 hover:bg-teritary p-0.5 rounded-lg font-medium m-0.5 w-[130px] h-12 ${
@@ -626,7 +626,7 @@ const ProcessingSample = () => {
 																			Array.isArray(parameter.analyses) && // Add this check
 																			parameter.analyses.map(
 																				(analysis) =>
-																					analysis.status === 1 && (
+																					analysis.status === 0 && (
 																						<button
 																							key={analysis.id}
 																							className={`bg-slate-50 border-2 hover:bg-teritary p-0.5 rounded-lg font-medium m-0.5 w-[130px] h-12 ${

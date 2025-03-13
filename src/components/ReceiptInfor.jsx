@@ -56,6 +56,174 @@ const ReceiptInfor = ({ receipt }) => {
 	const [userInfo, setUserInfo] = useState({});
 	const [isPaymentConfirmVisible, setIsPaymentConfirmVisible] = useState(false);
 
+	// Add state to track if deadline DatePicker is focused
+	const [isDeadlineFocused, setIsDeadlineFocused] = useState(false);
+	const [tempDeadline, setTempDeadline] = useState(null);
+
+	// Add state to track receipt date focus
+	const [isReceiptDateFocused, setIsReceiptDateFocused] = useState(false);
+	const [tempReceiptDate, setTempReceiptDate] = useState(null);
+	const [receiptDateInput, setReceiptDateInput] = useState('');
+
+	// Function to format date strings entered manually
+	const formatDateString = (dateStr) => {
+		// Remove any existing separators to normalize
+		const normalized = dateStr.replace(/[^0-9]/g, '');
+
+		if (normalized.length === 8) {
+			// Format as DD/MM/YYYY if 8 digits
+			return `${normalized.substring(0, 2)}/${normalized.substring(2, 4)}/${normalized.substring(4)}`;
+		} else if (dateStr.length === 10) {
+			// Replace the 3rd and 6th characters with "/" for 10-char strings
+			return `${dateStr.substring(0, 2)}/${dateStr.substring(3, 5)}/${dateStr.substring(6)}`;
+		}
+
+		// Return original if it doesn't match our patterns
+		return dateStr;
+	};
+
+	// Function to convert DD/MM/YYYY string to Date object
+	const parseDateString = (dateStr) => {
+		if (!dateStr) return null;
+
+		// Handle formatted date strings
+		const parts = dateStr.split('/');
+		if (parts.length === 3) {
+			const day = parseInt(parts[0], 10);
+			const month = parseInt(parts[1], 10) - 1; // Month is 0-based in JS Date
+			const year = parseInt(parts[2], 10);
+
+			if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+				return new Date(year, month, day);
+			}
+		}
+
+		// Fallback to standard parsing
+		const parsedDate = new Date(dateStr);
+		return isNaN(parsedDate.getTime()) ? null : parsedDate;
+	};
+
+	// Handle receipt date input change
+	const handleReceiptDateInputChange = (e) => {
+		setReceiptDateInput(e.target.value);
+	};
+
+	// Handle date picker select for receipt date
+	const handleReceiptDateChange = (date) => {
+		// Just update the component state without API call
+		setTempReceiptDate(date);
+		handleInputChange({ target: { name: 'receipt_date', value: date } });
+	};
+
+	// Handle the receipt DatePicker blur event
+	const handleReceiptDateBlur = () => {
+		if (isReceiptDateFocused && currentReceipt?.receipt_date) {
+			// Only make API call when focus is lost and there's a value
+			handleReceiptApiUpdate('receipt_date', currentReceipt.receipt_date);
+			setIsReceiptDateFocused(false);
+		}
+	};
+
+	// Handle receipt DatePicker focus
+	const handleReceiptDateFocus = () => {
+		setIsReceiptDateFocused(true);
+		setTempReceiptDate(currentReceipt?.receipt_date);
+	};
+
+	// Handle keydown events on the receipt DatePicker
+	const handleReceiptDateKeyDown = (e) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+
+			// Format and validate the date
+			const formattedDate = formatDateString(receiptDateInput);
+			const parsedDate = parseDateString(formattedDate);
+
+			if (parsedDate) {
+				handleInputChange({ target: { name: 'receipt_date', value: parsedDate } });
+				// Update API with the new date
+				handleReceiptApiUpdate('receipt_date', parsedDate);
+
+				// Clear the input and blur
+				setReceiptDateInput('');
+				if (document.activeElement) {
+					document.activeElement.blur();
+				}
+				setIsReceiptDateFocused(false);
+			} else {
+				toast.error('Định dạng ngày không hợp lệ. Sử dụng định dạng DD/MM/YYYY hoặc DDMMYYYY');
+			}
+		} else if (e.key === 'Escape') {
+			// Revert to original value and blur
+			handleInputChange({ target: { name: 'receipt_date', value: tempReceiptDate } });
+			setReceiptDateInput('');
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
+			setIsReceiptDateFocused(false);
+		}
+	};
+
+	// Handle date change for deadline - only update local state
+	const handleDeadlineChange = (date) => {
+		// Just update the component state without API call
+		setTempDeadline(date);
+		handleInputChange({ target: { name: 'deadline', value: date } });
+	};
+
+	// Handle the DatePicker blur event to update API
+	const handleDeadlineBlur = () => {
+		if (isDeadlineFocused && currentReceipt?.deadline) {
+			// Only make API call when focus is lost and there's a value
+			handleReceiptApiUpdate('deadline', currentReceipt.deadline);
+			setIsDeadlineFocused(false);
+		}
+	};
+
+	// Handle DatePicker focus
+	const handleDeadlineFocus = () => {
+		setIsDeadlineFocused(true);
+		setTempDeadline(currentReceipt?.deadline);
+	};
+
+	// Handle keydown events on the DatePicker
+	const handleDeadlineKeyDown = (e) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+
+			// Check if user is typing a date string manually
+			if (e.target.value && typeof e.target.value === 'string') {
+				const formattedDate = formatDateString(e.target.value);
+				const parsedDate = parseDateString(formattedDate);
+
+				if (parsedDate) {
+					handleInputChange({ target: { name: 'deadline', value: parsedDate } });
+					// Update API with the new date
+					handleReceiptApiUpdate('deadline', parsedDate);
+				} else {
+					toast.error('Định dạng ngày không hợp lệ. Sử dụng định dạng DD/MM/YYYY hoặc DDMMYYYY');
+					// Restore previous value
+					handleInputChange({ target: { name: 'deadline', value: tempDeadline } });
+				}
+			} else {
+				// Regular date picker handling
+				handleReceiptApiUpdate('deadline', currentReceipt.deadline);
+			}
+
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
+			setIsDeadlineFocused(false);
+		} else if (e.key === 'Escape') {
+			// Revert to original value and blur
+			handleInputChange({ target: { name: 'deadline', value: tempDeadline } });
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
+			setIsDeadlineFocused(false);
+		}
+	};
+
 	useEffect(() => {
 		setCurrentTitlePage('Tiếp nhận mẫu');
 	}, []);
@@ -850,6 +1018,151 @@ const ReceiptInfor = ({ receipt }) => {
 		</div>
 	);
 
+	// Function to handle API update for receipt fields
+	const handleReceiptApiUpdate = async (field, value) => {
+		try {
+			const payload = {
+				receipt: {
+					id: currentReceipt.id,
+					[field]: value,
+					modified_by_uid: currentUser.identity_uid,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+			if (response.status === 200) {
+				toast.success(`Cập nhật thành công!`, { autoClose: 1000 });
+				return true;
+			} else {
+				toast.error(`Lỗi khi cập nhật thông tin`);
+				fetchReceipt(); // Refresh data on error
+				return false;
+			}
+		} catch (error) {
+			console.error('Error updating receipt information:', error);
+			toast.error('Có lỗi xảy ra khi cập nhật thông tin');
+			fetchReceipt(); // Refresh data on error
+			return false;
+		}
+	};
+
+	// Handle client information update
+	const handleClientApiUpdate = async (field, value) => {
+		try {
+			// Create an updated client object with just the changed field
+			const updatedClient = {
+				...currentReceipt.client,
+				[field]: value,
+			};
+
+			delete updatedClient.created_by_uid;
+
+			// Update through receipt endpoint with client as a nested property
+			const payload = {
+				receipt: {
+					id: currentReceipt.id,
+					client: updatedClient,
+					modified_by_uid: currentUser.identity_uid,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+			if (response.status === 200) {
+				toast.success(`Cập nhật thông tin khách hàng thành công!`, { autoClose: 1000 });
+				return true;
+			} else {
+				toast.error(`Lỗi khi cập nhật thông tin khách hàng`);
+				fetchReceipt(); // Refresh data on error
+				return false;
+			}
+		} catch (error) {
+			console.error('Error updating client information:', error);
+			toast.error('Có lỗi xảy ra khi cập nhật thông tin khách hàng');
+			fetchReceipt(); // Refresh data on error
+			return false;
+		}
+	};
+
+	// Handle contact information update
+	const handleContactApiUpdate = async (field, value) => {
+		try {
+			// Create an updated contact object with just the changed field
+			const updatedContact = {
+				...currentReceipt.contact,
+				[field]: value,
+			};
+
+			delete updatedContact.created_by_uid;
+			delete updatedContact.search;
+
+			// Update through receipt endpoint with contact as a nested property
+			const payload = {
+				receipt: {
+					id: currentReceipt.id,
+					contact: updatedContact,
+					modified_by_uid: currentUser.identity_uid,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+			if (response.status === 200) {
+				toast.success(`Cập nhật thông tin liên hệ thành công!`, { autoClose: 1000 });
+				return true;
+			} else {
+				toast.error(`Lỗi khi cập nhật thông tin liên hệ`);
+				fetchReceipt(); // Refresh data on error
+				return false;
+			}
+		} catch (error) {
+			console.error('Error updating contact information:', error);
+			toast.error('Có lỗi xảy ra khi cập nhật thông tin liên hệ');
+			fetchReceipt(); // Refresh data on error
+			return false;
+		}
+	};
+
+	// Handle key down for receipt fields
+	const handleReceiptInputKeyDown = (e, field, value) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			handleReceiptApiUpdate(field, value);
+
+			// Remove focus
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
+		}
+	};
+
+	// Handle key down for client fields
+	const handleClientInputKeyDown = (e, field, value) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			handleClientApiUpdate(field, value);
+
+			// Remove focus
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
+		}
+	};
+
+	// Handle key down for contact fields
+	const handleContactInputKeyDown = (e, field, value) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			handleContactApiUpdate(field, value);
+
+			// Remove focus
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
+		}
+	};
+
 	if (!currentReceipt) {
 		return <div>Loading...</div>;
 	}
@@ -917,7 +1230,7 @@ const ReceiptInfor = ({ receipt }) => {
 										className="bg-white border px-1 w-full rounded-lg"
 										value={currentReceipt?.request_number}
 										onChange={handleInputChange}
-										disabled
+										onKeyDown={(e) => handleReceiptInputKeyDown(e, 'request_number', currentReceipt?.request_number)}
 									/>
 								</div>
 							</div>
@@ -939,10 +1252,13 @@ const ReceiptInfor = ({ receipt }) => {
 								<div className="text-sm w-full flex item-start rounded-lg border">
 									<DatePicker
 										selected={currentReceipt?.receipt_date}
-										onChange={(date) => handleInputChange({ target: { name: 'receipt_date', value: date } })}
+										onChange={handleReceiptDateChange}
+										onBlur={handleReceiptDateBlur}
+										onFocus={handleReceiptDateFocus}
+										onKeyDown={handleReceiptDateKeyDown}
+										onChangeRaw={handleReceiptDateInputChange}
 										dateFormat="dd/MM/yyyy"
-										className="bg-white px-1 h py-1.5 rounded-lg focus:outline-none"
-										disabled
+										className="bg-white px-1 h py-1.5 rounded-lg focus:outline-none w-full"
 									/>
 								</div>
 							</div>
@@ -964,10 +1280,12 @@ const ReceiptInfor = ({ receipt }) => {
 								<div className="text-sm w-full flex item-start rounded-lg border">
 									<DatePicker
 										selected={currentReceipt?.deadline}
-										onChange={(date) => handleInputChange({ target: { name: 'deadline', value: date } })}
+										onChange={handleDeadlineChange}
+										onBlur={handleDeadlineBlur}
+										onFocus={handleDeadlineFocus}
+										onKeyDown={handleDeadlineKeyDown}
 										dateFormat="dd/MM/yyyy"
-										className="bg-white px-1 h py-1.5 rounded-lg focus:outline-none"
-										disabled
+										className="bg-white px-1 h py-1.5 rounded-lg focus:outline-none w-full"
 									/>
 								</div>
 							</div>
@@ -986,7 +1304,7 @@ const ReceiptInfor = ({ receipt }) => {
 										rows="3"
 										value={currentReceipt?.note}
 										onChange={handleInputChange}
-										disabled
+										onKeyDown={(e) => handleReceiptInputKeyDown(e, 'note', currentReceipt?.note)}
 									/>
 								</div>
 							</div>
@@ -1007,7 +1325,7 @@ const ReceiptInfor = ({ receipt }) => {
 										className="bg-white border px-1 w-full rounded-lg"
 										value={currentReceipt?.client?.client_uid}
 										onChange={handleCustomerSearch}
-										disabled
+										onKeyDown={(e) => handleClientInputKeyDown(e, 'client_uid', currentReceipt?.client?.client_uid)}
 									/>
 								</div>
 							</div>
@@ -1020,7 +1338,7 @@ const ReceiptInfor = ({ receipt }) => {
 										className="bg-white border px-1 w-full rounded-lg"
 										value={currentReceipt?.client?.client_name}
 										onChange={handleInputChange}
-										disabled
+										onKeyDown={(e) => handleClientInputKeyDown(e, 'client_name', currentReceipt?.client?.client_name)}
 									/>
 								</div>
 							</div>
@@ -1033,7 +1351,9 @@ const ReceiptInfor = ({ receipt }) => {
 										className="bg-white border px-1 w-full rounded-lg"
 										value={currentReceipt?.client?.client_address}
 										onChange={handleInputChange}
-										disabled
+										onKeyDown={(e) =>
+											handleClientInputKeyDown(e, 'client_address', currentReceipt?.client?.client_address)
+										}
 									/>
 								</div>
 							</div>
@@ -1046,7 +1366,7 @@ const ReceiptInfor = ({ receipt }) => {
 										className="bg-white border px-1 w-full rounded-lg"
 										value={currentReceipt?.client?.legal_id}
 										onChange={handleInputChange}
-										disabled
+										onKeyDown={(e) => handleClientInputKeyDown(e, 'legal_id', currentReceipt?.client?.legal_id)}
 									/>
 								</div>
 							</div>
@@ -1065,7 +1385,7 @@ const ReceiptInfor = ({ receipt }) => {
 										className="bg-white border px-1 w-full rounded-lg"
 										value={currentReceipt?.contact?.name}
 										onChange={handleContactSearch}
-										disabled
+										onKeyDown={(e) => handleContactInputKeyDown(e, 'name', currentReceipt?.contact?.name)}
 									/>
 								</div>
 							</div>
@@ -1078,7 +1398,7 @@ const ReceiptInfor = ({ receipt }) => {
 										className="bg-white border px-1 w-full rounded-lg"
 										value={currentReceipt?.contact?.email}
 										onChange={handleInputChange}
-										disabled
+										onKeyDown={(e) => handleContactInputKeyDown(e, 'email', currentReceipt?.contact?.email)}
 									/>
 								</div>
 							</div>
@@ -1091,7 +1411,7 @@ const ReceiptInfor = ({ receipt }) => {
 										className="bg-white border px-1 w-full rounded-lg"
 										value={currentReceipt?.contact?.phone}
 										onChange={handleInputChange}
-										disabled
+										onKeyDown={(e) => handleContactInputKeyDown(e, 'phone', currentReceipt?.contact?.phone)}
 									/>
 								</div>
 							</div>
