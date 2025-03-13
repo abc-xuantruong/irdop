@@ -12,7 +12,8 @@ const CreateReceiptFromCRM = () => {
 	const [isCreating, setIsCreating] = useState(false);
 	const [urgentSamples, setUrgentSamples] = useState({});
 	const [allUrgent, setAllUrgent] = useState(false);
-	const { formatDate, currentUser } = useContext(GlobalContext);
+	const [selectedPurpose, setSelectedPurpose] = useState(''); // Default purpose
+	const { formatDate, currentUser, purposes } = useContext(GlobalContext);
 	const navigate = useNavigate();
 
 	const openModal = () => {
@@ -22,6 +23,7 @@ const CreateReceiptFromCRM = () => {
 		setError(null);
 		setUrgentSamples({});
 		setAllUrgent(false);
+		setSelectedPurpose(''); // Reset to default purpose
 	};
 
 	const closeModal = () => {
@@ -91,7 +93,20 @@ const CreateReceiptFromCRM = () => {
 		// Add status property to samples based on urgentSamples state
 		const samplesWithStatus = crmData.samples.map((sample, index) => ({
 			...sample,
+			sample_information: [
+				{ fname: 'Tên mẫu thử / name.', fvalue: sample?.sample_name || '' },
+				{ fname: 'Số lô / LOT no.', fvalue: '' },
+				{ fname: 'Ngày SX / mfg.', fvalue: '' },
+				{ fname: 'HSD / exp.', fvalue: '' },
+				{ fname: 'Nơi SX / mfr.', fvalue: '' },
+				{
+					fname: 'Ngày tiếp nhận / receipt date.',
+					fvalue: new Date().toLocaleDateString('vi-VN'),
+				},
+				{ fname: 'Mô tả / desc.', fvalue: sample?.sample_description || '' },
+			],
 			status: urgentSamples[index] ? 1 : 0,
+			purpose: selectedPurpose, // Add purpose to each sample
 		}));
 
 		try {
@@ -100,6 +115,10 @@ const CreateReceiptFromCRM = () => {
 				samples: samplesWithStatus,
 				created_by_uid: currentUser.identity_uid,
 				modified_by_uid: currentUser.identity_uid,
+				order_code: crmData.order_code,
+				quote_code: crmData.quote_code,
+				sale_recorder: crmData.sale_recorder,
+				total_amount: crmData.total_amount,
 			});
 
 			// Check if the response contains an error
@@ -122,7 +141,7 @@ const CreateReceiptFromCRM = () => {
 		<>
 			<button
 				onClick={openModal}
-				className="border-gray-300 font-medium py-0 px-2 rounded-lg w-fit bg-blue-500 text-white max-h-fit"
+				className="border-gray-300 font-medium py-0 px-2 rounded-lg w-fit bg-background text-primary"
 			>
 				<div>Tạo TNM từ CRM</div>
 			</button>
@@ -164,6 +183,30 @@ const CreateReceiptFromCRM = () => {
 							{crmData && (
 								<div className="overflow-y-auto pr-1 max-h-[50vh] scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
 									<div className="border rounded-lg p-2 mb-2 text-start w-full">
+										<h3 className="font-semibold text-lg">Thông tin đơn hàng</h3>
+										<p>
+											<span className="font-medium">Mã đơn hàng: </span>
+											{crmData.order_code || 'N/A'}
+										</p>
+										<p>
+											<span className="font-medium">Mã báo giá: </span>
+											{crmData.quote_code || 'N/A'}
+										</p>
+										<p>
+											<span className="font-medium">Ghi nhận doanh số: </span>
+											{crmData.sale_recorder || 'N/A'}
+										</p>
+										<p>
+											<span className="font-medium">Tổng tiền: </span>
+											{crmData.total_amount
+												? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+														crmData.total_amount,
+												  )
+												: 'N/A'}
+										</p>
+									</div>
+
+									<div className="border rounded-lg p-2 mb-2 text-start w-full">
 										<h3 className="font-semibold text-lg">Thông tin khách hàng</h3>
 										<p>
 											<span className="font-medium">Tên: </span>
@@ -182,17 +225,37 @@ const CreateReceiptFromCRM = () => {
 									<div className="mb-4 w-full">
 										<div className="flex justify-between items-center mb-2">
 											<h3 className="font-semibold text-lg">Danh sách mẫu</h3>
-											<div className="flex items-center">
-												<input
-													type="checkbox"
-													id="allUrgent"
-													checked={allUrgent}
-													onChange={handleAllUrgentChange}
-													className="mr-2"
-												/>
-												<label htmlFor="allUrgent" className="text-sm font-medium">
-													Mẫu khẩn
-												</label>
+											<div className="flex items-center gap-4">
+												<div className="flex items-center">
+													<input
+														type="checkbox"
+														id="allUrgent"
+														checked={allUrgent}
+														onChange={handleAllUrgentChange}
+														className="mr-2"
+													/>
+													<label htmlFor="allUrgent" className="text-sm font-medium">
+														Mẫu khẩn
+													</label>
+												</div>
+												<div className="flex items-center">
+													<label htmlFor="purpose" className="text-sm font-medium mr-2">
+														Mục đích:
+													</label>
+													<select
+														id="purpose"
+														value={selectedPurpose}
+														onChange={(e) => setSelectedPurpose(e.target.value)}
+														className="border rounded p-1 bg-white text-sm py-0.5 border-gray-400 "
+													>
+														<option value="">--</option>
+														{purposes.map((purpose, idx) => (
+															<option key={idx} value={purpose}>
+																{purpose}
+															</option>
+														))}
+													</select>
+												</div>
 											</div>
 										</div>
 										{crmData.samples.map((sample, index) => (

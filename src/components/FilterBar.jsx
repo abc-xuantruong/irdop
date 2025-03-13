@@ -779,8 +779,8 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 							ref={sortButtonRef}
 							onClick={toggleSortOptions}
 							className={`p-2 border border-gray-400 rounded-lg ${
-								activeSorts ? 'bg-blue-500 text-white' : 'bg-white'
-							} flex items-center justify-center mr-2`}
+								activeSorts ? 'bg-blue-600 text-white' : 'bg-white'
+							} flex items-center justify-center mr-2 focus:outline-none`}
 							title="Sắp xếp"
 						>
 							<FaSortAlphaDown />
@@ -792,8 +792,8 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 							ref={filterButtonRef}
 							onClick={toggleFilterOptions}
 							className={`p-2 border border-gray-400 rounded-lg ${
-								activeFilters ? 'bg-blue-500 text-white' : 'bg-white'
-							} flex items-center justify-center mr-2`}
+								activeFilters ? 'bg-blue-600 text-white' : 'bg-white'
+							} flex items-center justify-center mr-2 focus:outline-none`}
 							title="Lọc"
 						>
 							<FiFilter />
@@ -846,7 +846,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 
 									<button
 										onClick={() => removeSortRow(index)}
-										className="ml-1 p-1.5 border border-gray-300 rounded hover:bg-red-100 text-red-500"
+										className="ml-1 p-1.5 border border-gray-300 rounded hover:bg-red-100 text-red-500 "
 										title="Xóa"
 									>
 										<FaTrash size={14} />
@@ -877,7 +877,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 								>
 									Đóng
 								</button>
-								<button onClick={applySort} className="px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600">
+								<button onClick={applySort} className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-600">
 									Áp dụng
 								</button>
 							</div>
@@ -1012,7 +1012,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 								>
 									Đóng
 								</button>
-								<button onClick={applyFilters} className="px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600">
+								<button onClick={applyFilters} className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-600">
 									Áp dụng
 								</button>
 							</div>

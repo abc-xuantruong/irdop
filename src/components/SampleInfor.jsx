@@ -651,19 +651,19 @@ const SampleInfor = () => {
 	};
 
 	let defaultCustomerFields = [
-		{ fname: 'Tên mẫu / name.', fvalue: currentSample?.sample_name || '' },
+		{ fname: 'Tên mẫu thử / name.', fvalue: currentSample?.sample_name || '' },
 		{ fname: 'Số lô / LOT no.', fvalue: '' },
 		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
-		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
-		{ fname: 'Nơi sản xuất / mfr.', favlue: '' },
+		{ fname: 'Ngày SX / mfg.', fvalue: '' },
+		{ fname: 'Nơi SX / mfr.', favlue: '' },
 	];
 
 	let defaultReceiptFields = [
-		{ fname: 'Ngày tiếp nhận / Receipt date.', fvalue: formatDate(receiptFull?.receipt_date) || '' },
+		{ fname: 'Ngày tiếp nhận / receipt date.', fvalue: formatDate(receiptFull?.receipt_date) || '' },
 		{ fname: 'Mô tả / desc.', fvalue: currentSample?.sample_description || '' },
-		{ fname: 'Mã tiếp nhận / Receipt code.', fvalue: receipt_uid || '' },
-		{ fname: 'Ngày hoàn thành / Deadline.', fvalue: formatDate(receiptFull?.deadline) || '' },
-		{ fname: 'Nền mẫu / Matrix.', fvalue: currentSample?.matrix || '' },
+		{ fname: 'Mã tiếp nhận / receipt code.', fvalue: receipt_uid || '' },
+		{ fname: 'Ngày hoàn thành / deadline.', fvalue: formatDate(receiptFull?.deadline) || '' },
+		{ fname: 'Nền mẫu / matrix.', fvalue: currentSample?.matrix || '' },
 	];
 
 	const navigate = useNavigate();
@@ -803,6 +803,43 @@ const SampleInfor = () => {
 
 	const handleInputChange = (field, value) => {
 		setSample({ ...sample, [field]: value });
+
+		// Update corresponding values in sample_information arrays
+		if (field === 'sample_name') {
+			// Update the "Tên mẫu thử / name." field in customerInfo
+			const updatedCustomerInfo = customerInfo.map((item) => {
+				if (item.fname.includes('Tên mẫu thử') || item.fname.includes('name')) {
+					return { ...item, fvalue: value };
+				}
+				return item;
+			});
+			setCustomerInfo(updatedCustomerInfo);
+			setIsReportChanged(true);
+		}
+
+		if (field === 'sample_description') {
+			// Update the "Mô tả / desc." field in receiptInfo
+			const updatedReceiptInfo = receiptInfo.map((item) => {
+				if (item.fname.includes('Mô tả') || item.fname.includes('desc')) {
+					return { ...item, fvalue: value };
+				}
+				return item;
+			});
+			setReceiptInfo(updatedReceiptInfo);
+			setIsReportChanged(true);
+		}
+
+		if (field === 'matrix') {
+			// Update the "Nền mẫu / matrix." field in receiptInfo
+			const updatedReceiptInfo = receiptInfo.map((item) => {
+				if (item.fname.includes('Nền mẫu') || item.fname.includes('matrix')) {
+					return { ...item, fvalue: value };
+				}
+				return item;
+			});
+			setReceiptInfo(updatedReceiptInfo);
+			setIsReportChanged(true);
+		}
 	};
 
 	const handleAddCustomerField = () => {
@@ -816,7 +853,7 @@ const SampleInfor = () => {
 		if (receiptInfo.length === 0) {
 			setReceiptInfo([
 				{
-					fname: 'Ngày tiếp nhận / Receipt date.',
+					fname: 'Ngày tiếp nhận / receipt date.',
 					fvalue: formatDate(receiptFull?.receipt_date) || '',
 				},
 			]);
@@ -882,7 +919,7 @@ const SampleInfor = () => {
 		// Validate that the first receipt info item contains 'Ngày tiếp nhận' or 'Receipt date'
 		if (receiptInfo.length > 0) {
 			const firstReceiptField = receiptInfo[0];
-			if (!firstReceiptField.fname.includes('Ngày tiếp nhận') && !firstReceiptField.fname.includes('Receipt date')) {
+			if (!firstReceiptField.fname.includes('Ngày tiếp nhận') && !firstReceiptField.fname.includes('receipt date')) {
 				toast.error('Thông tin đầu tiên trong "Thông tin tiếp nhận" phải là ngày tiếp nhận');
 				return;
 			}
@@ -935,16 +972,16 @@ const SampleInfor = () => {
 			const receiptInfoItems = sampleInfo.filter(
 				(item) =>
 					item.fname.includes('Ngày tiếp nhận') ||
-					item.fname.includes('Receipt date') ||
+					item.fname.includes('receipt date') ||
 					item.fname.includes('Mã phiếu') ||
-					item.fname.includes('Receipt code'),
+					item.fname.includes('receipt code'),
 			);
 			const customerInfoItems = sampleInfo.filter(
 				(item) =>
 					!item.fname.includes('Ngày tiếp nhận') &&
-					!item.fname.includes('Receipt date') &&
+					!item.fname.includes('receipt date') &&
 					!item.fname.includes('Mã phiếu') &&
-					!item.fname.includes('Receipt code'),
+					!item.fname.includes('receipt code'),
 			);
 
 			// Set the customer and receipt info

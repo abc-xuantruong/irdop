@@ -827,10 +827,10 @@ const ReceiptInfor = ({ receipt }) => {
 	};
 
 	const handleDeleteAnalysisConfirmAction = async () => {
+		console.log(deleteItemId);
 		try {
 			const response = await axios.post('https://black.irdop.org/trelw82ki/db/delete/analysis', {
 				id: deleteItemId,
-				modified_by_uid: currentUser.identity_uid,
 			});
 			if (response.status === 200) {
 				toast.success('Xóa chỉ tiêu thành công!', { autoClose: 1000 });

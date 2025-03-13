@@ -588,11 +588,11 @@ export default function MultiPageEditor() {
 
 					return `
 				<tr>
-					<td style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">${index + 1}.</td>
-					<td style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">${parameterName}</td>
-					<td style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">${result}</td>
-					<td style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">${unit}</td>
-					<td style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">${protocol}</td>${referenceCell}
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; ">${index + 1}.</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${parameterName}</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${result}</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${unit}</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${protocol}</td>${referenceCell}
 				</tr>`;
 				})
 				.join('');
@@ -604,11 +604,11 @@ export default function MultiPageEditor() {
 
 			analysisRows = `
 		<tr>
-			<td style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">1</td>
-			<td style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">--</td>
-			<td style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">--</td>
-			<td style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">--</td>
-			<td style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">--</td>${referenceCell}
+			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; ">1</td>
+			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
+			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
+			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
+			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>${referenceCell}
 		</tr>`;
 		}
 
@@ -632,7 +632,7 @@ export default function MultiPageEditor() {
                     Đơn vị <br> <span style="font-size: 12px; color: gray;">/ Unit</span>
                 </th>
                 <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: ${
-									showReference ? '22%' : '38%'
+									showReference ? '22%' : '36%'
 								}; text-align:left; font-size:12px;">
                     Phương pháp <br> <span style="font-size: 12px; color: gray;">/ Protocol</span>
                 </th>${referenceHeader}
@@ -767,15 +767,15 @@ export default function MultiPageEditor() {
          style="padding-top:10mm; position:relative; ">
         <div style="position:relative; text-align:left;">
             <p contenteditable="true" class=" content-header-title" 
-               style="font-weight:700; font-size:24pt; color:#0058A3; height: 30px;">
+               style="font-weight:700; font-size:24pt; color:#0058A3; height: 28px;">
                 PHIẾU KẾT QUẢ THỬ NGHIỆM
             </p>
             <p class=" content-header-title_eng" 
-               style="font-weight:700; font-size:21pt; color:#0058A3; height: 30px;">
+               style="font-weight:700; font-size:21pt; color:#0058A3; height: 28px;">
                 / Certificate of Analysis
             </p>
             <div class=" display-flex" 
-                 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px;; height: 30px;">
+                 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px;; height: 28px;">
                 <span class=" std_ref-title">Ref:</span>
                 <p contenteditable="true" 
                    class="  ref_code" 
@@ -1187,10 +1187,10 @@ export default function MultiPageEditor() {
 			width: 210,
 			height: 297,
 			topMargin: 15, // 1.5cm
-			bottomMargin: 7, // 0.8cm
+			bottomMargin: 7, // 0.7cm
 			sideMargin: 10, // 1cm
 			headerSpacing: 5, // spacing between header and content
-			footerSpacing: 1, // removed spacing between content and footer
+			footerSpacing: 3, // removed spacing between content and footer
 		};
 
 		// Get DPI for pixel to mm conversion
@@ -1645,10 +1645,29 @@ export default function MultiPageEditor() {
 
 					// Get all rendered rows to measure actual heights
 					const renderedRows = Array.from(measureArea.querySelectorAll('tbody tr'));
-					const rowHeights = renderedRows.map((row) => {
+
+					// Log table information
+					console.log(`📏 TABLE ROWS HEIGHT MEASUREMENT:`);
+					console.log(`- Available space for rows: ${remainingHeightPx}px (${pxToMm(remainingHeightPx).toFixed(2)}mm)`);
+
+					// Measure each row and log its height
+					const rowHeights = renderedRows.map((row, index) => {
 						// Use getBoundingClientRect for more accurate height measurement
 						const rect = row.getBoundingClientRect();
-						return rect.height;
+						const originalRowHeightPx = rect.height;
+						// Reduce height by 12% to prevent footer overlap
+						const rowHeightPx = originalRowHeightPx * 0.9; // 100% - 12% = 88%
+						const rowHeightMm = pxToMm(rowHeightPx);
+						const percentOfAvailable = (rowHeightPx / availableContentHeightPx) * 100;
+
+						// Log detailed information about this row with both original and adjusted heights
+						console.log(
+							`- Row ${index + 1}: Original ${originalRowHeightPx.toFixed(1)}px, Adjusted ${rowHeightPx.toFixed(
+								1,
+							)}px (${rowHeightMm.toFixed(2)}mm) - ${percentOfAvailable.toFixed(1)}% of available space`,
+						);
+
+						return rowHeightPx;
 					});
 
 					// Reset measurement area
@@ -1658,22 +1677,39 @@ export default function MultiPageEditor() {
 					let rowsInFirstPart = [];
 					let remainingRows = [...rows];
 					let totalUsedHeight = 0;
+					let totalRemainingHeight = remainingHeightPx;
 
 					// Use measured heights to determine how many rows fit
+					console.log(`🔍 FITTING ROWS IN FIRST PART:`);
 					for (let i = 0; i < rows.length && i < rowHeights.length; i++) {
 						const rowHeightPx = rowHeights[i];
 
-						if (rowHeightPx <= remainingHeightPx) {
+						if (rowHeightPx <= totalRemainingHeight) {
 							// This row fits
 							rowsInFirstPart.push(rows[i]);
-							remainingHeightPx -= rowHeightPx;
+							totalRemainingHeight -= rowHeightPx;
 							totalUsedHeight += rowHeightPx;
 							remainingRows.shift();
+							console.log(
+								`- Row ${i + 1} fits: ${rowHeightPx.toFixed(1)}px - Remaining space: ${totalRemainingHeight.toFixed(
+									1,
+								)}px (${pxToMm(totalRemainingHeight).toFixed(2)}mm)`,
+							);
 						} else {
 							// This row doesn't fit
+							console.log(
+								`- Row ${i + 1} doesn't fit: ${rowHeightPx.toFixed(1)}px > ${totalRemainingHeight.toFixed(
+									1,
+								)}px remaining`,
+							);
 							break;
 						}
 					}
+					console.log(`- Total rows that fit: ${rowsInFirstPart.length} of ${rows.length}`);
+					console.log(`- Total height used: ${totalUsedHeight.toFixed(1)}px (${pxToMm(totalUsedHeight).toFixed(2)}mm)`);
+					console.log(
+						`- Remaining height: ${totalRemainingHeight.toFixed(1)}px (${pxToMm(totalRemainingHeight).toFixed(2)}mm)`,
+					);
 
 					// Finish the first part of the table
 					if (rowsInFirstPart.length > 0) {
@@ -1718,9 +1754,12 @@ export default function MultiPageEditor() {
 							// Try to fit as many remaining rows as possible
 							for (let i = 0; i < remainingRows.length; i++) {
 								const row = remainingRows[i];
-								const rowHTML = `<table ${tableAttributes}><tbody>${row.outerHTML}</tbody></table>`;
-								measureArea.innerHTML = rowHTML;
-								const rowHeightPx = measureArea.offsetHeight;
+
+								// Get precomputed row height from earlier measurements
+								const rowIndex = rows.indexOf(row);
+								const originalRowHeightPx =
+									rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] / 0.9 : 30; // Convert back to original height for display purposes only
+								const rowHeightPx = rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] : 30 * 0.9; // Default height if not found, with 12% reduction
 
 								if (currentPageHeightPx + rowHeightPx <= availableContentHeightPx) {
 									// This row fits
@@ -1728,13 +1767,30 @@ export default function MultiPageEditor() {
 									currentPageHeightPx += rowHeightPx;
 									remainingRows.shift();
 									i--; // Adjust index since we're removing from array
+									console.log(
+										`  - Row added: Original height ${originalRowHeightPx.toFixed(1)}px, Used ${rowHeightPx.toFixed(
+											1,
+										)}px, Remaining space: ${(availableContentHeightPx - currentPageHeightPx).toFixed(1)}px`,
+									);
 								} else if (i === 0 && currentPage.length === 0) {
 									// Force at least one row even if it overflows
 									rowsInCurrentPart.push(row);
 									remainingRows.shift();
+									console.log(
+										`  - Force added row: Original height ${originalRowHeightPx.toFixed(
+											1,
+										)}px, Used ${rowHeightPx.toFixed(1)}px (overflow)`,
+									);
 									break;
 								} else {
 									// This row doesn't fit, and we already have content
+									console.log(
+										`  - Row doesn't fit: Original height ${originalRowHeightPx.toFixed(
+											1,
+										)}px, Used ${rowHeightPx.toFixed(1)}px, Available space: ${(
+											availableHeightForRows - currentPageHeightPx
+										).toFixed(1)}px`,
+									);
 									break;
 								}
 							}
@@ -1801,20 +1857,22 @@ export default function MultiPageEditor() {
 					pageContentHeights.push(currentPageHeightPx);
 				}
 
+				// Log detailed information about each page's content height
+				console.log(`📊 PAGE CONTENT HEIGHT ANALYSIS:`);
+				pageContentHeights.forEach((height, index) => {
+					const heightMm = pxToMm(height);
+					const percentUsed = (height / availableContentHeightPx) * 100;
+					const remainingPx = availableContentHeightPx - height;
+					const remainingMm = pxToMm(remainingPx);
+
+					console.log(`- Page ${index + 1}: Content height = ${height.toFixed(1)}px (${heightMm.toFixed(2)}mm)`);
+					console.log(`  • ${percentUsed.toFixed(1)}% of available space used`);
+					console.log(`  • Remaining space: ${remainingPx.toFixed(1)}px (${remainingMm.toFixed(2)}mm)`);
+				});
+
 				// Verify our actual page count
 				console.log(`📄 Standard layout resulted in ${contentPages.length} pages`);
 				console.log(`📄 Table breaks count: ${tableBreakCounts}`);
-
-				// Debugging: inspect content pages
-				contentPages.forEach((page, index) => {
-					console.log(`📄 Page ${index + 1} has content length of ${page.length} characters`);
-
-					// Check if this page contains the analysis section (table)
-					const hasTable = page.includes('<table') && page.includes('Tests');
-					if (hasTable) {
-						console.log(`✅ Page ${index + 1} contains analysis table`);
-					}
-				});
 			}
 
 			// Clean up
@@ -1887,7 +1945,7 @@ export default function MultiPageEditor() {
 						}
 						
 						.print-container {
-							width: ${A4.width}mm;
+							width: 720px; /* Exact width: 210mm - 2*10mm margins at 96 DPI */
 							margin: 20px auto;
 							box-shadow: 0 0 10px rgba(0,0,0,0.2);
 							background-color: white;
@@ -1896,9 +1954,8 @@ export default function MultiPageEditor() {
 						
 						.page {
 							position: relative;
-							width: ${A4.width - 2 * A4.sideMargin}mm;
+							width: 100%;
 							height: ${A4.height - A4.topMargin - A4.bottomMargin}mm;
-							margin: 0 ${A4.sideMargin}mm;
 							overflow: hidden;
 							box-sizing: border-box;
 							page-break-after: always;
@@ -1935,6 +1992,22 @@ export default function MultiPageEditor() {
 							vertical-align: top; /* Better alignment for multi-line content */
 							height: auto !important; /* Allow cells to grow with content */
 							line-height: 1.2; /* Ensure consistent line height */
+						}
+						
+						/* Fix paragraph styling in table cells */
+						table td p, table th p {
+							margin: 0;
+							padding: 0;
+							line-height: 1.2;
+							font-family: 'Gilroy', sans-serif !important;
+							font-size: 12px;
+						}
+						
+						/* Ensure STT/No. column has consistent width */
+						table th:first-child, table td:first-child {
+							width: 28px !important;
+							min-width: 28px !important;
+							max-width: 28px !important;
 						}
 						
 						.header {
@@ -2009,12 +2082,13 @@ export default function MultiPageEditor() {
 							}
 							
 							.print-container {
-								width: 100%;
-								margin: 0;
+								width: 720px !important; /* Force exact width even in print */
+								margin: 0 auto;
 								box-shadow: none;
 							}
 							
 							.page {
+								width: 100% !important;
 								margin: 0;
 								border-bottom: none;
 							}
@@ -2027,6 +2101,13 @@ export default function MultiPageEditor() {
 							/* Preserve table row heights in print mode */
 							table { page-break-inside: auto; }
 							tr { page-break-inside: avoid; }
+							
+							/* Ensure paragraph styling in table cells is preserved when printing */
+							table td p, table th p {
+								margin: 0 !important;
+								padding: 0 !important;
+								line-height: 1.2 !important;
+							}
 						}
 					</style>
 				</head>
@@ -2075,6 +2156,27 @@ export default function MultiPageEditor() {
 					: Array.isArray(pageContent)
 					? pageContent.join('')
 					: String(pageContent);
+
+			// Measure the actual content height for this page
+			const tempMeasureDiv = document.createElement('div');
+			tempMeasureDiv.style.position = 'absolute';
+			tempMeasureDiv.style.visibility = 'hidden';
+			tempMeasureDiv.style.width = `${A4.width - 2 * A4.sideMargin}mm`;
+			tempMeasureDiv.innerHTML = pageContentHTML;
+			document.body.appendChild(tempMeasureDiv);
+
+			const actualContentHeight = tempMeasureDiv.offsetHeight;
+			const actualContentHeightMm = pxToMm(actualContentHeight);
+			const percentOfAvailable = (actualContentHeight / paginationResult.availableContentHeightPx) * 100;
+			const remainingSpace = paginationResult.availableContentHeightPx - actualContentHeight;
+			const remainingSpaceMm = pxToMm(remainingSpace);
+
+			console.log(`📃 Final Page ${pageNumber}/${totalPages} content measurements:`);
+			console.log(`- Content height: ${actualContentHeight.toFixed(1)}px (${actualContentHeightMm.toFixed(2)}mm)`);
+			console.log(`- ${percentOfAvailable.toFixed(1)}% of available space used`);
+			console.log(`- Remaining space: ${remainingSpace.toFixed(1)}px (${remainingSpaceMm.toFixed(2)}mm)`);
+
+			document.body.removeChild(tempMeasureDiv);
 
 			page.innerHTML = `
 					<div class="header">${currentHeader}</div>
@@ -2406,12 +2508,21 @@ export default function MultiPageEditor() {
 					font-family: 'Gilroy', sans-serif !important;
 				}
 				
+				/* Table styling in editor */
 				.content-editable table {
 					border-collapse: collapse;
 					table-layout: fixed;
 					font-family: 'Gilroy', sans-serif !important;
 				}
 				
+				/* Table cell paragraph styling in editor */
+				.content-editable table td p, .content-editable table th p {
+					margin: 0 !important;
+					padding: 0 !important;
+					line-height: 1.2 !important;
+					font-size: 12px;
+				}
+
 				.editable, .header-editable, .content-editable, .footer-editable {
 					font-family: 'Gilroy', sans-serif !important;
 				}
@@ -2590,15 +2701,19 @@ export default function MultiPageEditor() {
 			</div>
 			<div className="flex flex-col gap-4 overflow-x-auto p-4 bg-white shadow-lg rounded-lg">
 				<div
-					className="w-[210mm] bg-white shadow-md flex flex-col border border-gray-300"
-					style={{ fontFamily: 'Gilroy, sans-serif' }}
+					className="bg-white flex flex-col "
+					style={{
+						fontFamily: 'Gilroy, sans-serif',
+						width: '720px', // Exact width: 210mm - 2*10mm margins at 96 DPI
+						margin: '0 auto',
+					}}
 				>
 					<div
 						id="header-edit"
-						className={`header-editable editable text-center font-bold text-lg border-b px-8 pt-8 pb-4 ${
+						className={`header-editable editable text-center font-bold text-lg border-b px-0 pt-8 pb-4 ${
 							isReadOnly ? 'read-only' : ''
 						}`}
-						style={{ fontFamily: 'Gilroy, sans-serif' }}
+						style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
 						dangerouslySetInnerHTML={{
 							__html: header.replace(/SƠ BỘ \/ DRAFT/g, pptUid || 'SƠ BỘ / DRAFT'),
 						}}
@@ -2606,14 +2721,14 @@ export default function MultiPageEditor() {
 					<div
 						id="content-edit"
 						ref={contentRef}
-						className={`content-editable editable border-0 px-8 py-2 text-base my-4 ${isReadOnly ? 'read-only' : ''}`}
-						style={{ fontFamily: 'Gilroy, sans-serif' }}
+						className={`content-editable editable border-0 px-0 py-2 text-base my-4 ${isReadOnly ? 'read-only' : ''}`}
+						style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
 						dangerouslySetInnerHTML={{ __html: content }}
 					/>
 					<div
 						id="footer-edit"
-						className={`footer-editable editable px-8 pb-8 pt-4 ${isReadOnly ? 'read-only' : ''}`}
-						style={{ fontFamily: 'Gilroy, sans-serif' }}
+						className={`footer-editable editable px-0 pb-8 pt-4 ${isReadOnly ? 'read-only' : ''}`}
+						style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
 						dangerouslySetInnerHTML={{ __html: footer }}
 					/>
 				</div>

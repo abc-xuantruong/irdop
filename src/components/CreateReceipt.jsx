@@ -322,7 +322,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 			<ToastContainer />
 			<button
 				className={` border-gray-300 font-medium py-0 px-2 rounded-lg ${
-					initialReceipt ? 'w-20 bg-background text-primary' : 'w-fit bg-blue-500 text-white'
+					initialReceipt ? 'w-20 bg-background text-primary' : 'w-fit bg-background text-primary'
 				} `}
 				onClick={() => setIsFormVisible(true)}
 			>
@@ -331,7 +331,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 						{'Sửa'} <RiEdit2Line size={20} />
 					</div>
 				) : (
-					<div className="flex items-center">{`Tiếp nhận mẫu mới `}</div>
+					<div className="flex items-center ">{`Tạo TNM mới `}</div>
 				)}
 			</button>
 
