@@ -448,10 +448,18 @@ export default function MultiPageEditor() {
 				const mainLabel = parts[0].trim();
 				const engLabel = parts.length > 1 ? `/ ${parts[1].trim()}` : '';
 
+				// Process mainLabel to replace "SX" with "sản xuất" and "HSD" with "Hạn sử dụng"
+				let displayMainLabel = mainLabel;
+				if (mainLabel.includes('SX')) {
+					displayMainLabel = mainLabel.replace('SX', 'sản xuất');
+				} else if (mainLabel.includes('HSD')) {
+					displayMainLabel = mainLabel.replace('HSD', 'Hạn sử dụng');
+				}
+
 				return `
 			<div style="display: flex; ${fieldName.includes('Ngày tiếp nhận') && 'margin-top: 8px;'}">
 				<div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: center;">
-					<p style="font-weight:bold">${mainLabel}</p> ${engLabel}:
+					<p style="font-weight:bold">${displayMainLabel}</p> ${engLabel}:
 				</div>
 				<div style="width: 70%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;" >
 					<p style="margin: 0; ${mainLabel.toLowerCase().includes('tên mẫu') ? 'font-weight: bold;' : ''}">${fieldValue}</p>
