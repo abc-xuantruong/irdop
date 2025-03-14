@@ -617,7 +617,7 @@ export default function MultiPageEditor() {
     <table style="width: 100%; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
         <thead>
             <tr>
-                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 6%; text-align:left; font-size:12px;">
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 6.5%; text-align:left; font-size:12px;">
                     <strong>STT</strong> <br> <span style="font-size: 12px; color: #444444;">/ No.</span>
                 </th>
                 <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: ${
