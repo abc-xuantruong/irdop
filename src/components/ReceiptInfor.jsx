@@ -38,9 +38,9 @@ const ReceiptInfor = ({ receipt }) => {
 	});
 	const [sampleInformation, setSampleInformation] = useState([
 		{ fname: 'Số lô / LOT no.', fvalue: '' },
-		{ fname: 'Ngày SX / mfg.', fvalue: '' },
-		{ fname: 'Nơi SX / mfr.', fvalue: '' },
-		{ fname: 'HSD / exp.', fvalue: '' },
+		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
+		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
+		{ fname: 'Nơi sản / mfr.', fvalue: '' },
 	]);
 	const [checkConfirm, setCheckConfirm] = useState(false);
 	const defaultFields = sampleInformation;
@@ -483,8 +483,8 @@ const ReceiptInfor = ({ receipt }) => {
 			sample_information: JSON.stringify([
 				{ fname: 'Tên mẫu / name.', fvalue: newSample?.sample_name || '' },
 				...sampleInformation,
+				{ fname: 'Ngày tiếp nhận / Receipt date.', fvalue: formatDate(currentReceipt.receipt_date) || '' },
 				{ fname: 'Mô tả / desc.', fvalue: newSample?.sample_description || '' },
-				{ fname: 'Ngày tiếp nhận / Receipt date.', fvalue: ensureValidDate(currentReceipt.receipt_date) || '' },
 			]),
 			created_by_uid: currentUser.identity_uid,
 			modified_by_uid: currentUser.identity_uid,
@@ -601,8 +601,8 @@ const ReceiptInfor = ({ receipt }) => {
 				toast.success('Xóa tiếp nhận mẫu thành công!', {
 					autoClose: 1000,
 				});
-				// Redirect or update state to reflect deletion
-				fetchReceipt(); // Fetch updated data
+				// Redirect to dashboard after successful deletion
+				navigate('/dashboard');
 			} else {
 				toast.error('Xóa tiếp nhận mẫu thất bại. Vui lòng thử lại.', {
 					autoClose: 1000,
@@ -663,6 +663,49 @@ const ReceiptInfor = ({ receipt }) => {
 
 		if (value.length >= 5) {
 			// Implement search logic here
+		}
+	};
+
+	// Add this new handler function before renderAddSampleForm
+	const handleCopySample = (sampleUid) => {
+		// If default option ("Sao chép") is selected, do nothing
+		if (!sampleUid || sampleUid === 'copy') return;
+
+		// Find the sample with the matching UID
+		const sampleToCopy = currentReceipt.samples.find((sample) => sample.sample_uid === sampleUid);
+
+		if (sampleToCopy) {
+			// Copy sample data to the form
+			setNewSample({
+				sample_name: sampleToCopy.sample_name || '',
+				matrix: sampleToCopy.matrix || '',
+				sample_description: sampleToCopy.sample_description || '',
+				sample_volume: sampleToCopy.sample_volume || '',
+				purpose: sampleToCopy.purpose || '',
+				additional_request: sampleToCopy.additional_request || '',
+			});
+
+			// Try to parse sample_information if it exists
+			try {
+				if (sampleToCopy.sample_information) {
+					const parsedInfo =
+						typeof sampleToCopy.sample_information === 'string'
+							? JSON.parse(sampleToCopy.sample_information)
+							: sampleToCopy.sample_information;
+
+					// Filter out entries we're already copying elsewhere
+					const filteredInfo = parsedInfo.filter(
+						(item) =>
+							item.fname !== 'Tên mẫu / name.' &&
+							item.fname !== 'Ngày tiếp nhận / Receipt date.' &&
+							item.fname !== 'Mô tả / desc.',
+					);
+
+					setSampleInformation(filteredInfo);
+				}
+			} catch (error) {
+				console.error('Error parsing sample information:', error);
+			}
 		}
 	};
 
@@ -783,6 +826,20 @@ const ReceiptInfor = ({ receipt }) => {
 					</button>
 				</div>
 				<div className="flex justify-end mt-4">
+					<div className="flex-1">
+						<select
+							className="bg-white border rounded p-1 mr-2"
+							onChange={(e) => handleCopySample(e.target.value)}
+							defaultValue="copy"
+						>
+							<option value="copy">Sao chép</option>
+							{currentReceipt?.samples.map((sample) => (
+								<option key={sample.sample_uid} value={sample.sample_uid}>
+									{sample.sample_uid}
+								</option>
+							))}
+						</select>
+					</div>
 					<button className="bg-gray-500 text-white text-sm rounded-lg p-1 mr-2 w-20" onClick={handleCancelAddSample}>
 						Hủy bỏ
 					</button>

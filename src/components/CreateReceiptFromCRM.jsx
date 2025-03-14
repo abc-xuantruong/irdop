@@ -85,6 +85,54 @@ const CreateReceiptFromCRM = () => {
 		}));
 	};
 
+	// Handle deleting a sample
+	const handleDeleteSample = (index) => {
+		if (!crmData) return;
+
+		const updatedSamples = [...crmData.samples];
+		updatedSamples.splice(index, 1);
+
+		// Update crmData with the modified samples array
+		setCrmData({
+			...crmData,
+			samples: updatedSamples,
+		});
+
+		// Update the urgentSamples state to reflect the deletion
+		const newUrgentSamples = {};
+		updatedSamples.forEach((_, idx) => {
+			// If index is less than deleted index, keep value
+			// If index is >= deleted index, take value from original index + 1
+			if (idx < index) {
+				newUrgentSamples[idx] = urgentSamples[idx];
+			} else {
+				newUrgentSamples[idx] = urgentSamples[idx + 1] || false;
+			}
+		});
+
+		setUrgentSamples(newUrgentSamples);
+	};
+
+	// Handle deleting an analysis item
+	const handleDeleteAnalysis = (sampleIndex, analysisIndex) => {
+		if (!crmData) return;
+
+		const updatedSamples = [...crmData.samples];
+		const updatedAnalysis = [...updatedSamples[sampleIndex].analysis];
+
+		updatedAnalysis.splice(analysisIndex, 1);
+
+		updatedSamples[sampleIndex] = {
+			...updatedSamples[sampleIndex],
+			analysis: updatedAnalysis,
+		};
+
+		setCrmData({
+			...crmData,
+			samples: updatedSamples,
+		});
+	};
+
 	const handleCreateReceipt = async () => {
 		if (!crmData) return;
 
@@ -261,7 +309,16 @@ const CreateReceiptFromCRM = () => {
 										{crmData.samples.map((sample, index) => (
 											<div key={index} className="mb-4 p-2 border rounded w-full">
 												<div className="flex justify-between items-center">
-													<h2 className="font-medium text-start text-lg">{sample.sample_name}</h2>
+													<div className="flex items-center gap-2">
+														<h2 className="font-medium text-start text-lg">{sample.sample_name}</h2>
+														<button
+															onClick={() => handleDeleteSample(index)}
+															className="text-red-500 hover:border hover:border-red-500 rounded-full w-5 h-5 flex items-center justify-center"
+															title="Xóa mẫu"
+														>
+															✕
+														</button>
+													</div>
 													<div className="flex items-center">
 														<input
 															type="checkbox"
@@ -282,6 +339,7 @@ const CreateReceiptFromCRM = () => {
 																<th className="p-1 text-start">Mã</th>
 																<th className="p-1 text-start">Chỉ tiêu</th>
 																<th className="p-1 text-start">Nền mẫu</th>
+																<th className="p-1 text-start w-10">Xóa</th>
 															</tr>
 														</thead>
 														<tbody>
@@ -290,6 +348,15 @@ const CreateReceiptFromCRM = () => {
 																	<td className="p-1 text-start">{item.parameter_uid}</td>
 																	<td className="p-1 text-start">{item.parameter_name}</td>
 																	<td className="p-1 text-start">{item.matrix}</td>
+																	<td className="p-1 text-center">
+																		<button
+																			onClick={() => handleDeleteAnalysis(index, idx)}
+																			className="text-red-500 hover:border hover:border-red-500 rounded-full w-5 h-5 flex items-center justify-center mx-auto"
+																			title="Xóa chỉ tiêu"
+																		>
+																			✕
+																		</button>
+																	</td>
 																</tr>
 															))}
 														</tbody>

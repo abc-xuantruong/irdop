@@ -395,10 +395,10 @@ const ProcessingSample = () => {
 						</span>
 						<span className="flex items-center">
 							<div className="w-4 h-4 border-2 border-red-500 rounded mr-1"></div>
-							<span>Đã quá hạn</span>
+							<span>Hôm nay / quá hạn</span>
 						</span>
 						<span className="flex items-center">
-							<div className="w-4 h-4 border-2 border-sky-500 rounded mr-1"></div>
+							<div className="w-4 h-4 border-2 border-gray-500 rounded mr-1"></div>
 							<span>Chưa có kết quả</span>
 						</span>
 					</div>
@@ -519,10 +519,10 @@ const ProcessingSample = () => {
 														{parameter?.parameter_name || 'Không có tên'}
 													</p>
 													<span className="flex line-clamp-1">
-														<p className="text-gray-500 font-medium mr-1">
+														<p className="text-gray-500 font-medium mr-1 min-w-20 text-start">
 															{parameter?.protocol_source ? `${parameter.protocol_source}:` : ''}
 														</p>
-														<p className="font-medium">{parameter?.protocol_code || ''}</p>
+														<p className="font-medium text-start">{parameter?.protocol_code || ''}</p>
 													</span>
 													<p className="text-start text-sm font-semibold line-clamp-1">{parameter?.matrix || ''}</p>
 
@@ -564,7 +564,7 @@ const ProcessingSample = () => {
 																									? 'border-green-500'
 																									: analysis?.deadline && new Date(analysis.deadline) < new Date()
 																									? 'border-red-500'
-																									: 'border-sky-500'
+																									: 'border-gray-500'
 																							}`}
 																							draggable
 																							onDragStart={(e) => handleDragStart(e, parameter?.id, analysis?.id)}
@@ -600,7 +600,7 @@ const ProcessingSample = () => {
 																									? 'border-green-500'
 																									: new Date(analysis.deadline) < new Date()
 																									? 'border-red-500'
-																									: 'border-sky-500'
+																									: 'border-gray-500'
 																							}`}
 																							draggable
 																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
@@ -634,7 +634,7 @@ const ProcessingSample = () => {
 																									? 'border-green-500'
 																									: new Date(analysis.deadline) < new Date()
 																									? 'border-red-500'
-																									: 'border-sky-500'
+																									: 'border-gray-500'
 																							}`}
 																							draggable
 																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}

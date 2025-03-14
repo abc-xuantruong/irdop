@@ -654,8 +654,8 @@ const SampleInfor = () => {
 		{ fname: 'Tên mẫu thử / name.', fvalue: currentSample?.sample_name || '' },
 		{ fname: 'Số lô / LOT no.', fvalue: '' },
 		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
-		{ fname: 'Ngày SX / mfg.', fvalue: '' },
-		{ fname: 'Nơi SX / mfr.', favlue: '' },
+		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
+		{ fname: 'Nơi sản xuất / mfr.', favlue: '' },
 	];
 
 	let defaultReceiptFields = [
@@ -2193,7 +2193,7 @@ const SampleInfor = () => {
 											<select
 												className="min-w-24 max-w-fit p-1 py-[5px] max-h-fit font-semibold text-slate-500 bg-white border rounded text-sm focus:outline-none text-left"
 												onChange={(e) => handleNewParameterChange('protocol_source', e.target.value)}
-												value={newParameter.protocol_source || 'IRDOP'}
+												value={newParameter.protocol_source || '--'}
 											>
 												<option value={'IRDOP'}>{'IRDOP'}</option>
 												<option value={'IRDOP VS'}>{'IRDOP VS'}</option>
@@ -2299,8 +2299,9 @@ const SampleInfor = () => {
 											<select
 												className="w-fit min-w-24 cursor-pointer p-1 py-[5px] font-semibold text-slate-500 bg-white  border rounded text-sm hover:border-indigo-500 hover:border focus:outline-none text-left"
 												onChange={(e) => handleProtocolSourceChange(order.id, e.target.value)}
-												value={order.protocol_source || ''}
+												value={order.protocol_source || '--'}
 											>
+												<option value={''}>{'--'}</option>
 												<option value={'IRDOP'}>{'IRDOP'}</option>
 												<option value={'IRDOP VS'}>{'IRDOP VS'}</option>
 												<option value={'EX'}>{'EX'}</option>

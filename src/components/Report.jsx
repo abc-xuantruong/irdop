@@ -754,25 +754,25 @@ export default function MultiPageEditor() {
                  class="OQtYGs6LmEKlbdTnVjZ4oA" 
                  style="width:5cm;">
         </div>
-        <div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
-    <p class="" 
-       style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
-        Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
-    </p>
-    <p class="" 
-       style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
-        / Institute for Research and Development of Organic Products
-    </p>
-    <span class="" 
-          style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
-                 width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
-        Phòng Phân tích - Kiểm nghiệm / Analysis Control Department
-    </span>
-</div>
+		<div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
+			<p class="" 
+			style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
+				Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
+			</p>
+			<p class="" 
+			style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
+				/ Institute for Research and Development of Organic Products
+			</p>
+			<span class="" 
+				style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
+						width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
+				Phòng Phân tích - Kiểm nghiệm / Analysis Control Department
+			</span>
+		</div>
 
     </div>
     <div class=" " 
-         style="padding-top:10mm; position:relative; ">
+         style="padding-top:6mm; position:relative; ">
         <div style="position:relative; text-align:left;">
             <p contenteditable="true" class=" content-header-title" 
                style="font-weight:700; font-size:24pt; color:#0058A3; height: 28px;">
@@ -797,7 +797,7 @@ export default function MultiPageEditor() {
             </div>
         </div>
         <div class=" vlas_icon" 
-             style="position:absolute; right:-5mm; top:0.5cm; ${showVlas ? '' : 'display:none;'}">
+             style="position:absolute; right:-5mm; top:0.2cm; ${showVlas ? '' : 'display:none;'}">
             <img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png" 
                  loading="lazy" 
                  class="" 
@@ -1664,7 +1664,7 @@ export default function MultiPageEditor() {
 						const rect = row.getBoundingClientRect();
 						const originalRowHeightPx = rect.height;
 						// Reduce height by 12% to prevent footer overlap
-						const rowHeightPx = originalRowHeightPx * 0.9; // 100% - 12% = 88%
+						const rowHeightPx = originalRowHeightPx * 0.999; // 100% - 12% = 88%
 						const rowHeightMm = pxToMm(rowHeightPx);
 						const percentOfAvailable = (rowHeightPx / availableContentHeightPx) * 100;
 
@@ -1766,8 +1766,8 @@ export default function MultiPageEditor() {
 								// Get precomputed row height from earlier measurements
 								const rowIndex = rows.indexOf(row);
 								const originalRowHeightPx =
-									rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] / 0.9 : 30; // Convert back to original height for display purposes only
-								const rowHeightPx = rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] : 30 * 0.9; // Default height if not found, with 12% reduction
+									rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] / 0.999 : 30; // Convert back to original height for display purposes only
+								const rowHeightPx = rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] : 30 * 0.999; // Default height if not found, with 12% reduction
 
 								if (currentPageHeightPx + rowHeightPx <= availableContentHeightPx) {
 									// This row fits
@@ -1955,9 +1955,9 @@ export default function MultiPageEditor() {
 						.print-container {
 							width: 720px; /* Exact width: 210mm - 2*10mm margins at 96 DPI */
 							margin: 20px auto;
-							box-shadow: 0 0 10px rgba(0,0,0,0.2);
 							background-color: white;
 							font-family: 'Gilroy', sans-serif !important;
+							padding: 0 1px; /* Add 1px padding on left and right */
 						}
 						
 						.page {
@@ -1970,6 +1970,7 @@ export default function MultiPageEditor() {
 							background-color: white;
 							border-bottom: 1px dashed #ccc;
 							font-family: 'Gilroy', sans-serif !important;
+							padding: 0 1px; /* Add 1px padding on left and right */
 						}
 			
 						/* Allow VLAS icon to overflow the container */
@@ -2042,8 +2043,7 @@ export default function MultiPageEditor() {
 							width: 100%;
 							box-sizing: border-box;
 							overflow: hidden;
-							padding-top: 0 !important;
-							padding-bottom: 0 !important;
+							padding: 0 1px !important; /* Add 1px padding on left and right */
 							font-family: 'Gilroy', sans-serif !important;
 						}
 						
@@ -2093,12 +2093,14 @@ export default function MultiPageEditor() {
 								width: 720px !important; /* Force exact width even in print */
 								margin: 0 auto;
 								box-shadow: none;
+								padding: 0 1px !important; /* Ensure padding in print mode */
 							}
 							
 							.page {
 								width: 100% !important;
 								margin: 0;
 								border-bottom: none;
+								padding: 0 1px !important; /* Ensure padding in print mode */
 							}
 							
 							/* Critical: ensure overflow is visible in print mode for VLAS icon */
@@ -2393,6 +2395,8 @@ export default function MultiPageEditor() {
 			let sampleParent = sampleInfoDiv;
 			while (sampleParent.parentElement && sampleParent.parentElement !== tempContainer && !sampleParent.style.border) {
 				sampleParent = sampleParent.parentElement;
+				// If we reach a major section break, stop climbing
+				if (sampleParent === tempContainer) break;
 			}
 
 			extractedSections.sampleInfoSection = sampleParent.outerHTML;
