@@ -450,11 +450,11 @@ export default function MultiPageEditor() {
 
 				return `
 			<div style="display: flex; ${fieldName.includes('Ngày tiếp nhận') && 'margin-top: 8px;'}">
-				<div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px;">
-					<strong style="font-weight:500">${mainLabel}</strong> ${engLabel}:
+				<div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: center;">
+					<p style="font-weight:bold">${mainLabel}</p> ${engLabel}:
 				</div>
 				<div style="width: 70%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;" >
-					<p style="margin: 0; ${mainLabel.toLowerCase().includes('tên mẫu') ? 'font-weight: 500;' : ''}">${fieldValue}</p>
+					<p style="margin: 0; ${mainLabel.toLowerCase().includes('tên mẫu') ? 'font-weight: bold;' : ''}">${fieldValue}</p>
 				</div>
 			</div>`;
 			})
@@ -520,7 +520,7 @@ export default function MultiPageEditor() {
 				// Create default reference cells for each analysis item
 				refsArray = analysisItems.map(
 					() =>
-						`<td class="reference-cell" style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">--</td>`,
+						`<td class="reference-cell" style="border: 1px solid black; padding: 6px 10px; text-align:left; font-size:12px;">--</td>`,
 				);
 			}
 
@@ -529,7 +529,7 @@ export default function MultiPageEditor() {
 				// Add default cells for any new rows
 				const additionalCells = analysisItems.length - refsArray.length;
 				const defaultCells = Array(additionalCells).fill(
-					`<td class="reference-cell" style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">--</td>`,
+					`<td class="reference-cell" style="border: 1px solid black; padding: 6px 10px; text-align:left; font-size:12px;">--</td>`,
 				);
 				refsArray = [...refsArray, ...defaultCells];
 			}
@@ -551,8 +551,8 @@ export default function MultiPageEditor() {
 		// Add extra table header for reference if needed
 		const referenceHeader = showReference
 			? `
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 15%; text-align:left; font-size:12px;">
-				Tham chiếu <br> <span style="font-size: 12px; color: gray;">/ Standard Ref</span>
+			<th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 15%; text-align:left; font-size:12px;">
+				<strong>Tham chiếu</strong> <br> <span style="font-size: 12px; color: #444444  ;">/ Standard Ref</span>
 			</th>`
 			: '';
 
@@ -573,42 +573,42 @@ export default function MultiPageEditor() {
 						if (index < refsArray.length && refsArray[index]) {
 							// Use existing reference cell if available
 							if (refsArray[index].includes('class="reference-cell"')) {
-								referenceCell = refsArray[index];
+								referenceCell = refsArray[index].replace(/padding: 6px 8px/g, 'padding: 6px 10px');
 							} else {
 								// Create a properly formatted cell from stored value
-								referenceCell = `<td class="reference-cell" style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">${refsArray[
+								referenceCell = `<td class="reference-cell" style="border: 1px solid black; padding: 6px 10px; text-align:left; font-size:12px;">${refsArray[
 									index
 								].replace(/<\/?td[^>]*>/g, '')}</td>`;
 							}
 						} else {
 							// Create default cell if no stored value exists
-							referenceCell = `<td class="reference-cell" style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">--</td>`;
+							referenceCell = `<td class="reference-cell" style="border: 1px solid black; padding: 6px 10px; text-align:left; font-size:12px;">--</td>`;
 						}
 					}
 
 					return `
 				<tr>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; ">${index + 1}.</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${parameterName}</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${result}</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${unit}</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${protocol}</td>${referenceCell}
+					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px; ">${index + 1}.</td>
+					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${parameterName}</td>
+					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${result}</td>
+					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${unit}</td>
+					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${protocol}</td>${referenceCell}
 				</tr>`;
 				})
 				.join('');
 		} else {
 			// If no analysis items, include a placeholder row
 			const referenceCell = showReference
-				? `<td class="reference-cell" style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">--</td>`
+				? `<td class="reference-cell" style="border: 1px solid black; padding: 6px 10px; text-align:left; font-size:12px;">--</td>`
 				: '';
 
 			analysisRows = `
 		<tr>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; ">1</td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>${referenceCell}
+			<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px; ">1</td>
+			<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">--</td>
+			<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">--</td>
+			<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">--</td>
+			<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">--</td>${referenceCell}
 		</tr>`;
 		}
 
@@ -617,24 +617,24 @@ export default function MultiPageEditor() {
     <table style="width: 100%; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
         <thead>
             <tr>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 6%; text-align:left; font-size:12px;">
-                    STT <br> <span style="font-size: 12px; color: gray;">/ No.</span>
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 6%; text-align:left; font-size:12px;">
+                    <strong>STT</strong> <br> <span style="font-size: 12px; color: #444444;">/ No.</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: ${
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: ${
 									showReference ? '25%' : '26%'
+								}; text-align:left; font-size:12px; min-width: 25%;">
+                    <strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444;">/ Tests</span>
+                </th>
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 17%; text-align:left; font-size:12px;">
+                    <strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444;">/ Test result</span>
+                </th>
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 11%; text-align:left; font-size:12px;">
+                    <strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
+                </th>
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: ${
+									showReference ? '22%' : '35%'
 								}; text-align:left; font-size:12px;">
-                    Phép thử <br> <span style="font-size: 12px; color: gray;">/ Tests</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 17%; text-align:left; font-size:12px;">
-                    Kết quả <br> <span style="font-size: 12px; color: gray;">/ Test result</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 11%; text-align:left; font-size:12px;">
-                    Đơn vị <br> <span style="font-size: 12px; color: gray;">/ Unit</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: ${
-									showReference ? '22%' : '36%'
-								}; text-align:left; font-size:12px;">
-                    Phương pháp <br> <span style="font-size: 12px; color: gray;">/ Protocol</span>
+                    <strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
                 </th>${referenceHeader}
             </tr>
         </thead>
@@ -655,7 +655,7 @@ export default function MultiPageEditor() {
 				Nhận xét / Comment:
 			</p>
 		</div>
-		<div style="display: flex; flex-direction: column; gap: 2px; padding-left: 2pt;">
+		<div style="display: flex; flex-direction: column; gap: 2px; padding-left: 8px;">
 			<p class="comment-content print-text-paragraph" 
 			   style="font-size:12px; margin:0; padding:0; line-height: 1.2; text-align:left;">
 				--
@@ -677,7 +677,7 @@ export default function MultiPageEditor() {
 		</div>
 		<div style="display: flex; flex-direction: column; gap: 2px;">
 			<p class="note test_note_detail print-text-paragraph" 
-			   style="font-size:12px; margin:0; padding:0; line-height: 1.2; text-align:left;">
+			   style="font-size:11px; margin:0; padding:0; line-height: 1.2; text-align:left;">
 				KPH: Không phát hiện / Not detected.<br>
 				LOD: Giới hạn phát hiện / Limit of detection.<br>
 				LOQ: Giới hạn định lượng / Limit of quantification.<br>
@@ -807,7 +807,7 @@ export default function MultiPageEditor() {
         <p style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">
             IRDOP.ORG
         </p>
-        <p style="opacity:0.5; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">
+        <p style="color: #444444; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">
             Form: BM06-QT010-KN / Version: 04 / Effective date: 01/08/2023
         </p>
     </div>
@@ -1187,7 +1187,7 @@ export default function MultiPageEditor() {
 			width: 210,
 			height: 297,
 			topMargin: 15, // 1.5cm
-			bottomMargin: 7, // 0.7cm
+			bottomMargin: 8, // 0.8cm
 			sideMargin: 10, // 1cm
 			headerSpacing: 5, // spacing between header and content
 			footerSpacing: 3, // removed spacing between content and footer
@@ -1987,9 +1987,9 @@ export default function MultiPageEditor() {
 						}
 						
 						table td, table th {
-							padding: 6px 8px;
+							padding: 6px 8px !important; /* Keep 8px padding for print mode */
 							border: 1px solid black;
-							vertical-align: top; /* Better alignment for multi-line content */
+							vertical-align: middle; /* Better alignment for multi-line content */
 							height: auto !important; /* Allow cells to grow with content */
 							line-height: 1.2; /* Ensure consistent line height */
 						}
@@ -2704,7 +2704,7 @@ export default function MultiPageEditor() {
 					className="bg-white flex flex-col "
 					style={{
 						fontFamily: 'Gilroy, sans-serif',
-						width: '720px', // Exact width: 210mm - 2*10mm margins at 96 DPI
+						width: '710px', // Exact width: 210mm - 2*10mm margins at 96 DPI
 						margin: '0 auto',
 					}}
 				>

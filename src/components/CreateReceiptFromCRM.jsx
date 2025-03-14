@@ -96,9 +96,9 @@ const CreateReceiptFromCRM = () => {
 			sample_information: [
 				{ fname: 'Tên mẫu thử / name.', fvalue: sample?.sample_name || '' },
 				{ fname: 'Số lô / LOT no.', fvalue: '' },
-				{ fname: 'Ngày SX / mfg.', fvalue: '' },
-				{ fname: 'HSD / exp.', fvalue: '' },
-				{ fname: 'Nơi SX / mfr.', fvalue: '' },
+				{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
+				{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
+				{ fname: 'Nơi sản xuất / mfr.', fvalue: '' },
 				{
 					fname: 'Ngày tiếp nhận / receipt date.',
 					fvalue: new Date().toLocaleDateString('vi-VN'),
