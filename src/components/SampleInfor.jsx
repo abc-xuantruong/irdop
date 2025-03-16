@@ -10,8 +10,7 @@ import { RiEdit2Line } from 'react-icons/ri';
 import { GrDocumentText, GrPrint } from 'react-icons/gr';
 import { MdLibraryAdd, MdChevronLeft, MdChevronRight } from 'react-icons/md';
 import FilterBar from './FilterBar';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import Swal from 'sweetalert2';
 import { FaTrashAlt, FaCopy, FaUserCog, FaSave, FaTimes, FaRegTimesCircle, FaDatabase } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -113,16 +112,105 @@ const SampleInfor = () => {
 		}
 	};
 
-	const handleStatusChange = (statusIndex) => {
-		if (isEditingSample) {
-			handleInputChange('status', statusIndex);
+	// Add a new function to handle saving individual field changes
+	const handleSaveField = async (field, value) => {
+		try {
+			// Create a copy of the sample with just the updated field
+			const updatedSample = {
+				...sample,
+				[field]: value,
+				modified_by_uid: currentUser.identity_uid,
+			};
+
+			// Update corresponding values in sample_information arrays if needed
+			if (field === 'sample_name') {
+				// Update the "Tên mẫu thử / name." field in customerInfo
+				const updatedCustomerInfo = customerInfo.map((item) => {
+					if (item.fname.includes('Tên mẫu thử') || item.fname.includes('name')) {
+						return { ...item, fvalue: value };
+					}
+					return item;
+				});
+				updatedSample.sample_information = [...updatedCustomerInfo, ...receiptInfo];
+				setCustomerInfo(updatedCustomerInfo);
+			}
+
+			if (field === 'sample_description') {
+				// Update the "Mô tả / desc." field in receiptInfo
+				const updatedReceiptInfo = receiptInfo.map((item) => {
+					if (item.fname.includes('Mô tả') || item.fname.includes('desc')) {
+						return { ...item, fvalue: value };
+					}
+					return item;
+				});
+				updatedSample.sample_information = [...customerInfo, ...updatedReceiptInfo];
+				setReceiptInfo(updatedReceiptInfo);
+			}
+
+			if (field === 'matrix') {
+				// Update the "Nền mẫu / matrix." field in receiptInfo
+				const updatedReceiptInfo = receiptInfo.map((item) => {
+					if (item.fname.includes('Nền mẫu') || item.fname.includes('matrix')) {
+						return { ...item, fvalue: value };
+					}
+					return item;
+				});
+				updatedSample.sample_information = [...customerInfo, ...updatedReceiptInfo];
+				setReceiptInfo(updatedReceiptInfo);
+			}
+
+			// Send the update to the server
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
+				sample: updatedSample,
+			});
+
+			if (response.status === 200) {
+				showToast(`${field} updated successfully!`);
+				// Update local state
+				setSample((prev) => ({ ...prev, [field]: value }));
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || `Failed to update ${field}.`,
+				});
+			}
+		} catch (error) {
+			console.error(`Error updating ${field}:`, error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || `An error occurred while updating ${field}.`,
+			});
 		}
 	};
 
-	const handlePurposeChange = (e) => {
-		if (isEditingSample) {
-			handleInputChange('purpose', e.target.value);
+	// New handler for field keydown events
+	const handleFieldKeyDown = (e, field, value) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			handleSaveField(field, value);
+			// Remove focus from the element
+			e.target.blur();
 		}
+	};
+
+	// New handler for field blur events
+	const handleFieldBlur = (field, value, originalValue) => {
+		// Only save if value has changed
+		if (value !== originalValue) {
+			handleSaveField(field, value);
+		}
+	};
+
+	// Modified status change handler
+	const handleStatusChange = (statusIndex) => {
+		handleSaveField('status', statusIndex);
+	};
+
+	// Modified purpose change handler
+	const handlePurposeChange = (e) => {
+		handleSaveField('purpose', e.target.value);
 	};
 
 	// Function to open PPT in new window
@@ -141,6 +229,31 @@ const SampleInfor = () => {
 		} catch (error) {
 			console.error('Error fetching receipt full:', error);
 		}
+	};
+
+	// Add custom toast notification function
+	const showToast = (message, type = 'success') => {
+		const Toast = Swal.mixin({
+			toast: true,
+			position: 'top-end',
+			showConfirmButton: false,
+			timer: 2000,
+			timerProgressBar: true,
+			didOpen: (toast) => {
+				toast.addEventListener('mouseenter', Swal.stopTimer);
+				toast.addEventListener('mouseleave', Swal.resumeTimer);
+			},
+			width: 'auto',
+			padding: '0.5em',
+			customClass: {
+				popup: 'colored-toast',
+			},
+		});
+
+		Toast.fire({
+			icon: type,
+			title: message,
+		});
 	};
 
 	const handleSearchChange = (e) => {
@@ -233,17 +346,25 @@ const SampleInfor = () => {
 			});
 
 			if (response.status === 200) {
-				toast.success('Parameters added successfully!');
+				showToast('Parameters added successfully!');
 				setIsAddingParameter(false);
 				setSelectedParameters([]);
 				setListAnalytes([...currentSample.analysis, ...response.data]);
 				setCurrentSample({ ...currentSample, analysis: [...currentSample.analysis, ...response.data] });
 			} else {
-				toast.error('Failed to add parameters.');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Failed to add parameters.',
+				});
 			}
 		} catch (error) {
 			console.error('Error adding parameters:', error);
-			toast.error('An error occurred while adding parameters.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while adding parameters.',
+			});
 		}
 	};
 
@@ -285,7 +406,7 @@ const SampleInfor = () => {
 	const confirmParameterUpdateMode = () => {
 		setUpdateParameterMode(true);
 		setIsParameterWarningVisible(false);
-		toast.info('Đã bật chế độ cập nhật thư viện chỉ tiêu', { autoClose: 1000 });
+		showToast('Đã bật chế độ cập nhật thư viện chỉ tiêu', 'info');
 	};
 
 	// Function to handle cancellation of parameter update mode
@@ -326,14 +447,22 @@ const SampleInfor = () => {
 					});
 
 					if (analysisResponse.status === 200) {
-						toast.success('Chỉ tiêu và thư viện đã được cập nhật!');
+						showToast('Chỉ tiêu và thư viện đã được cập nhật!');
 						return updatedAnalysis;
 					} else {
-						toast.error('Lỗi khi cập nhật chỉ tiêu.');
+						Swal.fire({
+							icon: 'error',
+							title: 'Lỗi',
+							text: analysisResponse.data?.message || 'Lỗi khi cập nhật chỉ tiêu.',
+						});
 						return analysis;
 					}
 				} else {
-					toast.error('Lỗi khi cập nhật thư viện chỉ tiêu.');
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: parameterResponse.data?.message || 'Lỗi khi cập nhật thư viện chỉ tiêu.',
+					});
 					return analysis;
 				}
 			} else {
@@ -343,15 +472,23 @@ const SampleInfor = () => {
 				});
 
 				if (response.status === 200) {
-					toast.success('Chỉ tiêu đã được cập nhật!');
+					showToast('Chỉ tiêu đã được cập nhật!');
 				} else {
-					toast.error('Lỗi khi cập nhật chỉ tiêu.');
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: response.data?.message || 'Lỗi khi cập nhật chỉ tiêu.',
+					});
 				}
 				return analysis;
 			}
 		} catch (error) {
 			console.error('Error updating parameter and analysis:', error);
-			toast.error('Đã xảy ra lỗi khi cập nhật.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Đã xảy ra lỗi khi cập nhật.',
+			});
 			return analysis;
 		}
 	};
@@ -371,15 +508,23 @@ const SampleInfor = () => {
 				});
 
 				if (response.status === 200) {
-					toast.success('Chỉ tiêu đã được cập nhật!');
+					showToast('Chỉ tiêu đã được cập nhật!');
 				} else {
-					toast.error('Lỗi khi cập nhật chỉ tiêu.');
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: response.data?.message || 'Lỗi khi cập nhật chỉ tiêu.',
+					});
 				}
 				return analysis;
 			}
 		} catch (error) {
 			console.error('Error updating analysis:', error);
-			toast.error('Đã xảy ra lỗi khi cập nhật chỉ tiêu.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Đã xảy ra lỗi khi cập nhật chỉ tiêu.',
+			});
 			return analysis;
 		}
 	};
@@ -388,7 +533,11 @@ const SampleInfor = () => {
 		try {
 			// Make sure required fields are filled
 			if (!newParameter.parameter_name) {
-				toast.error('Tên chỉ tiêu không được để trống');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: 'Tên chỉ tiêu không được để trống',
+				});
 				return;
 			}
 
@@ -406,7 +555,11 @@ const SampleInfor = () => {
 				});
 
 				if (parameterResponse.status !== 200) {
-					toast.error('Lỗi khi tạo chỉ tiêu trong thư viện.');
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: parameterResponse.data?.message || 'Lỗi khi tạo chỉ tiêu trong thư viện.',
+					});
 					return;
 				}
 
@@ -430,7 +583,7 @@ const SampleInfor = () => {
 			});
 
 			if (response.status === 200) {
-				toast.success('Chỉ tiêu đã được thêm thành công!');
+				showToast('Chỉ tiêu đã được thêm thành công!');
 				// Add the new parameter to the list
 				setListAnalytes([response.data, ...listAnalytes]);
 				setIsAddingNewParameter(false);
@@ -448,11 +601,19 @@ const SampleInfor = () => {
 					sample_id: currentSample?.id || 0,
 				});
 			} else {
-				toast.error('Không thể thêm chỉ tiêu.');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Không thể thêm chỉ tiêu.',
+				});
 			}
 		} catch (error) {
 			console.error('Error adding new parameter:', error);
-			toast.error('Đã xảy ra lỗi khi thêm chỉ tiêu.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Đã xảy ra lỗi khi thêm chỉ tiêu.',
+			});
 		}
 	};
 
@@ -748,7 +909,11 @@ const SampleInfor = () => {
 			await onUpdateAnalysis(analysis);
 		} catch (error) {
 			console.error('Error updating analysis:', error);
-			toast.error('An error occurred while updating analysis.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while updating analysis.',
+			});
 		}
 		// }
 	};
@@ -789,15 +954,23 @@ const SampleInfor = () => {
 			});
 
 			if (response.status === 200) {
-				toast.success('Sample updated successfully!');
+				showToast('Sample updated successfully!');
 				setIsEditingSample(false);
 				fetchReceiptFull(); // Fetch updated data
 			} else {
-				toast.error('Failed to update sample.');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Failed to update sample.',
+				});
 			}
 		} catch (error) {
 			console.error('Error updating sample:', error);
-			toast.error('An error occurred while updating sample.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while updating sample.',
+			});
 		}
 	};
 
@@ -920,7 +1093,11 @@ const SampleInfor = () => {
 		if (receiptInfo.length > 0) {
 			const firstReceiptField = receiptInfo[0];
 			if (!firstReceiptField.fname.includes('Ngày tiếp nhận') && !firstReceiptField.fname.includes('receipt date')) {
-				toast.error('Thông tin đầu tiên trong "Thông tin tiếp nhận" phải là ngày tiếp nhận');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: 'Thông tin đầu tiên trong "Thông tin tiếp nhận" phải là ngày tiếp nhận',
+				});
 				return;
 			}
 		}
@@ -950,15 +1127,23 @@ const SampleInfor = () => {
 			});
 
 			if (response.status === 200) {
-				toast.success('Report updated successfully!');
+				showToast('Report updated successfully!');
 				setIsReportChanged(false); // Reset change tracker
 				fetchReceiptFull(); // Fetch updated data
 			} else {
-				toast.error('Failed to update report.');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Failed to update report.',
+				});
 			}
 		} catch (error) {
 			console.error('Error updating report:', error);
-			toast.error('An error occurred while updating report.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while updating report.',
+			});
 		}
 	};
 
@@ -991,9 +1176,13 @@ const SampleInfor = () => {
 			// Mark as changed to enable the save button
 			setIsReportChanged(true);
 
-			toast.success(`Đã sao chép thông tin từ mẫu ${sampleUid}`);
+			showToast(`Đã sao chép thông tin từ mẫu ${sampleUid}`);
 		} else {
-			toast.error(`Không tìm thấy thông tin từ mẫu ${sampleUid}`);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: `Không tìm thấy thông tin từ mẫu ${sampleUid}`,
+			});
 		}
 
 		// Close the dropdown
@@ -1246,14 +1435,22 @@ const SampleInfor = () => {
 			});
 
 			if (response.status === 200) {
-				toast.success('Analysis deleted successfully!');
+				showToast('Analysis deleted successfully!');
 				setListAnalytes(listAnalytes.filter((analyte) => analyte.id !== id));
 			} else {
-				toast.error('Failed to delete analysis.');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Failed to delete analysis.',
+				});
 			}
 		} catch (error) {
 			console.error('Error deleting analysis:', error);
-			toast.error('An error occurred while deleting analysis.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while deleting analysis.',
+			});
 		}
 	};
 
@@ -1305,7 +1502,11 @@ const SampleInfor = () => {
 			await onUpdateAnalysis(analysis);
 		} catch (error) {
 			console.error('Error updating analysis:', error);
-			toast.error('Có lỗi xảy ra khi cập nhật người thực hiện');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật người thực hiện',
+			});
 		}
 	};
 
@@ -1360,7 +1561,11 @@ const SampleInfor = () => {
 			await onUpdateAnalysis(analysis);
 		} catch (error) {
 			console.error('Error updating deadline:', error);
-			toast.error('Có lỗi xảy ra khi cập nhật hạn trả');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật hạn trả',
+			});
 		}
 	};
 
@@ -1561,7 +1766,11 @@ const SampleInfor = () => {
 			setListAnalytes(finalAnalytes);
 		} catch (error) {
 			console.error('Error updating protocol source:', error);
-			toast.error('An error occurred while updating protocol source.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while updating protocol source.',
+			});
 		}
 	};
 
@@ -1584,14 +1793,22 @@ const SampleInfor = () => {
 			});
 
 			if (response.status === 200) {
-				toast.success('Sample deleted successfully!');
+				showToast('Sample deleted successfully!');
 				navigate(`/dashboard/receipt?receipt_uid=${receipt_uid}`);
 			} else {
-				toast.error('Failed to delete sample.');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Failed to delete sample.',
+				});
 			}
 		} catch (error) {
 			console.error('Error deleting sample:', error);
-			toast.error('An error occurred while deleting sample.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while deleting sample.',
+			});
 		} finally {
 			setIsDeleteConfirmVisible(false);
 			setDeleteItemId(null);
@@ -1606,14 +1823,22 @@ const SampleInfor = () => {
 			});
 
 			if (response.status === 200) {
-				toast.success('Analysis deleted successfully!');
+				showToast('Analysis deleted successfully!');
 				setListAnalytes(listAnalytes.filter((analyte) => analyte.id !== deleteItemId));
 			} else {
-				toast.error('Failed to delete analysis.');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Failed to delete analysis.',
+				});
 			}
 		} catch (error) {
 			console.error('Error deleting analysis:', error);
-			toast.error('An error occurred while deleting analysis.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while deleting analysis.',
+			});
 		} finally {
 			setIsDeleteConfirmVisible(false);
 			setDeleteItemId(null);
@@ -1665,7 +1890,11 @@ const SampleInfor = () => {
 	// Modify delete handler to handle multiple selections
 	const handleDeleteSelected = () => {
 		if (selectedAnalytes.length === 0) {
-			toast.warning('Please select at least one item to delete');
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Please select at least one item to delete',
+			});
 			return;
 		}
 		setIsDeleteConfirmVisible(true);
@@ -1680,16 +1909,24 @@ const SampleInfor = () => {
 			});
 
 			if (response.status === 200) {
-				toast.success(`${selectedAnalytes.length} analyses deleted successfully!`);
+				showToast(`${selectedAnalytes.length} analyses deleted successfully!`);
 				setListAnalytes(listAnalytes.filter((analyte) => !selectedAnalytes.includes(analyte.id)));
 				setSelectedAnalytes([]);
 				setSelectAll(false);
 			} else {
-				toast.error('Failed to delete analyses.');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Failed to delete analyses.',
+				});
 			}
 		} catch (error) {
 			console.error('Error deleting analyses:', error);
-			toast.error('An error occurred while deleting analyses.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while deleting analyses.',
+			});
 		} finally {
 			setIsDeleteConfirmVisible(false);
 		}
@@ -1697,7 +1934,11 @@ const SampleInfor = () => {
 
 	const handleBulkTransfer = () => {
 		if (selectedAnalytes.length === 0) {
-			toast.warning('Please select at least one item to transfer');
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Please select at least one item to transfer',
+			});
 			return;
 		}
 		setIsTransferMultipleVisible(true);
@@ -1705,7 +1946,11 @@ const SampleInfor = () => {
 
 	const handleBulkTransferConfirm = async () => {
 		if (!selectedTechnician) {
-			toast.warning('Please select a technician');
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Please select a technician',
+			});
 			return;
 		}
 
@@ -1744,9 +1989,13 @@ const SampleInfor = () => {
 			setListAnalytes(newAnalytesList);
 
 			if (failCount > 0) {
-				toast.warning(`${successCount} analyses updated successfully, ${failCount} failed`);
+				Swal.fire({
+					icon: 'warning',
+					title: 'Kết quả',
+					text: `${successCount} analyses updated successfully, ${failCount} failed`,
+				});
 			} else {
-				toast.success(
+				showToast(
 					`Successfully transferred ${selectedAnalytes.length} analyses to ${
 						technicians.find((tech) => tech.identity_uid === selectedTechnician)?.identity_name
 					}`,
@@ -1757,7 +2006,11 @@ const SampleInfor = () => {
 			setSelectedTechnician(null);
 		} catch (error) {
 			console.error('Error transferring analyses:', error);
-			toast.error('An error occurred while transferring analyses');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while transferring analyses',
+			});
 		}
 	};
 
@@ -1827,7 +2080,43 @@ const SampleInfor = () => {
 
 	return (
 		<div className="w-full relative">
-			<ToastContainer />
+			{/* Add CSS for custom toast */}
+			<style jsx>{`
+				.colored-toast.swal2-icon-success {
+					background-color: #2bae66 !important;
+				}
+				.colored-toast.swal2-icon-error {
+					background-color: #f27474 !important;
+				}
+				.colored-toast.swal2-icon-warning {
+					background-color: #f8bb86 !important;
+				}
+				.colored-toast.swal2-icon-info {
+					background-color: #3fc3ee !important;
+				}
+				.colored-toast.swal2-icon-question {
+					background-color: #87adbd !important;
+				}
+				.colored-toast .swal2-title {
+					color: white;
+					font-size: 0.85rem !important;
+				}
+				.colored-toast .swal2-close {
+					color: white;
+				}
+				.colored-toast .swal2-html-container {
+					color: white;
+				}
+
+				.editable-field {
+					transition: all 0.2s;
+				}
+
+				.editable-field:hover {
+					border-color: #6366f1 !important;
+					box-shadow: 0 0 0 1px #6366f1;
+				}
+			`}</style>
 			<Breadcrumb
 				paths={[
 					{ name: 'Danh sách', link: '/' },
@@ -1888,11 +2177,7 @@ const SampleInfor = () => {
 						</>
 					)}
 				</div>
-				<div
-					className={`hover:overflow-auto overflow-hidden lg:pb-0 md:pb-2 hover:pb-0 flex flex-wrap border rounded-lg mt-2 ${
-						isEditingSample ? 'border-green-500' : ''
-					}`}
-				>
+				<div className="hover:overflow-auto overflow-hidden lg:pb-0 md:pb-2 hover:pb-0 flex flex-wrap border rounded-lg mt-2">
 					<div className="flex md:flex-row flex-col md:justify-between items-center justify-center w-full">
 						<div className="w-full p-2 md:pr-4">
 							<table className="w-full border-none">
@@ -1914,9 +2199,10 @@ const SampleInfor = () => {
 											<input
 												type="text"
 												value={sample?.sample_name || ''}
-												className="w-full bg-white border rounded p-1"
-												disabled={!isEditingSample}
-												onChange={(e) => handleInputChange('sample_name', e.target.value)}
+												className="w-full bg-white border rounded p-1 editable-field"
+												onChange={(e) => setSample({ ...sample, sample_name: e.target.value })}
+												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_name', e.target.value)}
+												onBlur={(e) => handleFieldBlur('sample_name', e.target.value, sample?.sample_name)}
 											/>
 										</td>
 									</tr>
@@ -1928,9 +2214,10 @@ const SampleInfor = () => {
 											<input
 												type="text"
 												value={sample?.matrix || ''}
-												className="w-full bg-white border rounded p-1"
-												disabled={!isEditingSample}
-												onChange={(e) => handleInputChange('matrix', e.target.value)}
+												className="w-full bg-white border rounded p-1 editable-field"
+												onChange={(e) => setSample({ ...sample, matrix: e.target.value })}
+												onKeyDown={(e) => handleFieldKeyDown(e, 'matrix', e.target.value)}
+												onBlur={(e) => handleFieldBlur('matrix', e.target.value, sample?.matrix)}
 											/>
 										</td>
 									</tr>
@@ -1941,10 +2228,13 @@ const SampleInfor = () => {
 										<td className="w-full text-start p-1 flex">
 											<textarea
 												value={sample?.sample_description || ''}
-												className="w-full resize-none bg-white border rounded p-1 overflow-hidden hover:overflow-y-auto"
+												className="w-full resize-none bg-white border rounded p-1 overflow-hidden hover:overflow-y-auto editable-field"
 												rows={2}
-												disabled={!isEditingSample}
-												onChange={(e) => handleInputChange('sample_description', e.target.value)}
+												onChange={(e) => setSample({ ...sample, sample_description: e.target.value })}
+												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_description', e.target.value)}
+												onBlur={(e) =>
+													handleFieldBlur('sample_description', e.target.value, sample?.sample_description)
+												}
 											/>
 										</td>
 									</tr>
@@ -1960,9 +2250,10 @@ const SampleInfor = () => {
 											<input
 												type="text"
 												value={sample?.sample_volume || ''}
-												className="w-full bg-white border rounded p-1"
-												disabled={!isEditingSample}
-												onChange={(e) => handleInputChange('sample_volume', e.target.value)}
+												className="w-full bg-white border rounded p-1 editable-field"
+												onChange={(e) => setSample({ ...sample, sample_volume: e.target.value })}
+												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_volume', e.target.value)}
+												onBlur={(e) => handleFieldBlur('sample_volume', e.target.value, sample?.sample_volume)}
 											/>
 										</td>
 									</tr>
@@ -1971,8 +2262,7 @@ const SampleInfor = () => {
 										<td className="w-full text-start p-1">
 											<select
 												value={sample?.purpose || ''}
-												className="w-full bg-white border rounded p-1"
-												disabled={!isEditingSample}
+												className="w-full bg-white border rounded p-1 editable-field"
 												onChange={handlePurposeChange}
 											>
 												<option value="">-- Mục đích kiểm nghiệm --</option>
@@ -1991,8 +2281,7 @@ const SampleInfor = () => {
 										<td className="w-full text-start p-1 md:max-w-80 max-w-60">
 											<select
 												value={sample?.status || 0}
-												className="w-full bg-white border rounded p-1"
-												disabled={!isEditingSample}
+												className="w-full bg-white border rounded p-1 editable-field"
 												onChange={(e) => handleStatusChange(parseInt(e.target.value))}
 											>
 												{status.map((stat, index) => (
@@ -2010,10 +2299,13 @@ const SampleInfor = () => {
 										<td className="w-full text-start p-1 flex">
 											<textarea
 												value={sample?.additional_request || ''}
-												className="w-full resize-none bg-white border rounded p-1 overflow-hidden hover:overflow-y-auto h-full"
+												className="w-full resize-none bg-white border rounded p-1 overflow-hidden hover:overflow-y-auto editable-field h-full"
 												rows={2}
-												disabled={!isEditingSample}
-												onChange={(e) => handleInputChange('additional_request', e.target.value)}
+												onChange={(e) => setSample({ ...sample, additional_request: e.target.value })}
+												onKeyDown={(e) => handleFieldKeyDown(e, 'additional_request', e.target.value)}
+												onBlur={(e) =>
+													handleFieldBlur('additional_request', e.target.value, sample?.additional_request)
+												}
 											/>
 										</td>
 									</tr>
@@ -2022,23 +2314,24 @@ const SampleInfor = () => {
 						</div>
 					</div>
 				</div>
-
+				{/* Remove the edit buttons since we now have inline editing */}
 				{isEditingSample && (
-					<div className="flex justify-end mt-4">
-						<button
-							className="bg-gray-500 text-white text-sm rounded-lg p-1 active:bg-gray-600 focus:outline-none mr-2"
-							onClick={handleCancelEdit}
-						>
-							Hủy bỏ
-						</button>
-						<button
-							className="bg-green-500 text-white text-sm rounded-lg p-1 active:bg-green-600 focus:outline-none"
-							onClick={handleConfirmEdit}
-						>
-							Xác nhận
-						</button>
-					</div>
+				<div className="flex justify-end mt-4">
+					<button
+						className="bg-gray-500 text-white text-sm rounded-lg p-1 active:bg-gray-600 focus:outline-none mr-2"
+						onClick={handleCancelEdit}
+					>
+						Hủy bỏ
+					</button>
+					<button
+						className="bg-green-500 text-white text-sm rounded-lg p-1 active:bg-green-600 focus:outline-none"
+						onClick={handleConfirmEdit}
+					>
+						Xác nhận
+					</button>
+				</div>
 				)}
+				{/* Rest of the component remains the same */}
 				<div className="mt-2 flex flex-col">
 					<div className="flex justify-between items-center">
 						<h3 className="font-medium text-lg">Thông tin in phiếu</h3>

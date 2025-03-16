@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiPost } from '../contexts/helperFunctionCallAPI';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2'; // Add Swal import
 
 const CreateReceiptFromCRM = () => {
 	const [isModalOpen, setIsModalOpen] = useState(false);
@@ -173,8 +174,11 @@ const CreateReceiptFromCRM = () => {
 			if (response.data && response.data.error) {
 				setError(response.data.message || 'Đã xảy ra lỗi khi tạo tiếp nhận mẫu.');
 			} else {
-				// Close modal and navigate to the receipt page
+				// Close modal and show notification before navigation
 				closeModal();
+
+				// Show brief notification and navigate after delay
+				await showBriefNotification('Tạo tiếp nhận mẫu thành công!');
 				navigate(`/dashboard/receipt?receipt_uid=${response.data.receipt_uid}`);
 			}
 		} catch (error) {
@@ -183,6 +187,33 @@ const CreateReceiptFromCRM = () => {
 		} finally {
 			setIsCreating(false);
 		}
+	};
+
+	// New function to show brief notification before navigation
+	const showBriefNotification = (message) => {
+		return new Promise((resolve) => {
+			const Toast = Swal.mixin({
+				toast: true,
+				position: 'top-end',
+				showConfirmButton: false,
+				timer: 500, // Show for 0.5 seconds
+				timerProgressBar: true,
+				didOpen: (toast) => {
+					toast.addEventListener('mouseenter', Swal.stopTimer);
+					toast.addEventListener('mouseleave', Swal.resumeTimer);
+				},
+				customClass: {
+					popup: 'colored-toast swal2-icon-success',
+				},
+			});
+
+			Toast.fire({
+				icon: 'success',
+				title: message,
+			}).then(() => {
+				resolve();
+			});
+		});
 	};
 
 	return (

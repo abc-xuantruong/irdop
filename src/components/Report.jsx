@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
+import Swal from 'sweetalert2'; // Add SweetAlert2 import
 
 export default function MultiPageEditor() {
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -158,6 +159,8 @@ export default function MultiPageEditor() {
 		} catch (err) {
 			console.error('Error loading published report:', err);
 			setError(`Failed to load published report: ${err.message}`);
+			// Add notification for error
+			showNotification(`Tải phiếu không thành công: ${err.message}`, 'error');
 		} finally {
 			setLoading(false);
 		}
@@ -596,7 +599,7 @@ export default function MultiPageEditor() {
 
 					return `
 				<tr>
-					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px; ">${index + 1}.</td>
+					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;width:50px;">${index + 1}.</td>
 					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${parameterName}</td>
 					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${result}</td>
 					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${unit}</td>
@@ -622,26 +625,22 @@ export default function MultiPageEditor() {
 
 		return `
 <div style="margin:0; padding:0;">
-    <table style="width: 100%; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
+    <table style="width: auto; min-width: 100% ; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
         <thead>
             <tr>
-                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 6.5%; text-align:left; font-size:12px;">
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 50px; text-align:left; font-size:12px;">
                     <strong>STT</strong> <br> <span style="font-size: 12px; color: #444444;">/ No.</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: ${
-									showReference ? '25%' : '26%'
-								}; text-align:left; font-size:12px; min-width: 25%;">
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500;  text-align:left; font-size:12px; min-width: 25%;">
                     <strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444;">/ Tests</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 17%; text-align:left; font-size:12px;">
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; min-width:100px; text-align:left; font-size:12px;">
                     <strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444;">/ Test result</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 11%; text-align:left; font-size:12px;">
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; min-width:90px; text-align:left; font-size:12px;">
                     <strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: ${
-									showReference ? '22%' : '35%'
-								}; text-align:left; font-size:12px;">
+                <th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;">
                     <strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
                 </th>${referenceHeader}
             </tr>
@@ -1988,6 +1987,9 @@ export default function MultiPageEditor() {
 							width: 100%;
 							font-family: 'Gilroy', sans-serif !important;
 							table-layout: fixed; /* Helps with consistent row heights */
+							width: auto;
+							min-width: 100%;
+							max-width: 100%;
 						}
 						
 						table tr {
@@ -2136,7 +2138,7 @@ export default function MultiPageEditor() {
 										icon.querySelector('img').style.maxWidth = 'none';
 									}
 								});
-								window.print();
+								// window.print();
 							}, 1000);
 						});
 					</script>
@@ -2221,9 +2223,21 @@ export default function MultiPageEditor() {
 			? 'Bạn có chắc chắn muốn phát hành lại phiếu phân tích này? Phiếu phân tích cũ sẽ vẫn được lưu trữ trong hệ thống.'
 			: 'Bạn có chắc chắn muốn phát hành phiếu phân tích này?';
 
-		if (window.confirm(confirmMessage)) {
-			publishReport();
-		}
+		// Replace window.confirm with SweetAlert2
+		Swal.fire({
+			title: 'Xác nhận',
+			text: confirmMessage,
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonColor: '#3085d6',
+			cancelButtonColor: '#d33',
+			confirmButtonText: 'Xác nhận',
+			cancelButtonText: 'Hủy',
+		}).then((result) => {
+			if (result.isConfirmed) {
+				publishReport();
+			}
+		});
 	};
 
 	// Rename the original function to publishReport
@@ -2334,13 +2348,20 @@ export default function MultiPageEditor() {
 					return params;
 				});
 
-				alert(`Report published successfully with ID: ${newPptUid}`);
+				// Show success notification
+				showNotification('Phát hành phiếu phân tích thành công!', 'success');
 			} else {
-				alert('Report published successfully!');
+				// Show error notification
+				showNotification('Phát hành không thành công, không nhận được mã phiếu', 'error');
 			}
 		} catch (err) {
 			console.error('Error publishing report:', err);
-			alert(`Failed to publish report: ${err.message}`);
+			// Replace alert with SweetAlert2
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: `Phát hành không thành công: ${err.message}`,
+			});
 		} finally {
 			setLoading(false);
 		}
@@ -2627,6 +2648,29 @@ export default function MultiPageEditor() {
 		updateVlasVisibility();
 	}, [showVlas, showComment, showReference, sampleData]);
 
+	// Custom function to show notifications with SweetAlert instead of alert
+	const showNotification = (message, type = 'success') => {
+		const Toast = Swal.mixin({
+			toast: true,
+			position: 'top-end',
+			showConfirmButton: false,
+			timer: 3000,
+			timerProgressBar: true,
+			didOpen: (toast) => {
+				toast.addEventListener('mouseenter', Swal.stopTimer);
+				toast.addEventListener('mouseleave', Swal.resumeTimer);
+			},
+			customClass: {
+				popup: `colored-toast swal2-icon-${type}`,
+			},
+		});
+
+		Toast.fire({
+			icon: type,
+			title: message,
+		});
+	};
+
 	return (
 		<div className="p-4 bg-gray-100 min-h-screen">
 			<div className="mb-4 flex flex-col gap-4 items-end">
@@ -2794,6 +2838,32 @@ export default function MultiPageEditor() {
 					.page-break {
 						page-break-after: always;
 					}
+				}
+
+				.colored-toast.swal2-icon-success {
+					background-color: #2bae66 !important;
+				}
+				.colored-toast.swal2-icon-error {
+					background-color: #f27474 !important;
+				}
+				.colored-toast.swal2-icon-warning {
+					background-color: #f8bb86 !important;
+				}
+				.colored-toast.swal2-icon-info {
+					background-color: #1976d2 !important;
+				}
+				.colored-toast.swal2-icon-question {
+					background-color: #87adbd !important;
+				}
+				.colored-toast .swal2-title {
+					color: white;
+					font-size: 0.85rem !important;
+				}
+				.colored-toast .swal2-close {
+					color: white;
+				}
+				.colored-toast .swal2-html-container {
+					color: white;
 				}
 			`}</style>
 		</div>

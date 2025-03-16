@@ -58,13 +58,23 @@ export const apiGet = async (url, headers = {}) => {
 		return response;
 	} catch (error) {
 		console.error('GET request error:', error);
-		if (error.status === 403) {
-			forbidden('Bạn không có quyền truy cập vào chức năng này!');
-			return { status: 403, data: { message: 'Forbidden' } };
-		} else if (error.status === 401) {
-			redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
-			return { status: 401, data: { message: 'Unauthorized' } };
+		if (error.response) {
+			if (error.response.status === 403) {
+				forbidden('Bạn không có quyền truy cập vào chức năng này!');
+				return { status: 403, data: { message: error.response.data?.message || 'Forbidden' } };
+			} else if (error.response.status === 401) {
+				redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
+				return { status: 401, data: { message: error.response.data?.message || 'Unauthorized' } };
+			} else {
+				// Return the error message from the server if available
+				return {
+					status: error.response.status,
+					data: { message: error.response.data?.message || error.message || 'Lỗi không xác định' },
+				};
+			}
 		}
+		// Handle network errors or other issues
+		return { status: 500, data: { message: error.message || 'Lỗi kết nối đến máy chủ' } };
 	}
 };
 
@@ -90,14 +100,24 @@ export const apiPost = async (url, body, headers = {}) => {
 
 		response = await axios.post(url, body, { headers: { ...getAuthHeader(), ...headers } });
 		return response;
-	}  catch (error) {
-		console.error('GET request error:', error);
-		if (error.status === 403) {
-			forbidden('Bạn không có quyền truy cập vào chức năng này!');
-			return { status: 403, data: { message: 'Forbidden' } };
-		} else if (error.status === 401) {
-			redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
-			return { status: 401, data: { message: 'Unauthorized' } };
+	} catch (error) {
+		console.error('POST request error:', error);
+		if (error.response) {
+			if (error.response.status === 403) {
+				forbidden('Bạn không có quyền truy cập vào chức năng này!');
+				return { status: 403, data: { message: error.response.data?.message || 'Forbidden' } };
+			} else if (error.response.status === 401) {
+				redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
+				return { status: 401, data: { message: error.response.data?.message || 'Unauthorized' } };
+			} else {
+				// Return the error message from the server if available
+				return {
+					status: error.response.status,
+					data: { message: error.response.data?.message || error.message || 'Lỗi không xác định' },
+				};
+			}
 		}
+		// Handle network errors or other issues
+		return { status: 500, data: { message: error.message || 'Lỗi kết nối đến máy chủ' } };
 	}
 };

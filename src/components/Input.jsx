@@ -4,6 +4,17 @@ const { useEffect, useRef } = React;
 const TinyMceInput = ({ value, onUpdate, onKey }) => {
 	const editorRef = useRef(null);
 
+	// Helper function to check if content is empty
+	const isEmptyContent = (content) => {
+		// Check if content is just an empty paragraph or contains only whitespace
+		if (!content || content === '<p></p>' || content === '<p> </p>') {
+			return true;
+		}
+		// Remove HTML tags to check if there's only whitespace
+		const textContent = content.replace(/<[^>]*>/g, '').trim();
+		return textContent === '';
+	};
+
 	useEffect(() => {
 		const script = document.createElement('script');
 		script.src = '/tinymce/tinymce.min.js';
@@ -38,7 +49,10 @@ const TinyMceInput = ({ value, onUpdate, onKey }) => {
 
 				editor.on('blur', () => {
 					const content = editor.getContent();
-					onUpdate(content);
+					// Only call onUpdate if content is not empty
+					if (!isEmptyContent(content)) {
+						onUpdate(content);
+					}
 				});
 
 				// Lắng nghe sự kiện keydown để cập nhật khi nhấn Enter hoặc X

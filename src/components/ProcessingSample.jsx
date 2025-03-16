@@ -93,8 +93,8 @@ const ProcessingSample = () => {
 		setVisibleTables((prev) => ({ ...prev, [id]: !prev[id] }));
 	};
 
-	const handleAnalysisClick = (analysis) => {
-		setSelectedAnalysis(analysis);
+	const handleAnalysisClick = (analysis, parameterName) => {
+		setSelectedAnalysis({ ...analysis, parameterName });
 	};
 
 	const closeForm = () => {
@@ -409,7 +409,7 @@ const ProcessingSample = () => {
 						onClick={closeForm}
 					>
 						<div className="bg-white p-4 rounded-lg shadow-lg w-96" onClick={(e) => e.stopPropagation()}>
-							<h2 className="text-lg font-medium mb-4">Chi tiết phân tích</h2>
+							<h2 className="text-lg font-medium mb-4">Kết quả {selectedAnalysis.parameterName || ''}</h2>
 							<div className="mb-2 flex items-center h-10">
 								<label className="text-start block text-sm font-medium w-24">Mã mẫu</label>
 								<input
@@ -568,7 +568,7 @@ const ProcessingSample = () => {
 																							}`}
 																							draggable
 																							onDragStart={(e) => handleDragStart(e, parameter?.id, analysis?.id)}
-																							onClick={() => handleAnalysisClick(analysis)}
+																							onClick={() => handleAnalysisClick(analysis, parameter?.parameter_name)}
 																						>
 																							{analysis?.sample_uid || 'N/A'} <br />
 																							{getTechnicianName(analysis?.technician_uid)}
@@ -604,7 +604,7 @@ const ProcessingSample = () => {
 																							}`}
 																							draggable
 																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
-																							onClick={() => handleAnalysisClick(analysis)}
+																							onClick={() => handleAnalysisClick(analysis, parameter.parameter_name)}
 																						>
 																							{analysis.sample_uid} <br />
 																							{getTechnicianName(analysis.technician_uid)}
@@ -638,7 +638,7 @@ const ProcessingSample = () => {
 																							}`}
 																							draggable
 																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
-																							onClick={() => handleAnalysisClick(analysis)}
+																							onClick={() => handleAnalysisClick(analysis, parameter.parameter_name)}
 																						>
 																							{analysis.sample_uid} <br />
 																							{getTechnicianName(analysis.technician_uid)}

@@ -4,7 +4,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { useNavigate } from 'react-router-dom';
 import { RiEdit2Line, RiAddCircleLine } from 'react-icons/ri';
 import { GlobalContext } from '../contexts/GlobalContext';
-import { toast, ToastContainer } from 'react-toastify';
+import Swal from 'sweetalert2'; // Replace toast with Swal
 import { apiPost } from '../contexts/helperFunctionCallAPI';
 
 const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) => {
@@ -247,17 +247,58 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 			if (initialReceipt && setUpdatedReceipt && newReceipt.status === 200) {
 				const fullReceipt = { ...initialReceipt, ...newReceipt.data };
 				setUpdatedReceipt(fullReceipt);
-				toast.success('Cập nhật thành công!');
+
+				// Show brief notification and navigate after delay
+				const successMessage = 'Cập nhật thành công!';
+				await showBriefNotification(successMessage);
+				navigate(`/dashboard/receipt?receipt_uid=${newReceipt.data.receipt_uid}`);
 			} else if (newReceipt.status === 200) {
-				toast.success('Tiếp nhận mẫu thành công!');
+				// Show brief notification and navigate after delay
+				const successMessage = 'Tiếp nhận mẫu thành công!';
+				await showBriefNotification(successMessage);
+				navigate(`/dashboard/receipt?receipt_uid=${newReceipt.data.receipt_uid}`);
 			} else {
-				toast.error('Có lỗi xảy ra, vui lòng thử lại sau!');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: 'Có lỗi xảy ra, vui lòng thử lại sau!',
+				});
 			}
-			navigate(`/dashboard/receipt?receipt_uid=${newReceipt.data.receipt_uid}`);
 		} catch (error) {
 			console.error('Error confirming receipt:', error);
-			toast.error('Có lỗi xảy ra, vui lòng thử lại sau!');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Có lỗi xảy ra, vui lòng thử lại sau!',
+			});
 		}
+	};
+
+	// New function to show brief notification before navigation
+	const showBriefNotification = (message) => {
+		return new Promise((resolve) => {
+			const Toast = Swal.mixin({
+				toast: true,
+				position: 'top-end',
+				showConfirmButton: false,
+				timer: 500, // Show for 0.5 seconds
+				timerProgressBar: true,
+				didOpen: (toast) => {
+					toast.addEventListener('mouseenter', Swal.stopTimer);
+					toast.addEventListener('mouseleave', Swal.resumeTimer);
+				},
+				customClass: {
+					popup: 'colored-toast swal2-icon-success',
+				},
+			});
+
+			Toast.fire({
+				icon: 'success',
+				title: message,
+			}).then(() => {
+				resolve();
+			});
+		});
 	};
 
 	const handleCustomerModeToggle = (type) => {
@@ -319,7 +360,6 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 
 	return (
 		<div className="relative p-1 px-2 w-fit">
-			<ToastContainer />
 			<button
 				className={` border-gray-300 font-medium py-0 px-2 rounded-lg ${
 					initialReceipt ? 'w-20 bg-background text-primary' : 'w-fit bg-background text-primary'

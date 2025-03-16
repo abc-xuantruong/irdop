@@ -2,8 +2,6 @@ import * as React from 'react';
 const { useContext, useState, useEffect } = React;
 import TinyMceInput from './Input';
 import { GlobalContext } from '../contexts/GlobalContext';
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import Breadcrumb from './Breadcrumb';
 import FilterBar from './FilterBar';
 import { NavLink, useSearchParams, useNavigate } from 'react-router-dom';
@@ -11,11 +9,12 @@ import { PiDownloadSimpleBold } from 'react-icons/pi';
 import { CgFileDocument } from 'react-icons/cg';
 import { TiBusinessCard } from 'react-icons/ti';
 import { MdOutlineContactPhone } from 'react-icons/md';
-import { FaTrashAlt, FaEdit, FaCheck } from 'react-icons/fa';
+import { FaTrashAlt, FaEdit, FaCheck, FaMoneyBillWave } from 'react-icons/fa'; // Keep FaMoneyBillWave for the revenue section icon
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import CreateReceipt from './CreateReceipt';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
+import Swal from 'sweetalert2';
 
 const ReceiptInfor = ({ receipt }) => {
 	const { setCurrentTitlePage, currentUser, technicians, status, purposes, formatDate, getIdenByUid, identityCache } =
@@ -28,6 +27,10 @@ const ReceiptInfor = ({ receipt }) => {
 	const [viewMode, setViewMode] = useState('sample'); // 'analyte' or 'sample'
 	const [isAddingSample, setIsAddingSample] = useState(false);
 	const [isEditMode, setIsEditMode] = useState(false); // Add edit mode state
+
+	// Keep editingRevenueField state but remove showRevenueSection
+	const [editingRevenueField, setEditingRevenueField] = useState(null);
+
 	const [newSample, setNewSample] = useState({
 		sample_name: '',
 		matrix: '',
@@ -151,7 +154,11 @@ const ReceiptInfor = ({ receipt }) => {
 				}
 				setIsReceiptDateFocused(false);
 			} else {
-				toast.error('Định dạng ngày không hợp lệ. Sử dụng định dạng DD/MM/YYYY hoặc DDMMYYYY');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: 'Định dạng ngày không hợp lệ. Sử dụng định dạng DD/MM/YYYY hoặc DDMMYYYY',
+				});
 			}
 		} else if (e.key === 'Escape') {
 			// Revert to original value and blur
@@ -201,7 +208,11 @@ const ReceiptInfor = ({ receipt }) => {
 					// Update API with the new date
 					handleReceiptApiUpdate('deadline', parsedDate);
 				} else {
-					toast.error('Định dạng ngày không hợp lệ. Sử dụng định dạng DD/MM/YYYY hoặc DDMMYYYY');
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: 'Định dạng ngày không hợp lệ. Sử dụng định dạng DD/MM/YYYY hoặc DDMMYYYY',
+					});
 					// Restore previous value
 					handleInputChange({ target: { name: 'deadline', value: tempDeadline } });
 				}
@@ -315,15 +326,22 @@ const ReceiptInfor = ({ receipt }) => {
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', payload);
 
 			if (response.status === 200) {
-				// Only show toast here, not in handleTextareaKeyDown
-				toast.success(`Cập nhật thông tin thành công!`, { autoClose: 1000 });
+				showToast(`Cập nhật thông tin thành công!`);
 			} else {
-				toast.error(`Lỗi khi cập nhật thông tin mẫu`);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật thông tin mẫu',
+				});
 				fetchReceipt(); // Refresh data on error
 			}
 		} catch (error) {
 			console.error('Error updating sample information:', error);
-			toast.error('Có lỗi xảy ra khi cập nhật thông tin mẫu');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật thông tin mẫu',
+			});
 			fetchReceipt(); // Refresh data on error
 		}
 	};
@@ -385,14 +403,22 @@ const ReceiptInfor = ({ receipt }) => {
 			});
 
 			if (response.status === 200) {
-				toast.success('Chỉ tiêu đã được cập nhật!');
+				showToast('Chỉ tiêu đã được cập nhật!');
 			} else {
-				toast.error('Lỗi khi cập nhật chỉ tiêu.');
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật chỉ tiêu',
+				});
 			}
 			return analysis;
 		} catch (error) {
 			console.error('Error updating analysis:', error);
-			toast.error('Đã xảy ra lỗi khi cập nhật.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Đã xảy ra lỗi khi cập nhật',
+			});
 			return analysis;
 		}
 	};
@@ -429,7 +455,11 @@ const ReceiptInfor = ({ receipt }) => {
 			}
 		} catch (error) {
 			console.error('Error updating analysis:', error);
-			toast.error('Có lỗi xảy ra khi cập nhật kết quả.');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật kết quả',
+			});
 		}
 	};
 
@@ -442,15 +472,35 @@ const ReceiptInfor = ({ receipt }) => {
 	};
 
 	const handleNotify = (data) => {
-		toast.success(`Kết quả vừa nhập: ${processHtmlString(data)}`, {
+		showToast(`Kết quả vừa nhập: ${processHtmlString(data)}`, {
 			autoClose: 1000, // Tự động đóng sau 3 giây
 		});
 	};
 
-	const handleViewModeChange = (mode) => {
-		setViewMode(mode);
-	};
+	// Add custom toast notification function
+	const showToast = (message, type = 'success') => {
+		const Toast = Swal.mixin({
+			toast: true,
+			position: 'top-end',
+			showConfirmButton: false,
+			timer: 2000,
+			timerProgressBar: true,
+			didOpen: (toast) => {
+				toast.addEventListener('mouseenter', Swal.stopTimer);
+				toast.addEventListener('mouseleave', Swal.resumeTimer);
+			},
+			width: 'auto',
+			padding: '0.5em',
+		});
 
+		Toast.fire({
+			icon: type,
+			title: message,
+			background: type === 'success' ? '#2bae66' : type === 'info' ? '#2196F3' : '#333333',
+			color: '#FFFFFF',
+			iconColor: '#FFFFFF',
+		});
+	};
 	const getSampleUid = (sample_id) => {
 		const sample = currentReceipt.samples.find((sample) => sample.id === sample_id);
 		return sample ? sample.sample_uid : '';
@@ -471,8 +521,10 @@ const ReceiptInfor = ({ receipt }) => {
 		const isValid = requiredFields.every((field) => newSample[field].trim() !== '');
 
 		if (!isValid) {
-			toast.error('Vui lòng nhập đầy đủ thông tin bắt buộc.', {
-				autoClose: 1000,
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Vui lòng nhập đầy đủ thông tin bắt buộc',
 			});
 			return;
 		}
@@ -493,7 +545,7 @@ const ReceiptInfor = ({ receipt }) => {
 		try {
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/sample', { sample: newSampleData });
 			if (response.status === 200) {
-				toast.success('Thêm mẫu mới thành công!', {
+				showToast('Thêm mẫu mới thành công!', {
 					autoClose: 1000,
 				});
 				setNewSample({
@@ -512,13 +564,17 @@ const ReceiptInfor = ({ receipt }) => {
 				setCheckConfirm(false);
 				fetchReceipt(); // Fetch updated data
 			} else {
-				toast.error('Thêm mẫu mới thất bại. Vui lòng thử lại.', {
-					autoClose: 1000,
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Thêm mẫu mới thất bại. Vui lòng thử lại',
 				});
 			}
 		} catch (error) {
-			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', {
-				autoClose: 1000,
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra. Vui lòng thử lại',
 			});
 		}
 
@@ -581,13 +637,21 @@ const ReceiptInfor = ({ receipt }) => {
 				modified_by_uid: currentUser.identity_uid,
 			});
 			if (response.status === 200) {
-				toast.success('Xóa mẫu thành công!', { autoClose: 1000 });
+				showToast('Xóa mẫu thành công!');
 				fetchReceipt(); // Fetch updated data
 			} else {
-				toast.error('Xóa mẫu thất bại. Vui lòng thử lại.', { autoClose: 1000 });
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Xóa mẫu thất bại. Vui lòng thử lại',
+				});
 			}
 		} catch (error) {
-			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 1000 });
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra. Vui lòng thử lại',
+			});
 		}
 	};
 
@@ -598,19 +662,23 @@ const ReceiptInfor = ({ receipt }) => {
 				modified_by_uid: currentUser.identity_uid,
 			});
 			if (response.status === 200) {
-				toast.success('Xóa tiếp nhận mẫu thành công!', {
+				showToast('Xóa tiếp nhận mẫu thành công!', {
 					autoClose: 1000,
 				});
 				// Redirect to dashboard after successful deletion
 				navigate('/dashboard');
 			} else {
-				toast.error('Xóa tiếp nhận mẫu thất bại. Vui lòng thử lại.', {
-					autoClose: 1000,
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Xóa tiếp nhận mẫu thất bại. Vui lòng thử lại',
 				});
 			}
 		} catch (error) {
-			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', {
-				autoClose: 1000,
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra. Vui lòng thử lại',
 			});
 		}
 	};
@@ -656,7 +724,6 @@ const ReceiptInfor = ({ receipt }) => {
 		setCurrentReceipt((prev) => ({
 			...prev,
 			contact: {
-				...prev.contact,
 				name: value,
 			},
 		}));
@@ -870,13 +937,21 @@ const ReceiptInfor = ({ receipt }) => {
 			});
 			console.log(deleteItemId);
 			if (response.status === 200) {
-				toast.success('Xóa mẫu thành công!', { autoClose: 1000 });
+				showToast('Xóa mẫu thành công!');
 				fetchReceipt(); // Fetch updated data
 			} else {
-				toast.error('Xóa mẫu thất bại. Vui lòng thử lại.', { autoClose: 1000 });
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Xóa mẫu thất bại. Vui lòng thử lại',
+				});
 			}
 		} catch (error) {
-			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 1000 });
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra. Vui lòng thử lại',
+			});
 		} finally {
 			setIsDeleteConfirmVisible(false);
 			setDeleteItemId(null);
@@ -890,13 +965,21 @@ const ReceiptInfor = ({ receipt }) => {
 				id: deleteItemId,
 			});
 			if (response.status === 200) {
-				toast.success('Xóa chỉ tiêu thành công!', { autoClose: 1000 });
+				showToast('Xóa chỉ tiêu thành công!');
 				fetchReceipt(); // Fetch updated data
 			} else {
-				toast.error('Xóa chỉ tiêu thất bại. Vui lòng thử lại.', { autoClose: 1000 });
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Xóa chỉ tiêu thất bại. Vui lòng thử lại',
+				});
 			}
 		} catch (error) {
-			toast.error('Có lỗi xảy ra. Vui lòng thử lại.', { autoClose: 1000 });
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra. Vui lòng thử lại',
+			});
 		} finally {
 			setIsDeleteConfirmVisible(false);
 			setDeleteItemId(null);
@@ -932,9 +1015,7 @@ const ReceiptInfor = ({ receipt }) => {
 	const handleExcelDownload = async () => {
 		try {
 			// Show loading toast
-			const loadingToastId = toast.info('Đang tải xuống file Excel...', {
-				autoClose: false,
-			});
+			showToast('Đang tải xuống file Excel...', 'info');
 
 			// Specify Excel MIME type explicitly
 			const excelMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -981,22 +1062,22 @@ const ReceiptInfor = ({ receipt }) => {
 				}
 
 				// Show success toast
-				toast.dismiss(loadingToastId);
-				toast.success('Tải xuống file Excel thành công!', {
-					autoClose: 1000,
-				});
+				showToast('Tải xuống file Excel thành công!');
 			} else {
 				// Handle HTTP errors
 				console.error('Error downloading file:', response.status, response.statusText);
-				toast.dismiss(loadingToastId);
-				toast.error(`Không thể tải file Excel (${response.status}). Vui lòng thử lại.`, {
-					autoClose: 1000,
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: `Không thể tải file Excel (${response.status}). Vui lòng thử lại`,
 				});
 			}
 		} catch (error) {
 			console.error('Error downloading Excel file:', error);
-			toast.error('Có lỗi xảy ra khi tải file Excel. Vui lòng thử lại.', {
-				autoClose: 1000,
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi tải file Excel. Vui lòng thử lại',
 			});
 		}
 	};
@@ -1029,21 +1110,22 @@ const ReceiptInfor = ({ receipt }) => {
 					...prev,
 					pay_status: newPayStatus,
 				}));
-				toast.success(
+				showToast(
 					`Đã cập nhật trạng thái thanh toán thành ${newPayStatus === 1 ? 'đã thanh toán' : 'chưa thanh toán'}!`,
-					{
-						autoClose: 1000,
-					},
 				);
 			} else {
-				toast.error('Cập nhật trạng thái thanh toán thất bại!', {
-					autoClose: 1000,
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Cập nhật trạng thái thanh toán thất bại',
 				});
 			}
 		} catch (error) {
 			console.error('Error updating payment status:', error);
-			toast.error('Có lỗi xảy ra khi cập nhật trạng thái thanh toán.', {
-				autoClose: 1000,
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật trạng thái thanh toán',
 			});
 		} finally {
 			setIsPaymentConfirmVisible(false);
@@ -1089,16 +1171,24 @@ const ReceiptInfor = ({ receipt }) => {
 			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
 
 			if (response.status === 200) {
-				toast.success(`Cập nhật thành công!`, { autoClose: 1000 });
+				showToast(`Cập nhật thành công!`);
 				return true;
 			} else {
-				toast.error(`Lỗi khi cập nhật thông tin`);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật thông tin',
+				});
 				fetchReceipt(); // Refresh data on error
 				return false;
 			}
 		} catch (error) {
 			console.error('Error updating receipt information:', error);
-			toast.error('Có lỗi xảy ra khi cập nhật thông tin');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật thông tin',
+			});
 			fetchReceipt(); // Refresh data on error
 			return false;
 		}
@@ -1127,16 +1217,24 @@ const ReceiptInfor = ({ receipt }) => {
 			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
 
 			if (response.status === 200) {
-				toast.success(`Cập nhật thông tin khách hàng thành công!`, { autoClose: 1000 });
+				showToast(`Cập nhật thông tin khách hàng thành công!`);
 				return true;
 			} else {
-				toast.error(`Lỗi khi cập nhật thông tin khách hàng`);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật thông tin khách hàng',
+				});
 				fetchReceipt(); // Refresh data on error
 				return false;
 			}
 		} catch (error) {
 			console.error('Error updating client information:', error);
-			toast.error('Có lỗi xảy ra khi cập nhật thông tin khách hàng');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật thông tin khách hàng',
+			});
 			fetchReceipt(); // Refresh data on error
 			return false;
 		}
@@ -1166,16 +1264,24 @@ const ReceiptInfor = ({ receipt }) => {
 			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
 
 			if (response.status === 200) {
-				toast.success(`Cập nhật thông tin liên hệ thành công!`, { autoClose: 1000 });
+				showToast(`Cập nhật thông tin liên hệ thành công!`);
 				return true;
 			} else {
-				toast.error(`Lỗi khi cập nhật thông tin liên hệ`);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật thông tin liên hệ',
+				});
 				fetchReceipt(); // Refresh data on error
 				return false;
 			}
 		} catch (error) {
 			console.error('Error updating contact information:', error);
-			toast.error('Có lỗi xảy ra khi cập nhật thông tin liên hệ');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật thông tin liên hệ',
+			});
 			fetchReceipt(); // Refresh data on error
 			return false;
 		}
@@ -1226,7 +1332,35 @@ const ReceiptInfor = ({ receipt }) => {
 
 	return (
 		<div className="w-full">
-			<ToastContainer />
+			{/* Add custom styling for SweetAlert toasts */}
+			<style jsx>{`
+				.colored-toast.swal2-icon-success {
+					background-color: #2bae66 !important;
+				}
+				.colored-toast.swal2-icon-error {
+					background-color: #f27474 !important;
+				}
+				.colored-toast.swal2-icon-warning {
+					background-color: #f8bb86 !important;
+				}
+				.colored-toast.swal2-icon-info {
+					background-color: #3fc3ee !important;
+				}
+				.colored-toast.swal2-icon-question {
+					background-color: #87adbd !important;
+				}
+				.colored-toast .swal2-title {
+					color: white;
+					font-size: 0.85rem !important;
+				}
+				.colored-toast .swal2-close {
+					color: white;
+				}
+				.colored-toast .swal2-html-container {
+					color: white;
+				}
+			`}</style>
+
 			<Breadcrumb
 				paths={[
 					{ name: 'Danh sách', link: '/' },
@@ -1258,9 +1392,8 @@ const ReceiptInfor = ({ receipt }) => {
 					</button>
 				</div>
 			</div>
-
 			<div className="rounded-lg w-full p-4 bg-white ">
-				{/* Payment Status Indicator */}
+				{/* Payment status indicator - keep at top right */}
 				<div className="flex items-center cursor-pointer justify-end" onClick={handlePayStatusToggle}>
 					<div
 						className={`w-2 h-2 rounded-full mr-2 ${currentReceipt?.pay_status === 1 ? 'bg-green-600' : 'bg-red-500'}`}
@@ -1271,41 +1404,91 @@ const ReceiptInfor = ({ receipt }) => {
 						{currentReceipt?.pay_status === 1 ? 'Đã thanh toán' : 'Chưa thanh toán'}
 					</span>
 				</div>
+
+				{/* Revenue Recognition Section - Modified styling with increased text size */}
+				<div className="w-full mb-2 border-b pb-2">
+					<div className="flex justify-start items-center mb-1">
+						<FaMoneyBillWave size={14} className="text-blue-600 mr-1.5" />
+						<h3 className="text-sm font-medium text-blue-600">Ghi nhận doanh số</h3>
+					</div>
+
+					{/* Responsive grid with 2 columns on small screens */}
+					<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+						<div className="col-span-1">
+							<label className="block text-sm font-medium text-gray-700 mb-0.5 text-left">Mã đơn hàng</label>
+							<div className="py-0.5 px-2 border rounded-md bg-gray-50 min-h-[32px] text-sm flex items-center">
+								{currentReceipt?.order_code || '--'}
+							</div>
+						</div>
+
+						<div className="col-span-1">
+							<label className="block text-sm font-medium text-gray-700 mb-0.5 text-left">Mã báo giá</label>
+							<div className="py-0.5 px-2 border rounded-md bg-gray-50 min-h-[32px] text-sm flex items-center">
+								{currentReceipt?.quote_code || '--'}
+							</div>
+						</div>
+
+						<div className="col-span-1">
+							<label className="block text-sm font-medium text-gray-700 mb-0.5 text-left">Người ghi nhận</label>
+							<div className="py-0.5 px-2 border rounded-md bg-gray-50 min-h-[32px] text-sm flex items-center">
+								{currentReceipt?.sale_recorder || '--'}
+							</div>
+						</div>
+
+						<div className="col-span-1">
+							<label className="block text-sm font-medium text-gray-700 mb-0.5 text-left">Tổng doanh số</label>
+							<div
+								className={`py-0.5 px-2 border rounded-md bg-gray-50 min-h-[32px] text-sm flex items-center ${
+									currentReceipt?.pay_status === 1 ? 'text-green-600 font-medium' : ''
+								}`}
+							>
+								{currentReceipt?.total_amount ? `${parseInt(currentReceipt.total_amount).toLocaleString()} ₫` : '--'}
+							</div>
+						</div>
+					</div>
+				</div>
+
 				<div className="flex flex-col md:flex-row">
-					<div className={`flex justify-between items-center mt-1 p-2 rounded-md border flex-col md:flex-row w-full`}>
-						<div className="w-full md:w-1/2 flex flex-col items-start">
-							<div className="flex justify-center items-center w-full p-2">
+					<div className={`flex justify-between items-start p-0 rounded-md border flex-col md:flex-row w-full`}>
+						{/* Receipt Information Section - Added padding and increased text size */}
+						<div className="w-full md:w-1/2 flex flex-col items-start px-2">
+							{/* Receipt Information Section Header */}
+							<div className="flex justify-center items-center w-full py-1">
 								<CgFileDocument size={16} className="text-primary" />
 								<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN TIẾP NHẬN</h2>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Số yêu cầu đến:</div>
+
+							{/* Receipt Information Fields - Increased text size */}
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Số yêu cầu đến:</div>
 								<div className="text-sm w-full flex item-start">
 									<input
 										type="number"
 										name="request_number"
-										className="bg-white border px-1 w-full rounded-lg"
+										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
 										value={currentReceipt?.request_number}
 										onChange={handleInputChange}
 										onKeyDown={(e) => handleReceiptInputKeyDown(e, 'request_number', currentReceipt?.request_number)}
 									/>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Mã tiếp nhận:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Mã tiếp nhận:</div>
 								<div className="text-sm w-full flex item-start">
 									<input
 										type="text"
 										name="receipt_uid"
-										className="bg-white border px-1 w-full rounded-lg"
+										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
 										value={currentReceipt?.receipt_uid}
 										onChange={handleInputChange}
 										disabled
 									/>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Ngày tiếp nhận:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Ngày tiếp nhận:</div>
 								<div className="text-sm w-full flex item-start rounded-lg border">
 									<DatePicker
 										selected={currentReceipt?.receipt_date}
@@ -1315,25 +1498,27 @@ const ReceiptInfor = ({ receipt }) => {
 										onKeyDown={handleReceiptDateKeyDown}
 										onChangeRaw={handleReceiptDateInputChange}
 										dateFormat="dd/MM/yyyy"
-										className="bg-white px-1 h py-1.5 rounded-lg focus:outline-none w-full"
+										className="bg-white px-1 py-0.5 rounded-lg focus:outline-none w-full text-sm"
 									/>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Người tiếp nhận:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Người tiếp nhận:</div>
 								<div className="text-sm w-full flex item-start">
 									<input
 										type="text"
 										name="created_by_uid"
-										className="bg-white border px-1 w-full rounded-lg"
+										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
 										value={getUserName(currentReceipt?.created_by_uid)}
 										onChange={handleInputChange}
 										disabled
 									/>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Hạn trả kết quả:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Hạn trả kết quả:</div>
 								<div className="text-sm w-full flex item-start rounded-lg border">
 									<DatePicker
 										selected={currentReceipt?.deadline}
@@ -1342,22 +1527,24 @@ const ReceiptInfor = ({ receipt }) => {
 										onFocus={handleDeadlineFocus}
 										onKeyDown={handleDeadlineKeyDown}
 										dateFormat="dd/MM/yyyy"
-										className="bg-white px-1 h py-1.5 rounded-lg focus:outline-none w-full"
+										className="bg-white px-1 py-0.5 rounded-lg focus:outline-none w-full text-sm"
 									/>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Số lượng mẫu:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Số lượng mẫu:</div>
 								<div className="text-sm w-full flex items-center">
-									<p className="text-center flex items-center w-12 font-medium">{currentReceipt?.samples.length}</p>
+									<p className="flex items-center w-12 font-medium text-sm">{currentReceipt?.samples.length}</p>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-32">Ghi chú</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Ghi chú</div>
 								<div className="text-sm w-full flex item-start">
 									<textarea
 										name="note"
-										className="w-full px-1 border bg-white rounded-lg p-2 pt-1.5 resize-none"
+										className="w-full px-1 py-0.5 border bg-white rounded-lg resize-none text-sm"
 										rows="3"
 										value={currentReceipt?.note}
 										onChange={handleInputChange}
@@ -1366,46 +1553,51 @@ const ReceiptInfor = ({ receipt }) => {
 								</div>
 							</div>
 						</div>
-						<div className="w-full md:w-1/2 flex flex-col items-start">
-							<div className="flex justify-center items-center w-full p-2">
-								<div className="flex items-center pl-5">
-									<TiBusinessCard size={16} className="text-primary mr-1 " />
+
+						{/* Customer and Contact Information - Added padding, adjusted min-width, increased text size */}
+						<div className="w-full md:w-1/2 flex flex-col items-start px-2">
+							<div className="flex justify-center items-center w-full py-1">
+								<div className="flex items-center pl-2">
+									<TiBusinessCard size={16} className="text-primary mr-1" />
 									<h2 className="text-md font-semibold w-full text-primary">THÔNG TIN KHÁCH HÀNG</h2>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Mã khách hàng:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Mã khách hàng:</div>
 								<div className="text-sm w-full flex item-start">
 									<input
 										type="text"
 										name="client.client_uid"
-										className="bg-white border px-1 w-full rounded-lg"
+										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
 										value={currentReceipt?.client?.client_uid}
 										onChange={handleCustomerSearch}
 										onKeyDown={(e) => handleClientInputKeyDown(e, 'client_uid', currentReceipt?.client?.client_uid)}
 									/>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Tên công ty/cá nhân:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Công ty/cá nhân:</div>
 								<div className="text-sm w-full flex item-start">
 									<input
 										type="text"
 										name="client.client_name"
-										className="bg-white border px-1 w-full rounded-lg"
+										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
 										value={currentReceipt?.client?.client_name}
 										onChange={handleInputChange}
 										onKeyDown={(e) => handleClientInputKeyDown(e, 'client_name', currentReceipt?.client?.client_name)}
 									/>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Địa chỉ:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Địa chỉ:</div>
 								<div className="text-sm w-full flex item-start">
 									<input
 										type="text"
 										name="client.client_address"
-										className="bg-white border px-1 w-full rounded-lg"
+										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
 										value={currentReceipt?.client?.client_address}
 										onChange={handleInputChange}
 										onKeyDown={(e) =>
@@ -1414,58 +1606,64 @@ const ReceiptInfor = ({ receipt }) => {
 									/>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Mã số thuế/CCCD:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Mã số thuế/CCCD:</div>
 								<div className="text-sm w-full flex item-start">
 									<input
 										type="text"
 										name="legal_id"
-										className="bg-white border px-1 w-full rounded-lg"
+										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
 										value={currentReceipt?.client?.legal_id}
 										onChange={handleInputChange}
 										onKeyDown={(e) => handleClientInputKeyDown(e, 'legal_id', currentReceipt?.client?.legal_id)}
 									/>
 								</div>
 							</div>
-							<div className="flex justify-center items-center w-full p-2">
-								<div className="flex items-center pl-5">
+
+							{/* Contact Information Section Header */}
+							<div className="flex justify-center items-center w-full py-1 mt-1">
+								<div className="flex items-center pl-2">
 									<MdOutlineContactPhone size={16} className="text-primary mr-1" />
 									<h2 className="text-md font-semibold w-fit text-primary">THÔNG TIN LIÊN HỆ</h2>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Họ tên:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Họ tên:</div>
 								<div className="text-sm w-full flex item-start">
 									<input
 										type="text"
 										name="contact.name"
-										className="bg-white border px-1 w-full rounded-lg"
+										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
 										value={currentReceipt?.contact?.name}
 										onChange={handleContactSearch}
 										onKeyDown={(e) => handleContactInputKeyDown(e, 'name', currentReceipt?.contact?.name)}
 									/>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Email:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Email:</div>
 								<div className="text-sm w-full flex item-start">
 									<input
 										type="text"
 										name="contact.email"
-										className="bg-white border px-1 w-full rounded-lg"
+										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
 										value={currentReceipt?.contact?.email}
 										onChange={handleInputChange}
 										onKeyDown={(e) => handleContactInputKeyDown(e, 'email', currentReceipt?.contact?.email)}
 									/>
 								</div>
 							</div>
-							<div className="flex justify-start w-full p-2">
-								<div className="text-sm font-semibold w-1/4 flex item-start p-2 min-w-40">Điện thoại:</div>
+
+							<div className="flex justify-start w-full py-1">
+								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Điện thoại:</div>
 								<div className="text-sm w-full flex item-start">
 									<input
 										type="text"
 										name="contact.phone"
-										className="bg-white border px-1 w-full rounded-lg"
+										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
 										value={currentReceipt?.contact?.phone}
 										onChange={handleInputChange}
 										onKeyDown={(e) => handleContactInputKeyDown(e, 'phone', currentReceipt?.contact?.phone)}
@@ -1476,7 +1674,7 @@ const ReceiptInfor = ({ receipt }) => {
 					</div>
 				</div>
 			</div>
-
+			{/* Rest of the component remains unchanged */}
 			<div className="bg-white rounded-lg w-full my-4 p-4">
 				<div className="flex justify-between items-start sm:h-10 sm:flex-row flex-col h-[76px] ">
 					<div className="w-full flex justify-start overflow-auto mr-1">
