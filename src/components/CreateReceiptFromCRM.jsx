@@ -168,6 +168,7 @@ const CreateReceiptFromCRM = () => {
 				quote_code: crmData.quote_code,
 				sale_recorder: crmData.sale_recorder,
 				total_amount: crmData.total_amount,
+				discount_summary: crmData.discount_summary
 			});
 
 			// Check if the response contains an error
@@ -275,6 +276,13 @@ const CreateReceiptFromCRM = () => {
 											<span className="font-medium">Ghi nhận doanh số: </span>
 											{crmData.sale_recorder || 'N/A'}
 										</p>
+										<p>
+											<span className="font-medium">Chiết khấu: </span>
+											{crmData.discount_summary
+												? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+														crmData.discount_summary,
+												  )
+												: 'N/A'}										</p>
 										<p>
 											<span className="font-medium">Tổng tiền: </span>
 											{crmData.total_amount

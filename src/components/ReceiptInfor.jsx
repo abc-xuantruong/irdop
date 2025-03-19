@@ -68,6 +68,9 @@ const ReceiptInfor = ({ receipt }) => {
 	const [tempReceiptDate, setTempReceiptDate] = useState(null);
 	const [receiptDateInput, setReceiptDateInput] = useState('');
 
+	// Add state to track which field is currently being edited
+	const [editingGeneralField, setEditingGeneralField] = useState(null);
+
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
 		// Remove any existing separators to normalize
@@ -239,20 +242,68 @@ const ReceiptInfor = ({ receipt }) => {
 		setCurrentTitlePage('Tiếp nhận mẫu');
 	}, []);
 
+	// Function to adjust received dates for timezone (+7 hours for Vietnam)
+	const adjustTimezoneDate = (dateValue) => {
+		if (!dateValue) return null;
+
+		// Create a new date from the value, which was stored in UTC
+		const date = new Date(dateValue);
+		if (isNaN(date.getTime())) return dateValue;
+
+		// Add 7 hours to convert from UTC to Vietnam time
+		date.setHours(date.getHours() + 7);
+		return date;
+	};
+
+	// NEW FUNCTION: Adjust dates for API submission (subtract 7 hours)
+	const adjustDateForApiSubmission = (dateValue) => {
+		if (!dateValue) return null;
+
+		// Create a copy of the date to avoid modifying the original
+		const date = new Date(dateValue);
+		if (isNaN(date.getTime())) return dateValue;
+
+		// Subtract 7 hours to convert from Vietnam time to UTC for storage
+		date.setHours(date.getHours() - 7);
+		return date;
+	};
+
 	const fetchReceipt = async () => {
 		try {
 			const response = await apiGet(`https://black.irdop.org/khsi19me/db/get/receipt_full/${receipt_uid}`);
 			console.log(response.status);
 			if (response.status === 200) {
-				setCurrentReceipt(response.data);
-				setListAnalytes(response.data.samples.flatMap((sample) => sample.analysis));
+				// Adjust timezone for dates before setting state
+				const receiptData = response.data;
+				if (receiptData.receipt_date) {
+					receiptData.receipt_date = adjustTimezoneDate(receiptData.receipt_date);
+				}
+				if (receiptData.deadline) {
+					receiptData.deadline = adjustTimezoneDate(receiptData.deadline);
+				}
+
+				// Adjust timezone for all sample deadlines
+				if (receiptData.samples) {
+					receiptData.samples.forEach((sample) => {
+						if (sample.analysis) {
+							sample.analysis.forEach((analysis) => {
+								if (analysis.deadline) {
+									analysis.deadline = adjustTimezoneDate(analysis.deadline);
+								}
+							});
+						}
+					});
+				}
+
+				setCurrentReceipt(receiptData);
+				setListAnalytes(receiptData.samples.flatMap((sample) => sample.analysis));
 
 				// Fetch user information for created_by_uid and modified_by_uid
-				if (response.data.created_by_uid) {
-					fetchUserIdentity(response.data.created_by_uid);
+				if (receiptData.created_by_uid) {
+					fetchUserIdentity(receiptData.created_by_uid);
 				}
-				if (response.data.modified_by_uid) {
-					fetchUserIdentity(response.data.modified_by_uid);
+				if (receiptData.modified_by_uid) {
+					fetchUserIdentity(receiptData.modified_by_uid);
 				}
 			} else if (response.status === 401) {
 				navigate('/login');
@@ -1085,7 +1136,7 @@ const ReceiptInfor = ({ receipt }) => {
 	// Helper function to check if value is empty or invalid for display
 	const displayValue = (value) => {
 		if (value === null || value === undefined || value === '') {
-			return <span className="text-start block">--</span>;
+			return '--';
 		}
 		return value;
 	};
@@ -1160,10 +1211,16 @@ const ReceiptInfor = ({ receipt }) => {
 	// Function to handle API update for receipt fields
 	const handleReceiptApiUpdate = async (field, value) => {
 		try {
+			// Apply timezone adjustment for date fields before sending to API
+			let adjustedValue = value;
+			if (field === 'deadline' || field === 'receipt_date') {
+				adjustedValue = adjustDateForApiSubmission(value);
+			}
+
 			const payload = {
 				receipt: {
 					id: currentReceipt.id,
-					[field]: value,
+					[field]: adjustedValue,
 					modified_by_uid: currentUser.identity_uid,
 				},
 			};
@@ -1326,6 +1383,115 @@ const ReceiptInfor = ({ receipt }) => {
 		}
 	};
 
+	const [isCustomerDetailsVisible, setIsCustomerDetailsVisible] = useState(false);
+
+	const toggleCustomerDetails = () => {
+		setIsCustomerDetailsVisible(!isCustomerDetailsVisible);
+	};
+
+	// Handle field click to switch to edit mode
+	const handleFieldClick = (fieldName) => {
+		setEditingGeneralField(fieldName);
+	};
+
+	// Handle field blur to save changes and exit edit mode
+	const handleFieldBlur = (field, value) => {
+		if (field.startsWith('client.')) {
+			const actualField = field.split('.')[1];
+			handleClientApiUpdate(actualField, value);
+		} else if (field.startsWith('contact.')) {
+			const actualField = field.split('.')[1];
+			handleContactApiUpdate(actualField, value);
+		} else {
+			handleReceiptApiUpdate(field, value);
+		}
+		setEditingGeneralField(null);
+	};
+
+	// Handle key press in input fields
+	const handleFieldKeyDown = (e, field, value) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			handleFieldBlur(field, value);
+		} else if (e.key === 'Escape') {
+			setEditingGeneralField(null);
+			// Revert to original value by not saving
+		}
+	};
+
+	// Format currency for display
+	const formatCurrency = (value) => {
+		if (!value) return '--';
+		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+	};
+
+	// Render field - either as display div or input
+	const renderField = (fieldName, value, disabled = false, type = 'text', isCurrency = false) => {
+		const isEditing = editingGeneralField === fieldName;
+		const displayText = isCurrency ? formatCurrency(value) : displayValue(value);
+
+		if (disabled) {
+			return <div className="w-2/3 px-2 py-0 text-sm text-left border border-white">{displayText}</div>;
+		}
+
+		if (isEditing) {
+			return (
+				<input
+					type={type}
+					name={fieldName}
+					className="w-full bg-white border border-blue-500 px-2 py-0 rounded-lg text-sm focus:outline-none align-top"
+					value={value || ''}
+					onChange={handleInputChange}
+					onBlur={() => handleFieldBlur(fieldName, value)}
+					onKeyDown={(e) => handleFieldKeyDown(e, fieldName, value)}
+					autoFocus
+				/>
+			);
+		}
+
+		return (
+			<div
+				className="w-full px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg align-top"
+				onClick={() => handleFieldClick(fieldName)}
+			>
+				{displayText}
+			</div>
+		);
+	};
+
+	// Render textarea field
+	const renderTextareaField = (fieldName, value, disabled = false) => {
+		const isEditing = editingGeneralField === fieldName;
+
+		if (disabled) {
+			return <div className="w-2/3 px-2 py-0 text-sm text-left border border-white">{displayValue(value)}</div>;
+		}
+
+		if (isEditing) {
+			return (
+				<textarea
+					name={fieldName}
+					className="w-2/3 bg-white border border-blue-500 px-2 py-0 rounded-lg text-sm focus:outline-none resize-none align-top"
+					rows="3"
+					value={value || ''}
+					onChange={handleInputChange}
+					onBlur={() => handleFieldBlur(fieldName, value)}
+					onKeyDown={(e) => handleFieldKeyDown(e, fieldName, value)}
+					autoFocus
+				/>
+			);
+		}
+
+		return (
+			<div
+				className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top"
+				onClick={() => handleFieldClick(fieldName)}
+			>
+				{displayValue(value)}
+			</div>
+		);
+	};
+
 	if (!currentReceipt) {
 		return <div>Loading...</div>;
 	}
@@ -1393,287 +1559,162 @@ const ReceiptInfor = ({ receipt }) => {
 				</div>
 			</div>
 			<div className="rounded-lg w-full p-4 bg-white ">
-				{/* Payment status indicator - keep at top right */}
-				<div className="flex items-center cursor-pointer justify-end" onClick={handlePayStatusToggle}>
-					<div
-						className={`w-2 h-2 rounded-full mr-2 ${currentReceipt?.pay_status === 1 ? 'bg-green-600' : 'bg-red-500'}`}
-					></div>
-					<span
-						className={`font-medium text-sm ${currentReceipt?.pay_status === 1 ? 'text-green-600' : 'text-red-500'}`}
-					>
-						{currentReceipt?.pay_status === 1 ? 'Đã thanh toán' : 'Chưa thanh toán'}
-					</span>
-				</div>
-
-				{/* Revenue Recognition Section - Modified styling with increased text size */}
-				<div className="w-full mb-2 border-b pb-2">
-					<div className="flex justify-start items-center mb-1">
-						<FaMoneyBillWave size={14} className="text-blue-600 mr-1.5" />
-						<h3 className="text-sm font-medium text-blue-600">Ghi nhận doanh số</h3>
-					</div>
-
-					{/* Responsive grid with 2 columns on small screens */}
-					<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
-						<div className="col-span-1">
-							<label className="block text-sm font-medium text-gray-700 mb-0.5 text-left">Mã đơn hàng</label>
-							<div className="py-0.5 px-2 border rounded-md bg-gray-50 min-h-[32px] text-sm flex items-center">
-								{currentReceipt?.order_code || '--'}
-							</div>
-						</div>
-
-						<div className="col-span-1">
-							<label className="block text-sm font-medium text-gray-700 mb-0.5 text-left">Mã báo giá</label>
-							<div className="py-0.5 px-2 border rounded-md bg-gray-50 min-h-[32px] text-sm flex items-center">
-								{currentReceipt?.quote_code || '--'}
-							</div>
-						</div>
-
-						<div className="col-span-1">
-							<label className="block text-sm font-medium text-gray-700 mb-0.5 text-left">Người ghi nhận</label>
-							<div className="py-0.5 px-2 border rounded-md bg-gray-50 min-h-[32px] text-sm flex items-center">
-								{currentReceipt?.sale_recorder || '--'}
-							</div>
-						</div>
-
-						<div className="col-span-1">
-							<label className="block text-sm font-medium text-gray-700 mb-0.5 text-left">Tổng doanh số</label>
-							<div
-								className={`py-0.5 px-2 border rounded-md bg-gray-50 min-h-[32px] text-sm flex items-center ${
-									currentReceipt?.pay_status === 1 ? 'text-green-600 font-medium' : ''
-								}`}
-							>
-								{currentReceipt?.total_amount ? `${parseInt(currentReceipt.total_amount).toLocaleString()} ₫` : '--'}
-							</div>
-						</div>
-					</div>
-				</div>
-
 				<div className="flex flex-col md:flex-row">
-					<div className={`flex justify-between items-start p-0 rounded-md border flex-col md:flex-row w-full`}>
-						{/* Receipt Information Section - Added padding and increased text size */}
-						<div className="w-full md:w-1/2 flex flex-col items-start px-2">
-							{/* Receipt Information Section Header */}
-							<div className="flex justify-center items-center w-full py-1">
-								<CgFileDocument size={16} className="text-primary" />
-								<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN TIẾP NHẬN</h2>
+					{/* Thông tin chung Section - now 2/5 width and includes contact info */}
+					<div className="w-full md:w-2/5 flex flex-col items-start px-2">
+						<div className="flex justify-start items-center mb-1">
+							<CgFileDocument size={16} className="text-primary" />
+							<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN CHUNG</h2>
+						</div>
+						<div className="w-full">
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số hồ sơ lưu</label>
+								{renderField('record_code', currentReceipt?.record_code)}
 							</div>
-
-							{/* Receipt Information Fields - Increased text size */}
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Số yêu cầu đến:</div>
-								<div className="text-sm w-full flex item-start">
-									<input
-										type="number"
-										name="request_number"
-										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
-										value={currentReceipt?.request_number}
-										onChange={handleInputChange}
-										onKeyDown={(e) => handleReceiptInputKeyDown(e, 'request_number', currentReceipt?.request_number)}
-									/>
-								</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số yêu cầu đến</label>
+								{renderField('request_number', currentReceipt?.request_number, false, 'number')}
 							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Mã tiếp nhận:</div>
-								<div className="text-sm w-full flex item-start">
-									<input
-										type="text"
-										name="receipt_uid"
-										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
-										value={currentReceipt?.receipt_uid}
-										onChange={handleInputChange}
-										disabled
-									/>
-								</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã tiếp nhận</label>
+								{renderField('receipt_uid', currentReceipt?.receipt_uid, true)}
 							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Ngày tiếp nhận:</div>
-								<div className="text-sm w-full flex item-start rounded-lg border">
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ngày tiếp nhận</label>
+								{editingGeneralField === 'receipt_date' ? (
 									<DatePicker
 										selected={currentReceipt?.receipt_date}
 										onChange={handleReceiptDateChange}
-										onBlur={handleReceiptDateBlur}
-										onFocus={handleReceiptDateFocus}
+										onBlur={() => {
+											handleReceiptApiUpdate('receipt_date', currentReceipt?.receipt_date);
+											setEditingGeneralField(null);
+										}}
 										onKeyDown={handleReceiptDateKeyDown}
-										onChangeRaw={handleReceiptDateInputChange}
 										dateFormat="dd/MM/yyyy"
-										className="bg-white px-1 py-0.5 rounded-lg focus:outline-none w-full text-sm"
+										className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
+										calendarClassName="text-black"
+										placeholderText="Chọn hạn trả"
+										autoFocus
 									/>
-								</div>
+								) : (
+									<div
+										className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
+										onClick={() => setEditingGeneralField('receipt_date')}
+									>
+										{currentReceipt?.receipt_date ? formatDate(currentReceipt.receipt_date) : '--'}
+									</div>
+								)}
 							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Người tiếp nhận:</div>
-								<div className="text-sm w-full flex item-start">
-									<input
-										type="text"
-										name="created_by_uid"
-										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
-										value={getUserName(currentReceipt?.created_by_uid)}
-										onChange={handleInputChange}
-										disabled
-									/>
-								</div>
-							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Hạn trả kết quả:</div>
-								<div className="text-sm w-full flex item-start rounded-lg border">
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Hạn trả</label>
+								{editingGeneralField === 'deadline' ? (
 									<DatePicker
 										selected={currentReceipt?.deadline}
 										onChange={handleDeadlineChange}
-										onBlur={handleDeadlineBlur}
-										onFocus={handleDeadlineFocus}
+										onBlur={() => {
+											handleReceiptApiUpdate('deadline', currentReceipt?.deadline);
+											setEditingGeneralField(null);
+										}}
 										onKeyDown={handleDeadlineKeyDown}
 										dateFormat="dd/MM/yyyy"
-										className="bg-white px-1 py-0.5 rounded-lg focus:outline-none w-full text-sm"
+										className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
+										calendarClassName="text-black"
+										placeholderText="Chọn hạn trả"
+										autoFocus
 									/>
-								</div>
+								) : (
+									<div
+										className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
+										onClick={() => setEditingGeneralField('deadline')}
+									>
+										{currentReceipt?.deadline ? formatDate(currentReceipt.deadline) : '--'}
+									</div>
+								)}
 							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Số lượng mẫu:</div>
-								<div className="text-sm w-full flex items-center">
-									<p className="flex items-center w-12 font-medium text-sm">{currentReceipt?.samples.length}</p>
-								</div>
+							{/* Contact information moved here from order section */}
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Người tiếp nhận</label>
+								{renderField('created_by_uid', getUserName(currentReceipt?.created_by_uid), true)}
+							</div>{' '}
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Người liên hệ</label>
+								{renderField('contact.name', currentReceipt?.contact?.name)}
 							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Ghi chú</div>
-								<div className="text-sm w-full flex item-start">
-									<textarea
-										name="note"
-										className="w-full px-1 py-0.5 border bg-white rounded-lg resize-none text-sm"
-										rows="3"
-										value={currentReceipt?.note}
-										onChange={handleInputChange}
-										onKeyDown={(e) => handleReceiptInputKeyDown(e, 'note', currentReceipt?.note)}
-									/>
-								</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Điện thoại</label>
+								{renderField('contact.phone', currentReceipt?.contact?.phone)}
+							</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email</label>
+								{renderField('contact.email', currentReceipt?.contact?.email)}
+							</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ghi chú</label>
+								{renderTextareaField('note', currentReceipt?.note)}
 							</div>
 						</div>
+					</div>
 
-						{/* Customer and Contact Information - Added padding, adjusted min-width, increased text size */}
-						<div className="w-full md:w-1/2 flex flex-col items-start px-2">
-							<div className="flex justify-center items-center w-full py-1">
-								<div className="flex items-center pl-2">
-									<TiBusinessCard size={16} className="text-primary mr-1" />
-									<h2 className="text-md font-semibold w-full text-primary">THÔNG TIN KHÁCH HÀNG</h2>
+					{/* Thông tin đơn hàng Section - now 3/5 width */}
+					<div className="w-full md:w-3/5 flex flex-col items-start px-2">
+						<div className="flex justify-start items-center mb-1">
+							<TiBusinessCard size={16} className="text-primary" />
+							<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN ĐƠN HÀNG</h2>
+						</div>
+						<div className="w-full">
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Tên khách hàng</label>
+								{renderField('client.client_name', currentReceipt?.client?.client_name)}
+							</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã khách hàng</label>
+								{renderField('client.client_uid', currentReceipt?.client?.client_uid)}
+							</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Địa chỉ</label>
+								{renderField('client.client_address', currentReceipt?.client?.client_address)}
+							</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã số thuế/CCCD</label>
+								{renderField('client.legal_id', currentReceipt?.client?.legal_id)}
+							</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số báo giá</label>
+								{renderField('quote_code', currentReceipt?.quote_code)}
+							</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã đơn hàng</label>
+								{renderField('order_code', currentReceipt?.order_code)}
+							</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Giá trị</label>
+								<div className="flex items-center w-1/3">
+									{renderField('total_amount', currentReceipt?.total_amount, false, 'number', true)}
+									<div className="flex items-center ml-2 cursor-pointer" onClick={handlePayStatusToggle}>
+										<div
+											className={`min-w-2 h-2 rounded-full mr-1 ${
+												currentReceipt?.pay_status === 1 ? 'bg-green-600' : 'bg-red-500'
+											}`}
+										></div>
+										<span
+											className={`font-medium text-xs min-w-28 ${
+												currentReceipt?.pay_status === 1 ? 'text-green-600' : 'text-red-500'
+											}`}
+										>
+											{currentReceipt?.pay_status === 1 ? 'Đã thanh toán' : 'Chưa thanh toán'}
+										</span>
+									</div>
 								</div>
 							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Mã khách hàng:</div>
-								<div className="text-sm w-full flex item-start">
-									<input
-										type="text"
-										name="client.client_uid"
-										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
-										value={currentReceipt?.client?.client_uid}
-										onChange={handleCustomerSearch}
-										onKeyDown={(e) => handleClientInputKeyDown(e, 'client_uid', currentReceipt?.client?.client_uid)}
-									/>
-								</div>
-							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Công ty/cá nhân:</div>
-								<div className="text-sm w-full flex item-start">
-									<input
-										type="text"
-										name="client.client_name"
-										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
-										value={currentReceipt?.client?.client_name}
-										onChange={handleInputChange}
-										onKeyDown={(e) => handleClientInputKeyDown(e, 'client_name', currentReceipt?.client?.client_name)}
-									/>
-								</div>
-							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Địa chỉ:</div>
-								<div className="text-sm w-full flex item-start">
-									<input
-										type="text"
-										name="client.client_address"
-										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
-										value={currentReceipt?.client?.client_address}
-										onChange={handleInputChange}
-										onKeyDown={(e) =>
-											handleClientInputKeyDown(e, 'client_address', currentReceipt?.client?.client_address)
-										}
-									/>
-								</div>
-							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Mã số thuế/CCCD:</div>
-								<div className="text-sm w-full flex item-start">
-									<input
-										type="text"
-										name="legal_id"
-										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
-										value={currentReceipt?.client?.legal_id}
-										onChange={handleInputChange}
-										onKeyDown={(e) => handleClientInputKeyDown(e, 'legal_id', currentReceipt?.client?.legal_id)}
-									/>
-								</div>
-							</div>
-
-							{/* Contact Information Section Header */}
-							<div className="flex justify-center items-center w-full py-1 mt-1">
-								<div className="flex items-center pl-2">
-									<MdOutlineContactPhone size={16} className="text-primary mr-1" />
-									<h2 className="text-md font-semibold w-fit text-primary">THÔNG TIN LIÊN HỆ</h2>
-								</div>
-							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Họ tên:</div>
-								<div className="text-sm w-full flex item-start">
-									<input
-										type="text"
-										name="contact.name"
-										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
-										value={currentReceipt?.contact?.name}
-										onChange={handleContactSearch}
-										onKeyDown={(e) => handleContactInputKeyDown(e, 'name', currentReceipt?.contact?.name)}
-									/>
-								</div>
-							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Email:</div>
-								<div className="text-sm w-full flex item-start">
-									<input
-										type="text"
-										name="contact.email"
-										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
-										value={currentReceipt?.contact?.email}
-										onChange={handleInputChange}
-										onKeyDown={(e) => handleContactInputKeyDown(e, 'email', currentReceipt?.contact?.email)}
-									/>
-								</div>
-							</div>
-
-							<div className="flex justify-start w-full py-1">
-								<div className="text-sm font-semibold w-1/4 flex item-start py-0.5 px-1 min-w-32">Điện thoại:</div>
-								<div className="text-sm w-full flex item-start">
-									<input
-										type="text"
-										name="contact.phone"
-										className="bg-white border px-1 py-0.5 w-full rounded-lg text-sm"
-										value={currentReceipt?.contact?.phone}
-										onChange={handleInputChange}
-										onKeyDown={(e) => handleContactInputKeyDown(e, 'phone', currentReceipt?.contact?.phone)}
-									/>
-								</div>
+							<div className="flex justify-start items-start mb-1">
+								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Người thực hiện</label>
+								{renderField('sale_recorder', currentReceipt?.sale_recorder)}
 							</div>
 						</div>
 					</div>
 				</div>
 			</div>
+
 			{/* Rest of the component remains unchanged */}
 			<div className="bg-white rounded-lg w-full my-4 p-4">
 				<div className="flex justify-between items-start sm:h-10 sm:flex-row flex-col h-[76px] ">

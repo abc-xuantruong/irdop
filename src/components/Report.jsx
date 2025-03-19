@@ -34,6 +34,10 @@ export default function MultiPageEditor() {
 	const [signatureSectionHTML, setSignatureSectionHTML] = useState('');
 	const [referenceValues, setReferenceValues] = useState([]);
 
+	// Add new state variables for notes and requirements
+	const [receiptNote, setReceiptNote] = useState('');
+	const [additionalRequest, setAdditionalRequest] = useState('');
+
 	// Set read-only mode whenever selected_ppt_uid changes
 	useEffect(() => {
 		setIsReadOnly(!!selected_ppt_uid);
@@ -108,6 +112,15 @@ export default function MultiPageEditor() {
 						`<td class="reference-cell" style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">${refValue}</td>`,
 				);
 				setReferenceValues(refCells);
+			}
+
+			// Extract receipt note and additional request if available in report data
+			if (reportData.receipt_note) {
+				setReceiptNote(reportData.receipt_note);
+			}
+
+			if (reportData.additional_request) {
+				setAdditionalRequest(reportData.additional_request);
 			}
 
 			// Update the editor content
@@ -241,6 +254,23 @@ export default function MultiPageEditor() {
 			const sampleResult = sampleResponse.data;
 			setSampleData(sampleResult);
 			console.log('Sample data fetched:', sampleResult);
+
+			// Check if any analysis has protocol_source = 'IRDOP VS' and set showVlas to true if found
+			if (sampleResult.analysis && Array.isArray(sampleResult.analysis)) {
+				const hasVlasProtocol = sampleResult.analysis.some((item) => item.protocol_source === 'IRDOP VS');
+				if (hasVlasProtocol) {
+					setShowVlas(true);
+				}
+			}
+
+			// Extract receipt note and additional request data
+			if (sampleResult.receipt && sampleResult.receipt.note) {
+				setReceiptNote(sampleResult.receipt.note);
+			}
+
+			if (sampleResult.additional_request) {
+				setAdditionalRequest(sampleResult.additional_request);
+			}
 
 			// Get receipt_id from sample data to fetch client info
 			if (sampleResult && sampleResult.receipt_id) {
@@ -437,8 +467,8 @@ export default function MultiPageEditor() {
 		// Get the sample_uid from data
 		const sampleId = data.sample_uid || sample_uid;
 
-		// Get the sample_information array from data
-		const sampleInfo = data.sample_information || [];
+		// Get the sample_information array from data and filter out items with empty fvalue
+		const sampleInfo = (data.sample_information || []).filter((item) => item.fvalue && item.fvalue.trim() !== '');
 
 		// Map each sample information item to a row in the sample info section
 		const infoRows = sampleInfo
@@ -815,7 +845,7 @@ export default function MultiPageEditor() {
             IRDOP.ORG
         </p>
         <p style="color: #444444; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">
-            Form: BM06-QT010-KN / Version: 04 / Effective date: 01/08/2023
+            Form: BM06-QT010-KN / Version: 05 / Effective date: 12/03/2025
         </p>
     </div>
     <div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;">
@@ -2315,6 +2345,8 @@ export default function MultiPageEditor() {
 				is_comment: showComment,
 				is_reference: showReference,
 				created_by_uid: currentUser.identity_uid,
+				receipt_note: receiptNote,
+				additional_request: additionalRequest,
 			};
 
 			console.log('Publishing new report with data:', requestBody);
@@ -2672,7 +2704,7 @@ export default function MultiPageEditor() {
 	};
 
 	return (
-		<div className="p-4 bg-gray-100 min-h-screen">
+		<div className="p-4 bg-gray-100 min-h-screen relative">
 			<div className="mb-4 flex flex-col gap-4 items-end">
 				<div className="flex justify-between items-center w-full">
 					<select
@@ -2755,38 +2787,62 @@ export default function MultiPageEditor() {
 					</div>
 				</div>
 			</div>
+
+			{/* Left chat bubble for Ghi chú/Note */}
+			{receiptNote && (
+				<div className="fixed left-4 text-start top-20 w-56 max-h-96 overflow-y-auto overflow-x-hidden bg-blue-50 rounded-lg border border-blue-200 shadow-md p-3 z-10">
+					<div className="font-bold text-gray-700 text-sm mb-2">Ghi chú / Note:</div>
+					<div className="text-gray-600 text-sm whitespace-pre-wrap">{receiptNote}</div>
+					{/* Simple arrow using a div instead of pseudo-element */}
+					<div className="absolute -right-2 top-5 w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-blue-50"></div>
+				</div>
+			)}
+
+			{/* Right chat bubble for Yêu cầu/Requirements */}
+			{additionalRequest && (
+				<div className="fixed right-4 text-start top-20 w-56 max-h-96 overflow-y-auto bg-green-50 rounded-lg border border-green-200 shadow-md p-3 z-10">
+					<div className="font-bold text-blue-700 text-sm mb-2">Yêu cầu / Requirements:</div>
+					<div className="text-blue-600 text-sm whitespace-pre-wrap">{additionalRequest}</div>
+					{/* Simple arrow using a div instead of pseudo-element */}
+					<div className="absolute -left-2 top-5 w-0 h-0 border-t-8 border-b-8 border-r-8 border-transparent border-r-green-50"></div>
+				</div>
+			)}
+
 			<div className="flex flex-col gap-4 overflow-x-auto p-4 bg-white shadow-lg rounded-lg">
-				<div
-					className="bg-white flex flex-col "
-					style={{
-						fontFamily: 'Gilroy, sans-serif',
-						width: '710px', // Exact width: 210mm - 2*10mm margins at 96 DPI
-						margin: '0 auto',
-					}}
-				>
+				<div className="flex justify-center">
+					{/* Main editor content */}
 					<div
-						id="header-edit"
-						className={`header-editable editable text-center font-bold text-lg border-b px-0 pt-8 pb-4 ${
-							isReadOnly ? 'read-only' : ''
-						}`}
-						style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
-						dangerouslySetInnerHTML={{
-							__html: header.replace(/SƠ BỘ \/ DRAFT/g, pptUid || 'SƠ BỘ / DRAFT'),
+						className="bg-white flex flex-col"
+						style={{
+							fontFamily: 'Gilroy, sans-serif',
+							width: '710px',
+							margin: '0 auto',
 						}}
-					/>
-					<div
-						id="content-edit"
-						ref={contentRef}
-						className={`content-editable editable border-0 px-0 py-2 text-base my-4 ${isReadOnly ? 'read-only' : ''}`}
-						style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
-						dangerouslySetInnerHTML={{ __html: content }}
-					/>
-					<div
-						id="footer-edit"
-						className={`footer-editable editable px-0 pb-8 pt-4 ${isReadOnly ? 'read-only' : ''}`}
-						style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
-						dangerouslySetInnerHTML={{ __html: footer }}
-					/>
+					>
+						<div
+							id="header-edit"
+							className={`header-editable editable text-center font-bold text-lg border-b px-0 pt-8 pb-4 ${
+								isReadOnly ? 'read-only' : ''
+							}`}
+							style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
+							dangerouslySetInnerHTML={{
+								__html: header.replace(/SƠ BỘ \/ DRAFT/g, pptUid || 'SƠ BỘ / DRAFT'),
+							}}
+						/>
+						<div
+							id="content-edit"
+							ref={contentRef}
+							className={`content-editable editable border-0 px-0 py-2 text-base my-4 ${isReadOnly ? 'read-only' : ''}`}
+							style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
+							dangerouslySetInnerHTML={{ __html: content }}
+						/>
+						<div
+							id="footer-edit"
+							className={`footer-editable editable px-0 pb-8 pt-4 ${isReadOnly ? 'read-only' : ''}`}
+							style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
+							dangerouslySetInnerHTML={{ __html: footer }}
+						/>
+					</div>
 				</div>
 			</div>
 
@@ -2864,6 +2920,22 @@ export default function MultiPageEditor() {
 				}
 				.colored-toast .swal2-html-container {
 					color: white;
+				}
+
+				/* Make bubbles responsive in small screens */
+				@media (max-width: 1200px) {
+					.fixed.left-4,
+					.fixed.right-4 {
+						position: static !important;
+						width: 100% !important;
+						max-width: none !important;
+						margin-bottom: 10px !important;
+					}
+
+					.fixed.left-4 > div:last-child,
+					.fixed.right-4 > div:last-child {
+						display: none !important;
+					}
 				}
 			`}</style>
 		</div>

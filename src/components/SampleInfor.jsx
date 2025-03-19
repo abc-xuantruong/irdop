@@ -1054,6 +1054,14 @@ const SampleInfor = () => {
 		updatedCustomerInfo[index][field] = value;
 		setCustomerInfo(updatedCustomerInfo);
 		setIsReportChanged(true); // Mark report as changed
+
+		// If changing value of "Tên mẫu thử / name", update the main sample name field
+		if (
+			field === 'fvalue' &&
+			(updatedCustomerInfo[index].fname.includes('Tên mẫu thử') || updatedCustomerInfo[index].fname.includes('name'))
+		) {
+			setSample((prevSample) => ({ ...prevSample, sample_name: value }));
+		}
 	};
 
 	const handleReceiptFieldChange = (index, field, value) => {
@@ -1072,6 +1080,22 @@ const SampleInfor = () => {
 		updatedReceiptInfo[index][field] = value;
 		setReceiptInfo(updatedReceiptInfo);
 		setIsReportChanged(true); // Mark report as changed
+
+		// If changing value of "Mô tả / desc", update the main sample description field
+		if (
+			field === 'fvalue' &&
+			(updatedReceiptInfo[index].fname.includes('Mô tả') || updatedReceiptInfo[index].fname.includes('desc'))
+		) {
+			setSample((prevSample) => ({ ...prevSample, sample_description: value }));
+		}
+
+		// If changing value of "Nền mẫu / matrix", update the main matrix field
+		if (
+			field === 'fvalue' &&
+			(updatedReceiptInfo[index].fname.includes('Nền mẫu') || updatedReceiptInfo[index].fname.includes('matrix'))
+		) {
+			setSample((prevSample) => ({ ...prevSample, matrix: value }));
+		}
 	};
 
 	const handleDeleteCustomerField = (index) => {
@@ -2316,20 +2340,20 @@ const SampleInfor = () => {
 				</div>
 				{/* Remove the edit buttons since we now have inline editing */}
 				{isEditingSample && (
-				<div className="flex justify-end mt-4">
-					<button
-						className="bg-gray-500 text-white text-sm rounded-lg p-1 active:bg-gray-600 focus:outline-none mr-2"
-						onClick={handleCancelEdit}
-					>
-						Hủy bỏ
-					</button>
-					<button
-						className="bg-green-500 text-white text-sm rounded-lg p-1 active:bg-green-600 focus:outline-none"
-						onClick={handleConfirmEdit}
-					>
-						Xác nhận
-					</button>
-				</div>
+					<div className="flex justify-end mt-4">
+						<button
+							className="bg-gray-500 text-white text-sm rounded-lg p-1 active:bg-gray-600 focus:outline-none mr-2"
+							onClick={handleCancelEdit}
+						>
+							Hủy bỏ
+						</button>
+						<button
+							className="bg-green-500 text-white text-sm rounded-lg p-1 active:bg-green-600 focus:outline-none"
+							onClick={handleConfirmEdit}
+						>
+							Xác nhận
+						</button>
+					</div>
 				)}
 				{/* Rest of the component remains the same */}
 				<div className="mt-2 flex flex-col">

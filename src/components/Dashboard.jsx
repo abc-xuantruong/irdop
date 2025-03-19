@@ -39,11 +39,7 @@ const Dashboard = () => {
 	const [dateInputValues, setDateInputValues] = useState({});
 	const [isDatePickerFocused, setIsDatePickerFocused] = useState(false);
 	const [tempDateValues, setTempDateValues] = useState({});
-
-	// Add these new state variables at the beginning of the component where other states are defined
-	const [confirmPaymentChange, setConfirmPaymentChange] = useState(false);
-	const [selectedReceiptId, setSelectedReceiptId] = useState(null);
-
+	
 	// Add new state to track payment column visibility (default is hidden)
 	const [showPaymentColumn, setShowPaymentColumn] = useState(false);
 
@@ -377,7 +373,7 @@ const Dashboard = () => {
 			setIsFilter(true);
 			setCurrentPage(1); // Reset to first page
 
-			showToast(`Hiển thị ${filteredReceipts.length} phiếu có hạn trả là hôm nay`, 'info');
+			showToast(`Hiển thị ${filteredReceipts.length} tiếp nhận có hạn trả là hôm nay`, 'info');
 		} else {
 			// If turning off the filter
 			setCurrentList(originalList);
@@ -774,7 +770,12 @@ const Dashboard = () => {
 					}
 				}
 			`}</style>
-			<Breadcrumb paths={[{ name: 'Danh sách', link: '/' }]} />{' '}
+			<Breadcrumb
+				paths={[{ name: 'Danh sách', link: '/' }]}
+				source={originalList}
+				setCurrentList={setCurrentList}
+				setIsFilter={setIsFilter}
+			/>
 			<div className="justify-between items-center w-full mb-1 hidden md:flex">
 				<div>
 					{searchTerm && (
@@ -841,33 +842,35 @@ const Dashboard = () => {
 								<th className="p-1 border-b text-start  min-w-40">Mã tiếp nhận mẫu</th>
 								<th className="p-1 border-b text-start w-36 min-w-36">Mã mẫu thử</th>
 
-								{/* Hide these two columns when showPaymentColumn is true */}
-								{!showPaymentColumn && (
+								{showPaymentColumn ? (
+									<th className="p-1 border-b text-start w-[25%] min-w-72">Thông tin mẫu thử</th>
+								) : (
 									<>
 										<th className="p-1 border-b text-start w-[25%] min-w-72">Thông tin mẫu thử</th>
 										<th className="p-1 border-b text-start w-[10%] min-w-28">Số lượng</th>
+										<th className="p-1 border-b text-start w-[6%] min-w-24">Mục đích</th>
+										<th className="p-1 border-b text-start w-[6%] min-w-24">Trạng thái</th>
+										<th className="p-1 border-b text-start w-[6%] min-w-24">SL chỉ tiêu</th>
 									</>
 								)}
 
-								<th className="p-1 border-b text-start w-[6%] min-w-24">Mục đích</th>
-								<th className="p-1 border-b text-start w-[6%] min-w-24">Trạng thái</th>
-								<th className="p-1 border-b text-start w-[6%] min-w-24">SL chỉ tiêu</th>
-
-								{/* Display the 4 payment information columns when showPaymentColumn is true */}
+								{/* Display the payment information columns when showPaymentColumn is true */}
 								{showPaymentColumn && (
 									<>
 										<th className="p-1 border-b text-start min-w-32">Mã đơn hàng</th>
 										<th className="p-1 border-b text-start min-w-32">Mã báo giá</th>
 										<th className="p-1 border-b text-start min-w-32">Người ghi nhận</th>
 										<th className="p-1 border-b text-start min-w-32">Doanh số</th>
+										<th className="p-1 border-b text-start min-w-32">Số hồ sơ lưu</th>
 									</>
 								)}
 
 								<th
-									className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667]"
+									className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700
+									"
 									onClick={toggleDeadlineFormat}
 								>
-									Hạn trả
+									Hạn trả KQ
 								</th>
 							</tr>
 						</thead>
@@ -899,11 +902,14 @@ const Dashboard = () => {
 														</p>
 													</div>
 												</td>
-												<td colSpan={showPaymentColumn ? '5' : '6'} className="p-1 text-center text-gray-500">
+												<td colSpan={showPaymentColumn ? '1' : '6'} className="p-1 text-center text-gray-500">
 													Chưa có thông tin mẫu thử . . .
 												</td>
 
-												{/* Display 4 separate payment columns instead of a single one */}
+												{/* Show sample information column when payment columns are visible */}
+												{showPaymentColumn && <td className="p-1 text-center text-gray-500">--</td>}
+
+												{/* Display payment columns instead of a single one */}
 												{showPaymentColumn && (
 													<>
 														<td
@@ -977,6 +983,26 @@ const Dashboard = () => {
 															>
 																{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
 															</div>
+														</td>
+														<td
+															className="p-1 text-start cursor-pointer hover:bg-gray-100"
+															onClick={() => handleFieldClick(receipt.id, null, 'record_code')}
+														>
+															{editingField.receiptId === receipt.id && editingField.field === 'record_code' ? (
+																<input
+																	type="text"
+																	value={receipt.record_code || ''}
+																	onChange={(e) => handleReceiptInputChange(e, receipt.id, 'record_code')}
+																	onKeyDown={(e) =>
+																		handleReceiptInputKeyDown(e, receipt.id, 'record_code', e.target.value)
+																	}
+																	onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																	className="p-1 border rounded-md w-full text-sm bg-white"
+																	autoFocus
+																/>
+															) : (
+																<div className="w-full h-full p-1 rounded">{receipt.record_code || '--'}</div>
+															)}
 														</td>
 													</>
 												)}
@@ -1053,8 +1079,17 @@ const Dashboard = () => {
 																{sample.sample_uid}
 															</NavLink>
 														</td>
-														{/* Show or hide these columns based on showPaymentColumn */}
-														{!showPaymentColumn && (
+
+														{/* Conditionally show either sample information or purpose/status columns */}
+														{showPaymentColumn ? (
+															<td
+																className="p-1 text-start align-top line-clamp-2"
+																onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
+																onMouseLeave={handleSampleMouseLeave}
+															>
+																{displayValue(sample.sample_name)}
+															</td>
+														) : (
 															<>
 																<td
 																	className="p-1 text-start align-top line-clamp-2"
@@ -1093,78 +1128,74 @@ const Dashboard = () => {
 																		<div className="w-full h-full rounded">{displayValue(sample.sample_volume)}</div>
 																	)}
 																</td>
+																<td
+																	className="p-1 text-start cursor-pointer align-top"
+																	onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'purpose')}
+																>
+																	{editingField.receiptId === receipt.receipt_id &&
+																	editingField.sampleId === sample.id &&
+																	editingField.field === 'purpose' ? (
+																		<select
+																			value={sample.purpose || ''}
+																			onChange={(e) => handleSelectChange(e, receipt.receipt_id, sample.id, 'purpose')}
+																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																			className="p-1 border rounded-md w-full text-sm bg-white"
+																			autoFocus
+																		>
+																			<option value="">--</option>
+																			{purposes.map((purpose, index) => (
+																				<option key={index} value={purpose}>
+																					{purpose}
+																				</option>
+																			))}
+																		</select>
+																	) : (
+																		<div className="w-full h-full rounded">{displayValue(sample.purpose)}</div>
+																	)}{' '}
+																</td>
+
+																{/* Status column - always shown */}
+																<td
+																	className="p-1 text-start cursor-pointer align-top"
+																	onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'status')}
+																>
+																	{editingField.receiptId === receipt.receipt_id &&
+																	editingField.sampleId === sample.id &&
+																	editingField.field === 'status' ? (
+																		<select
+																			value={sample.status}
+																			onChange={(e) => handleSelectChange(e, receipt.receipt_id, sample.id, 'status')}
+																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																			className="p-1 border rounded-md w-full text-sm bg-white"
+																			autoFocus
+																		>
+																			{status.map((statusName, index) => (
+																				<option key={index} value={index}>
+																					{statusName}
+																				</option>
+																			))}
+																		</select>
+																	) : (
+																		<div className="w-full h-full rounded">
+																			{status[sample.status] ? (
+																				status[sample.status]
+																			) : (
+																				<span className="text-start block">--</span>
+																			)}
+																		</div>
+																	)}
+																</td>
+																<td
+																	className="p-1 text-start align-top"
+																	onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
+																	onMouseLeave={handleSampleMouseLeave}
+																>
+																	{completedTests} / {pendingTests} / {totalTests}
+																</td>
 															</>
 														)}
 
-														{/* Purpose column - always shown */}
-														<td
-															className="p-1 text-start cursor-pointer align-top"
-															onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'purpose')}
-														>
-															{editingField.receiptId === receipt.receipt_id &&
-															editingField.sampleId === sample.id &&
-															editingField.field === 'purpose' ? (
-																<select
-																	value={sample.purpose || ''}
-																	onChange={(e) => handleSelectChange(e, receipt.receipt_id, sample.id, 'purpose')}
-																	onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																	className="p-1 border rounded-md w-full text-sm bg-white"
-																	autoFocus
-																>
-																	<option value="">--</option>
-																	{purposes.map((purpose, index) => (
-																		<option key={index} value={purpose}>
-																			{purpose}
-																		</option>
-																	))}
-																</select>
-															) : (
-																<div className="w-full h-full rounded">{displayValue(sample.purpose)}</div>
-															)}{' '}
-														</td>
-
-														{/* Status column - always shown */}
-														<td
-															className="p-1 text-start cursor-pointer align-top"
-															onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'status')}
-														>
-															{editingField.receiptId === receipt.receipt_id &&
-															editingField.sampleId === sample.id &&
-															editingField.field === 'status' ? (
-																<select
-																	value={sample.status}
-																	onChange={(e) => handleSelectChange(e, receipt.receipt_id, sample.id, 'status')}
-																	onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																	className="p-1 border rounded-md w-full text-sm bg-white"
-																	autoFocus
-																>
-																	{status.map((statusName, index) => (
-																		<option key={index} value={index}>
-																			{statusName}
-																		</option>
-																	))}
-																</select>
-															) : (
-																<div className="w-full h-full rounded">
-																	{status[sample.status] ? (
-																		status[sample.status]
-																	) : (
-																		<span className="text-start block">--</span>
-																	)}
-																</div>
-															)}
-														</td>
-
-														{/* Test count column - always shown */}
-														<td
-															className="p-1 text-start align-top"
-															onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
-															onMouseLeave={handleSampleMouseLeave}
-														>
-															{completedTests} / {pendingTests} / {totalTests}
-														</td>
-
-														{/* Show the 4 payment columns only for the first sample row */}
+														{/* Show payment columns for the first sample in each receipt */}
 														{sampleIndex === 0 && showPaymentColumn && (
 															<>
 																<td
@@ -1262,6 +1293,33 @@ const Dashboard = () => {
 																	>
 																		{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
 																	</p>
+																</td>
+																<td
+																	className={`p-1 text-start align-top ${
+																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																	}`}
+																	rowSpan={samplesToShow.length}
+																	onClick={() => handleFieldClick(receipt.id, null, 'record_code')}
+																>
+																	{editingField.receiptId === receipt.id &&
+																	editingField.sampleId === null &&
+																	editingField.field === 'record_code' ? (
+																		<input
+																			type="text"
+																			value={receipt.record_code || ''}
+																			onChange={(e) => handleReceiptInputChange(e, receipt.id, 'record_code')}
+																			onKeyDown={(e) =>
+																				handleReceiptInputKeyDown(e, receipt.id, 'record_code', e.target.value)
+																			}
+																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																			className="p-1 border rounded-md w-full text-sm bg-white"
+																			autoFocus
+																		/>
+																	) : (
+																		<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
+																			{receipt.record_code || '--'}
+																		</p>
+																	)}
 																</td>
 															</>
 														)}

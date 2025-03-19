@@ -1,8 +1,9 @@
 import React, { useContext, useState } from 'react';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import FilterBar from './FilterBar';
 
-const Breadcrumb = ({ paths }) => {
+const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter }) => {
 	const { currentTitlePage } = useContext(GlobalContext);
 	const [searchTerm, setSearchTerm] = useState('');
 	const location = useLocation();
@@ -45,14 +46,13 @@ const Breadcrumb = ({ paths }) => {
 
 				{/* Search input - only visible on dashboard/home page */}
 				{isDashboard && (
-					<div className="md:w-1/3 max-w-md min-w-[250px] w-full">
-						<input
-							type="text"
-							value={searchTerm}
-							onChange={handleSearchChange}
-							onKeyPress={handleKeyPress}
-							className="p-1.5 border text-sm border-gray-400 rounded-lg bg-white w-full"
-							placeholder="Tìm kiếm tiếp nhận mẫu..."
+					<div className="w-full md:w-fit">
+						<FilterBar
+							source={source} // Pass the original list to FilterBar
+							setCurrentList={setCurrentList}
+							typeSearch="receipt"
+							setIsFilter={setIsFilter} // Pass the setIsFilter function
+							hide={['sort', 'filter']} // Conditionally hide search
 						/>
 					</div>
 				)}
