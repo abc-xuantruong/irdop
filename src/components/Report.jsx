@@ -40,7 +40,9 @@ export default function MultiPageEditor() {
 
 	// Set read-only mode whenever selected_ppt_uid changes
 	useEffect(() => {
-		setIsReadOnly(!!selected_ppt_uid);
+		// Allow editing if it's a DRAFT
+		const isDraft = selected_ppt_uid && selected_ppt_uid.includes('DRAFT');
+		setIsReadOnly(!!selected_ppt_uid && !isDraft);
 		if (!selected_ppt_uid) {
 			setPptUid('');
 		}
@@ -58,7 +60,7 @@ export default function MultiPageEditor() {
 					}
 
 					console.log('PPT list fetched:', response.data);
-					setPptList(response.data);
+					setPptList(response.data); // Now data structure is [{ppt_uid, publish_date},...]
 
 					// Check if a specific ppt_uid was requested in URL
 					if (selected_ppt_uid) {
@@ -168,7 +170,9 @@ export default function MultiPageEditor() {
 			setFooter(reportData.footer_section || footer);
 
 			// After loading the report, update the read-only state
-			setIsReadOnly(true);
+			// Allow editing if it's a DRAFT
+			const isDraft = reportData.ppt_uid && reportData.ppt_uid.includes('DRAFT');
+			setIsReadOnly(!isDraft);
 		} catch (err) {
 			console.error('Error loading published report:', err);
 			setError(`Failed to load published report: ${err.message}`);
@@ -232,7 +236,7 @@ export default function MultiPageEditor() {
 			});
 
 			// Load the selected report data and set editor to read-only mode
-			setIsReadOnly(true);
+			// (unless it's a draft, which is handled in loadPublishedReport)
 			loadPublishedReport(selectedValue);
 		}
 	};
@@ -479,7 +483,7 @@ export default function MultiPageEditor() {
 				// Extract field label and English translation (if present)
 				const parts = fieldName.split('/');
 				const mainLabel = parts[0].trim();
-				const engLabel = parts.length > 1 ? `/ ${parts[1].trim()}` : '';
+				const engLabel = parts.length > 1 ? ` / ${parts[1].trim()}` : '';
 
 				// Process mainLabel to replace "SX" with "sản xuất" and "HSD" with "Hạn sử dụng"
 				let displayMainLabel = mainLabel;
@@ -1311,6 +1315,8 @@ export default function MultiPageEditor() {
 					!sampleParent.style.border
 				) {
 					sampleParent = sampleParent.parentElement;
+					// If we reach a major section break, stop climbing
+					if (sampleParent === tempContainer) break;
 				}
 
 				extractedSections.sampleInfoSection = sampleParent.outerHTML;
@@ -2250,7 +2256,7 @@ export default function MultiPageEditor() {
 	const handlePublishNewReport = () => {
 		const isRepublishing = pptList.length > 0;
 		const confirmMessage = isRepublishing
-			? 'Bạn có chắc chắn muốn phát hành lại phiếu phân tích này? Phiếu phân tích cũ sẽ vẫn được lưu trữ trong hệ thống.'
+			? 'Bạn có chắc chắn muốn phát hành phiếu phân tích này? Phiếu phân tích cũ sẽ vẫn được lưu trữ trong hệ thống.'
 			: 'Bạn có chắc chắn muốn phát hành phiếu phân tích này?';
 
 		// Replace window.confirm with SweetAlert2
@@ -2265,13 +2271,31 @@ export default function MultiPageEditor() {
 			cancelButtonText: 'Hủy',
 		}).then((result) => {
 			if (result.isConfirmed) {
-				publishReport();
+				publishReport('publish');
 			}
 		});
 	};
 
-	// Rename the original function to publishReport
-	const publishReport = async () => {
+	// Add handler for the SAVE button
+	const handleSaveReport = () => {
+		Swal.fire({
+			title: 'Xác nhận',
+			text: 'Bạn có chắc chắn muốn lưu phiếu phân tích này?',
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonColor: '#3085d6',
+			cancelButtonColor: '#d33',
+			confirmButtonText: 'Xác nhận',
+			cancelButtonText: 'Hủy',
+		}).then((result) => {
+			if (result.isConfirmed) {
+				publishReport('save');
+			}
+		});
+	};
+
+	// Rename the original function to publishReport and add type parameter
+	const publishReport = async (type) => {
 		try {
 			setLoading(true);
 
@@ -2349,17 +2373,20 @@ export default function MultiPageEditor() {
 				additional_request: additionalRequest,
 			};
 
-			console.log('Publishing new report with data:', requestBody);
+			console.log(`${type === 'publish' ? 'Publishing' : 'Saving'} report with data:`, requestBody);
 
-			// Send the data to the API
-			const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/ppt', { report: requestBody });
+			// Send the data to the API with the type parameter
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/ppt', {
+				report: requestBody,
+				type: type, // Add the type param (publish/save)
+			});
 
 			if (response.status !== 200) {
 				throw new Error(`API request failed with status ${response.status}`);
 			}
 
 			const result = response.data;
-			console.log('Published successfully:', result);
+			console.log(`${type === 'publish' ? 'Published' : 'Saved'} successfully:`, result);
 
 			// If we get a ppt_uid back from the API, update our state and URL
 			if (result && result.ppt_uid) {
@@ -2368,8 +2395,14 @@ export default function MultiPageEditor() {
 
 				// Add the new ppt_uid to the pptList if it's not already there
 				setPptList((prevList) => {
-					if (!prevList.includes(newPptUid)) {
-						return [...prevList, newPptUid];
+					// Check if the item with this ppt_uid already exists
+					const exists = prevList.some((item) => item.ppt_uid === newPptUid);
+					if (!exists) {
+						const newItem = {
+							ppt_uid: newPptUid,
+							publish_date: new Date().toISOString(),
+						};
+						return [...prevList, newItem];
 					}
 					return prevList;
 				});
@@ -2381,18 +2414,25 @@ export default function MultiPageEditor() {
 				});
 
 				// Show success notification
-				showNotification('Phát hành phiếu phân tích thành công!', 'success');
+				showNotification(`${type === 'publish' ? 'Phát hành' : 'Lưu'} phiếu phân tích thành công!`, 'success');
+
+				// Set isReadOnly based on whether this is a draft
+				const isDraft = newPptUid.includes('DRAFT');
+				setIsReadOnly(!isDraft);
 			} else {
 				// Show error notification
-				showNotification('Phát hành không thành công, không nhận được mã phiếu', 'error');
+				showNotification(
+					`${type === 'publish' ? 'Phát hành' : 'Lưu'} không thành công, không nhận được mã phiếu`,
+					'error',
+				);
 			}
 		} catch (err) {
-			console.error('Error publishing report:', err);
+			console.error(`Error ${type === 'publish' ? 'publishing' : 'saving'} report:`, err);
 			// Replace alert with SweetAlert2
 			Swal.fire({
 				icon: 'error',
 				title: 'Lỗi',
-				text: `Phát hành không thành công: ${err.message}`,
+				text: `${type === 'publish' ? 'Phát hành' : 'Lưu'} không thành công: ${err.message}`,
 			});
 		} finally {
 			setLoading(false);
@@ -2703,26 +2743,55 @@ export default function MultiPageEditor() {
 		});
 	};
 
+	// Function to format date string for display
+	const formatPublishDate = (dateString) => {
+		if (!dateString) return '';
+		try {
+			const date = new Date(dateString);
+			return date.toLocaleDateString('vi-VN', {
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+			});
+		} catch (error) {
+			console.error('Error formatting date:', error);
+			return dateString;
+		}
+	};
+
 	return (
 		<div className="p-4 bg-gray-100 min-h-screen relative">
 			<div className="mb-4 flex flex-col gap-4 items-end">
 				<div className="flex justify-between items-center w-full">
 					<select
-						className="px-4 py-1.5 focus:outline-none border-2 border-gray-500 rounded-lg bg-white"
+						className="px-4 py-1.5 focus:outline-none border-2 border-gray-500 rounded-lg bg-white w-96"
 						value={pptUid}
 						onChange={handleReportSelectionChange}
 					>
 						<option value="">Phát hành mới</option>
 						{pptList &&
 							pptList.map((item, index) => (
-								<option key={index} value={item}>
-									{item}
+								<option key={index} value={item.ppt_uid} className="flex justify-between">
+									{item.ppt_uid} - {formatPublishDate(item.publish_date)}
 								</option>
 							))}
 					</select>
 					<div>
 						{loading && <span className="px-4 py-2 bg-yellow-500 text-white rounded">Đang tải dữ liệu mẫu...</span>}
 						{error && <span className="px-4 py-2 bg-red-500 text-white rounded">Lỗi: {error}</span>}
+
+						<button
+							onClick={handleSaveReport}
+							className={`px-4 py-1 focus:outline-none border-2 border-gray-500 rounded-lg ml-2 active:bg-blue-700 ${
+								isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+							}`}
+							disabled={isReadOnly}
+						>
+							SAVE
+						</button>
+
 						<button
 							onClick={handlePublishNewReport}
 							className={`px-4 py-1 focus:outline-none border-2 border-gray-500 rounded-lg ml-2 active:bg-blue-700 ${
@@ -2730,8 +2799,9 @@ export default function MultiPageEditor() {
 							}`}
 							disabled={isReadOnly}
 						>
-							{pptList.length > 0 ? 'Phát hành lại' : 'Phát hành mới'}
+							PUBLISH
 						</button>
+
 						<button
 							onClick={handlePrint}
 							className="px-4 py-1 focus:outline-none border-2 border-gray-500 rounded-lg ml-2 active:bg-blue-700"

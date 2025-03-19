@@ -1182,15 +1182,15 @@ const SampleInfor = () => {
 				(item) =>
 					item.fname.includes('Ngày tiếp nhận') ||
 					item.fname.includes('receipt date') ||
-					item.fname.includes('Mã phiếu') ||
-					item.fname.includes('receipt code'),
+					item.fname.includes('Mô tả') ||
+					item.fname.includes('desc'),
 			);
 			const customerInfoItems = sampleInfo.filter(
 				(item) =>
 					!item.fname.includes('Ngày tiếp nhận') &&
 					!item.fname.includes('receipt date') &&
-					!item.fname.includes('Mã phiếu') &&
-					!item.fname.includes('receipt code'),
+					!item.fname.includes('Mô tả') &&
+					!item.fname.includes('desc'),
 			);
 
 			// Set the customer and receipt info

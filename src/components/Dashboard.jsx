@@ -39,7 +39,7 @@ const Dashboard = () => {
 	const [dateInputValues, setDateInputValues] = useState({});
 	const [isDatePickerFocused, setIsDatePickerFocused] = useState(false);
 	const [tempDateValues, setTempDateValues] = useState({});
-	
+
 	// Add new state to track payment column visibility (default is hidden)
 	const [showPaymentColumn, setShowPaymentColumn] = useState(false);
 
@@ -386,40 +386,40 @@ const Dashboard = () => {
 	}, [setCurrentTitlePage]);
 
 	// Parse URL search parameters when component mounts
-	useEffect(() => {
-		const queryParams = new URLSearchParams(location.search);
-		const searchQuery = queryParams.get('search');
+	// useEffect(() => {
+	// 	const queryParams = new URLSearchParams(location.search);
+	// 	const searchQuery = queryParams.get('search');
 
-		if (searchQuery) {
-			setSearchTerm(searchQuery);
-			setIsFilter(true);
+	// 	if (searchQuery) {
+	// 		setSearchTerm(searchQuery);
+	// 		setIsFilter(true);
 
-			// Fetch search results
-			const fetchSearchResults = async () => {
-				try {
-					const response = await apiPost('https://black.irdop.org/khsi19me/db/search/receipt', {
-						query: searchQuery,
-					});
-					setCurrentList(response.data);
-				} catch (error) {
-					console.error('Error searching receipts:', error);
-					Swal.fire({
-						icon: 'error',
-						title: 'Lỗi',
-						text: 'Có lỗi xảy ra khi tìm kiếm',
-					});
-				}
-			};
+	// 		// Fetch search results
+	// 		const fetchSearchResults = async () => {
+	// 			try {
+	// 				const response = await apiPost('https://black.irdop.org/khsi19me/db/search/receipt', {
+	// 					query: searchQuery,
+	// 				});
+	// 				setCurrentList(response.data);
+	// 			} catch (error) {
+	// 				console.error('Error searching receipts:', error);
+	// 				Swal.fire({
+	// 					icon: 'error',
+	// 					title: 'Lỗi',
+	// 					text: 'Có lỗi xảy ra khi tìm kiếm',
+	// 				});
+	// 			}
+	// 		};
 
-			fetchSearchResults();
-		} else {
-			// Still fetch normal data if no search query
-			if (!isFetch) {
-				fetchReceipt();
-				isFetch = true;
-			}
-		}
-	}, [location.search]);
+	// 		fetchSearchResults();
+	// 	} else {
+	// 		// Still fetch normal data if no search query
+	// 		if (!isFetch) {
+	// 			fetchReceipt();
+	// 			isFetch = true;
+	// 		}
+	// 	}
+	// }, [location.search]);
 
 	const fetchReceipt = async () => {
 		try {
