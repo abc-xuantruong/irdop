@@ -41,7 +41,10 @@ const SampleInfor = () => {
 	const [selectedParameters, setSelectedParameters] = useState([]);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [technicianDropdownVisible, setTechnicianDropdownVisible] = useState(null);
-	const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+	const [dropdownPosition, setDropdownPosition] = useState({
+		top: 0,
+		left: 0,
+	});
 	const [deadlineDropdownVisible, setDeadlineDropdownVisible] = useState(null);
 	const [selectedDate, setSelectedDate] = useState(new Date());
 	const [originalSample, setOriginalSample] = useState(null); // Store original sample data
@@ -100,14 +103,20 @@ const SampleInfor = () => {
 	// Functions to handle status scrolling
 	const scrollLeft = () => {
 		if (statusContainerRef.current) {
-			statusContainerRef.current.scrollBy({ left: -100, behavior: 'smooth' });
+			statusContainerRef.current.scrollBy({
+				left: -100,
+				behavior: 'smooth',
+			});
 			setScrollPosition(statusContainerRef.current.scrollLeft - 100);
 		}
 	};
 
 	const scrollRight = () => {
 		if (statusContainerRef.current) {
-			statusContainerRef.current.scrollBy({ left: 100, behavior: 'smooth' });
+			statusContainerRef.current.scrollBy({
+				left: 100,
+				behavior: 'smooth',
+			});
 			setScrollPosition(statusContainerRef.current.scrollLeft + 100);
 		}
 	};
@@ -215,7 +224,20 @@ const SampleInfor = () => {
 
 	// Function to open PPT in new window
 	const openPPTWindow = () => {
-		window.open(`${window.location.origin}/report?sample_uid=${sample_uid}`, '_blank');
+		if (sample?.report?.length > 0) {
+			// Lấy object có publish_date lớn nhất
+			const latestReport = sample.report.reduce((prev, current) =>
+				new Date(prev.publish_date) > new Date(current.publish_date) ? prev : current,
+			);
+			// Mở trang với ppt_uid từ report
+			window.open(
+				`${window.location.origin}/report?sample_uid=${sample_uid}&ppt_uid=${latestReport.ppt_uid}`,
+				'_blank',
+			);
+		} else {
+			// Nếu không có report, mở trang mặc định
+			window.open(`${window.location.origin}/report?sample_uid=${sample_uid}`, '_blank');
+		}
 	};
 
 	const fetchReceiptFull = async () => {
@@ -350,7 +372,10 @@ const SampleInfor = () => {
 				setIsAddingParameter(false);
 				setSelectedParameters([]);
 				setListAnalytes([...currentSample.analysis, ...response.data]);
-				setCurrentSample({ ...currentSample, analysis: [...currentSample.analysis, ...response.data] });
+				setCurrentSample({
+					...currentSample,
+					analysis: [...currentSample.analysis, ...response.data],
+				});
 			} else {
 				Swal.fire({
 					icon: 'error',
@@ -468,7 +493,10 @@ const SampleInfor = () => {
 			} else {
 				// Standard analysis update without parameter changes
 				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: { ...analysis, modified_by_uid: currentUser.identity_uid },
+					analysis: {
+						...analysis,
+						modified_by_uid: currentUser.identity_uid,
+					},
 				});
 
 				if (response.status === 200) {
@@ -504,7 +532,10 @@ const SampleInfor = () => {
 			} else {
 				// Standard analysis update without parameter changes
 				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: { ...analysis, modified_by_uid: currentUser.identity_uid },
+					analysis: {
+						...analysis,
+						modified_by_uid: currentUser.identity_uid,
+					},
 				});
 
 				if (response.status === 200) {
@@ -812,7 +843,10 @@ const SampleInfor = () => {
 	};
 
 	let defaultCustomerFields = [
-		{ fname: 'Tên mẫu thử / name.', fvalue: currentSample?.sample_name || '' },
+		{
+			fname: 'Tên mẫu thử / name.',
+			fvalue: currentSample?.sample_name || '',
+		},
 		{ fname: 'Số lô / LOT no.', fvalue: '' },
 		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
 		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
@@ -820,10 +854,19 @@ const SampleInfor = () => {
 	];
 
 	let defaultReceiptFields = [
-		{ fname: 'Ngày tiếp nhận / receipt date.', fvalue: formatDate(receiptFull?.receipt_date) || '' },
-		{ fname: 'Mô tả / desc.', fvalue: currentSample?.sample_description || '' },
+		{
+			fname: 'Ngày tiếp nhận / receipt date.',
+			fvalue: formatDate(receiptFull?.receipt_date) || '',
+		},
+		{
+			fname: 'Mô tả / desc.',
+			fvalue: currentSample?.sample_description || '',
+		},
 		{ fname: 'Mã tiếp nhận / receipt code.', fvalue: receipt_uid || '' },
-		{ fname: 'Ngày hoàn thành / deadline.', fvalue: formatDate(receiptFull?.deadline) || '' },
+		{
+			fname: 'Ngày hoàn thành / deadline.',
+			fvalue: formatDate(receiptFull?.deadline) || '',
+		},
 		{ fname: 'Nền mẫu / matrix.', fvalue: currentSample?.matrix || '' },
 	];
 
@@ -950,7 +993,11 @@ const SampleInfor = () => {
 			const combinedInfo = [...customerInfo, ...receiptInfo];
 
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
-				sample: { ...sample, sample_information: combinedInfo, modified_by_uid: currentUser.identity_uid },
+				sample: {
+					...sample,
+					sample_information: combinedInfo,
+					modified_by_uid: currentUser.identity_uid,
+				},
 			});
 
 			if (response.status === 200) {
@@ -1086,7 +1133,10 @@ const SampleInfor = () => {
 			field === 'fvalue' &&
 			(updatedReceiptInfo[index].fname.includes('Mô tả') || updatedReceiptInfo[index].fname.includes('desc'))
 		) {
-			setSample((prevSample) => ({ ...prevSample, sample_description: value }));
+			setSample((prevSample) => ({
+				...prevSample,
+				sample_description: value,
+			}));
 		}
 
 		// If changing value of "Nền mẫu / matrix", update the main matrix field
@@ -1147,7 +1197,11 @@ const SampleInfor = () => {
 
 		try {
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
-				sample: { ...sample, sample_information: combinedInfo, modified_by_uid: currentUser.identity_uid },
+				sample: {
+					...sample,
+					sample_information: combinedInfo,
+					modified_by_uid: currentUser.identity_uid,
+				},
 			});
 
 			if (response.status === 200) {
@@ -1258,157 +1312,160 @@ const SampleInfor = () => {
 	const renderNewReport = () => {
 		return (
 			<div className="border py-2 mt-1 rounded-lg">
-				{/* Customer Information Section */}
-				<div className="border-b pb-2">
-					<div className="flex justify-between items-center px-4 mb-2">
-						<h3 className="font-medium text-lg">Thông tin khách hàng cung cấp</h3>
-						<button
-							className="bg-white text-sky-500 rounded-full p-1"
-							onClick={handleAddCustomerField}
-							title="Thêm thông tin khách hàng"
-						>
-							<AiOutlinePlus size={18} />
-						</button>
-					</div>
-					<div className="w-full overflow-hidden hover:overflow-auto md:pb-2 lg:pb-0 pb-0 hover:pb-0 mb-1">
-						{customerInfo?.length > 0 && (
-							<div className="flex flex-wrap md:min-w-[900px]">
-								{customerInfo.map((field, index) => (
-									<div key={index} className="mb-1 w-full md:w-1/2 px-2">
-										<table className=" w-full">
-											<tbody>
-												<tr>
-													<td className=" w-1/5 text-start p-1 font-medium min-w-40 flex justify-between items-center">
-														<select
-															value={field?.fname || ''}
-															onChange={(e) => handleCustomerFieldChange(index, 'fname', e.target.value)}
-															className={`p-1 ${
-																field.fname === 'Khác' ? 'w-1/3 mr-1' : 'w-full'
-															} border min-w-16 rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm `}
-														>
-															<option value={field.fname}>{field.fname || 'Chọn thông tin'}</option>
-															{defaultCustomerFields.map((selectField) => (
-																<option key={selectField.fname} value={selectField.fname}>
-																	{selectField.fname}
-																</option>
-															))}
-															<option value="Khác">Khác</option>
-														</select>
-														{field.fname === 'Khác' && (
+				{/* Container for both sections with flex row on md+ screens */}
+				<div className="flex flex-col md:flex-row md:overflow-auto">
+					{/* Customer Information Section */}
+					<div className="w-full border-b md:border-b-0 md:border-r pb-2 ">
+						<div className="flex justify-between items-center px-4 mb-2">
+							<h3 className="font-medium text-lg">Thông tin khách hàng cung cấp</h3>
+							<button
+								className="bg-white text-sky-500 rounded-full p-1"
+								onClick={handleAddCustomerField}
+								title="Thêm thông tin khách hàng"
+							>
+								<AiOutlinePlus size={18} />
+							</button>
+						</div>
+						<div className="w-full overflow-hidden hover:overflow-auto md:pb-2 lg:pb-0 pb-0 hover:pb-0 mb-1">
+							{customerInfo?.length > 0 && (
+								<div className="flex flex-wrap md:min-w-[450px]">
+									{customerInfo.map((field, index) => (
+										<div key={index} className="mb-1 w-full  px-2">
+											<table className=" w-full">
+												<tbody>
+													<tr>
+														<td className=" w-1/5 text-start p-1 font-medium min-w-40 flex justify-between items-center">
+															<select
+																value={field?.fname || ''}
+																onChange={(e) => handleCustomerFieldChange(index, 'fname', e.target.value)}
+																className={`p-1 ${
+																	field.fname === 'Khác' ? 'w-1/3 mr-1' : 'w-full'
+																} border min-w-16 rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm `}
+															>
+																<option value={field.fname}>{field.fname || 'Chọn thông tin'}</option>
+																{defaultCustomerFields.map((selectField) => (
+																	<option key={selectField.fname} value={selectField.fname}>
+																		{selectField.fname}
+																	</option>
+																))}
+																<option value="Khác">Khác</option>
+															</select>
+															{field.fname === 'Khác' && (
+																<input
+																	type="text"
+																	value={field?.other || ''}
+																	onChange={(e) => handleCustomerFieldChange(index, 'other', e.target.value)}
+																	className="p-1 w-full border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+																	placeholder="Nhập tên khác"
+																/>
+															)}
+														</td>
+														<td className=" w-full text-start p-1 min-w-64">
 															<input
 																type="text"
-																value={field?.other || ''}
-																onChange={(e) => handleCustomerFieldChange(index, 'other', e.target.value)}
+																value={field?.fvalue || ''}
+																onChange={(e) => handleCustomerFieldChange(index, 'fvalue', e.target.value)}
 																className="p-1 w-full border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-																placeholder="Nhập tên khác"
 															/>
-														)}
-													</td>
-													<td className=" w-full text-start p-1 min-w-64">
-														<input
-															type="text"
-															value={field?.fvalue || ''}
-															onChange={(e) => handleCustomerFieldChange(index, 'fvalue', e.target.value)}
-															className="p-1 w-full border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-														/>
-													</td>
-													<td>
-														<button
-															className="text-red-500 bg-white text-sm rounded-lg py-1 px-1 focus:outline-none text-center"
-															onClick={() => handleDeleteCustomerField(index)}
-														>
-															<FaRegTimesCircle size={20} />
-														</button>
-													</td>
-												</tr>
-											</tbody>
-										</table>
-									</div>
-								))}
-							</div>
-						)}
-						{customerInfo?.length === 0 && (
-							<div className="text-center text-gray-500 italic py-2">
-								Chưa có thông tin khách hàng. Nhấn nút + để thêm thông tin.
-							</div>
-						)}
+														</td>
+														<td>
+															<button
+																className="text-red-500 bg-white text-sm rounded-lg py-1 px-1 focus:outline-none text-center"
+																onClick={() => handleDeleteCustomerField(index)}
+															>
+																<FaRegTimesCircle size={20} />
+															</button>
+														</td>
+													</tr>
+												</tbody>
+											</table>
+										</div>
+									))}
+								</div>
+							)}
+							{customerInfo?.length === 0 && (
+								<div className="text-center text-gray-500 italic py-2">
+									Chưa có thông tin khách hàng. Nhấn nút + để thêm thông tin.
+								</div>
+							)}
+						</div>
 					</div>
-				</div>
 
-				{/* Receipt Information Section */}
-				<div className="pt-2">
-					<div className="flex justify-between items-center px-4 mb-2">
-						<h3 className="font-medium text-lg">Thông tin tiếp nhận</h3>
-						<button
-							className="bg-white text-sky-500 rounded-full p-1"
-							onClick={handleAddReceiptField}
-							title="Thêm thông tin tiếp nhận"
-						>
-							<AiOutlinePlus size={18} />
-						</button>
-					</div>
-					<div className="w-full overflow-hidden hover:overflow-auto md:pb-2 lg:pb-0 pb-0 hover:pb-0 mb-1">
-						{receiptInfo?.length > 0 && (
-							<div className="flex flex-wrap md:min-w-[900px]">
-								{receiptInfo.map((field, index) => (
-									<div key={index} className="mb-1 w-full md:w-1/2 px-2">
-										<table className=" w-full">
-											<tbody>
-												<tr>
-													<td className=" w-1/5 text-start p-1 font-medium min-w-40 flex justify-between items-center">
-														<select
-															value={field?.fname || ''}
-															onChange={(e) => handleReceiptFieldChange(index, 'fname', e.target.value)}
-															className={`p-1 ${
-																field.fname === 'Khác' ? 'w-1/3 mr-1' : 'w-full'
-															} border min-w-16 rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm `}
-														>
-															<option value={field.fname}>{field.fname || 'Chọn thông tin'}</option>
-															{defaultReceiptFields.map((selectField) => (
-																<option key={selectField.fname} value={selectField.fname}>
-																	{selectField.fname}
-																</option>
-															))}
-															<option value="Khác">Khác</option>
-														</select>
-														{field.fname === 'Khác' && (
+					{/* Receipt Information Section */}
+					<div className="w-full pt-2 md:pt-0">
+						<div className="flex justify-between items-center px-4 mb-2">
+							<h3 className="font-medium text-lg">Thông tin tiếp nhận</h3>
+							<button
+								className="bg-white text-sky-500 rounded-full p-1"
+								onClick={handleAddReceiptField}
+								title="Thêm thông tin tiếp nhận"
+							>
+								<AiOutlinePlus size={18} />
+							</button>
+						</div>
+						<div className="w-full overflow-hidden hover:overflow-auto md:pb-2 lg:pb-0 pb-0 hover:pb-0 mb-1">
+							{receiptInfo?.length > 0 && (
+								<div className="flex flex-wrap md:min-w-[450px]">
+									{receiptInfo.map((field, index) => (
+										<div key={index} className="mb-1 w-full px-2">
+											<table className=" w-full">
+												<tbody>
+													<tr>
+														<td className=" w-1/5 text-start p-1 font-medium min-w-40 flex justify-between items-center">
+															<select
+																value={field?.fname || ''}
+																onChange={(e) => handleReceiptFieldChange(index, 'fname', e.target.value)}
+																className={`p-1 ${
+																	field.fname === 'Khác' ? 'w-1/3 mr-1' : 'w-full'
+																} border min-w-16 rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm `}
+															>
+																<option value={field.fname}>{field.fname || 'Chọn thông tin'}</option>
+																{defaultReceiptFields.map((selectField) => (
+																	<option key={selectField.fname} value={selectField.fname}>
+																		{selectField.fname}
+																	</option>
+																))}
+																<option value="Khác">Khác</option>
+															</select>
+															{field.fname === 'Khác' && (
+																<input
+																	type="text"
+																	value={field?.other || ''}
+																	onChange={(e) => handleReceiptFieldChange(index, 'other', e.target.value)}
+																	className="p-1 w-full border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+																	placeholder="Nhập tên khác"
+																/>
+															)}
+														</td>
+														<td className=" w-full text-start p-1 min-w-64">
 															<input
 																type="text"
-																value={field?.other || ''}
-																onChange={(e) => handleReceiptFieldChange(index, 'other', e.target.value)}
+																value={field?.fvalue || ''}
+																onChange={(e) => handleReceiptFieldChange(index, 'fvalue', e.target.value)}
 																className="p-1 w-full border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-																placeholder="Nhập tên khác"
 															/>
-														)}
-													</td>
-													<td className=" w-full text-start p-1 min-w-64">
-														<input
-															type="text"
-															value={field?.fvalue || ''}
-															onChange={(e) => handleReceiptFieldChange(index, 'fvalue', e.target.value)}
-															className="p-1 w-full border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-														/>
-													</td>
-													<td>
-														<button
-															className="text-red-500 bg-white text-sm rounded-lg py-1 px-1 focus:outline-none text-center"
-															onClick={() => handleDeleteReceiptField(index)}
-														>
-															<FaRegTimesCircle size={20} />
-														</button>
-													</td>
-												</tr>
-											</tbody>
-										</table>
-									</div>
-								))}
-							</div>
-						)}
-						{receiptInfo?.length === 0 && (
-							<div className="text-center text-gray-500 italic py-2">
-								Chưa có thông tin tiếp nhận. Nhấn nút + để thêm thông tin.
-							</div>
-						)}
+														</td>
+														<td>
+															<button
+																className="text-red-500 bg-white text-sm rounded-lg py-1 px-1 focus:outline-none text-center"
+																onClick={() => handleDeleteReceiptField(index)}
+															>
+																<FaRegTimesCircle size={20} />
+															</button>
+														</td>
+													</tr>
+												</tbody>
+											</table>
+										</div>
+									))}
+								</div>
+							)}
+							{receiptInfo?.length === 0 && (
+								<div className="text-center text-gray-500 italic py-2">
+									Chưa có thông tin tiếp nhận. Nhấn nút + để thêm thông tin.
+								</div>
+							)}
+						</div>
 					</div>
 				</div>
 
@@ -2144,7 +2201,10 @@ const SampleInfor = () => {
 			<Breadcrumb
 				paths={[
 					{ name: 'Danh sách', link: '/' },
-					{ name: `${receipt_uid}`, link: `/dashboard/receipt?receipt_uid=${receipt_uid}` },
+					{
+						name: `${receipt_uid}`,
+						link: `/dashboard/receipt?receipt_uid=${receipt_uid}`,
+					},
 					{
 						name: `${sample.sample_uid}`,
 						link: `/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`,
@@ -2224,7 +2284,12 @@ const SampleInfor = () => {
 												type="text"
 												value={sample?.sample_name || ''}
 												className="w-full bg-white border rounded p-1 editable-field"
-												onChange={(e) => setSample({ ...sample, sample_name: e.target.value })}
+												onChange={(e) =>
+													setSample({
+														...sample,
+														sample_name: e.target.value,
+													})
+												}
 												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_name', e.target.value)}
 												onBlur={(e) => handleFieldBlur('sample_name', e.target.value, sample?.sample_name)}
 											/>
@@ -2239,7 +2304,12 @@ const SampleInfor = () => {
 												type="text"
 												value={sample?.matrix || ''}
 												className="w-full bg-white border rounded p-1 editable-field"
-												onChange={(e) => setSample({ ...sample, matrix: e.target.value })}
+												onChange={(e) =>
+													setSample({
+														...sample,
+														matrix: e.target.value,
+													})
+												}
 												onKeyDown={(e) => handleFieldKeyDown(e, 'matrix', e.target.value)}
 												onBlur={(e) => handleFieldBlur('matrix', e.target.value, sample?.matrix)}
 											/>
@@ -2254,7 +2324,12 @@ const SampleInfor = () => {
 												value={sample?.sample_description || ''}
 												className="w-full resize-none bg-white border rounded p-1 overflow-hidden hover:overflow-y-auto editable-field"
 												rows={2}
-												onChange={(e) => setSample({ ...sample, sample_description: e.target.value })}
+												onChange={(e) =>
+													setSample({
+														...sample,
+														sample_description: e.target.value,
+													})
+												}
 												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_description', e.target.value)}
 												onBlur={(e) =>
 													handleFieldBlur('sample_description', e.target.value, sample?.sample_description)
@@ -2275,7 +2350,12 @@ const SampleInfor = () => {
 												type="text"
 												value={sample?.sample_volume || ''}
 												className="w-full bg-white border rounded p-1 editable-field"
-												onChange={(e) => setSample({ ...sample, sample_volume: e.target.value })}
+												onChange={(e) =>
+													setSample({
+														...sample,
+														sample_volume: e.target.value,
+													})
+												}
 												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_volume', e.target.value)}
 												onBlur={(e) => handleFieldBlur('sample_volume', e.target.value, sample?.sample_volume)}
 											/>
@@ -2325,7 +2405,12 @@ const SampleInfor = () => {
 												value={sample?.additional_request || ''}
 												className="w-full resize-none bg-white border rounded p-1 overflow-hidden hover:overflow-y-auto editable-field h-full"
 												rows={2}
-												onChange={(e) => setSample({ ...sample, additional_request: e.target.value })}
+												onChange={(e) =>
+													setSample({
+														...sample,
+														additional_request: e.target.value,
+													})
+												}
 												onKeyDown={(e) => handleFieldKeyDown(e, 'additional_request', e.target.value)}
 												onBlur={(e) =>
 													handleFieldBlur('additional_request', e.target.value, sample?.additional_request)
@@ -2434,7 +2519,11 @@ const SampleInfor = () => {
 							</button>
 						</div>
 						<div className="absolute right-4">
-							<FilterBar source={currentSample.analysis} setCurrentList={setListAnalytes} typeSearch={'analysis'} />
+							<FilterBar
+								source={currentSample.analysis || []}
+								setCurrentList={setListAnalytes}
+								typeSearch={'analysis'}
+							/>
 						</div>
 					</div>
 					{isAddingParameter && renderNewParameter()}
@@ -2444,9 +2533,6 @@ const SampleInfor = () => {
 					<table className="text-black w-full border-2 analytes-table">
 						<thead>
 							<tr className="border-y-2">
-								<th className="py-2 border-x w-10 min-w-10">
-									<input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="w-4 h-4" />
-								</th>
 								<th className="p-2 border-x w-28 min-w-28 text-left">Mã chỉ tiêu</th>
 								<th className="p-2 border-x w-[22%] min-w-60 text-left">Chỉ tiêu</th>
 								<th className="p-2 border-x w-36 min-w-36 text-left">Nền mẫu</th>
@@ -2455,6 +2541,10 @@ const SampleInfor = () => {
 								<th className="p-2 border-x w-1/12 min-w-20 text-left">Đơn vị</th>
 								<th className="p-2 border-x w-1/12 min-w-28 text-left">Hạn trả</th>
 								<th className="p-2 border-2 w-[12%] min-w-36 text-left">Người thực hiện</th>
+
+								<th className="py-2 border-x w-10 min-w-10">
+									<input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="w-4 h-4" />
+								</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -2545,14 +2635,6 @@ const SampleInfor = () => {
 							)}
 							{listAnalytes?.map((order) => (
 								<tr key={order.id} className="border">
-									<td className="pt-[5px] pb-0 border align-top text-center">
-										<input
-											type="checkbox"
-											checked={selectedAnalytes.includes(order.id)}
-											onChange={() => handleAnalyteSelect(order.id)}
-											className="w-4 h-4 mt-2"
-										/>
-									</td>
 									<td className="p-1 border relative align-top">
 										<input
 											type="text"
@@ -2654,7 +2736,9 @@ const SampleInfor = () => {
 												<TinyMceInput value={inputValue || ''} onUpdate={handleSaveContent} onKey={handleKeyDown} />
 											) : (
 												<div
-													dangerouslySetInnerHTML={{ __html: order?.result_value ? order.result_value : '--' }}
+													dangerouslySetInnerHTML={{
+														__html: order?.result_value ? order.result_value : '--',
+													}}
 													className="p-1"
 												/>
 											)}
@@ -2666,7 +2750,9 @@ const SampleInfor = () => {
 												<TinyMceInput value={inputValue || ''} onUpdate={handleSaveContent} onKey={handleKeyDown} />
 											) : (
 												<div
-													dangerouslySetInnerHTML={{ __html: order?.result_unit ? order.result_unit : '--' }}
+													dangerouslySetInnerHTML={{
+														__html: order?.result_unit ? order.result_unit : '--',
+													}}
 													className="p-1"
 												/>
 											)}
@@ -2740,6 +2826,14 @@ const SampleInfor = () => {
 												document.body,
 											)}
 									</td>
+									<td className="pt-[5px] pb-0 border align-top text-center">
+										<input
+											type="checkbox"
+											checked={selectedAnalytes.includes(order.id)}
+											onChange={() => handleAnalyteSelect(order.id)}
+											className="w-4 h-4 mt-2"
+										/>
+									</td>
 								</tr>
 							))}
 						</tbody>
@@ -2749,11 +2843,12 @@ const SampleInfor = () => {
 			{isTransferMultipleVisible && renderBulkTransferForm()}
 			{isDeleteConfirmVisible &&
 				renderDeleteConfirm(
-					deleteType === 'sample'
-						? 'Bạn có chắc chắn muốn xóa mẫu này?'
-						: deleteType === 'multiple'
-						? `Bạn có chắc chắn muốn xóa ${selectedAnalytes.length} chỉ tiêu đã chọn?`
-						: 'Bạn có chắc chắn muốn xóa chỉ tiêu này?',
+					(deleteType =
+						hh == 'sample'
+							? 'Bạn có chắc chắn muốn xóa mẫu này?'
+							: deleteType === 'multiple'
+							? `Bạn có chắc chắn muốn xóa ${selectedAnalytes.length} chỉ tiêu đã chọn?`
+							: 'Bạn có chắc chắn muốn xóa chỉ tiêu này?'),
 					deleteType === 'sample'
 						? handleDeleteSampleConfirmAction
 						: deleteType === 'multiple'

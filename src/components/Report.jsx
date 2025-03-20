@@ -496,7 +496,7 @@ export default function MultiPageEditor() {
 				return `
 			<div style="display: flex; ${fieldName.includes('Ngày tiếp nhận') && 'margin-top: 8px;'}">
 				<div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: center;">
-					<p style="font-weight:bold">${displayMainLabel}</p> ${engLabel}:
+					<p style="font-weight:bold; margin-right: 4px;">${displayMainLabel}</p> ${engLabel}:
 				</div>
 				<div style="width: 70%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;" >
 					<p style="margin: 0; ${mainLabel.toLowerCase().includes('tên mẫu') ? 'font-weight: bold;' : ''}">${fieldValue}</p>
@@ -817,15 +817,15 @@ export default function MultiPageEditor() {
             </p>
             <div class=" display-flex" 
                  style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px;; height: 28px;">
-                <span class=" std_ref-title">Ref:</span>
+                <span class=" std_ref-title">Xuất bản / ref.:</span>
                 <p contenteditable="true" 
                    class="  ref_code" 
-                   style="min-width:5pt; margin: 0;">
+                   style="min-width:5pt; margin: 0; margin-right: 2mm;">
                     SƠ BỘ / DRAFT
                 </p>
                 <span class="  published_date" 
                       style="min-width:5pt; margin: 0;">
-                    ${formatDate(new Date())}
+					  Ngày / Date: ${formatDate(new Date())}
                 </span>
             </div>
         </div>
@@ -1230,7 +1230,7 @@ export default function MultiPageEditor() {
 			topMargin: 15, // 1.5cm
 			bottomMargin: 8, // 0.8cm
 			sideMargin: 10, // 1cm
-			headerSpacing: 5, // spacing between header and content
+			headerSpacing: 8, // spacing between header and content
 			footerSpacing: 3, // removed spacing between content and footer
 		};
 
@@ -2020,12 +2020,10 @@ export default function MultiPageEditor() {
 						/* Additional styles for table rows to preserve height */
 						table {
 							border-collapse: collapse;
-							width: 100%;
 							font-family: 'Gilroy', sans-serif !important;
 							table-layout: fixed; /* Helps with consistent row heights */
 							width: auto;
-							min-width: 100%;
-							max-width: 100%;
+
 						}
 						
 						table tr {
@@ -2762,8 +2760,8 @@ export default function MultiPageEditor() {
 	};
 
 	return (
-		<div className="p-4 bg-gray-100 min-h-screen relative">
-			<div className="mb-4 flex flex-col gap-4 items-end">
+		<div className="p-4 bg-gray-100 min-h-screen relative mt-1">
+			<div className="mb-4 flex flex-col gap-4 items-end min-w-[800px]">
 				<div className="flex justify-between items-center w-full">
 					<select
 						className="px-4 py-1.5 focus:outline-none border-2 border-gray-500 rounded-lg bg-white w-96"
@@ -2860,7 +2858,7 @@ export default function MultiPageEditor() {
 
 			{/* Left chat bubble for Ghi chú/Note */}
 			{receiptNote && (
-				<div className="fixed left-4 text-start top-20 w-56 max-h-96 overflow-y-auto overflow-x-hidden bg-blue-50 rounded-lg border border-blue-200 shadow-md p-3 z-10">
+				<div className="fixed right-4 text-start top-20 w-56 max-h-60 overflow-y-auto overflow-x-hidden bg-blue-50 rounded-lg border border-blue-200 shadow-md p-3 z-10">
 					<div className="font-bold text-gray-700 text-sm mb-2">Ghi chú / Note:</div>
 					<div className="text-gray-600 text-sm whitespace-pre-wrap">{receiptNote}</div>
 					{/* Simple arrow using a div instead of pseudo-element */}
@@ -2870,7 +2868,7 @@ export default function MultiPageEditor() {
 
 			{/* Right chat bubble for Yêu cầu/Requirements */}
 			{additionalRequest && (
-				<div className="fixed right-4 text-start top-20 w-56 max-h-96 overflow-y-auto bg-green-50 rounded-lg border border-green-200 shadow-md p-3 z-10">
+				<div className="fixed right-4 text-start top-96 w-56 max-h-60 overflow-y-auto bg-green-50 rounded-lg border border-green-200 shadow-md p-3 z-10">
 					<div className="font-bold text-blue-700 text-sm mb-2">Yêu cầu / Requirements:</div>
 					<div className="text-blue-600 text-sm whitespace-pre-wrap">{additionalRequest}</div>
 					{/* Simple arrow using a div instead of pseudo-element */}

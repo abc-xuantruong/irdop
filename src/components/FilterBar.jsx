@@ -5,6 +5,8 @@ import axios from 'axios';
 import { FiFilter } from 'react-icons/fi';
 import { FaSortAlphaDown, FaPlus, FaTrash } from 'react-icons/fa';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] }) => {
 	const navigate = useNavigate();
@@ -38,6 +40,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 	const [specialFilters, setSpecialFilters] = useState({
 		deadline: '',
 		status: '',
+		dateRange: { startDate: null, endDate: null },
 	});
 
 	const sortRef = useRef(null);
@@ -159,6 +162,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			setSpecialFilters({
 				deadline: '',
 				status: '',
+				dateRange: { startDate: null, endDate: null },
 			});
 		}
 	}, [currentKey]);
@@ -304,15 +308,52 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 	const parseFilterQuery = (query) => {
 		if (!query) return [];
 
-		return query.split(',').map((filterStr) => {
-			const [logic, key, operator, encodedValue] = filterStr.split('-');
-			return {
+		const filterArray = [];
+
+		// Split the query into individual filter strings
+		const filterStrings = query.split(',');
+
+		for (const filterStr of filterStrings) {
+			const parts = filterStr.split('-');
+
+			// Regular filter parsing
+			const [logic, key, operator, ...valueParts] = parts;
+			// Join value parts in case the value itself contained hyphens
+			const value = decodeURIComponent(valueParts.join('-'));
+
+			// Add to filter rows
+			filterArray.push({
 				logic: logic,
 				key: key,
 				operator: operator,
-				value: decodeURIComponent(encodedValue || ''),
-			};
-		});
+				value: value,
+			});
+
+			// If this is a date range filter for deadline, also update the UI date pickers
+			if (key === 'deadline' && typeSearch === 'receipt') {
+				if (operator === '>=') {
+					// Parse date in local timezone
+					setSpecialFilters((prev) => ({
+						...prev,
+						dateRange: {
+							...prev.dateRange,
+							startDate: new Date(value),
+						},
+					}));
+				} else if (operator === '<=') {
+					// Parse date in local timezone
+					setSpecialFilters((prev) => ({
+						...prev,
+						dateRange: {
+							...prev.dateRange,
+							endDate: new Date(value),
+						},
+					}));
+				}
+			}
+		}
+
+		return filterArray;
 	};
 
 	// Convert sort rows to URL query format
@@ -754,19 +795,68 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 		return technician ? technician.identity_uid : '';
 	};
 
-	// Apply filters - updated to handle processing_v2 special case
+	// Apply filters - updated to handle processing_v2 and receipt special cases
 	const applyFilters = () => {
-		// Only consider filter rows with non-empty values
-		const validFilters = filterRows.filter((row) => row.value && row.value.trim() !== '');
-		console.log(validFilters);
-		console.log(source);
+		// Filter out existing deadline filters to avoid duplicates
+		let baseFilters = filterRows.filter(
+			(row) =>
+				row.value &&
+				row.value.trim() !== '' &&
+				!(typeSearch === 'receipt' && row.key === 'deadline' && (row.operator === '>=' || row.operator === '<=')),
+		);
 
-		// Check if there are any special filters for processing_v2
-		const hasSpecialFilters =
+		// Create a copy of filtered rows
+		let allFilters = [...baseFilters];
+
+		// For receipt type, add date range filters to regular filter rows
+		if (typeSearch === 'receipt') {
+			// Add start date filter if it exists
+			if (specialFilters.dateRange.startDate) {
+				// Format date with GMT+7 timezone
+				const date = new Date(specialFilters.dateRange.startDate);
+				// Format YYYY-MM-DD in local timezone
+				const startDateStr =
+					date.getFullYear() +
+					'-' +
+					String(date.getMonth() + 1).padStart(2, '0') +
+					'-' +
+					String(date.getDate()).padStart(2, '0');
+
+				allFilters.push({
+					logic: 'AND',
+					key: 'deadline',
+					operator: '>=',
+					value: startDateStr,
+				});
+			}
+
+			// Add end date filter if it exists
+			if (specialFilters.dateRange.endDate) {
+				// Format date with GMT+7 timezone
+				const date = new Date(specialFilters.dateRange.endDate);
+				// Format YYYY-MM-DD in local timezone
+				const endDateStr =
+					date.getFullYear() +
+					'-' +
+					String(date.getMonth() + 1).padStart(2, '0') +
+					'-' +
+					String(date.getDate()).padStart(2, '0');
+
+				allFilters.push({
+					logic: 'AND',
+					key: 'deadline',
+					operator: '<=',
+					value: endDateStr,
+				});
+			}
+		}
+
+		// Check if there are any valid filters or special filters for processing_v2
+		const hasSpecialProcessingFilters =
 			typeSearch === 'processing_v2' && (specialFilters.deadline !== '' || specialFilters.status !== '');
 
 		// If no valid filters and no special filters, return the original source
-		if (validFilters.length === 0 && !hasSpecialFilters) {
+		if (allFilters.length === 0 && !hasSpecialProcessingFilters) {
 			setCurrentList(source);
 			setCurrentFilter([]);
 			setActiveFilters(false);
@@ -778,12 +868,42 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			return;
 		}
 
-		// Update URL with filter parameters only when Apply is clicked
-		if (validFilters.length > 0) {
-			const filterQuery = filterRowsToQuery(validFilters);
+		// Update URL with all filter parameters
+		if (allFilters.length > 0) {
+			const filterQuery = filterRowsToQuery(allFilters);
 			updateUrlParams('filter', filterQuery);
 		} else {
 			updateUrlParams('filter', null);
+		}
+
+		// Special handling for receipt data type
+		if (typeSearch === 'receipt') {
+			let filteredList = [...source];
+
+			// Apply all filters
+			allFilters.forEach((filter, index) => {
+				if (filter.logic === 'AND' || index === 0) {
+					filteredList = filteredList.filter((item) => applyOperator(item[filter.key], filter.operator, filter.value));
+				} else if (filter.logic === 'OR') {
+					const additionalItems = source.filter((item) =>
+						applyOperator(item[filter.key], filter.operator, filter.value),
+					);
+
+					// Add unique items
+					additionalItems.forEach((item) => {
+						if (!filteredList.some((existing) => JSON.stringify(existing) === JSON.stringify(item))) {
+							filteredList.push(item);
+						}
+					});
+				}
+			});
+
+			setCurrentList(filteredList);
+			setCurrentFilter(allFilters);
+			setActiveFilters(true);
+			setShowFilterOptions(false);
+			setIsFilter && setIsFilter(true);
+			return;
 		}
 
 		// Special handling for processing_v2 data type
@@ -791,9 +911,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			let filteredList = [...source];
 
 			// Apply sample-level filters first (sample_uid, matrix)
-			const sampleLevelFilters = validFilters.filter(
-				(filter) => filter.key === 'sample_uid' || filter.key === 'matrix',
-			);
+			const sampleLevelFilters = allFilters.filter((filter) => filter.key === 'sample_uid' || filter.key === 'matrix');
 
 			if (sampleLevelFilters.length > 0) {
 				sampleLevelFilters.forEach((filter, index) => {
@@ -817,7 +935,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			}
 
 			// Apply analysis-level filters (result_value, result_unit)
-			const analysisLevelFilters = validFilters.filter(
+			const analysisLevelFilters = allFilters.filter(
 				(filter) => filter.key === 'result_value' || filter.key === 'result_unit',
 			);
 
@@ -939,7 +1057,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			}
 
 			setCurrentList(filteredList);
-			setCurrentFilter(validFilters);
+			setCurrentFilter(allFilters);
 			setActiveFilters(true);
 			setShowFilterOptions(false);
 			setIsFilter && setIsFilter(true);
@@ -949,7 +1067,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 		// Regular filtering for other types
 		let filteredList = [...source];
 
-		validFilters.forEach((filter, index) => {
+		allFilters.forEach((filter, index) => {
 			if (filter.logic === 'AND' || index === 0) {
 				filteredList = filteredList.filter((item) => {
 					// Special handling for technician_uid
@@ -979,7 +1097,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 		});
 
 		setCurrentList(filteredList);
-		setCurrentFilter(validFilters);
+		setCurrentFilter(allFilters);
 		setActiveFilters(true);
 		setShowFilterOptions(false);
 		setIsFilter && setIsFilter(true);
@@ -1083,10 +1201,11 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 		}));
 		setFilterRows(resetRows);
 
-		// Reset special filters for processing_v2
+		// Reset special filters for processing_v2 and receipt
 		setSpecialFilters({
 			deadline: '',
 			status: '',
+			dateRange: { startDate: null, endDate: null },
 		});
 
 		// Remove filter parameter from URL
@@ -1222,6 +1341,17 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 		setSpecialFilters((prev) => ({ ...prev, [filterType]: value }));
 	};
 
+	// Handle date range change for receipt filtering
+	const handleDateRangeChange = (type, date) => {
+		setSpecialFilters((prev) => ({
+			...prev,
+			dateRange: {
+				...prev.dateRange,
+				[type]: date,
+			},
+		}));
+	};
+
 	return (
 		<div className="relative flex flex-col md:flex-row items-center justify-end text-black w-full bg-white rounded-lg leading-none">
 			{/* Remove the quick filters that were here before */}
@@ -1346,6 +1476,42 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 						className="absolute right-0 top-full mt-2 p-4 border rounded bg-white shadow-lg z-20 w-96 max-h-80 overflow-y-auto"
 					>
 						<h3 className="font-bold mb-3 border-b pb-2">Lọc dữ liệu</h3>
+
+						{/* Special date range filter for receipt */}
+						{typeSearch === 'receipt' && (
+							<div className="mb-3 pb-2 border-b">
+								<div className="flex gap-2 items-center">
+									<div className="text-sm font-medium">Hạn trả:</div>
+									<div className="flex items-center gap-2">
+										<span className="text-sm">Từ:</span>
+										<DatePicker
+											selected={specialFilters.dateRange.startDate}
+											onChange={(date) => handleDateRangeChange('startDate', date)}
+											selectsStart
+											startDate={specialFilters.dateRange.startDate}
+											endDate={specialFilters.dateRange.endDate}
+											dateFormat="dd/MM/yyyy"
+											placeholderText="Từ ngày"
+											className="p-1.5 border border-gray-300 rounded bg-white w-24"
+										/>
+									</div>
+									<div className="flex items-center gap-2">
+										<span className="text-sm">Đến:</span>
+										<DatePicker
+											selected={specialFilters.dateRange.endDate}
+											onChange={(date) => handleDateRangeChange('endDate', date)}
+											selectsEnd
+											startDate={specialFilters.dateRange.startDate}
+											endDate={specialFilters.dateRange.endDate}
+											minDate={specialFilters.dateRange.startDate}
+											dateFormat="dd/MM/yyyy"
+											placeholderText="Đến ngày"
+											className="p-1.5 border border-gray-300 rounded bg-white w-24"
+										/>
+									</div>
+								</div>
+							</div>
+						)}
 
 						{/* Special filters for processing_v2 */}
 						{typeSearch === 'processing_v2' && (

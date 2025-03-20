@@ -839,14 +839,21 @@ const Dashboard = () => {
 					<table className="w-full text-black ">
 						<thead>
 							<tr className="border-b-2">
-								<th className="p-1 border-b text-start  min-w-40">Mã tiếp nhận mẫu</th>
+								<th className="p-1 border-b text-start  min-w-[300px]">Mã tiếp nhận mẫu</th>
+								<th
+									className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700
+									"
+									onClick={toggleDeadlineFormat}
+								>
+									Hạn trả KQ
+								</th>
 								<th className="p-1 border-b text-start w-36 min-w-36">Mã mẫu thử</th>
 
 								{showPaymentColumn ? (
 									<th className="p-1 border-b text-start w-[25%] min-w-72">Thông tin mẫu thử</th>
 								) : (
 									<>
-										<th className="p-1 border-b text-start w-[25%] min-w-72">Thông tin mẫu thử</th>
+										<th className="p-1 border-b text-start w-full min-w-72">Thông tin mẫu thử</th>
 										<th className="p-1 border-b text-start w-[10%] min-w-28">Số lượng</th>
 										<th className="p-1 border-b text-start w-[6%] min-w-24">Mục đích</th>
 										<th className="p-1 border-b text-start w-[6%] min-w-24">Trạng thái</th>
@@ -864,14 +871,6 @@ const Dashboard = () => {
 										<th className="p-1 border-b text-start min-w-32">Số hồ sơ lưu</th>
 									</>
 								)}
-
-								<th
-									className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700
-									"
-									onClick={toggleDeadlineFormat}
-								>
-									Hạn trả KQ
-								</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -902,6 +901,7 @@ const Dashboard = () => {
 														</p>
 													</div>
 												</td>
+
 												<td colSpan={showPaymentColumn ? '1' : '6'} className="p-1 text-center text-gray-500">
 													Chưa có thông tin mẫu thử . . .
 												</td>
@@ -1006,18 +1006,6 @@ const Dashboard = () => {
 														</td>
 													</>
 												)}
-
-												<td className="p-1 text-start">
-													{receipt?.deadline ? (
-														isDeadlineToday(receipt.deadline) ? (
-															<span className="text-purple-600">{formatDate(receipt.deadline)}</span>
-														) : (
-															formatDate(receipt.deadline)
-														)
-													) : (
-														<span className="text-start block">--</span>
-													)}
-												</td>
 											</tr>
 										) : (
 											samplesToShow.map((sample, sampleIndex) => {
@@ -1046,27 +1034,64 @@ const Dashboard = () => {
 														}}
 													>
 														{sampleIndex === 0 && (
-															<td
-																className={`p-1   text-start align-top ${
-																	hoveredReceiptId === receipt?.receipt_uid ? 'bg-gray-50' : ''
-																}`}
-																rowSpan={samplesToShow.length}
-															>
-																<NavLink
-																	className="font-semibold text-primary hover:text-[#103667]"
-																	to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid}`}
+															<>
+																<td
+																	className={`p-1   text-start align-top ${
+																		hoveredReceiptId === receipt?.receipt_uid ? 'bg-gray-50' : ''
+																	}`}
+																	rowSpan={samplesToShow.length}
 																>
-																	{receipt.receipt_uid}
-																</NavLink>
-																<div className="flex flex-col">
-																	<p className="text-sm">{receipt.client.client_name}</p>
-																	<p className="text-xs text-gray-500">
-																		{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
-																		{getUserName(receipt.created_by_uid)}
-																	</p>
-																</div>
-															</td>
+																	<NavLink
+																		className="font-semibold text-primary hover:text-[#103667]"
+																		to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid}`}
+																	>
+																		{receipt.receipt_uid}
+																	</NavLink>
+																	<div className="flex flex-col">
+																		<p className="text-sm">{receipt.client.client_name}</p>
+																		<p className="text-xs text-gray-500 mb-2">
+																			{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
+																			{getUserName(receipt.created_by_uid)}
+																		</p>
+																	</div>
+																</td>
+
+																{sampleIndex === 0 && (
+																	<td
+																		className={`p-1 text-start cursor-pointer align-top ${
+																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																		}`}
+																		rowSpan={samplesToShow.length}
+																		onClick={() => handleFieldClick(receipt.id, null, 'deadline')}
+																	>
+																		{editingField.receiptId === receipt.id &&
+																		editingField.sampleId === null &&
+																		editingField.field === 'deadline' ? (
+																			<DatePicker
+																				selected={receipt.deadline ? new Date(receipt.deadline) : null}
+																				onChange={(date) => handleDeadlineChange(receipt.id, date)}
+																				onBlur={() => handleDatePickerBlur(receipt.id, receipt.deadline)}
+																				onFocus={() => handleDatePickerFocus(receipt.id, receipt.deadline)}
+																				onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
+																				onKeyDown={(e) => handleDeadlineKeyDown(e, receipt.id)}
+																				dateFormat="dd/MM/yyyy"
+																				className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
+																				calendarClassName="text-black"
+																				placeholderText="Chọn hạn trả"
+																				autoFocus
+																			/>
+																		) : (
+																			<div className="w-full h-full p-1 rounded">
+																				{showRelativeTime
+																					? formatDeadlineAsRelative(receipt.deadline, receipt)
+																					: formatDeadlineWithStyle(receipt.deadline, receipt)}
+																			</div>
+																		)}
+																	</td>
+																)}
+															</>
 														)}
+
 														<td
 															className="p-1 text-start align-top"
 															onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
@@ -1324,39 +1349,17 @@ const Dashboard = () => {
 															</>
 														)}
 
-														{sampleIndex === 0 && (
-															<td
-																className={`p-1 text-start cursor-pointer align-top ${
-																	hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																}`}
-																rowSpan={samplesToShow.length}
-																onClick={() => handleFieldClick(receipt.id, null, 'deadline')}
-															>
-																{editingField.receiptId === receipt.id &&
-																editingField.sampleId === null &&
-																editingField.field === 'deadline' ? (
-																	<DatePicker
-																		selected={receipt.deadline ? new Date(receipt.deadline) : null}
-																		onChange={(date) => handleDeadlineChange(receipt.id, date)}
-																		onBlur={() => handleDatePickerBlur(receipt.id, receipt.deadline)}
-																		onFocus={() => handleDatePickerFocus(receipt.id, receipt.deadline)}
-																		onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
-																		onKeyDown={(e) => handleDeadlineKeyDown(e, receipt.id)}
-																		dateFormat="dd/MM/yyyy"
-																		className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
-																		calendarClassName="text-black"
-																		placeholderText="Chọn hạn trả"
-																		autoFocus
-																	/>
+														{/* <td className="p-1 text-start">
+															{receipt?.deadline ? (
+																isDeadlineToday(receipt.deadline) ? (
+																	<span className="text-purple-600">{formatDate(receipt.deadline)}</span>
 																) : (
-																	<div className="w-full h-full p-1 rounded">
-																		{showRelativeTime
-																			? formatDeadlineAsRelative(receipt.deadline, receipt)
-																			: formatDeadlineWithStyle(receipt.deadline, receipt)}
-																	</div>
-																)}
-															</td>
-														)}
+																	formatDate(receipt.deadline)
+																)
+															) : (
+																<span className="text-start block">--</span>
+															)}
+														</td> */}
 													</tr>
 												);
 											})

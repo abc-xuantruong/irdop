@@ -48,7 +48,7 @@ const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter }) => {
 				{isDashboard && (
 					<div className="w-full md:w-fit">
 						<FilterBar
-							source={source} // Pass the original list to FilterBar
+							source={source || []} // Pass the original list to FilterBar
 							setCurrentList={setCurrentList}
 							typeSearch="receipt"
 							setIsFilter={setIsFilter} // Pass the setIsFilter function
