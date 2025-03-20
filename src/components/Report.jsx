@@ -472,8 +472,7 @@ export default function MultiPageEditor() {
 		const sampleId = data.sample_uid || sample_uid;
 
 		// Get the sample_information array from data and filter out items with empty fvalue
-		const sampleInfo = (data.sample_information || []).filter((item) => item.fvalue && item.fvalue.trim() !== '');
-
+		const sampleInfo = data.sample_information;
 		// Map each sample information item to a row in the sample info section
 		const infoRows = sampleInfo
 			.map((item) => {
