@@ -377,6 +377,13 @@ const ReceiptInfor = ({ receipt }) => {
 	// Function to handle API update after confirmation
 	const handleSampleApiUpdate = async (sampleId, field, newValue) => {
 		try {
+			// Find the sample in the current state
+			const sample = currentReceipt.samples.find((s) => s.id === sampleId);
+			if (!sample) {
+				throw new Error('Sample not found');
+			}
+
+			// Create the initial payload
 			const payload = {
 				sample: {
 					id: sampleId,
@@ -385,10 +392,76 @@ const ReceiptInfor = ({ receipt }) => {
 				},
 			};
 
+			// For sample_name or sample_description, update sample_information
+			if (field === 'sample_name' || field === 'sample_description') {
+				// Parse sample_information (could be string or object)
+				let sampleInfo = [];
+				try {
+					if (sample.sample_information) {
+						sampleInfo =
+							typeof sample.sample_information === 'string'
+								? JSON.parse(sample.sample_information)
+								: sample.sample_information;
+					}
+				} catch (error) {
+					console.error('Error parsing sample information:', error);
+					sampleInfo = [];
+				}
+
+				// Make sure it's an array
+				if (!Array.isArray(sampleInfo)) {
+					sampleInfo = [];
+				}
+
+				// Define search keywords based on the field being edited
+				const searchKeywords = field === 'sample_name' ? ['Tên mẫu', 'name'] : ['Mô tả', 'desc'];
+
+				// Look for matching entry
+				let found = false;
+				const updatedSampleInfo = sampleInfo.map((item) => {
+					// Check if this item matches our search keywords
+					if (
+						item.fname &&
+						searchKeywords.some((keyword) => item.fname.toLowerCase().includes(keyword.toLowerCase()))
+					) {
+						found = true;
+						return { ...item, fvalue: newValue };
+					}
+					return item;
+				});
+
+				// If no matching entry found, add a new one
+				if (!found) {
+					const newEntry = {
+						fname: field === 'sample_name' ? 'Tên mẫu / name.' : 'Mô tả / desc.',
+						fvalue: newValue,
+					};
+					updatedSampleInfo.push(newEntry);
+				}
+
+				// Add the updated sample_information to the payload
+				payload.sample.sample_information = updatedSampleInfo;
+			}
+
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', payload);
 
 			if (response.status === 200) {
 				showToast(`Cập nhật thông tin thành công!`);
+
+				// If we updated sample_information, update the local state too
+				if (field === 'sample_name' || field === 'sample_description') {
+					setCurrentReceipt((prev) => ({
+						...prev,
+						samples: prev.samples.map((s) => {
+							if (s.id === sampleId) {
+								// Get the updated sample_information from the payload
+								const updatedSampleInfo = payload.sample.sample_information;
+								return { ...s, sample_information: updatedSampleInfo };
+							}
+							return s;
+						}),
+					}));
+				}
 			} else {
 				Swal.fire({
 					icon: 'error',
@@ -419,6 +492,12 @@ const ReceiptInfor = ({ receipt }) => {
 				document.activeElement.blur();
 			}
 		}
+	};
+
+	// Add handleTextareaBlur function to handle blur events
+	const handleTextareaBlur = (sampleId, field, value) => {
+		// Call API update when field loses focus
+		handleSampleApiUpdate(sampleId, field, value);
 	};
 
 	// Handle select change - immediately update both UI and API
@@ -1811,7 +1890,7 @@ const ReceiptInfor = ({ receipt }) => {
 										className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
 										onClick={() => setEditingGeneralField('receipt_date')}
 									>
-										{currentReceipt?.receipt_date ? formatDate(currentReceipt.receipt_date) : '--'} Người tiếp nhận{' '}
+										{currentReceipt?.receipt_date ? formatDate(currentReceipt.receipt_date) : '--'} bởi{' '}
 										<span className="font-semibold"> {getUserName(currentReceipt?.created_by_uid)}</span>
 									</div>
 								)}
@@ -1863,14 +1942,22 @@ const ReceiptInfor = ({ receipt }) => {
 									onClick={toggleCustomerDetails}
 								>
 									{currentReceipt?.client?.client_name || '--'}
-									<span className="text-xs text-blue-600">{isCustomerDetailsVisible ? 'Ẩn' : ' Xem Chi tiết'}</span>
+									<span className="text-xs text-blue-600 font-bold">
+										{isCustomerDetailsVisible ? 'Ẩn' : ' Xem Chi tiết'}
+									</span>
 								</div>
 							</div>
 
 							{/* Customer details in the same layout as other fields */}
 							{isCustomerDetailsVisible && (
-								<>
+								<div className="rounded-lg px-1 border-l-4 border-teritary">
 									<div className="flex justify-start items-start mb-1">
+										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
+											Tổ chức/CCá nhân
+										</label>
+										{renderField('client.client_name', currentReceipt?.client?.client_name)}
+									</div>
+									<div className="flex justify-start items-start mb-1 ">
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã khách hàng</label>
 										{renderField('client.client_uid', currentReceipt?.client?.client_uid)}
 									</div>
@@ -1896,7 +1983,7 @@ const ReceiptInfor = ({ receipt }) => {
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email</label>
 										{renderField('contact.email', currentReceipt?.contact?.email)}
 									</div>
-								</>
+								</div>
 							)}
 
 							<div className="flex justify-start items-start mb-1">
@@ -2102,6 +2189,7 @@ const ReceiptInfor = ({ receipt }) => {
 															value={sample?.sample_name || ''}
 															onChange={(e) => handleSampleChange(sample.id, 'sample_name', e.target.value)}
 															onKeyDown={(e) => handleTextareaKeyDown(e, sample.id, 'sample_name', e.target.value)}
+															onBlur={(e) => handleTextareaBlur(sample.id, 'sample_name', e.target.value)}
 															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
 															rows={2}
 														/>
@@ -2115,6 +2203,7 @@ const ReceiptInfor = ({ receipt }) => {
 															value={sample.matrix || ''}
 															onChange={(e) => handleSampleChange(sample.id, 'matrix', e.target.value)}
 															onKeyDown={(e) => handleTextareaKeyDown(e, sample.id, 'matrix', e.target.value)}
+															onBlur={(e) => handleTextareaBlur(sample.id, 'matrix', e.target.value)}
 															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
 															rows={2}
 														/>
@@ -2130,6 +2219,7 @@ const ReceiptInfor = ({ receipt }) => {
 															onKeyDown={(e) =>
 																handleTextareaKeyDown(e, sample.id, 'sample_description', e.target.value)
 															}
+															onBlur={(e) => handleTextareaBlur(sample.id, 'sample_description', e.target.value)}
 															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
 															rows={2}
 														/>
@@ -2143,6 +2233,7 @@ const ReceiptInfor = ({ receipt }) => {
 															value={sample.sample_volume || ''}
 															onChange={(e) => handleSampleChange(sample.id, 'sample_volume', e.target.value)}
 															onKeyDown={(e) => handleTextareaKeyDown(e, sample.id, 'sample_volume', e.target.value)}
+															onBlur={(e) => handleTextareaBlur(sample.id, 'sample_volume', e.target.value)}
 															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
 															rows={2}
 														/>
@@ -2196,6 +2287,7 @@ const ReceiptInfor = ({ receipt }) => {
 															onKeyDown={(e) =>
 																handleTextareaKeyDown(e, sample.id, 'additional_request', e.target.value)
 															}
+															onBlur={(e) => handleTextareaBlur(sample.id, 'additional_request', e.target.value)}
 															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
 															rows={2}
 														/>

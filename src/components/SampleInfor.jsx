@@ -2550,24 +2550,6 @@ const SampleInfor = () => {
 						<tbody>
 							{isAddingNewParameter && (
 								<tr className="border bg-blue-50">
-									<td className="pt-[5px] pb-0 border align-top text-center">
-										<div className="flex flex-col gap-0.5 items-center">
-											<button
-												onClick={handleSaveNewParameter}
-												className="border-2 rounded-md p-0.5 text-xs w-fit text-primary"
-												title="Lưu chỉ tiêu"
-											>
-												<FaSave size={15} />
-											</button>
-											<button
-												onClick={handleCancelNewParameter}
-												className="border-2 rounded-md p-0.5 text-xs w-fit text-gray-500"
-												title="Hủy"
-											>
-												<FaTimes size={15} />
-											</button>
-										</div>
-									</td>
 									<td className="p-1 border relative">
 										<input
 											type="text"
@@ -2630,6 +2612,24 @@ const SampleInfor = () => {
 									<td className="p-1 border relative">
 										{/* Người thực hiện - không nhập */}
 										<div className="p-1 text-gray-400 italic text-center">--</div>
+									</td>
+									<td className="pt-[5px] pb-0 border align-top text-center">
+										<div className="flex flex-col gap-0.5 items-center">
+											<button
+												onClick={handleSaveNewParameter}
+												className="border-2 rounded-md p-0.5 text-xs w-fit text-primary"
+												title="Lưu chỉ tiêu"
+											>
+												<FaSave size={15} />
+											</button>
+											<button
+												onClick={handleCancelNewParameter}
+												className="border-2 rounded-md p-0.5 text-xs w-fit text-gray-500"
+												title="Hủy"
+											>
+												<FaTimes size={15} />
+											</button>
+										</div>
 									</td>
 								</tr>
 							)}
@@ -2843,12 +2843,11 @@ const SampleInfor = () => {
 			{isTransferMultipleVisible && renderBulkTransferForm()}
 			{isDeleteConfirmVisible &&
 				renderDeleteConfirm(
-					(deleteType =
-						hh == 'sample'
-							? 'Bạn có chắc chắn muốn xóa mẫu này?'
-							: deleteType === 'multiple'
-							? `Bạn có chắc chắn muốn xóa ${selectedAnalytes.length} chỉ tiêu đã chọn?`
-							: 'Bạn có chắc chắn muốn xóa chỉ tiêu này?'),
+					deleteType === 'sample'
+						? 'Bạn có chắc chắn muốn xóa mẫu này?'
+						: deleteType === 'multiple'
+						? `Bạn có chắc chắn muốn xóa ${selectedAnalytes.length} chỉ tiêu đã chọn?`
+						: 'Bạn có chắc chắn muốn xóa chỉ tiêu này?',
 					deleteType === 'sample'
 						? handleDeleteSampleConfirmAction
 						: deleteType === 'multiple'
