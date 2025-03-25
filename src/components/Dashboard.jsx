@@ -385,42 +385,6 @@ const Dashboard = () => {
 		setCurrentTitlePage('Danh sách tiếp nhận mẫu');
 	}, [setCurrentTitlePage]);
 
-	// Parse URL search parameters when component mounts
-	// useEffect(() => {
-	// 	const queryParams = new URLSearchParams(location.search);
-	// 	const searchQuery = queryParams.get('search');
-
-	// 	if (searchQuery) {
-	// 		setSearchTerm(searchQuery);
-	// 		setIsFilter(true);
-
-	// 		// Fetch search results
-	// 		const fetchSearchResults = async () => {
-	// 			try {
-	// 				const response = await apiPost('https://black.irdop.org/khsi19me/db/search/receipt', {
-	// 					query: searchQuery,
-	// 				});
-	// 				setCurrentList(response.data);
-	// 			} catch (error) {
-	// 				console.error('Error searching receipts:', error);
-	// 				Swal.fire({
-	// 					icon: 'error',
-	// 					title: 'Lỗi',
-	// 					text: 'Có lỗi xảy ra khi tìm kiếm',
-	// 				});
-	// 			}
-	// 		};
-
-	// 		fetchSearchResults();
-	// 	} else {
-	// 		// Still fetch normal data if no search query
-	// 		if (!isFetch) {
-	// 			fetchReceipt();
-	// 			isFetch = true;
-	// 		}
-	// 	}
-	// }, [location.search]);
-
 	const fetchReceipt = async () => {
 		try {
 			const response = await apiGet('https://black.irdop.org/khsi19me/db/get/recent_receipt');
@@ -857,7 +821,7 @@ const Dashboard = () => {
 										<th className="p-1 border-b text-start w-[10%] min-w-28">Số lượng</th>
 										<th className="p-1 border-b text-start w-[6%] min-w-24">Mục đích</th>
 										<th className="p-1 border-b text-start w-[6%] min-w-24">Trạng thái</th>
-										<th className="p-1 border-b text-start w-[6%] min-w-24">SL chỉ tiêu</th>
+										<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
 									</>
 								)}
 
@@ -895,6 +859,9 @@ const Dashboard = () => {
 													</NavLink>
 													<div className="flex flex-col">
 														<p className="text-sm">{receipt.client.client_name}</p>
+														{receipt.record_code && (
+															<p className="text-xs text-slate-700">HSL: {receipt.record_code}</p>
+														)}
 														<p className="text-xs text-gray-500">
 															{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
 															{getUserName(receipt.created_by_uid)}
@@ -1012,8 +979,7 @@ const Dashboard = () => {
 												// Add null check for sample.analysis
 												const totalTests = sample?.analysis?.length || 0;
 												const completedTests =
-													sample?.analysis?.filter((order) => order?.result_value !== '')?.length || 0;
-												const pendingTests = totalTests - completedTests;
+													sample?.analysis?.filter((order) => order?.result_value !== '' && order?.result_value !== '<p></p>')?.length || 0;
 
 												return (
 													<tr
@@ -1049,6 +1015,9 @@ const Dashboard = () => {
 																	</NavLink>
 																	<div className="flex flex-col">
 																		<p className="text-sm">{receipt.client.client_name}</p>
+																		{receipt.record_code && (
+																			<p className="text-xs text-slate-700">HSL: {receipt.record_code}</p>
+																		)}
 																		<p className="text-xs text-gray-500 mb-2">
 																			{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
 																			{getUserName(receipt.created_by_uid)}
@@ -1215,7 +1184,7 @@ const Dashboard = () => {
 																	onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
 																	onMouseLeave={handleSampleMouseLeave}
 																>
-																	{completedTests} / {pendingTests} / {totalTests}
+																	{completedTests} / {totalTests}
 																</td>
 															</>
 														)}

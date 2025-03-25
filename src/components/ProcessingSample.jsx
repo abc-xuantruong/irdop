@@ -7,6 +7,7 @@ import FilterBar from './FilterBar';
 import TinyMceInput from './Input';
 import { toast, ToastContainer } from 'react-toastify';
 import { MdOutlineViewList, MdViewModule } from 'react-icons/md';
+import { FaCheck, FaSave, FaUndo } from 'react-icons/fa';
 
 const ProcessingSample = () => {
 	const { setCurrentTitlePage, formatDate, status, currentUser, technicians } = useContext(GlobalContext);
@@ -18,6 +19,11 @@ const ProcessingSample = () => {
 	const [editableCell, setEditableCell] = useState({ parameterId: null, row: null, column: null, analysisId: null });
 	const [inputValue, setInputValue] = useState('');
 	const [isFilter, setIsFilter] = useState(false); // Add state to track if filtering is active
+	const [selectedForReview, setSelectedForReview] = useState([]);
+	const [reviewAllChecked, setReviewAllChecked] = useState(false);
+	const [showReviewSaveButton, setShowReviewSaveButton] = useState(false);
+	const [isReviewConfirmVisible, setIsReviewConfirmVisible] = useState(false);
+	const [samplesWithPendingReviews, setSamplesWithPendingReviews] = useState({});
 	const navigate = useNavigate();
 	const location = useLocation();
 	let isFetch = false;
@@ -352,6 +358,270 @@ const ProcessingSample = () => {
 		return categorized;
 	};
 
+	useEffect(() => {
+		// Update samples with pending reviews based on selectedForReview
+		const pendingSamples = {};
+
+		selectedForReview.forEach((id) => {
+			// Find which sample this analysis belongs to
+			processingSample?.forEach((sample) => {
+				if (sample?.analysis && Array.isArray(sample.analysis)) {
+					sample.analysis.forEach((analysis) => {
+						if (Math.abs(id) === analysis.id) {
+							pendingSamples[sample.sample_uid] = true;
+						}
+					});
+				}
+			});
+		});
+
+		setSamplesWithPendingReviews(pendingSamples);
+	}, [selectedForReview, processingSample]);
+
+	// Toggle review checkbox for a single analysis
+	const handleReviewSelect = (analysisId, isChecked, sampleUid) => {
+		// Get the item to check if it's already reviewed
+		const allAnalyses = [];
+		processingSample.forEach((sample) => {
+			if (sample?.analysis && Array.isArray(sample.analysis)) {
+				allAnalyses.push(...sample.analysis);
+			}
+		});
+
+		const analysis = allAnalyses.find((a) => a.id === analysisId);
+
+		// If already reviewed, handle differently
+		if (analysis?.reviewed_by) {
+			// Add to selectedForReview with negative ID to mark for unreview
+			setSelectedForReview((prev) => {
+				// If already in the list for unreview, remove it
+				if (prev.includes(-analysisId)) {
+					return prev.filter((id) => id !== -analysisId);
+				}
+				// Otherwise add it as negative to mark for unreview
+				return [...prev, -analysisId];
+			});
+		} else {
+			setSelectedForReview((prev) => {
+				if (isChecked) {
+					return [...prev, analysisId];
+				} else {
+					return prev.filter((id) => id !== analysisId);
+				}
+			});
+		}
+	};
+
+	// Toggle all review checkboxes for a specific sample
+	const handleReviewSelectAll = (sampleUid) => {
+		if (viewMode === 'v2' && Array.isArray(processingSample)) {
+			const sample = processingSample.find((s) => s.sample_uid === sampleUid);
+
+			if (!sample || !sample.analysis || !Array.isArray(sample.analysis)) {
+				return;
+			}
+
+			const analysisIds = sample.analysis.map((a) => a.id);
+			const selectedIds = selectedForReview.filter(
+				(id) =>
+					// Only consider positive IDs
+					id > 0 &&
+					// Only include IDs that belong to this sample
+					analysisIds.includes(id),
+			);
+
+			// Check if all analyses in this sample are already selected
+			const allSelected = selectedIds.length === analysisIds.length;
+
+			if (allSelected) {
+				// If all are selected, remove them all
+				setSelectedForReview((prev) => prev.filter((id) => !analysisIds.includes(Math.abs(id))));
+			} else {
+				// Otherwise, add all analyses from this sample (removing any negative selections)
+				const newSelectedForReview = [...selectedForReview.filter((id) => !analysisIds.includes(Math.abs(id)))];
+				analysisIds.forEach((id) => {
+					const analysis = sample.analysis.find((a) => a.id === id);
+					// Only add if not already reviewed
+					if (!analysis.reviewed_by) {
+						newSelectedForReview.push(id);
+					}
+				});
+				setSelectedForReview(newSelectedForReview);
+			}
+		}
+	};
+
+	// Check if all analyses in a sample are selected
+	const areAllAnalysesSelectedInSample = (sampleUid) => {
+		const sample = processingSample?.find((s) => s.sample_uid === sampleUid);
+
+		if (!sample || !sample.analysis || !Array.isArray(sample.analysis)) {
+			return false;
+		}
+
+		const nonReviewedAnalyses = sample.analysis.filter((a) => !a.reviewed_by);
+		const selectedIds = selectedForReview.filter((id) => id > 0);
+
+		// If all non-reviewed analyses are selected
+		return nonReviewedAnalyses.every((a) => selectedIds.includes(a.id));
+	};
+
+	// Show confirmation dialog for review for a specific sample
+	const handleReviewSave = (sampleUid) => {
+		setIsReviewConfirmVisible(true);
+	};
+
+	// Cancel review confirmation
+	const handleReviewCancel = () => {
+		setIsReviewConfirmVisible(false);
+	};
+
+	// Confirm and submit review
+	const handleReviewConfirm = async () => {
+		try {
+			// Get all analyses from all samples
+			const allAnalyses = [];
+			processingSample.forEach((sample) => {
+				if (sample?.analysis && Array.isArray(sample.analysis)) {
+					allAnalyses.push(...sample.analysis);
+				}
+			});
+
+			// Separate positive IDs (to review) and negative IDs (to unreview)
+			const toReview = selectedForReview.filter((id) => id > 0);
+			const toUnreview = selectedForReview.filter((id) => id < 0).map((id) => -id); // Convert back to positive
+
+			// Filter selected analyses to review
+			const selectedAnalysesToReview = allAnalyses.filter((analysis) => toReview.includes(analysis.id));
+
+			// Filter selected analyses to unreview
+			const selectedAnalysesToUnreview = allAnalyses.filter((analysis) => toUnreview.includes(analysis.id));
+
+			let successCount = 0;
+			let failCount = 0;
+
+			// First process items to review
+			for (const analysis of selectedAnalysesToReview) {
+				try {
+					const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+						analysis: {
+							...analysis,
+							reviewed_by: currentUser?.identity_uid || '',
+							modified_by_uid: currentUser?.identity_uid || '',
+						},
+					});
+
+					if (response?.status === 200) {
+						successCount++;
+					} else {
+						failCount++;
+					}
+				} catch (error) {
+					console.error(`Error updating analysis ID ${analysis.id}:`, error);
+					failCount++;
+				}
+			}
+
+			// Then process items to unreview
+			for (const analysis of selectedAnalysesToUnreview) {
+				try {
+					const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+						analysis: {
+							...analysis,
+							reviewed_by: '', // Clear the reviewer
+							modified_by_uid: currentUser?.identity_uid || '',
+						},
+					});
+
+					if (response?.status === 200) {
+						successCount++;
+					} else {
+						failCount++;
+					}
+				} catch (error) {
+					console.error(`Error updating analysis ID ${analysis.id}:`, error);
+					failCount++;
+				}
+			}
+
+			// Update the UI
+			const updatedSamples = processingSample.map((sample) => {
+				if (sample?.analysis && Array.isArray(sample.analysis)) {
+					const updatedAnalysis = sample.analysis.map((analysis) => {
+						if (toReview.includes(analysis.id)) {
+							return {
+								...analysis,
+								reviewed_by: currentUser?.identity_uid || '',
+							};
+						}
+						if (toUnreview.includes(analysis.id)) {
+							return {
+								...analysis,
+								reviewed_by: '', // Clear reviewed_by
+							};
+						}
+						return analysis;
+					});
+					return {
+						...sample,
+						analysis: updatedAnalysis,
+					};
+				}
+				return sample;
+			});
+
+			setProcessingSample(updatedSamples);
+
+			// Show result message
+			const reviewCount = toReview.length;
+			const unreviewCount = toUnreview.length;
+
+			if (failCount > 0) {
+				toast.warning(`${successCount} chỉ tiêu đã được cập nhật thành công, ${failCount} chỉ tiêu thất bại`);
+			} else if (reviewCount > 0 && unreviewCount > 0) {
+				toast.success(`Đã duyệt ${reviewCount} chỉ tiêu và hủy duyệt ${unreviewCount} chỉ tiêu thành công`);
+			} else if (reviewCount > 0) {
+				toast.success(`Đã duyệt thành công ${reviewCount} chỉ tiêu`);
+			} else {
+				toast.success(`Đã hủy duyệt thành công ${unreviewCount} chỉ tiêu`);
+			}
+
+			// Reset state
+			setSelectedForReview([]);
+			setReviewAllChecked(false);
+			setShowReviewSaveButton(false);
+		} catch (error) {
+			console.error('Error reviewing analyses:', error);
+			toast.error(`Đã xảy ra lỗi khi cập nhật chỉ tiêu: ${error.message || 'Lỗi không xác định'}`);
+		}
+
+		setIsReviewConfirmVisible(false);
+	};
+
+	// Add a function to handle resetting review changes for a specific sample
+	const handleResetReviewChanges = (sampleUid) => {
+		// Find the sample
+		const sample = processingSample.find((s) => s.sample_uid === sampleUid);
+
+		if (!sample || !sample.analysis || !Array.isArray(sample.analysis)) {
+			return;
+		}
+
+		// Get all analysis IDs for this sample
+		const analysisIds = sample.analysis.map((a) => a.id);
+
+		// Remove all selections (both positive and negative) for this sample
+		setSelectedForReview((prev) => prev.filter((id) => !analysisIds.includes(Math.abs(id))));
+
+		// Show toast to confirm
+		toast.info('Đã hủy các thay đổi đang chờ xác nhận');
+	};
+
+	// Add a function to handle navigation to sample in v2 mode
+	const navigateToSampleInV2 = (sampleUid) => {
+		window.open(`/processing?mode=v2&search=${sampleUid}`, '_blank');
+	};
+
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
@@ -412,12 +682,18 @@ const ProcessingSample = () => {
 							<h2 className="text-lg font-medium mb-4">Kết quả {selectedAnalysis.parameterName || ''}</h2>
 							<div className="mb-2 flex items-center h-10">
 								<label className="text-start block text-sm font-medium w-24">Mã mẫu</label>
-								<input
-									type="text"
-									value={selectedAnalysis.sample_uid}
-									className="text-start w-full p-2 border rounded-lg bg-white "
-									readOnly
-								/>
+								<div className="w-full relative">
+									<input
+										type="text"
+										value={selectedAnalysis.sample_uid}
+										className="text-start w-full p-2 border rounded-lg bg-white text-primary cursor-pointer hover:underline"
+										readOnly
+										onClick={(e) => {
+											e.stopPropagation();
+											navigateToSampleInV2(selectedAnalysis.sample_uid);
+										}}
+									/>
+								</div>
 							</div>
 							<div className="mb-2 flex items-center ">
 								<label className="text-start block text-sm font-medium w-24">Kết quả</label>
@@ -570,7 +846,16 @@ const ProcessingSample = () => {
 																							onDragStart={(e) => handleDragStart(e, parameter?.id, analysis?.id)}
 																							onClick={() => handleAnalysisClick(analysis, parameter?.parameter_name)}
 																						>
-																							{analysis?.sample_uid || 'N/A'} <br />
+																							<span
+																								className="cursor-pointer text-primary hover:underline"
+																								onClick={(e) => {
+																									e.stopPropagation();
+																									navigateToSampleInV2(analysis.sample_uid);
+																								}}
+																							>
+																								{analysis?.sample_uid || 'N/A'}
+																							</span>
+																							<br />
 																							{getTechnicianName(analysis?.technician_uid)}
 																						</button>
 																					),
@@ -589,7 +874,7 @@ const ProcessingSample = () => {
 																	<div className="min-h-max flex flex-wrap mt-1">
 																		{!visibleTables[parameter.id] &&
 																			parameter.analyses &&
-																			Array.isArray(parameter.analyses) && // Add this check
+																			Array.isArray(parameter.analyses) &&
 																			parameter.analyses.map(
 																				(analysis) =>
 																					analysis.status === 2 && (
@@ -606,7 +891,16 @@ const ProcessingSample = () => {
 																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
 																							onClick={() => handleAnalysisClick(analysis, parameter.parameter_name)}
 																						>
-																							{analysis.sample_uid} <br />
+																							<span
+																								className="cursor-pointer text-primary hover:underline"
+																								onClick={(e) => {
+																									e.stopPropagation();
+																									navigateToSampleInV2(analysis.sample_uid);
+																								}}
+																							>
+																								{analysis.sample_uid}
+																							</span>
+																							<br />
 																							{getTechnicianName(analysis.technician_uid)}
 																						</button>
 																					),
@@ -623,7 +917,7 @@ const ProcessingSample = () => {
 																	<div className="flex flex-wrap h-fit items-start mt-1">
 																		{!visibleTables[parameter.id] &&
 																			parameter.analyses &&
-																			Array.isArray(parameter.analyses) && // Add this check
+																			Array.isArray(parameter.analyses) &&
 																			parameter.analyses.map(
 																				(analysis) =>
 																					analysis.status === 0 && (
@@ -640,7 +934,16 @@ const ProcessingSample = () => {
 																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
 																							onClick={() => handleAnalysisClick(analysis, parameter.parameter_name)}
 																						>
-																							{analysis.sample_uid} <br />
+																							<span
+																								className="cursor-pointer text-primary hover:underline"
+																								onClick={(e) => {
+																									e.stopPropagation();
+																									navigateToSampleInV2(analysis.sample_uid);
+																								}}
+																							>
+																								{analysis.sample_uid}
+																							</span>
+																							<br />
 																							{getTechnicianName(analysis.technician_uid)}
 																						</button>
 																					),
@@ -665,7 +968,14 @@ const ProcessingSample = () => {
 																		Array.isArray(parameter.analyses) && // Add this check
 																		parameter.analyses.map((analysis, sampleIndex) => (
 																			<tr key={analysis.id}>
-																				<td className="border p-2">{analysis.sample_uid}</td>
+																				<td className="border p-2">
+																					<span
+																						className="cursor-pointer text-primary hover:underline"
+																						onClick={() => navigateToSampleInV2(analysis.sample_uid)}
+																					>
+																						{analysis.sample_uid}
+																					</span>
+																				</td>
 																				<td
 																					className="p-1 pb-0 border relative"
 																					onClick={() =>
@@ -790,6 +1100,36 @@ const ProcessingSample = () => {
 																	<th className="border p-1 text-start">Phép thử</th>
 																	<th className="border p-1 text-start w-20">Đơn vị</th>
 																	<th className="border p-1 text-start w-24">Kết quả</th>
+																	<th className="border p-1 text-start w-24 relative">
+																		{samplesWithPendingReviews[sample.sample_uid] ? (
+																			<div className="flex justify-center items-center">
+																				<button
+																					className="mx-1 text-gray-600 hover:text-gray-800 p-1.5"
+																					onClick={() => handleResetReviewChanges(sample.sample_uid)}
+																					title="Hủy thay đổi"
+																				>
+																					<FaUndo size={12} />
+																				</button>
+																				<button
+																					className="mx-1 text-green-600 hover:text-green-800 p-1.5"
+																					onClick={() => handleReviewSave(sample.sample_uid)}
+																					title="Duyệt các mục đã chọn"
+																				>
+																					<FaSave size={12} />
+																				</button>
+																			</div>
+																		) : (
+																			<div className="items-center flex">
+																				Duyệt
+																				<input
+																					type="checkbox"
+																					className="w-4 h-4 ml-1"
+																					checked={areAllAnalysesSelectedInSample(sample.sample_uid)}
+																					onChange={() => handleReviewSelectAll(sample.sample_uid)}
+																				/>
+																			</div>
+																		)}
+																	</th>
 																</tr>
 															</thead>
 															<tbody>
@@ -855,6 +1195,25 @@ const ProcessingSample = () => {
 																					)}
 																				</div>
 																			</td>
+																			<td className="border p-1 text-center">
+																				<input
+																					type="checkbox"
+																					className="w-6 h-6"
+																					checked={
+																						selectedForReview.includes(item.id) ||
+																						(item.reviewed_by && !selectedForReview.includes(-item.id)) ||
+																						false
+																					}
+																					onChange={(e) =>
+																						handleReviewSelect(item.id, e.target.checked, sample.sample_uid)
+																					}
+																				/>
+																				{item.reviewed_by && !selectedForReview.includes(-item.id) && (
+																					<span className="ml-1 text-green-600" title="Đã được duyệt">
+																						<FaCheck size={12} />
+																					</span>
+																				)}
+																			</td>
 																		</tr>
 																	);
 																})}
@@ -875,6 +1234,28 @@ const ProcessingSample = () => {
 					)}
 				</div>
 			</div>
+			{/* Confirmation Dialog for Review */}
+			{isReviewConfirmVisible && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+					<div className="bg-white p-4 rounded-lg shadow-lg w-96" onClick={(e) => e.stopPropagation()}>
+						<h2 className="text-lg font-medium mb-4">Xác nhận thay đổi trạng thái duyệt</h2>
+						<p>
+							{selectedForReview.filter((id) => id > 0).length > 0 &&
+								`Bạn sẽ duyệt ${selectedForReview.filter((id) => id > 0).length} chỉ tiêu. `}
+							{selectedForReview.filter((id) => id < 0).length > 0 &&
+								`Bạn sẽ hủy duyệt ${selectedForReview.filter((id) => id < 0).length} chỉ tiêu. `}
+						</p>
+						<div className="flex justify-end mt-4">
+							<button className="bg-gray-500 text-white px-2 py-1 w-20 rounded-lg mr-2" onClick={handleReviewCancel}>
+								Hủy
+							</button>
+							<button className="bg-green-500 text-white px-2 py-1 w-20 rounded-lg" onClick={handleReviewConfirm}>
+								Xác nhận
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };

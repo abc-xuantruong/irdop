@@ -11,7 +11,17 @@ import { GrDocumentText, GrPrint } from 'react-icons/gr';
 import { MdLibraryAdd, MdChevronLeft, MdChevronRight } from 'react-icons/md';
 import FilterBar from './FilterBar';
 import Swal from 'sweetalert2';
-import { FaTrashAlt, FaCopy, FaUserCog, FaSave, FaTimes, FaRegTimesCircle, FaDatabase } from 'react-icons/fa';
+import {
+	FaTrashAlt,
+	FaCopy,
+	FaUserCog,
+	FaSave,
+	FaTimes,
+	FaRegTimesCircle,
+	FaDatabase,
+	FaStar,
+	FaCheck,
+} from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 // Replace axios import with our helper functions
@@ -21,7 +31,8 @@ const SampleInfor = () => {
 	const [searchParams] = useSearchParams();
 	const receipt_uid = searchParams.get('receipt_uid');
 	const sample_uid = searchParams.get('sample_uid');
-	const { setCurrentTitlePage, technicians, formatDate, status, purposes, currentUser } = useContext(GlobalContext);
+	const { setCurrentTitlePage, technicians, formatDate, status, purposes, currentUser, getIdenByUid } =
+		useContext(GlobalContext);
 	const [currentSample, setCurrentSample] = useState(null);
 	const [sample, setSample] = useState(null);
 	const [listAnalytes, setListAnalytes] = useState([]);
@@ -576,7 +587,6 @@ const SampleInfor = () => {
 			if (updateParameterMode) {
 				const parameterResponse = await apiPost('https://black.irdop.org/ha8i0uw2/db/upsert/parameter', {
 					parameter: {
-						id: 0, // Always 0 for new parameters
 						parameter_uid: newParameter.parameter_uid,
 						parameter_name: newParameter.parameter_name,
 						matrix: newParameter.matrix,
@@ -882,6 +892,18 @@ const SampleInfor = () => {
 		const fetchSample = async () => {
 			try {
 				const response = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
+
+				// Process reviewer names for all analyses before setting state
+				if (response.data && response.data.analysis) {
+					for (const analysis of response.data.analysis) {
+						if (analysis.reviewed_by) {
+							// Call getIdenByUid and store the result directly in the analysis object
+							const reviewerData = await getIdenByUid(analysis.reviewed_by);
+							analysis.reviewerName = reviewerData ? reviewerData.identity_name : 'Unknown';
+						}
+					}
+				}
+
 				setSample(response.data);
 				setCurrentSample(response.data);
 				setListAnalytes(response.data.analysis);
@@ -2155,6 +2177,79 @@ const SampleInfor = () => {
 		);
 	};
 
+	// Add a new function to handle the review action
+	const handleReviewAnalyses = async () => {
+		if (selectedAnalytes.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Vui lòng chọn ít nhất một chỉ tiêu để duyệt',
+			});
+			return;
+		}
+
+		try {
+			// Get the selected analytes
+			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
+
+			// Update each analyte with the current user as reviewer
+			const updatedAnalytes = selectedItems.map((analyte) => ({
+				...analyte,
+				reviewed_by: currentUser.identity_uid,
+				modified_by_uid: currentUser.identity_uid,
+			}));
+
+			let successCount = 0;
+			let failCount = 0;
+
+			// Make API calls for each analyte separately
+			for (const analyte of updatedAnalytes) {
+				try {
+					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', { analysis: analyte });
+					successCount++;
+				} catch (error) {
+					console.error(`Error updating analysis ID ${analyte.id}:`, error);
+					failCount++;
+				}
+			}
+
+			// Update the UI
+			const currentUserName = await getIdenByUid(currentUser.identity_uid);
+			const newAnalytesList = listAnalytes.map((analyte) => {
+				if (selectedAnalytes.includes(analyte.id)) {
+					return {
+						...analyte,
+						reviewed_by: currentUser.identity_uid,
+						reviewerName: currentUserName ? currentUserName.identity_name : 'Unknown',
+					};
+				}
+				return analyte;
+			});
+			setListAnalytes(newAnalytesList);
+
+			if (failCount > 0) {
+				Swal.fire({
+					icon: 'warning',
+					title: 'Kết quả',
+					text: `${successCount} chỉ tiêu đã được duyệt thành công, ${failCount} chỉ tiêu thất bại`,
+				});
+			} else {
+				showToast(`Đã duyệt thành công ${selectedAnalytes.length} chỉ tiêu`, 'success');
+			}
+
+			// Clear selection after successful review
+			setSelectedAnalytes([]);
+			setSelectAll(false);
+		} catch (error) {
+			console.error('Error reviewing analyses:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Đã xảy ra lỗi khi duyệt chỉ tiêu',
+			});
+		}
+	};
+
 	if (!sample) {
 		return <div>Loading...</div>;
 	}
@@ -2499,6 +2594,18 @@ const SampleInfor = () => {
 								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
 							</button>
 
+							{/* Add the new review button here */}
+							<button
+								className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+									selectedAnalytes.length > 0 ? 'bg-green-500' : 'bg-gray-300 cursor-not-allowed'
+								} mr-2`}
+								onClick={selectedAnalytes.length > 0 ? handleReviewAnalyses : undefined}
+								title="Duyệt kết quả"
+							>
+								<FaCheck className="mr-1" />
+								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
+							</button>
+
 							<button
 								className={`border-gray-400 text-sm rounded-lg p-1.5 mr-2 flex-shrink-0 flex items-center ${
 									updateParameterMode ? 'bg-yellow-500 text-white' : 'text-gray-400'
@@ -2533,15 +2640,15 @@ const SampleInfor = () => {
 					<table className="text-black w-full border-2 analytes-table">
 						<thead>
 							<tr className="border-y-2">
-								<th className="p-2 border-x w-28 min-w-28 text-left">Mã chỉ tiêu</th>
+								<th className="p-2 border-x w-[100px] min-w-[100px] text-left">Mã chỉ tiêu </th>
 								<th className="p-2 border-x w-[22%] min-w-60 text-left">Chỉ tiêu</th>
 								<th className="p-2 border-x w-36 min-w-36 text-left">Nền mẫu</th>
 								<th className="p-2 border-x w-[20%] min-w-44 text-left">Phương pháp</th>
 								<th className="p-2 border-x w-1/12 min-w-20 text-left">Kết quả</th>
 								<th className="p-2 border-x w-1/12 min-w-20 text-left">Đơn vị</th>
 								<th className="p-2 border-x w-1/12 min-w-28 text-left">Hạn trả</th>
-								<th className="p-2 border-2 w-[12%] min-w-36 text-left">Người thực hiện</th>
-
+								<th className="p-2 border-2 w-[12%] min-w-36 text-left">Thực hiện</th>
+								<th className="p-2 border-x w-[12%] min-w-32 text-left">Review</th>
 								<th className="py-2 border-x w-10 min-w-10">
 									<input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="w-4 h-4" />
 								</th>
@@ -2636,14 +2743,21 @@ const SampleInfor = () => {
 							{listAnalytes?.map((order) => (
 								<tr key={order.id} className="border">
 									<td className="p-1 border relative align-top">
-										<input
-											type="text"
-											className={`w-full font-medium bg-white border-none p-1 hover:cursor-pointer hover:outline hover:outline-1 rounded hover:outline-indigo-500 text-left ${
-												order.parameter_id ? '' : 'text-gray-500'
-											}`}
-											value={order.parameter_uid || ''}
-											readOnly
-										/>
+										<div className="relative w-full">
+											<input
+												type="text"
+												className={`w-full font-medium bg-white border-none p-1 hover:cursor-pointer hover:outline hover:outline-1 rounded hover:outline-indigo-500 text-left ${
+													order.parameter_id ? '' : 'text-gray-500'
+												}`}
+												value={order.parameter_uid || ''}
+												readOnly
+											/>
+											{order.reviewed_by && (
+												<div className="absolute right-1 top-1" title="Đã được kiểm tra">
+													<FaStar className="text-yellow-400" size={14} />
+												</div>
+											)}
+										</div>
 									</td>
 									<td className="p-1 border relative align-top">
 										{editingParameterField === order.id ? (
@@ -2825,6 +2939,16 @@ const SampleInfor = () => {
 												</ul>,
 												document.body,
 											)}
+									</td>
+									{/* Added new cell for Review */}
+									<td className="p-1 border relative text-left">
+										{order.reviewed_by ? (
+											<span className="font-medium">
+												{order.reviewerName || 'Unknown'} {/* Use the pre-resolved name */}
+											</span>
+										) : (
+											<span className="text-gray-400 italic">Chưa duyệt</span>
+										)}
 									</td>
 									<td className="pt-[5px] pb-0 border align-top text-center">
 										<input

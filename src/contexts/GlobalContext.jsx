@@ -1,4 +1,3 @@
-import { bulkReceipts, listClients } from '../assets/testData';
 import axios from 'axios';
 import * as React from 'react';
 import { apiGet, apiPost } from './helperFunctionCallAPI';
@@ -8,20 +7,19 @@ const { createContext, useState, useEffect } = React;
 
 export const GlobalContext = createContext();
 
-const sampleCurrentBulkReceipt = bulkReceipts;
 
 export const GlobalProvider = ({ children }) => {
 	const [currentTitlePage, setCurrentTitlePage] = useState('Nhập kết quả');
-	const [currentReceipt, setCurrentReceiptState] = useState(sampleCurrentBulkReceipt[0]);
+	const [currentReceipt, setCurrentReceiptState] = useState([]);
 	const [currentSample, setCurrentSampleState] = useState(null);
 	const [listAnalytes, setListAnalytes] = useState([]);
 	const [searchWords, setSearchWords] = useState('');
-	const [currentBulkReceipt, setCurrentBulkReceipt] = useState(sampleCurrentBulkReceipt);
+	const [currentBulkReceipt, setCurrentBulkReceipt] = useState([]);
 	const [currentFilter, setCurrentFilter] = useState([]);
 	const [currentSort, setCurrentSort] = useState({});
 	const [technicians, setTechnicians] = useState([]);
 	const [currentKey, setCurrentKey] = useState([]);
-	const [clients, setClients] = useState(listClients);
+	const [clients, setClients] = useState([]);
 	const [currentUser, setCurrentUser] = useState(null);
 	const status = ['Đang chờ', 'Khẩn', 'Thường', 'Hoàn thành', 'Hủy bỏ'];
 	const purposes = ['Chất lượng', 'Dự án', 'Đề tài', 'Công bố', 'Thầu phụ'];

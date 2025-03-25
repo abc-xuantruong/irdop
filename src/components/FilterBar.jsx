@@ -177,8 +177,8 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 
 			let processedData = [...source];
 
-			// Priority 1: Apply search if exists
-			if (searchQuery) {
+			// Priority 1: Apply search if exists and if search is not hidden
+			if (searchQuery && !hide.includes('search')) {
 				setSearchTerm(searchQuery);
 				try {
 					if (typeSearch === 'protocol') {
@@ -210,8 +210,8 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 				}
 			}
 
-			// Priority 2: Apply filters if exist
-			if (filterQuery) {
+			// Priority 2: Apply filters if exist and if filter is not hidden
+			if (filterQuery && !hide.includes('filter')) {
 				const parsedFilters = parseFilterQuery(filterQuery);
 				if (parsedFilters.length > 0) {
 					setFilterRows(parsedFilters);
@@ -252,8 +252,8 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 				}
 			}
 
-			// Priority 3: Apply sorts if exist
-			if (sortQuery) {
+			// Priority 3: Apply sorts if exist and if sort is not hidden
+			if (sortQuery && !hide.includes('sort')) {
 				const parsedSorts = parseSortQuery(sortQuery);
 				if (parsedSorts.length > 0) {
 					setSortRows(parsedSorts);
@@ -287,7 +287,11 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			}
 
 			// Set the processed data as the current list
-			if (searchQuery || filterQuery || sortQuery) {
+			if (
+				(searchQuery && !hide.includes('search')) ||
+				(filterQuery && !hide.includes('filter')) ||
+				(sortQuery && !hide.includes('sort'))
+			) {
 				setCurrentList(processedData);
 				setIsFilter && setIsFilter(true);
 			}
@@ -536,6 +540,11 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 
 	const handleSearchKeyPress = async (e) => {
 		if (e.key === 'Enter') {
+			// Skip search if search feature is hidden
+			if (hide.includes('search')) {
+				return;
+			}
+
 			// If search term is empty, reset to source data and clear search param
 			if (searchTerm.trim() === '') {
 				setCurrentList(source);
@@ -797,6 +806,11 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 
 	// Apply filters - updated to handle processing_v2 and receipt special cases
 	const applyFilters = () => {
+		// Skip filtering if filter feature is hidden
+		if (hide.includes('filter')) {
+			return;
+		}
+
 		// Filter out existing deadline filters to avoid duplicates
 		let baseFilters = filterRows.filter(
 			(row) =>
@@ -1105,6 +1119,11 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 
 	// Apply sort with updated logic
 	const applySort = () => {
+		// Skip sorting if sort feature is hidden
+		if (hide.includes('sort')) {
+			return;
+		}
+
 		// Filter out rows with empty fields
 		const validSortRows = sortRows.filter((row) => row.field);
 

@@ -9,12 +9,15 @@ import { PiDownloadSimpleBold } from 'react-icons/pi';
 import { CgFileDocument } from 'react-icons/cg';
 import { TiBusinessCard } from 'react-icons/ti';
 import { MdOutlineContactPhone } from 'react-icons/md';
-import { FaTrashAlt, FaEdit, FaCheck, FaMoneyBillWave } from 'react-icons/fa'; // Keep FaMoneyBillWave for the revenue section icon
+import { FaTrashAlt, FaEdit, FaCheck, FaMoneyBillWave, FaFilePdf } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import CreateReceipt from './CreateReceipt';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
+import axios from 'axios'; // Add axios import
+// Import the generateReportToHTML function
+import { generateReportToHTML } from '../contexts/generateReportToHTML';
 
 const ReceiptInfor = ({ receipt }) => {
 	const { setCurrentTitlePage, currentUser, technicians, status, purposes, formatDate, getIdenByUid, identityCache } =
@@ -28,6 +31,7 @@ const ReceiptInfor = ({ receipt }) => {
 	const [isAddingSample, setIsAddingSample] = useState(false);
 	const [isEditMode, setIsEditMode] = useState(false); // Add edit mode state
 	const [selectedReports, setSelectedReports] = useState({});
+	const [selectAllChecked, setSelectAllChecked] = useState(false);
 
 	// Keep editingRevenueField state but remove showRevenueSection
 	const [editingRevenueField, setEditingRevenueField] = useState(null);
@@ -71,6 +75,10 @@ const ReceiptInfor = ({ receipt }) => {
 
 	// Add state to track which field is currently being edited
 	const [editingGeneralField, setEditingGeneralField] = useState(null);
+
+	// State to track report generation progress
+	const [isGeneratingReports, setIsGeneratingReports] = useState(false);
+	const [generationProgress, setGenerationProgress] = useState(0);
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -275,7 +283,7 @@ const ReceiptInfor = ({ receipt }) => {
 		if (isNaN(date.getTime())) return dateValue;
 
 		// Subtract 7 hours to convert from Vietnam time to UTC for storage
-		date.setHours(date.getHours() - 7);
+		date.setHours(date.getHours() + 7);
 		return date;
 	};
 
@@ -1686,23 +1694,297 @@ const ReceiptInfor = ({ receipt }) => {
 			.sort((a, b) => new Date(b.publish_date) - new Date(a.publish_date));
 	};
 
-	// Function to handle report selection change
+	// Function to handle report selection change - preserve checkbox state
 	const handleReportSelection = (sampleId, reportId) => {
-		setSelectedReports((prev) => ({ ...prev, [sampleId]: reportId }));
+		setSelectedReports((prev) => {
+			const isCurrentlyChecked = prev[sampleId]?.isChecked || false;
+			return {
+				...prev,
+				[sampleId]: {
+					ppt_uid: reportId,
+					isChecked: isCurrentlyChecked,
+				},
+			};
+		});
 	};
 
-	// Function to handle checkbox toggle
-	const handleCheckboxToggle = (sampleId) => {
-		setSelectedReports((prev) => ({
-			...prev,
-			[sampleId]: {
-				...prev[sampleId],
-				isChecked: !prev[sampleId]?.isChecked,
-			},
-		}));
+	// Function to handle checkbox toggle - refactored to preserve ppt_uid selection
+	const handleCheckboxToggle = (sampleId, explicitState) => {
+		setSelectedReports((prev) => {
+			const prevValue = prev[sampleId];
+			const newIsChecked = explicitState !== undefined ? explicitState : !prevValue?.isChecked;
+
+			// Get the current selected report ID
+			let currentPptUid = null;
+
+			// If prevValue is a string (ppt_uid), use it
+			if (typeof prevValue === 'string') {
+				currentPptUid = prevValue;
+			}
+			// If it's an object with ppt_uid, use that
+			else if (prevValue?.ppt_uid) {
+				currentPptUid = prevValue.ppt_uid;
+			}
+			// Otherwise check if there's a default selection possible
+			else {
+				const sample = currentReceipt?.samples.find((s) => s.id === sampleId);
+				if (sample?.report?.length > 0) {
+					const newestReport = getNewestReport(sample.report);
+					if (newestReport) {
+						currentPptUid = newestReport.ppt_uid;
+					}
+				}
+			}
+
+			return {
+				...prev,
+				[sampleId]: {
+					ppt_uid: currentPptUid,
+					isChecked: newIsChecked,
+				},
+			};
+		});
 	};
 
-	// Render PPT table
+	// Function to handle "select all" checkbox toggle
+	const handleSelectAllToggle = () => {
+		const newSelectAllState = !selectAllChecked;
+		setSelectAllChecked(newSelectAllState);
+
+		// Update all checkboxes to match the select all state
+		currentReceipt?.samples.forEach((sample) => {
+			handleCheckboxToggle(sample.id, newSelectAllState);
+		});
+	};
+
+	// Function to export selected PPTs to PDF - updated to generate HTML for each report
+	const handleExportPPT = async () => {
+		const selectedItems = [];
+
+		// Find all samples with checked reports
+		currentReceipt?.samples.forEach((sample) => {
+			const value = selectedReports[sample.id];
+			if (value?.isChecked) {
+				// Determine the report ID
+				let reportId = null;
+
+				if (typeof value === 'string') {
+					reportId = value;
+				} else if (value.ppt_uid) {
+					reportId = value.ppt_uid;
+				} else {
+					const selectedReportId =
+						typeof selectedReports[sample.id] === 'string'
+							? selectedReports[sample.id]
+							: selectedReports[sample.id]?.ppt_uid;
+
+					if (selectedReportId) {
+						reportId = selectedReportId;
+					} else {
+						const newestReport = getNewestReport(sample.report || []);
+						if (newestReport) {
+							reportId = newestReport.ppt_uid;
+						}
+					}
+				}
+
+				if (reportId) {
+					selectedItems.push({
+						ppt_uid: reportId,
+						sample_uid: sample.sample_uid,
+					});
+				}
+			}
+		});
+
+		// Check if we have any selected reports
+		if (selectedItems.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Không có phiếu nào được chọn',
+				text: 'Vui lòng chọn ít nhất một phiếu để xuất PPT.',
+			});
+			return;
+		}
+
+		try {
+			// Show loading toast
+			showToast('Đang xuất PPT...', 'info');
+
+			// Array to store HTML content for each report
+			const htmls = [];
+
+			// Generate HTML for each selected report
+			for (const item of selectedItems) {
+				try {
+					// Call generateReportToHTML with returnHtml option
+					const htmlContent = await generateReportToHTML({
+						sample_uid: item.sample_uid,
+						ppt_uid: item.ppt_uid,
+						showVlas: false,
+						showComment: false,
+						showReference: false,
+						currentUser: currentUser,
+						returnHtml: true, // Request HTML content instead of opening in a new window
+					});
+
+					// Add the HTML content to our array
+					htmls.push({
+						ppt_uid: item.ppt_uid,
+						html: htmlContent,
+					});
+				} catch (error) {
+					console.error(`Error generating HTML for report ${item.ppt_uid}:`, error);
+				}
+			}
+
+			// Send the array of HTML content to the API using axios
+			const response = await axios.post(
+				'https://black.irdop.org/khsi19me/html_to_pdf',
+				{
+					htmls: htmls,
+				},
+				{
+					responseType: 'blob', // For binary data response
+					headers: {
+						'Content-Type': 'application/json',
+						Accept: '*/*',
+					},
+				},
+			);
+
+			// Generate a filename based on receipt UID and date
+			const date = new Date();
+			const dateStr = `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
+			const fileName = `PPT_${receipt_uid}_${dateStr}.zip`;
+
+			// Create a URL for the blob
+			const url = window.URL.createObjectURL(new Blob([response.data]));
+
+			// Create an anchor element and trigger download
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = fileName;
+			document.body.appendChild(a);
+			a.click();
+
+			// Clean up
+			window.URL.revokeObjectURL(url);
+			document.body.removeChild(a);
+
+			showToast('Xuất PPT thành công!', 'success');
+		} catch (error) {
+			console.error('Error exporting PPT:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: `Không thể xuất PPT: ${error.message || 'Lỗi không xác định'}`,
+			});
+		}
+	};
+
+	// Function to get all reports (including drafts and published)
+	const getAllReports = (reports) => {
+		if (!reports || !Array.isArray(reports)) return [];
+		// Sort by publish date, newest first
+		return [...reports].sort((a, b) => new Date(b.publish_date) - new Date(a.publish_date));
+	};
+
+	// Function to get the newest report (draft or published)
+	const getNewestReport = (reports) => {
+		const allReports = getAllReports(reports);
+		return allReports.length > 0 ? allReports[0] : null;
+	};
+
+	// Function to handle generating draft reports for selected samples
+	const handleGenerateDraftReports = async () => {
+		// Get all checked samples
+		const selectedSampleIds = Object.entries(selectedReports)
+			.filter(([_, value]) => value?.isChecked)
+			.map(([sampleId, _]) => parseInt(sampleId));
+
+		if (selectedSampleIds.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Không có mẫu nào được chọn',
+				text: 'Vui lòng chọn ít nhất một mẫu để tạo báo cáo sơ bộ.',
+			});
+			return;
+		}
+
+		setIsGeneratingReports(true);
+		setGenerationProgress(0);
+
+		showToast(`Đang tạo báo cáo sơ bộ cho ${selectedSampleIds.length} mẫu...`, 'info');
+
+		// Process each selected sample
+		for (let i = 0; i < selectedSampleIds.length; i++) {
+			const sampleId = selectedSampleIds[i];
+			// Find the sample object from the current receipt
+			const sample = currentReceipt.samples.find((s) => s.id === sampleId);
+			if (!sample) continue;
+
+			try {
+				// Update progress
+				setGenerationProgress(Math.floor((i / selectedSampleIds.length) * 100));
+
+				// Call generateReportToHTML with the sample_uid
+				await generateReportToHTML({
+					sample_uid: sample.sample_uid,
+					showVlas: false, // Default settings
+					showComment: false,
+					showReference: false,
+					currentUser: currentUser,
+				});
+
+				// No need to open a new window anymore
+			} catch (error) {
+				console.error(`Error generating report for sample ${sample.sample_uid}:`, error);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: `Không thể tạo báo cáo cho mẫu ${sample.sample_uid}: ${error.message || 'Lỗi không xác định'}`,
+				});
+			}
+		}
+
+		setGenerationProgress(100);
+
+		// Fetch updated data to refresh the report list
+		await fetchReceipt();
+
+		// Update selectedReports to select newest ppt_uid for each processed sample
+		const updatedSelections = { ...selectedReports };
+
+		selectedSampleIds.forEach((sampleId) => {
+			const sample = currentReceipt.samples.find((s) => s.id === sampleId);
+			if (sample && sample.report && sample.report.length > 0) {
+				const newestReport = getNewestReport(sample.report);
+				if (newestReport) {
+					updatedSelections[sampleId] = newestReport.ppt_uid;
+				}
+			}
+		});
+
+		setSelectedReports(updatedSelections);
+
+		setTimeout(() => {
+			setIsGeneratingReports(false);
+			setGenerationProgress(0);
+		}, 1000);
+
+		showToast(`Đã tạo báo cáo sơ bộ cho ${selectedSampleIds.length} mẫu thành công!`, 'success');
+	};
+
+	// Helper function to check if all analyses in a sample have been reviewed
+	const allAnalysesReviewed = (sample) => {
+		console.log(sample);
+		if (!sample.analysis || sample.analysis.length === 0) return false;
+		const allReviewed = sample.analysis.every((analysis) => analysis.reviewed_by);
+		return allReviewed ? true : false;
+	};
+
+	// Modify renderPPTTable to include the review indicator
 	const renderPPTTable = () => {
 		return (
 			<div className="overflow-x-auto overflow-hidden">
@@ -1712,54 +1994,111 @@ const ReceiptInfor = ({ receipt }) => {
 							<th className="py-2 border-2 text-start pl-2 w-36 min-w-36">Mã mẫu thử</th>
 							<th className="py-2 border-2 text-start pl-2 w-[18%] min-w-44">Chỉ tiêu</th>
 							<th className="py-2 border-2 text-start pl-2 w-[12%] min-w-32">Lần cuối cập nhật</th>
-							<th className="py-2 border-2 text-start pl-2 w-[20%] min-w-48">Mã phiếu phân tích</th>
+							<th className="py-2 border-2 text-start pl-2 w-[24%] min-w-52">Mã phiếu phân tích</th>
 							<th className="py-2 border-2 text-start pl-2 w-32 min-w-32">Ngày phát hành</th>
-							<th className="py-2 border-2 text-center w-14 min-w-14">Chọn</th>
+							<th className="py-2 border-2 text-center w-14 min-w-14">
+								<input
+									type="checkbox"
+									className="w-4 h-4"
+									checked={selectAllChecked}
+									onChange={handleSelectAllToggle}
+								/>
+							</th>
 						</tr>
 					</thead>
 					<tbody className="border-2">
 						{currentReceipt?.samples.map((sample) => {
 							const reports = sample.report || [];
 							const draftReport = getDraftReport(reports);
-							const publishedReports = getPublishedReports(reports);
-							const latestPublishedReport = publishedReports.length > 0 ? publishedReports[0] : null;
+							const allReports = getAllReports(reports);
+							const newestReport = getNewestReport(reports);
 
-							// If no selectedReport for this sample, default to the latest published report
-							const selectedReportId =
-								selectedReports[sample.id] || (latestPublishedReport ? latestPublishedReport.ppt_uid : '');
+							// Calculate analysis statistics - similar to sample view
+							const totalTests = sample.analysis.length;
+							const completedTests = sample.analysis.filter((order) => order.result_value !== '').length;
+							const pendingTests = totalTests - completedTests;
+
+							// Use ppt_uid from the object structure if available, otherwise fall back to string or newest report
+							const selectedReportObj = selectedReports[sample.id];
+							let selectedReportId = '';
+
+							if (typeof selectedReportObj === 'string') {
+								selectedReportId = selectedReportObj;
+							} else if (selectedReportObj?.ppt_uid) {
+								selectedReportId = selectedReportObj.ppt_uid;
+							} else if (newestReport) {
+								selectedReportId = newestReport.ppt_uid;
+							}
 
 							// Find the selected report object
 							const selectedReport = reports.find((r) => r.ppt_uid === selectedReportId);
 
 							return (
 								<tr key={sample.id}>
-									<td className="p-2 border text-start text-text-secondary">
+									<td className="p-2 border text-start text-text-secondary relative">
 										<NavLink
 											to={`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`}
 											className="text-primary font-semibold hover:text-[#103667]"
 										>
 											{sample.sample_uid}
 										</NavLink>
+										{allAnalysesReviewed(sample) === true && (
+											<span className="absolute top-1 right-2 text-yellow-500 font-bold">*</span>
+										)}
 									</td>
-									<td className="p-2 border text-start">{draftReport ? draftReport.ppt_uid : '--'}</td>
+									<td className="p-2 border text-start">
+										{/* Show completed/pending/total analysis counts */}
+										{completedTests} / {pendingTests} / {totalTests}
+									</td>
 									<td className="p-2 border text-start">{draftReport ? formatDate(draftReport.publish_date) : '--'}</td>
 									<td className="p-2 border text-start">
-										{publishedReports.length > 0 ? (
-											<select
-												className="p-1 border rounded-md w-full text-sm bg-white"
-												value={selectedReportId}
-												onChange={(e) => handleReportSelection(sample.id, e.target.value)}
-											>
-												<option value="">-- Chọn phiếu phân tích --</option>
-												{publishedReports.map((report, index) => (
-													<option key={index} value={report.ppt_uid}>
-														{report.ppt_uid}
-													</option>
-												))}
-											</select>
-										) : (
-											'--'
-										)}
+										<div className="flex items-center space-x-2">
+											{allReports.length > 0 ? (
+												<>
+													<select
+														className="p-1 border rounded-md flex-grow text-sm bg-white"
+														value={selectedReportId}
+														onChange={(e) => handleReportSelection(sample.id, e.target.value)}
+													>
+														<option value="">-- Chọn phiếu phân tích --</option>
+														{allReports.map((report, index) => (
+															<option key={index} value={report.ppt_uid}>
+																{report.ppt_uid}
+															</option>
+														))}
+													</select>
+													{/* Add forward button to navigate to report */}
+													{selectedReportId && (
+														<button
+															className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+															onClick={() =>
+																window.open(
+																	`${window.location.origin}/report?sample_uid=${sample.sample_uid}&ppt_uid=${selectedReportId}`,
+																	'_blank',
+																)
+															}
+														>
+															<svg
+																xmlns="http://www.w3.org/2000/svg"
+																fill="none"
+																viewBox="0 0 24 24"
+																strokeWidth={1.5}
+																stroke="currentColor"
+																className="w-5 h-5"
+															>
+																<path
+																	strokeLinecap="round"
+																	strokeLinejoin="round"
+																	d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+																/>
+															</svg>
+														</button>
+													)}
+												</>
+											) : (
+												'--'
+											)}
+										</div>
 									</td>
 									<td className="p-2 border text-start">
 										{selectedReport && selectedReport.publish_date ? formatDate(selectedReport.publish_date) : '--'}
@@ -1953,7 +2292,7 @@ const ReceiptInfor = ({ receipt }) => {
 								<div className="rounded-lg px-1 border-l-4 border-teritary">
 									<div className="flex justify-start items-start mb-1">
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
-											Tổ chức/CCá nhân
+											Tổ chức / Cá nhân
 										</label>
 										{renderField('client.client_name', currentReceipt?.client?.client_name)}
 									</div>
@@ -2062,7 +2401,51 @@ const ReceiptInfor = ({ receipt }) => {
 						/>
 					) : viewMode === 'ppt' ? (
 						<div className="flex items-center space-x-2">
-							<button className="bg-blue-500 text-white px-1 py-1 rounded-lg w-36">Xuất PPT</button>
+							<button
+								className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
+								onClick={handleGenerateDraftReports}
+								disabled={isGeneratingReports}
+							>
+								{isGeneratingReports ? (
+									<span className="flex items-center">
+										<svg
+											className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+											xmlns="http://www.w3.org/2000/svg"
+											fill="none"
+											viewBox="0 0 24 24"
+										>
+											<circle
+												className="opacity-25"
+												cx="12"
+												cy="12"
+												r="10"
+												stroke="currentColor"
+												strokeWidth="4"
+											></circle>
+											<path
+												className="opacity-75"
+												fill="currentColor"
+												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+											></path>
+										</svg>
+										{generationProgress}%
+									</span>
+								) : (
+									<span className="flex items-center">
+										<div className="flex items-center justify-between ">
+											{'Tạo sơ bộ'} <FaFilePdf size={20} className="ml-1" />
+										</div>
+									</span>
+								)}
+							</button>
+							<button
+								className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
+								onClick={handleExportPPT}
+							>
+								<div className="flex items-center justify-between ">
+									{'Tải PPT'} <PiDownloadSimpleBold size={20} className="ml-1" />
+								</div>
+							</button>
 						</div>
 					) : (
 						<div className="flex items-center space-x-2">
@@ -2175,13 +2558,16 @@ const ReceiptInfor = ({ receipt }) => {
 
 										return (
 											<tr key={sample.id}>
-												<td className="p-2 border text-start text-text-secondary">
+												<td className="p-2 border text-start text-text-secondary relative">
 													<NavLink
 														to={`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`}
 														className="text-primary font-semibold hover:text-[#103667]"
 													>
 														{sample.sample_uid}
 													</NavLink>
+													{allAnalysesReviewed(sample) && (
+														<span className="absolute top-1 right-2 text-yellow-500 font-bold">*</span>
+													)}
 												</td>
 												<td className="p-2 border text-start">
 													{isEditMode ? (
