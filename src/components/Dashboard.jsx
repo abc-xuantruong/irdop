@@ -8,7 +8,8 @@ import CreateReceiptFromCRM from './CreateReceiptFromCRM';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import 'react-datepicker/dist/react-datepicker.css';
-import { FaTrashAlt, FaMoneyBillWave, FaCalendarDay } from 'react-icons/fa';
+// Add FaExternalLinkAlt to the import for the forward icon
+import { FaTrashAlt, FaMoneyBillWave, FaCalendarDay, FaFileAlt, FaExternalLinkAlt } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 
 const Dashboard = () => {
@@ -21,6 +22,23 @@ const Dashboard = () => {
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isFilter, setIsFilter] = useState(false); // State to track if filtering is active
 	const [searchTerm, setSearchTerm] = useState('');
+
+	// Extract search term from URL query params
+	useEffect(() => {
+		const queryParams = new URLSearchParams(location.search);
+		const searchParam = queryParams.get('search');
+		if (searchParam) {
+			setSearchTerm(searchParam);
+		}
+	}, [location.search]);
+
+	// Add state for preliminary results view
+	const [preliminaryData, setPreliminaryData] = useState({
+		not_sent_preliminary: [],
+		sent_preliminary: [],
+		sent_report: [],
+	});
+	const [selectedPreliminaryType, setSelectedPreliminaryType] = useState('not_sent_preliminary');
 
 	// Remove isEditMode state
 	// Add state to track which field is being edited
@@ -45,6 +63,12 @@ const Dashboard = () => {
 
 	// Add new state to track today's deadline filter
 	const [showTodayDeadlines, setShowTodayDeadlines] = useState(false);
+
+	// Add state to track selected report IDs for each sample
+	const [selectedReportIds, setSelectedReportIds] = useState({});
+
+	// Replace separate view state with a single viewMode state
+	const [viewMode, setViewMode] = useState('normal'); // 'normal', 'payment', 'preliminary'
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -83,6 +107,46 @@ const Dashboard = () => {
 		const parsedDate = new Date(dateStr);
 		return isNaN(parsedDate.getTime()) ? null : parsedDate;
 	};
+
+	// Function to get the most recent report for a sample
+	const getMostRecentReport = (sample) => {
+		if (!sample.report || !Array.isArray(sample.report) || sample.report.length === 0) {
+			return null;
+		}
+
+		// Sort reports by publish_date in descending order (most recent first)
+		const sortedReports = [...sample.report].sort((a, b) => new Date(b.publish_date) - new Date(a.publish_date));
+
+		return sortedReports[0];
+	};
+
+	// Function to handle report selection change
+	const handleReportSelection = (sampleId, reportId) => {
+		setSelectedReportIds((prev) => ({
+			...prev,
+			[sampleId]: reportId,
+		}));
+	};
+
+	// Function to initialize selected report IDs on data load
+	useEffect(() => {
+		if (preliminaryData && selectedPreliminaryType) {
+			const newSelectedReports = {};
+
+			preliminaryData[selectedPreliminaryType]?.forEach((receipt) => {
+				if (receipt.samples && Array.isArray(receipt.samples)) {
+					receipt.samples.forEach((sample) => {
+						const mostRecentReport = getMostRecentReport(sample);
+						if (mostRecentReport) {
+							newSelectedReports[sample.id || sample.sample_uid] = mostRecentReport.ppt_uid;
+						}
+					});
+				}
+			});
+
+			setSelectedReportIds(newSelectedReports);
+		}
+	}, [preliminaryData, selectedPreliminaryType]);
 
 	// Handle raw date input change
 	const handleDateInputChange = (receiptId, e) => {
@@ -346,12 +410,34 @@ const Dashboard = () => {
 		setShowRelativeTime(!showRelativeTime);
 	};
 
-	// Toggle payment column visibility
-	const togglePaymentColumn = () => {
-		setShowPaymentColumn(!showPaymentColumn);
+	// Updated togglePreliminaryView function
+	const togglePreliminaryView = () => {
+		if (viewMode === 'preliminary') {
+			// If already in preliminary view, switch back to normal
+			setViewMode('normal');
+		} else {
+			// Switch to preliminary view and fetch data
+			setViewMode('preliminary');
+			fetchPreliminaryData();
+			// Turn off other filters
+			setShowTodayDeadlines(false);
+		}
 	};
 
-	// Add a function to filter receipts with today's deadline
+	// Updated togglePaymentColumn function
+	const togglePaymentColumn = () => {
+		if (viewMode === 'payment') {
+			// If already in payment view, switch back to normal
+			setViewMode('normal');
+		} else {
+			// Switch to payment view
+			setViewMode('payment');
+			// Turn off other filters
+			setShowTodayDeadlines(false);
+		}
+	};
+
+	// Updated filterTodayDeadlines function that properly filters preliminary data
 	const filterTodayDeadlines = () => {
 		setShowTodayDeadlines(!showTodayDeadlines);
 
@@ -360,30 +446,96 @@ const Dashboard = () => {
 			const today = new Date();
 			const todayStr = today.toISOString().split('T')[0]; // Get YYYY-MM-DD format
 
-			const filteredReceipts = originalList.filter((receipt) => {
-				if (!receipt.deadline) return false;
+			if (viewMode === 'preliminary') {
+				// For preliminary view, filter the current preliminary data type
+				const sourceData = [...preliminaryData[selectedPreliminaryType]];
+				const filteredData = sourceData.filter((receipt) => {
+					if (!receipt.deadline) return false;
 
-				const deadlineDate = new Date(receipt.deadline);
-				const deadlineStr = deadlineDate.toISOString().split('T')[0];
+					const deadlineDate = new Date(receipt.deadline);
+					const deadlineStr = deadlineDate.toISOString().split('T')[0];
+					return deadlineStr === todayStr;
+				});
 
-				return deadlineStr === todayStr;
-			});
+				// Create a new object with the filtered data for the current type
+				const newPreliminaryData = {
+					...preliminaryData,
+					[selectedPreliminaryType]: filteredData,
+				};
 
-			setCurrentList(filteredReceipts);
-			setIsFilter(true);
-			setCurrentPage(1); // Reset to first page
+				setPreliminaryData(newPreliminaryData);
+				showToast(`Hiển thị ${filteredData.length} tiếp nhận có hạn trả là hôm nay`, 'info');
+			} else {
+				// For normal and payment views, filter from the current list
+				const filteredReceipts = currentList.filter((receipt) => {
+					if (!receipt.deadline) return false;
 
-			showToast(`Hiển thị ${filteredReceipts.length} tiếp nhận có hạn trả là hôm nay`, 'info');
+					const deadlineDate = new Date(receipt.deadline);
+					const deadlineStr = deadlineDate.toISOString().split('T')[0];
+					return deadlineStr === todayStr;
+				});
+
+				setCurrentList(filteredReceipts);
+				setIsFilter(true);
+				setCurrentPage(1); // Reset to first page
+				showToast(`Hiển thị ${filteredReceipts.length} tiếp nhận có hạn trả là hôm nay`, 'info');
+			}
 		} else {
 			// If turning off the filter
-			setCurrentList(originalList);
-			setIsFilter(false);
+			if (viewMode === 'preliminary') {
+				// For preliminary view, just reload the preliminary data again
+				fetchPreliminaryData();
+			} else {
+				// For normal/payment views, reset to the original list
+				setCurrentList(originalList);
+				setIsFilter(false);
+			}
 		}
+	};
+
+	// Function to fetch preliminary results data
+	const fetchPreliminaryData = async () => {
+		try {
+			const response = await apiGet('https://black.irdop.org/to82oe92i/db/sample/get/send_result');
+			if (response.status === 200) {
+				setPreliminaryData(response.data);
+				console.log('Preliminary data fetched:', response.data);
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi tải dữ liệu kết quả sơ bộ',
+				});
+			}
+		} catch (error) {
+			console.error('Error fetching preliminary results:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi tải dữ liệu kết quả sơ bộ',
+			});
+		}
+	};
+
+	// Update the handlePreliminaryTypeChange function to turn off deadlines filter
+	const handlePreliminaryTypeChange = (type) => {
+		// Turn off deadline filter when changing preliminary list type
+		if (showTodayDeadlines) {
+			setShowTodayDeadlines(false);
+		}
+		setSelectedPreliminaryType(type);
 	};
 
 	useEffect(() => {
 		setCurrentTitlePage('Danh sách tiếp nhận mẫu');
 	}, [setCurrentTitlePage]);
+
+	// Add effect to reset deadline filter when search term changes
+	useEffect(() => {
+		if (searchTerm && showTodayDeadlines) {
+			setShowTodayDeadlines(false);
+		}
+	}, [searchTerm]);
 
 	const fetchReceipt = async () => {
 		try {
@@ -394,6 +546,11 @@ const Dashboard = () => {
 				// If there's no active filter, update the current list as well
 				if (!isFilter) {
 					setCurrentList(response.data);
+
+					// Turn off deadline filter when refreshing data
+					if (showTodayDeadlines) {
+						setShowTodayDeadlines(false);
+					}
 				}
 				console.log('Data fetched:', response.data);
 
@@ -699,6 +856,10 @@ const Dashboard = () => {
 		});
 	};
 
+	// Calculate if a view mode is currently active
+	const isPreliminaryActive = viewMode === 'preliminary';
+	const isPaymentActive = viewMode === 'payment';
+
 	return (
 		<div className="flex flex-col justify-between items-center w-full">
 			{/* Add CSS for custom toast */}
@@ -737,27 +898,47 @@ const Dashboard = () => {
 			<Breadcrumb
 				paths={[{ name: 'Danh sách', link: '/' }]}
 				source={originalList}
-				setCurrentList={setCurrentList}
+				setCurrentList={(newList) => {
+					setCurrentList(newList);
+					// Turn off deadline filter when changing the list through breadcrumb
+					if (showTodayDeadlines) {
+						setShowTodayDeadlines(false);
+					}
+				}}
 				setIsFilter={setIsFilter}
 			/>
 			<div className="justify-between items-center w-full mb-1 hidden md:flex">
-				<div>
-					{searchTerm && (
-						<div className="text-sm text-gray-600">
-							Kết quả tìm kiếm cho: <span className="font-medium">{searchTerm}</span>
-							<button
-								onClick={() => {
-									setSearchTerm('');
-									setIsFilter(false);
-									navigate('/dashboard');
-									fetchReceipt();
-								}}
-								className="ml-2 text-blue-600 px-2 py-1 bg-background border-2 border-gray-400"
-							>
-								Hủy
-							</button>
-						</div>
-					)}
+				<div className="px-2 mb-1 mt-1">
+					<div className="flex width-fit space-x-2">
+						{isPreliminaryActive && (
+							<>
+								<button
+									className={`px-2 py-1 rounded focus:outline-none ${
+										selectedPreliminaryType === 'not_sent_preliminary' ? 'bg-blue-600 text-white' : 'bg-gray-200'
+									}`}
+									onClick={() => handlePreliminaryTypeChange('not_sent_preliminary')}
+								>
+									Chưa gửi kết quả ({preliminaryData.not_sent_preliminary?.length || 0})
+								</button>
+								<button
+									className={`px-2 py-1 rounded focus:outline-none ${
+										selectedPreliminaryType === 'sent_preliminary' ? 'bg-blue-600 text-white' : 'bg-gray-200'
+									}`}
+									onClick={() => handlePreliminaryTypeChange('sent_preliminary')}
+								>
+									Đã gửi sơ bộ({preliminaryData.sent_preliminary?.length || 0})
+								</button>
+								{/* <button
+									className={`px-2 py-1 rounded focus:outline-none ${
+										selectedPreliminaryType === 'sent_report' ? 'bg-blue-600 text-white' : 'bg-gray-200'
+									}`}
+									onClick={() => handlePreliminaryTypeChange('sent_report')}
+								>
+									Đã gửi phiếu ({preliminaryData.sent_report?.length || 0})
+								</button> */}
+							</>
+						)}
+					</div>
 				</div>
 				<div className="flex space-x-2 items-center">
 					<CreateReceiptFromCRM />
@@ -765,326 +946,520 @@ const Dashboard = () => {
 				</div>
 			</div>
 			<div className="bg-white rounded-lg w-full pb-4 pt-2">
-				<div className="w-full px-4 flex justify-end">
-					{/* Today's deadline toggle button */}
-					<button
-						className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none ${
-							showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black'
-						}`}
-						onClick={filterTodayDeadlines}
-						title={showTodayDeadlines ? 'Hiển thị tất cả' : 'Hiển thị các phiếu hạn trả hôm nay'}
-					>
-						<FaCalendarDay />
-					</button>
+				<div className="bg-white rounded-lg w-full pb-4 pt-2 flex justify-between items-center flex-wrap">
+					{/* Preliminary Results View */}
+					<div>
+						{searchTerm && (
+							<div className="text-sm text-gray-600">
+								Kết quả tìm kiếm cho: <span className="font-medium">{searchTerm}</span>
+								<button
+									onClick={() => {
+										setSearchTerm('');
+										setIsFilter(false);
+										navigate('/dashboard');
+										fetchReceipt();
+										// Turn off deadline filter when canceling search
+										if (showTodayDeadlines) {
+											setShowTodayDeadlines(false);
+										}
+									}}
+									className="ml-2 text-blue-600 px-2 py-1 bg-background border-2 border-gray-400"
+								>
+									Hủy
+								</button>
+							</div>
+						)}
+					</div>
+					<div className="w-fit px-4 flex justify-end">
+						{/* Today's deadline toggle button */}
+						<button
+							className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none ${
+								showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black'
+							}`}
+							onClick={filterTodayDeadlines}
+							title={showTodayDeadlines ? 'Hiển thị tất cả' : 'Hiển thị các phiếu hạn trả hôm nay'}
+						>
+							<FaCalendarDay />
+						</button>
 
-					{/* Add payment toggle button */}
-					<button
-						className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none ${
-							showPaymentColumn ? 'text-white bg-blue-600' : 'text-black'
-						}`}
-						onClick={togglePaymentColumn}
-						title={showPaymentColumn ? 'Ẩn cột ghi nhận doanh số' : 'Hiển thị cột ghi nhận doanh số'}
-					>
-						<FaMoneyBillWave />
-					</button>
+						{/* Change icon to document icon for preliminary results */}
+						<button
+							className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none ${
+								isPreliminaryActive ? 'text-white bg-blue-600' : 'text-black'
+							}`}
+							onClick={togglePreliminaryView}
+							title={isPreliminaryActive ? 'Hiển thị chế độ bình thường' : 'Hiển thị danh sách kết quả sơ bộ'}
+						>
+							<FaFileAlt />
+						</button>
 
-					<div className="w-fit">
-						<FilterBar
-							source={originalList} // Pass the original list to FilterBar
-							setCurrentList={setCurrentList}
-							typeSearch="receipt"
-							setIsFilter={setIsFilter} // Pass the setIsFilter function
-							hide={hideElements()} // Conditionally hide search
-						/>
+						{/* Add payment toggle button */}
+						<button
+							className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none ${
+								isPaymentActive ? 'text-white bg-blue-600' : 'text-black'
+							}`}
+							onClick={togglePaymentColumn}
+							title={isPaymentActive ? 'Ẩn cột ghi nhận doanh số' : 'Hiển thị cột ghi nhận doanh số'}
+						>
+							<FaMoneyBillWave />
+						</button>
+
+						<div className="w-fit">
+							<FilterBar
+								source={originalList} // Pass the original list to FilterBar
+								setCurrentList={setCurrentList}
+								typeSearch="receipt"
+								setIsFilter={setIsFilter} // Pass the setIsFilter function
+								hide={hideElements()} // Conditionally hide search
+							/>
+						</div>
 					</div>
 				</div>
 
-				<div className="overflow-x-auto px-1 py-2">
-					<table className="w-full text-black ">
-						<thead>
-							<tr className="border-b-2">
-								<th className="p-1 border-b text-start  min-w-[300px]">Mã tiếp nhận mẫu</th>
-								<th
-									className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700
-									"
-									onClick={toggleDeadlineFormat}
-								>
-									Hạn trả KQ
-								</th>
-								<th className="p-1 border-b text-start w-36 min-w-36">Mã mẫu thử</th>
-
-								{showPaymentColumn ? (
-									<th className="p-1 border-b text-start w-[25%] min-w-72">Thông tin mẫu thử</th>
-								) : (
-									<>
+				{isPreliminaryActive ? (
+					<>
+						<div className="overflow-x-auto px-1 py-2">
+							<table className="w-full text-black">
+								<thead>
+									<tr className="border-b-2">
+										<th className="p-1 border-b text-start min-w-[250px]">Mã tiếp nhận mẫu</th>
+										<th className="p-1 border-b text-start max-w-28 min-w-28">Hạn trả KQ</th>
+										<th className="p-1 border-b text-start w-36 min-w-36">Mã mẫu thử</th>
 										<th className="p-1 border-b text-start w-full min-w-72">Thông tin mẫu thử</th>
-										<th className="p-1 border-b text-start w-[10%] min-w-28">Số lượng</th>
-										<th className="p-1 border-b text-start w-[6%] min-w-24">Mục đích</th>
-										<th className="p-1 border-b text-start w-[6%] min-w-24">Trạng thái</th>
 										<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
-									</>
-								)}
+										<th className="p-1 border-b text-start w-[10%] min-w-36">Trạng thái</th>
+										<th className="p-1 border-b text-start w-[15%] min-w-40">Mã PPT</th>
+									</tr>
+								</thead>
+								<tbody>
+									{preliminaryData[selectedPreliminaryType]?.length > 0 ? (
+										preliminaryData[selectedPreliminaryType].map((receipt) => {
+											const samplesToShow = receipt.samples || [];
 
-								{/* Display the payment information columns when showPaymentColumn is true */}
-								{showPaymentColumn && (
-									<>
-										<th className="p-1 border-b text-start min-w-32">Mã đơn hàng</th>
-										<th className="p-1 border-b text-start min-w-32">Mã báo giá</th>
-										<th className="p-1 border-b text-start min-w-32">Người ghi nhận</th>
-										<th className="p-1 border-b text-start min-w-32">Doanh số</th>
-										<th className="p-1 border-b text-start min-w-32">Số hồ sơ lưu</th>
-									</>
-								)}
-							</tr>
-						</thead>
-						<tbody>
-							{paginatedReceipts.map((receipt) => {
-								const samplesToShow = receipt.samples;
-
-								return (
-									<React.Fragment key={receipt.receipt_uid}>
-										{samplesToShow.length === 0 ? (
-											<tr
-												key={receipt.receipt_uid}
-												className={`border-t border-b ${hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''}`}
-												onMouseEnter={() => handleReceiptMouseEnter(receipt.receipt_uid)}
-												onMouseLeave={handleReceiptMouseLeave}
-											>
-												<td className="p-1  text-start align-top ">
-													<NavLink
-														className="text-primary font-semibold hover:text-[#103667]"
-														to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid}`}
-													>
-														{receipt.receipt_uid}
-													</NavLink>
-													<div className="flex flex-col">
-														<p className="text-sm">{receipt.client.client_name}</p>
-														{receipt.record_code && (
-															<p className="text-xs text-slate-700">HSL: {receipt.record_code}</p>
-														)}
-														<p className="text-xs text-gray-500">
-															{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
-															{getUserName(receipt.created_by_uid)}
-														</p>
-													</div>
-												</td>
-
-												<td colSpan={showPaymentColumn ? '1' : '6'} className="p-1 text-center text-gray-500">
-													Chưa có thông tin mẫu thử . . .
-												</td>
-
-												{/* Show sample information column when payment columns are visible */}
-												{showPaymentColumn && <td className="p-1 text-center text-gray-500">--</td>}
-
-												{/* Display payment columns instead of a single one */}
-												{showPaymentColumn && (
-													<>
-														<td
-															className="p-1 text-start cursor-pointer hover:bg-gray-100"
-															onClick={() => handleFieldClick(receipt.id, null, 'order_code')}
-														>
-															{editingField.receiptId === receipt.id && editingField.field === 'order_code' ? (
-																<input
-																	type="text"
-																	value={receipt.order_code || ''}
-																	onChange={(e) => handleReceiptInputChange(e, receipt.id, 'order_code')}
-																	onKeyDown={(e) =>
-																		handleReceiptInputKeyDown(e, receipt.id, 'order_code', e.target.value)
-																	}
-																	onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																	className="p-1 border rounded-md w-full text-sm bg-white"
-																	autoFocus
-																/>
-															) : (
-																<div className="w-full h-full p-1 rounded">{receipt.order_code || '--'}</div>
-															)}
-														</td>
-														<td
-															className="p-1 text-start cursor-pointer hover:bg-gray-100"
-															onClick={() => handleFieldClick(receipt.id, null, 'quote_code')}
-														>
-															{editingField.receiptId === receipt.id && editingField.field === 'quote_code' ? (
-																<input
-																	type="text"
-																	value={receipt.quote_code || ''}
-																	onChange={(e) => handleReceiptInputChange(e, receipt.id, 'quote_code')}
-																	onKeyDown={(e) =>
-																		handleReceiptInputKeyDown(e, receipt.id, 'quote_code', e.target.value)
-																	}
-																	onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																	className="p-1 border rounded-md w-full text-sm bg-white"
-																	autoFocus
-																/>
-															) : (
-																<div className="w-full h-full p-1 rounded">{receipt.quote_code || '--'}</div>
-															)}
-														</td>
-														<td
-															className="p-1 text-start cursor-pointer hover:bg-gray-100"
-															onClick={() => handleFieldClick(receipt.id, null, 'sale_recorder')}
-														>
-															{editingField.receiptId === receipt.id && editingField.field === 'sale_recorder' ? (
-																<input
-																	type="text"
-																	value={receipt.sale_recorder || ''}
-																	onChange={(e) => handleReceiptInputChange(e, receipt.id, 'sale_recorder')}
-																	onKeyDown={(e) =>
-																		handleReceiptInputKeyDown(e, receipt.id, 'sale_recorder', e.target.value)
-																	}
-																	onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																	className="p-1 border rounded-md w-full text-sm bg-white"
-																	autoFocus
-																/>
-															) : (
-																<div className="w-full h-full p-1 rounded">{receipt.sale_recorder || '--'}</div>
-															)}
-														</td>
-														<td
-															className="p-1 text-start cursor-pointer hover:bg-gray-100"
-															onClick={() => handlePaymentConfirmation(receipt.id)}
-														>
-															<div
-																className={`w-full h-full p-1 rounded font-medium ${
-																	receipt.pay_status === 1 ? 'text-green-600' : 'text-gray-500'
-																}`}
-															>
-																{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
-															</div>
-														</td>
-														<td
-															className="p-1 text-start cursor-pointer hover:bg-gray-100"
-															onClick={() => handleFieldClick(receipt.id, null, 'record_code')}
-														>
-															{editingField.receiptId === receipt.id && editingField.field === 'record_code' ? (
-																<input
-																	type="text"
-																	value={receipt.record_code || ''}
-																	onChange={(e) => handleReceiptInputChange(e, receipt.id, 'record_code')}
-																	onKeyDown={(e) =>
-																		handleReceiptInputKeyDown(e, receipt.id, 'record_code', e.target.value)
-																	}
-																	onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																	className="p-1 border rounded-md w-full text-sm bg-white"
-																	autoFocus
-																/>
-															) : (
-																<div className="w-full h-full p-1 rounded">{receipt.record_code || '--'}</div>
-															)}
-														</td>
-													</>
-												)}
-											</tr>
-										) : (
-											samplesToShow.map((sample, sampleIndex) => {
-												// Add null check for sample.analysis
-												const totalTests = sample?.analysis?.length || 0;
-												const completedTests =
-													sample?.analysis?.filter((order) => order?.result_value !== '' && order?.result_value !== '<p></p>')?.length || 0;
-
-												return (
-													<tr
-														key={`${receipt?.receipt_uid || 'unknown'}-${sample?.sample_uid || 'unknown'}`}
-														className={` ${sampleIndex === 0 ? 'border-t' : ''} ${
-															sampleIndex === samplesToShow.length - 1 ? 'border-b' : ''
-														} ${
-															hoveredSampleId === sample?.sample_uid
-																? 'bg-gray-100'
-																: hoveredReceiptId === receipt?.receipt_uid
-																? 'bg-gray-50'
-																: ''
-														}`}
-														onMouseEnter={() => handleSampleMouseEnter(receipt?.receipt_uid, sample?.sample_uid)}
-														onMouseLeave={() => {
-															setHoveredSampleId(null);
-															setHoveredReceiptId(null);
-														}}
-													>
-														{sampleIndex === 0 && (
-															<>
-																<td
-																	className={`p-1   text-start align-top ${
-																		hoveredReceiptId === receipt?.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
+											return (
+												<React.Fragment key={receipt.receipt_uid || receipt.id}>
+													{samplesToShow.length === 0 ? (
+														<tr key={`empty-${receipt.receipt_uid || receipt.id}`}>
+															<td className="p-1 text-start align-top">
+																<NavLink
+																	className="text-primary font-semibold hover:text-[#103667]"
+																	to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid || receipt.id}`}
 																>
-																	<NavLink
-																		className="font-semibold text-primary hover:text-[#103667]"
-																		to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid}`}
-																	>
-																		{receipt.receipt_uid}
-																	</NavLink>
-																	<div className="flex flex-col">
-																		<p className="text-sm">{receipt.client.client_name}</p>
-																		{receipt.record_code && (
-																			<p className="text-xs text-slate-700">HSL: {receipt.record_code}</p>
-																		)}
-																		<p className="text-xs text-gray-500 mb-2">
-																			{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
-																			{getUserName(receipt.created_by_uid)}
-																		</p>
-																	</div>
-																</td>
+																	{receipt.receipt_uid || receipt.id}
+																</NavLink>
+																<div className="flex flex-col">
+																	<p className="text-sm">{receipt.client?.client_name || '--'}</p>
+																	<p className="text-xs text-gray-500">
+																		{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
+																		{getUserName(receipt.created_by_uid)}
+																	</p>
+																</div>
+															</td>
+															<td className="p-1 text-start">
+																{receipt.deadline ? formatDeadlineWithStyle(receipt.deadline, receipt) : '--'}
+															</td>
+															<td colSpan="5" className="p-1 text-center text-gray-500">
+																Chưa có thông tin mẫu thử . . .
+															</td>
+														</tr>
+													) : (
+														samplesToShow.map((sample, sampleIndex) => {
+															// Calculate completed tests count
+															const totalTests = sample?.analysis?.length || 0;
+															const completedTests =
+																sample?.analysis?.filter(
+																	(order) => order?.result_value !== null && order?.result_value !== '<p></p>',
+																)?.length || 0;
 
-																{sampleIndex === 0 && (
+															// Get sample id or uid for lookup
+															const sampleKey = sample.id || sample.sample_uid;
+
+															// Get reports for this sample
+															const reports = sample.report || [];
+
+															return (
+																<tr
+																	key={`${receipt.receipt_uid || receipt.id}-${
+																		sample.sample_uid || sample.id
+																	}-${sampleIndex}`}
+																>
+																	{sampleIndex === 0 && (
+																		<>
+																			<td className="p-1 text-start align-top" rowSpan={samplesToShow.length}>
+																				<NavLink
+																					className="text-primary font-semibold hover:text-[#103667]"
+																					to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid || receipt.id}`}
+																				>
+																					{receipt.receipt_uid || receipt.id}
+																				</NavLink>
+																				<div className="flex flex-col">
+																					<p className="text-sm">{receipt.client?.client_name || '--'}</p>
+																					<p className="text-xs text-gray-500">
+																						{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
+																						{getUserName(receipt.created_by_uid)}
+																					</p>
+																				</div>
+																			</td>
+																			<td className="p-1 text-start align-top" rowSpan={samplesToShow.length}>
+																				{receipt.deadline ? formatDeadlineWithStyle(receipt.deadline, receipt) : '--'}
+																			</td>
+																		</>
+																	)}
+																	<td className="p-1 text-start align-top">
+																		<NavLink
+																			className="text-primary font-normal hover:text-[#103667]"
+																			to={`/dashboard/sample?receipt_uid=${
+																				receipt.receipt_uid || receipt.id
+																			}&sample_uid=${sample.sample_uid || sample.id}`}
+																		>
+																			{sample.sample_uid || sample.id}
+																		</NavLink>
+																	</td>
+																	<td className="p-1 text-start align-top">{displayValue(sample.sample_name)}</td>
+																	<td className="p-1 text-start align-top">
+																		{completedTests} / {totalTests}
+																	</td>
+																	<td className="p-1 text-start align-top">
+																		{sample.status_ppt !== undefined && sample.status_ppt !== null
+																			? sample.status_ppt
+																			: '--'}
+																	</td>
+																	<td className="p-1 text-start flex items-center space-x-2 align-top">
+																		<select
+																			className="p-1 border rounded flex-grow text-sm bg-white"
+																			value={selectedReportIds[sampleKey] || ''}
+																			onChange={(e) => handleReportSelection(sampleKey, e.target.value)}
+																		>
+																			{reports.length > 0 ? (
+																				<>
+																					{reports.map((report) => (
+																						<option key={report.ppt_uid} value={report.ppt_uid}>
+																							{report.ppt_uid}
+																						</option>
+																					))}
+																				</>
+																			) : (
+																				<option value="">Chưa tạo PPT</option>
+																			)}
+																		</select>
+
+																		{/* Replace button with icon */}
+																		<button
+																			className="p-2 text-blue-500 hover:text-blue-700 focus:outline-none"
+																			onClick={() => {
+																				const url = `${window.location.origin}/report?sample_uid=${
+																					sample.sample_uid || sample.id
+																				}${
+																					selectedReportIds[sampleKey] ? `&ppt_uid=${selectedReportIds[sampleKey]}` : ''
+																				}`;
+																				window.open(url, '_blank');
+																			}}
+																			title="Xem báo cáo"
+																		>
+																			<FaExternalLinkAlt />
+																		</button>
+																	</td>
+																</tr>
+															);
+														})
+													)}
+												</React.Fragment>
+											);
+										})
+									) : (
+										<tr>
+											<td colSpan="7" className="p-4 text-center text-gray-500">
+												Không có dữ liệu để hiển thị
+											</td>
+										</tr>
+									)}
+								</tbody>
+							</table>
+						</div>
+					</>
+				) : (
+					<div className="overflow-x-auto px-1 py-2">
+						<table className="w-full text-black ">
+							{/* Normal view table head and body */}
+							<thead>
+								<tr className="border-b-2">
+									<th className="p-1 border-b text-start  min-w-[300px]">Mã tiếp nhận mẫu</th>
+									<th
+										className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700
+										"
+										onClick={toggleDeadlineFormat}
+									>
+										Hạn trả KQ
+									</th>
+									<th className="p-1 border-b text-start w-36 min-w-36">Mã mẫu thử</th>
+
+									{isPaymentActive ? (
+										<th className="p-1 border-b text-start w-[25%] min-w-72">Thông tin mẫu thử</th>
+									) : (
+										<>
+											<th className="p-1 border-b text-start w-full min-w-72">Thông tin mẫu thử</th>
+											<th className="p-1 border-b text-start w-[10%] min-w-28">Số lượng</th>
+											<th className="p-1 border-b text-start w-[6%] min-w-24">Mục đích</th>
+											<th className="p-1 border-b text-start w-[6%] min-w-24">Trạng thái</th>
+											<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
+										</>
+									)}
+
+									{/* Display the payment information columns when showPaymentColumn is true */}
+									{isPaymentActive && (
+										<>
+											<th className="p-1 border-b text-start min-w-32">Mã đơn hàng</th>
+											<th className="p-1 border-b text-start min-w-32">Mã báo giá</th>
+											<th className="p-1 border-b text-start min-w-32">Người ghi nhận</th>
+											<th className="p-1 border-b text-start min-w-32">Doanh số</th>
+											<th className="p-1 border-b text-start min-w-32">Số hồ sơ lưu</th>
+										</>
+									)}
+								</tr>
+							</thead>
+							<tbody>
+								{paginatedReceipts.map((receipt) => {
+									const samplesToShow = receipt.samples;
+
+									return (
+										<React.Fragment key={receipt.receipt_uid}>
+											{samplesToShow.length === 0 ? (
+												<tr
+													key={receipt.receipt_uid}
+													className={`border-t border-b ${
+														hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+													}`}
+													onMouseEnter={() => handleReceiptMouseEnter(receipt.receipt_uid)}
+													onMouseLeave={handleReceiptMouseLeave}
+												>
+													<td className="p-1  text-start align-top ">
+														<NavLink
+															className="text-primary font-semibold hover:text-[#103667]"
+															to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid}`}
+														>
+															{receipt.receipt_uid}
+														</NavLink>
+														<div className="flex flex-col">
+															<p className="text-sm">{receipt.client.client_name}</p>
+															{receipt.record_code && (
+																<p className="text-xs text-slate-700">HSL: {receipt.record_code}</p>
+															)}
+															<p className="text-xs text-gray-500">
+																{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
+																{getUserName(receipt.created_by_uid)}
+															</p>
+														</div>
+													</td>
+
+													<td colSpan={isPaymentActive ? '1' : '6'} className="p-1 text-center text-gray-500">
+														Chưa có thông tin mẫu thử . . .
+													</td>
+
+													{/* Show sample information column when payment columns are visible */}
+													{isPaymentActive && <td className="p-1 text-center text-gray-500">--</td>}
+
+													{/* Display payment columns instead of a single one */}
+													{isPaymentActive && (
+														<>
+															<td
+																className="p-1 text-start cursor-pointer hover:bg-gray-100"
+																onClick={() => handleFieldClick(receipt.id, null, 'order_code')}
+															>
+																{editingField.receiptId === receipt.id && editingField.field === 'order_code' ? (
+																	<input
+																		type="text"
+																		value={receipt.order_code || ''}
+																		onChange={(e) => handleReceiptInputChange(e, receipt.id, 'order_code')}
+																		onKeyDown={(e) =>
+																			handleReceiptInputKeyDown(e, receipt.id, 'order_code', e.target.value)
+																		}
+																		onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																		className="p-1 border rounded-md w-full text-sm bg-white"
+																		autoFocus
+																	/>
+																) : (
+																	<div className="w-full h-full p-1 rounded">{receipt.order_code || '--'}</div>
+																)}
+															</td>
+															<td
+																className="p-1 text-start cursor-pointer hover:bg-gray-100"
+																onClick={() => handleFieldClick(receipt.id, null, 'quote_code')}
+															>
+																{editingField.receiptId === receipt.id && editingField.field === 'quote_code' ? (
+																	<input
+																		type="text"
+																		value={receipt.quote_code || ''}
+																		onChange={(e) => handleReceiptInputChange(e, receipt.id, 'quote_code')}
+																		onKeyDown={(e) =>
+																			handleReceiptInputKeyDown(e, receipt.id, 'quote_code', e.target.value)
+																		}
+																		onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																		className="p-1 border rounded-md w-full text-sm bg-white"
+																		autoFocus
+																	/>
+																) : (
+																	<div className="w-full h-full p-1 rounded">{receipt.quote_code || '--'}</div>
+																)}
+															</td>
+															<td
+																className="p-1 text-start cursor-pointer hover:bg-gray-100"
+																onClick={() => handleFieldClick(receipt.id, null, 'sale_recorder')}
+															>
+																{editingField.receiptId === receipt.id && editingField.field === 'sale_recorder' ? (
+																	<input
+																		type="text"
+																		value={receipt.sale_recorder || ''}
+																		onChange={(e) => handleReceiptInputChange(e, receipt.id, 'sale_recorder')}
+																		onKeyDown={(e) =>
+																			handleReceiptInputKeyDown(e, receipt.id, 'sale_recorder', e.target.value)
+																		}
+																		onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																		className="p-1 border rounded-md w-full text-sm bg-white"
+																		autoFocus
+																	/>
+																) : (
+																	<div className="w-full h-full p-1 rounded">{receipt.sale_recorder || '--'}</div>
+																)}
+															</td>
+															<td
+																className="p-1 text-start cursor-pointer hover:bg-gray-100"
+																onClick={() => handlePaymentConfirmation(receipt.id)}
+															>
+																<div
+																	className={`w-full h-full p-1 rounded font-medium ${
+																		receipt.pay_status === 1 ? 'text-green-600' : 'text-gray-500'
+																	}`}
+																>
+																	{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
+																</div>
+															</td>
+															<td
+																className="p-1 text-start cursor-pointer hover:bg-gray-100"
+																onClick={() => handleFieldClick(receipt.id, null, 'record_code')}
+															>
+																{editingField.receiptId === receipt.id && editingField.field === 'record_code' ? (
+																	<input
+																		type="text"
+																		value={receipt.record_code || ''}
+																		onChange={(e) => handleReceiptInputChange(e, receipt.id, 'record_code')}
+																		onKeyDown={(e) =>
+																			handleReceiptInputKeyDown(e, receipt.id, 'record_code', e.target.value)
+																		}
+																		onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																		className="p-1 border rounded-md w-full text-sm bg-white"
+																		autoFocus
+																	/>
+																) : (
+																	<div className="w-full h-full p-1 rounded">{receipt.record_code || '--'}</div>
+																)}
+															</td>
+														</>
+													)}
+												</tr>
+											) : (
+												samplesToShow.map((sample, sampleIndex) => {
+													// Add null check for sample.analysis
+													const totalTests = sample?.analysis?.length || 0;
+													const completedTests =
+														sample?.analysis?.filter(
+															(order) => order?.result_value !== null && order?.result_value !== '<p></p>',
+														)?.length || 0;
+
+													return (
+														<tr
+															key={`${receipt?.receipt_uid || 'unknown'}-${sample?.sample_uid || 'unknown'}`}
+															className={` ${sampleIndex === 0 ? 'border-t' : ''} ${
+																sampleIndex === samplesToShow.length - 1 ? 'border-b' : ''
+															} ${
+																hoveredSampleId === sample?.sample_uid
+																	? 'bg-gray-100'
+																	: hoveredReceiptId === receipt?.receipt_uid
+																	? 'bg-gray-50'
+																	: ''
+															}`}
+															onMouseEnter={() => handleSampleMouseEnter(receipt?.receipt_uid, sample?.sample_uid)}
+															onMouseLeave={() => {
+																setHoveredSampleId(null);
+																setHoveredReceiptId(null);
+															}}
+														>
+															{sampleIndex === 0 && (
+																<>
 																	<td
-																		className={`p-1 text-start cursor-pointer align-top ${
-																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																		className={`p-1   text-start align-top ${
+																			hoveredReceiptId === receipt?.receipt_uid ? 'bg-gray-50' : ''
 																		}`}
 																		rowSpan={samplesToShow.length}
-																		onClick={() => handleFieldClick(receipt.id, null, 'deadline')}
 																	>
-																		{editingField.receiptId === receipt.id &&
-																		editingField.sampleId === null &&
-																		editingField.field === 'deadline' ? (
-																			<DatePicker
-																				selected={receipt.deadline ? new Date(receipt.deadline) : null}
-																				onChange={(date) => handleDeadlineChange(receipt.id, date)}
-																				onBlur={() => handleDatePickerBlur(receipt.id, receipt.deadline)}
-																				onFocus={() => handleDatePickerFocus(receipt.id, receipt.deadline)}
-																				onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
-																				onKeyDown={(e) => handleDeadlineKeyDown(e, receipt.id)}
-																				dateFormat="dd/MM/yyyy"
-																				className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
-																				calendarClassName="text-black"
-																				placeholderText="Chọn hạn trả"
-																				autoFocus
-																			/>
-																		) : (
-																			<div className="w-full h-full p-1 rounded">
-																				{showRelativeTime
-																					? formatDeadlineAsRelative(receipt.deadline, receipt)
-																					: formatDeadlineWithStyle(receipt.deadline, receipt)}
-																			</div>
-																		)}
+																		<NavLink
+																			className="font-semibold text-primary hover:text-[#103667]"
+																			to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid}`}
+																		>
+																			{receipt.receipt_uid}
+																		</NavLink>
+																		<div className="flex flex-col">
+																			<p className="text-sm">{receipt.client.client_name}</p>
+																			{receipt.record_code && (
+																				<p className="text-xs text-slate-700">HSL: {receipt.record_code}</p>
+																			)}
+																			<p className="text-xs text-gray-500 mb-2">
+																				{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
+																				{getUserName(receipt.created_by_uid)}
+																			</p>
+																		</div>
 																	</td>
-																)}
-															</>
-														)}
 
-														<td
-															className="p-1 text-start align-top"
-															onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
-															onMouseLeave={handleSampleMouseLeave}
-														>
-															<NavLink
-																className="text-primary font-normal hover:text-[#103667]"
-																to={`/dashboard/sample?receipt_uid=${receipt.receipt_uid}&sample_uid=${sample.sample_uid}`}
-															>
-																{sample.sample_uid}
-															</NavLink>
-														</td>
+																	{sampleIndex === 0 && (
+																		<td
+																			className={`p-1 text-start cursor-pointer align-top ${
+																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																			onClick={() => handleFieldClick(receipt.id, null, 'deadline')}
+																		>
+																			{editingField.receiptId === receipt.id &&
+																			editingField.sampleId === null &&
+																			editingField.field === 'deadline' ? (
+																				<DatePicker
+																					selected={receipt.deadline ? new Date(receipt.deadline) : null}
+																					onChange={(date) => handleDeadlineChange(receipt.id, date)}
+																					onBlur={() => handleDatePickerBlur(receipt.id, receipt.deadline)}
+																					onFocus={() => handleDatePickerFocus(receipt.id, receipt.deadline)}
+																					onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
+																					onKeyDown={(e) => handleDeadlineKeyDown(e, receipt.id)}
+																					dateFormat="dd/MM/yyyy"
+																					className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
+																					calendarClassName="text-black"
+																					placeholderText="Chọn hạn trả"
+																					autoFocus
+																				/>
+																			) : (
+																				<div className="w-full h-full p-1 rounded">
+																					{showRelativeTime
+																						? formatDeadlineAsRelative(receipt.deadline, receipt)
+																						: formatDeadlineWithStyle(receipt.deadline, receipt)}
+																				</div>
+																			)}
+																		</td>
+																	)}
+																</>
+															)}
 
-														{/* Conditionally show either sample information or purpose/status columns */}
-														{showPaymentColumn ? (
 															<td
-																className="p-1 text-start align-top line-clamp-2"
+																className="p-1 text-start align-top"
 																onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
 																onMouseLeave={handleSampleMouseLeave}
 															>
-																{displayValue(sample.sample_name)}
+																<NavLink
+																	className="text-primary font-normal hover:text-[#103667]"
+																	to={`/dashboard/sample?receipt_uid=${receipt.receipt_uid}&sample_uid=${sample.sample_uid}`}
+																>
+																	{sample.sample_uid}
+																</NavLink>
 															</td>
-														) : (
-															<>
+
+															{/* Conditionally show either sample information or purpose/status columns */}
+															{isPaymentActive ? (
 																<td
 																	className="p-1 text-start align-top line-clamp-2"
 																	onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
@@ -1092,270 +1467,285 @@ const Dashboard = () => {
 																>
 																	{displayValue(sample.sample_name)}
 																</td>
-																<td
-																	className="p-1 text-start cursor-text align-top"
-																	onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'sample_volume')}
-																>
-																	{editingField.receiptId === receipt.receipt_id &&
-																	editingField.sampleId === sample.id &&
-																	editingField.field === 'sample_volume' ? (
-																		<input
-																			type="text"
-																			value={sample.sample_volume || ''}
-																			onChange={(e) =>
-																				handleInputChange(e, receipt.receipt_id, sample.id, 'sample_volume')
-																			}
-																			onKeyDown={(e) =>
-																				handleInputKeyDown(
-																					e,
-																					receipt.receipt_id,
-																					sample.id,
-																					'sample_volume',
-																					e.target.value,
-																				)
-																			}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		/>
-																	) : (
-																		<div className="w-full h-full rounded">{displayValue(sample.sample_volume)}</div>
-																	)}
-																</td>
-																<td
-																	className="p-1 text-start cursor-pointer align-top"
-																	onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'purpose')}
-																>
-																	{editingField.receiptId === receipt.receipt_id &&
-																	editingField.sampleId === sample.id &&
-																	editingField.field === 'purpose' ? (
-																		<select
-																			value={sample.purpose || ''}
-																			onChange={(e) => handleSelectChange(e, receipt.receipt_id, sample.id, 'purpose')}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		>
-																			<option value="">--</option>
-																			{purposes.map((purpose, index) => (
-																				<option key={index} value={purpose}>
-																					{purpose}
-																				</option>
-																			))}
-																		</select>
-																	) : (
-																		<div className="w-full h-full rounded">{displayValue(sample.purpose)}</div>
-																	)}{' '}
-																</td>
-
-																{/* Status column - always shown */}
-																<td
-																	className="p-1 text-start cursor-pointer align-top"
-																	onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'status')}
-																>
-																	{editingField.receiptId === receipt.receipt_id &&
-																	editingField.sampleId === sample.id &&
-																	editingField.field === 'status' ? (
-																		<select
-																			value={sample.status}
-																			onChange={(e) => handleSelectChange(e, receipt.receipt_id, sample.id, 'status')}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		>
-																			{status.map((statusName, index) => (
-																				<option key={index} value={index}>
-																					{statusName}
-																				</option>
-																			))}
-																		</select>
-																	) : (
-																		<div className="w-full h-full rounded">
-																			{status[sample.status] ? (
-																				status[sample.status]
-																			) : (
-																				<span className="text-start block">--</span>
-																			)}
-																		</div>
-																	)}
-																</td>
-																<td
-																	className="p-1 text-start align-top"
-																	onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
-																	onMouseLeave={handleSampleMouseLeave}
-																>
-																	{completedTests} / {totalTests}
-																</td>
-															</>
-														)}
-
-														{/* Show payment columns for the first sample in each receipt */}
-														{sampleIndex === 0 && showPaymentColumn && (
-															<>
-																<td
-																	className={`p-1 text-start align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
-																	onClick={() => handleFieldClick(receipt.id, null, 'order_code')}
-																>
-																	{editingField.receiptId === receipt.id &&
-																	editingField.sampleId === null &&
-																	editingField.field === 'order_code' ? (
-																		<input
-																			type="text"
-																			value={receipt.order_code || ''}
-																			onChange={(e) => handleReceiptInputChange(e, receipt.id, 'order_code')}
-																			onKeyDown={(e) =>
-																				handleReceiptInputKeyDown(e, receipt.id, 'order_code', e.target.value)
-																			}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		/>
-																	) : (
-																		<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
-																			{receipt.order_code || '--'}
-																		</p>
-																	)}
-																</td>
-																<td
-																	className={`p-1 text-start align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
-																	onClick={() => handleFieldClick(receipt.id, null, 'quote_code')}
-																>
-																	{editingField.receiptId === receipt.id &&
-																	editingField.sampleId === null &&
-																	editingField.field === 'quote_code' ? (
-																		<input
-																			type="text"
-																			value={receipt.quote_code || ''}
-																			onChange={(e) => handleReceiptInputChange(e, receipt.id, 'quote_code')}
-																			onKeyDown={(e) =>
-																				handleReceiptInputKeyDown(e, receipt.id, 'quote_code', e.target.value)
-																			}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		/>
-																	) : (
-																		<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
-																			{receipt.quote_code || '--'}
-																		</p>
-																	)}
-																</td>
-																<td
-																	className={`p-1 text-start align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
-																	onClick={() => handleFieldClick(receipt.id, null, 'sale_recorder')}
-																>
-																	{editingField.receiptId === receipt.id &&
-																	editingField.sampleId === null &&
-																	editingField.field === 'sale_recorder' ? (
-																		<input
-																			type="text"
-																			value={receipt.sale_recorder || ''}
-																			onChange={(e) => handleReceiptInputChange(e, receipt.id, 'sale_recorder')}
-																			onKeyDown={(e) =>
-																				handleReceiptInputKeyDown(e, receipt.id, 'sale_recorder', e.target.value)
-																			}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		/>
-																	) : (
-																		<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
-																			{receipt.sale_recorder || '--'}
-																		</p>
-																	)}
-																</td>
-																<td
-																	className={`p-1 text-start align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
-																	onClick={() => handlePaymentConfirmation(receipt.id)}
-																>
-																	<p
-																		className={`cursor-pointer hover:bg-gray-100 p-1 rounded font-medium ${
-																			receipt.pay_status === 1 ? 'text-green-600' : 'text-gray-500'
-																		}`}
-																	>
-																		{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
-																	</p>
-																</td>
-																<td
-																	className={`p-1 text-start align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
-																	onClick={() => handleFieldClick(receipt.id, null, 'record_code')}
-																>
-																	{editingField.receiptId === receipt.id &&
-																	editingField.sampleId === null &&
-																	editingField.field === 'record_code' ? (
-																		<input
-																			type="text"
-																			value={receipt.record_code || ''}
-																			onChange={(e) => handleReceiptInputChange(e, receipt.id, 'record_code')}
-																			onKeyDown={(e) =>
-																				handleReceiptInputKeyDown(e, receipt.id, 'record_code', e.target.value)
-																			}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		/>
-																	) : (
-																		<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
-																			{receipt.record_code || '--'}
-																		</p>
-																	)}
-																</td>
-															</>
-														)}
-
-														{/* <td className="p-1 text-start">
-															{receipt?.deadline ? (
-																isDeadlineToday(receipt.deadline) ? (
-																	<span className="text-purple-600">{formatDate(receipt.deadline)}</span>
-																) : (
-																	formatDate(receipt.deadline)
-																)
 															) : (
-																<span className="text-start block">--</span>
-															)}
-														</td> */}
-													</tr>
-												);
-											})
-										)}
-									</React.Fragment>
-								);
-							})}
-						</tbody>
-					</table>
-				</div>
+																<>
+																	<td
+																		className="p-1 text-start align-top line-clamp-2"
+																		onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
+																		onMouseLeave={handleSampleMouseLeave}
+																	>
+																		{displayValue(sample.sample_name)}
+																	</td>
+																	<td
+																		className="p-1 text-start cursor-text align-top"
+																		onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'sample_volume')}
+																	>
+																		{editingField.receiptId === receipt.receipt_id &&
+																		editingField.sampleId === sample.id &&
+																		editingField.field === 'sample_volume' ? (
+																			<input
+																				type="text"
+																				value={sample.sample_volume || ''}
+																				onChange={(e) =>
+																					handleInputChange(e, receipt.receipt_id, sample.id, 'sample_volume')
+																				}
+																				onKeyDown={(e) =>
+																					handleInputKeyDown(
+																						e,
+																						receipt.receipt_id,
+																						sample.id,
+																						'sample_volume',
+																						e.target.value,
+																					)
+																				}
+																				onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																				className="p-1 border rounded-md w-full text-sm bg-white"
+																				autoFocus
+																			/>
+																		) : (
+																			<div className="w-full h-full rounded">{displayValue(sample.sample_volume)}</div>
+																		)}
+																	</td>
+																	<td
+																		className="p-1 text-start cursor-pointer align-top"
+																		onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'purpose')}
+																	>
+																		{editingField.receiptId === receipt.receipt_id &&
+																		editingField.sampleId === sample.id &&
+																		editingField.field === 'purpose' ? (
+																			<select
+																				value={sample.purpose || ''}
+																				onChange={(e) =>
+																					handleSelectChange(e, receipt.receipt_id, sample.id, 'purpose')
+																				}
+																				onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																				className="p-1 border rounded-md w-full text-sm bg-white"
+																				autoFocus
+																			>
+																				<option value="">--</option>
+																				{purposes.map((purpose, index) => (
+																					<option key={index} value={purpose}>
+																						{purpose}
+																					</option>
+																				))}
+																			</select>
+																		) : (
+																			<div className="w-full h-full rounded">{displayValue(sample.purpose)}</div>
+																		)}{' '}
+																	</td>
 
-				<div
-					className="flex justify-center mt-4 overflow-x-auto max-w-full"
-					style={{ scrollbarWidth: 'thin', scrollbarColor: '#cccccc transparent' }}
-				>
-					<div className="flex">
-						{Array.from({ length: Math.ceil(currentList.length / receiptsPerPage) }, (_, index) => (
-							<button
-								key={index + 1}
-								className={`px-4 py-2 mx-1 ${currentPage === index + 1 ? 'bg-blue-500 text-white' : 'bg-gray-200'} `}
-								onClick={() => handlePageChange(index + 1)}
-							>
-								{index + 1}
-							</button>
-						))}
+																	{/* Status column - always shown */}
+																	<td
+																		className="p-1 text-start cursor-pointer align-top"
+																		onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'status')}
+																	>
+																		{editingField.receiptId === receipt.receipt_id &&
+																		editingField.sampleId === sample.id &&
+																		editingField.field === 'status' ? (
+																			<select
+																				value={sample.status}
+																				onChange={(e) => handleSelectChange(e, receipt.receipt_id, sample.id, 'status')}
+																				onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																				className="p-1 border rounded-md w-full text-sm bg-white"
+																				autoFocus
+																			>
+																				{status.map((statusName, index) => (
+																					<option key={index} value={index}>
+																						{statusName}
+																					</option>
+																				))}
+																			</select>
+																		) : (
+																			<div className="w-full h-full rounded">
+																				{status[sample.status] ? (
+																					status[sample.status]
+																				) : (
+																					<span className="text-start block">--</span>
+																				)}
+																			</div>
+																		)}
+																	</td>
+																	<td
+																		className="p-1 text-start align-top"
+																		onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
+																		onMouseLeave={handleSampleMouseLeave}
+																	>
+																		{completedTests} / {totalTests}
+																	</td>
+																</>
+															)}
+
+															{/* Show payment columns for the first sample in each receipt */}
+															{sampleIndex === 0 && isPaymentActive && (
+																<>
+																	<td
+																		className={`p-1 text-start align-top ${
+																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																		}`}
+																		rowSpan={samplesToShow.length}
+																		onClick={() => handleFieldClick(receipt.id, null, 'order_code')}
+																	>
+																		{editingField.receiptId === receipt.id &&
+																		editingField.sampleId === null &&
+																		editingField.field === 'order_code' ? (
+																			<input
+																				type="text"
+																				value={receipt.order_code || ''}
+																				onChange={(e) => handleReceiptInputChange(e, receipt.id, 'order_code')}
+																				onKeyDown={(e) =>
+																					handleReceiptInputKeyDown(e, receipt.id, 'order_code', e.target.value)
+																				}
+																				onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																				className="p-1 border rounded-md w-full text-sm bg-white"
+																				autoFocus
+																			/>
+																		) : (
+																			<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
+																				{receipt.order_code || '--'}
+																			</p>
+																		)}
+																	</td>
+																	<td
+																		className={`p-1 text-start align-top ${
+																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																		}`}
+																		rowSpan={samplesToShow.length}
+																		onClick={() => handleFieldClick(receipt.id, null, 'quote_code')}
+																	>
+																		{editingField.receiptId === receipt.id &&
+																		editingField.sampleId === null &&
+																		editingField.field === 'quote_code' ? (
+																			<input
+																				type="text"
+																				value={receipt.quote_code || ''}
+																				onChange={(e) => handleReceiptInputChange(e, receipt.id, 'quote_code')}
+																				onKeyDown={(e) =>
+																					handleReceiptInputKeyDown(e, receipt.id, 'quote_code', e.target.value)
+																				}
+																				onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																				className="p-1 border rounded-md w-full text-sm bg-white"
+																				autoFocus
+																			/>
+																		) : (
+																			<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
+																				{receipt.quote_code || '--'}
+																			</p>
+																		)}
+																	</td>
+																	<td
+																		className={`p-1 text-start align-top ${
+																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																		}`}
+																		rowSpan={samplesToShow.length}
+																		onClick={() => handleFieldClick(receipt.id, null, 'sale_recorder')}
+																	>
+																		{editingField.receiptId === receipt.id &&
+																		editingField.sampleId === null &&
+																		editingField.field === 'sale_recorder' ? (
+																			<input
+																				type="text"
+																				value={receipt.sale_recorder || ''}
+																				onChange={(e) => handleReceiptInputChange(e, receipt.id, 'sale_recorder')}
+																				onKeyDown={(e) =>
+																					handleReceiptInputKeyDown(e, receipt.id, 'sale_recorder', e.target.value)
+																				}
+																				onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																				className="p-1 border rounded-md w-full text-sm bg-white"
+																				autoFocus
+																			/>
+																		) : (
+																			<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
+																				{receipt.sale_recorder || '--'}
+																			</p>
+																		)}
+																	</td>
+																	<td
+																		className={`p-1 text-start align-top ${
+																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																		}`}
+																		rowSpan={samplesToShow.length}
+																		onClick={() => handlePaymentConfirmation(receipt.id)}
+																	>
+																		<p
+																			className={`cursor-pointer hover:bg-gray-100 p-1 rounded font-medium ${
+																				receipt.pay_status === 1 ? 'text-green-600' : 'text-gray-500'
+																			}`}
+																		>
+																			{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
+																		</p>
+																	</td>
+																	<td
+																		className={`p-1 text-start align-top ${
+																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																		}`}
+																		rowSpan={samplesToShow.length}
+																		onClick={() => handleFieldClick(receipt.id, null, 'record_code')}
+																	>
+																		{editingField.receiptId === receipt.id &&
+																		editingField.sampleId === null &&
+																		editingField.field === 'record_code' ? (
+																			<input
+																				type="text"
+																				value={receipt.record_code || ''}
+																				onChange={(e) => handleReceiptInputChange(e, receipt.id, 'record_code')}
+																				onKeyDown={(e) =>
+																					handleReceiptInputKeyDown(e, receipt.id, 'record_code', e.target.value)
+																				}
+																				onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																				className="p-1 border rounded-md w-full text-sm bg-white"
+																				autoFocus
+																			/>
+																		) : (
+																			<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
+																				{receipt.record_code || '--'}
+																			</p>
+																		)}
+																	</td>
+																</>
+															)}
+
+															{/* <td className="p-1 text-start">
+																{receipt?.deadline ? (
+																	isDeadlineToday(receipt.deadline) ? (
+																		<span className="text-purple-600">{formatDate(receipt.deadline)}</span>
+																	) : (
+																		formatDate(receipt.deadline)
+																	)
+																) : (
+																	<span className="text-start block">--</span>
+																)}
+															</td> */}
+														</tr>
+													);
+												})
+											)}
+										</React.Fragment>
+									);
+								})}
+							</tbody>
+						</table>
 					</div>
-				</div>
+				)}
+
+				{/* Pagination - show only for normal view */}
+				{!isPreliminaryActive && (
+					<div
+						className="flex justify-center mt-4 overflow-x-auto max-w-full"
+						style={{ scrollbarWidth: 'thin', scrollbarColor: '#cccccc transparent' }}
+					>
+						<div className="flex">
+							{Array.from({ length: Math.ceil(currentList.length / receiptsPerPage) }, (_, index) => (
+								<button
+									key={index + 1}
+									className={`px-4 py-2 mx-1 ${currentPage === index + 1 ? 'bg-blue-500 text-white' : 'bg-gray-200'} `}
+									onClick={() => handlePageChange(index + 1)}
+								>
+									{index + 1}
+								</button>
+							))}
+						</div>
+					</div>
+				)}
 			</div>
 		</div>
 	);

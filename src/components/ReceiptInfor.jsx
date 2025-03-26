@@ -2553,7 +2553,10 @@ const ReceiptInfor = ({ receipt }) => {
 								<tbody className="border-2">
 									{currentReceipt?.samples.map((sample, sampleIndex) => {
 										const totalTests = sample.analysis.length;
-										const completedTests = sample.analysis.filter((order) => order.result_value !== '').length;
+										const completedTests =
+											sample?.analysis?.filter(
+												(order) => order?.result_value !== null && order?.result_value !== '<p></p>',
+											)?.length || 0;
 										const pendingTests = totalTests - completedTests;
 
 										return (
