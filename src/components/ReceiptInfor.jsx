@@ -441,7 +441,7 @@ const ReceiptInfor = ({ receipt }) => {
 				// If no matching entry found, add a new one
 				if (!found) {
 					const newEntry = {
-						fname: field === 'sample_name' ? 'Tên mẫu / name.' : 'Mô tả / desc.',
+						fname: field === 'sample_name' ? 'Tên mẫu thử / name.' : 'Mô tả / desc.',
 						fvalue: newValue,
 					};
 					updatedSampleInfo.push(newEntry);
@@ -685,13 +685,9 @@ const ReceiptInfor = ({ receipt }) => {
 			receipt_id: currentReceipt.id,
 			...newSample,
 			sample_information: JSON.stringify([
-				{
-					fname: 'Tên mẫu / name.',
-					fvalue: newSample?.sample_name || '',
-				},
 				...sampleInformation,
 				{
-					fname: 'Ngày tiếp nhận / Receipt date.',
+					fname: 'Ngày tiếp nhận / receipt date.',
 					fvalue: formatDate(currentReceipt.receipt_date) || '',
 				},
 				{
@@ -2124,6 +2120,12 @@ const ReceiptInfor = ({ receipt }) => {
 		return <div>Loading...</div>;
 	}
 
+	const isTechnician = () => {
+		// Implement your logic to determine if the current user is a technician
+		// For example, you might check the user's role or permissions
+		return currentUser?.role?.staff_technician;
+	};
+
 	return (
 		<div className="w-full">
 			{/* Add custom styling for SweetAlert toasts */}
@@ -2164,203 +2166,214 @@ const ReceiptInfor = ({ receipt }) => {
 					},
 				]}
 			/>
-			<div className="w-full flex justify-end md:justify-between items-center max-h-20 mb-1">
-				<div className=""></div>
-				<div className="flex items-center flex-wrap ">
-					<button
-						className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20"
-						onClick={handleExcelDownload}
-					>
-						<div className="flex items-center ">
-							{'Excel'} <PiDownloadSimpleBold size={20} className="ml-1" />
-						</div>
-					</button>
-					<CreateReceipt receipt={currentReceipt} setUpdatedReceipt={setCurrentReceipt} />
-					<button
-						className="bg-background border-gray-300 text-red-500 font-medium py-0 px-2 rounded-lg w-20"
-						onClick={handleDeleteReceipt}
-					>
-						<div className="flex items-center justify-between ">
-							{'Xóa'} <FaTrashAlt size={15} className="mr-1.5" />
-						</div>
-					</button>
-				</div>
-			</div>
-			<div className="rounded-lg w-full p-4 bg-white ">
-				<div className="flex flex-col md:flex-row">
-					{/* Thông tin chung Section - now 2/5 width and includes contact info */}
-					<div className="w-full md:w-2/5 flex flex-col items-start px-2">
-						<div className="flex justify-start items-center mb-1">
-							<CgFileDocument size={16} className="text-primary" />
-							<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN CHUNG</h2>
-						</div>
-						<div className="w-full">
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số hồ sơ lưu</label>
-								{renderField('record_code', currentReceipt?.record_code)}
+			{/* Only show action buttons for non-technicians */}
+			{!isTechnician() && (
+				<div className="w-full flex justify-end md:justify-between items-center max-h-20 mb-1">
+					<div className=""></div>
+					<div className="flex items-center flex-wrap ">
+						<button
+							className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20"
+							onClick={handleExcelDownload}
+						>
+							<div className="flex items-center ">
+								{'Excel'} <PiDownloadSimpleBold size={20} className="ml-1" />
 							</div>
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số yêu cầu đến</label>
-								{renderField('request_number', currentReceipt?.request_number, false, 'number')}
+						</button>
+						<CreateReceipt receipt={currentReceipt} setUpdatedReceipt={setCurrentReceipt} />
+						<button
+							className="bg-background border-gray-300 text-red-500 font-medium py-0 px-2 rounded-lg w-20"
+							onClick={handleDeleteReceipt}
+						>
+							<div className="flex items-center justify-between ">
+								{'Xóa'} <FaTrashAlt size={15} className="mr-1.5" />
 							</div>
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã tiếp nhận</label>
-								{renderField('receipt_uid', currentReceipt?.receipt_uid, true)}
-							</div>
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ngày tiếp nhận</label>
-								{editingGeneralField === 'receipt_date' ? (
-									<DatePicker
-										selected={currentReceipt?.receipt_date}
-										onChange={handleReceiptDateChange}
-										onBlur={() => {
-											handleReceiptApiUpdate('receipt_date', currentReceipt?.receipt_date);
-											setEditingGeneralField(null);
-										}}
-										onKeyDown={handleReceiptDateKeyDown}
-										dateFormat="dd/MM/yyyy"
-										className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
-										calendarClassName="text-black"
-										placeholderText="Chọn hạn trả"
-										autoFocus
-									/>
-								) : (
-									<div
-										className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
-										onClick={() => setEditingGeneralField('receipt_date')}
-									>
-										{currentReceipt?.receipt_date ? formatDate(currentReceipt.receipt_date) : '--'} bởi{' '}
-										<span className="font-semibold"> {getUserName(currentReceipt?.created_by_uid)}</span>
-									</div>
-								)}
-							</div>
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Hạn trả</label>
-								{editingGeneralField === 'deadline' ? (
-									<DatePicker
-										selected={currentReceipt?.deadline}
-										onChange={handleDeadlineChange}
-										onBlur={() => {
-											handleReceiptApiUpdate('deadline', currentReceipt?.deadline);
-											setEditingGeneralField(null);
-										}}
-										onKeyDown={handleDeadlineKeyDown}
-										dateFormat="dd/MM/yyyy"
-										className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
-										calendarClassName="text-black"
-										placeholderText="Chọn hạn trả"
-										autoFocus
-									/>
-								) : (
-									<div
-										className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
-										onClick={() => setEditingGeneralField('deadline')}
-									>
-										{currentReceipt?.deadline ? formatDate(currentReceipt.deadline) : '--'}
-									</div>
-								)}
-							</div>
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ghi chú</label>
-								{renderTextareaField('note', currentReceipt?.note)}
-							</div>
-						</div>
+						</button>
 					</div>
-
-					{/* Thông tin đơn hàng Section - now 3/5 width */}
-					<div className="w-full md:w-3/5 flex flex-col items-start px-2">
-						<div className="flex justify-start items-center mb-1">
-							<TiBusinessCard size={16} className="text-primary" />
-							<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN ĐƠN HÀNG</h2>
-						</div>
-						<div className="w-full">
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Tên khách hàng</label>
-								<div
-									className="w-full px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg flex items-center justify-between"
-									onClick={toggleCustomerDetails}
-								>
-									{currentReceipt?.client?.client_name || '--'}
-									<span className="text-xs text-blue-600 font-bold">
-										{isCustomerDetailsVisible ? 'Ẩn' : ' Xem Chi tiết'}
-									</span>
+				</div>
+			)}
+			{/* Only show general and order information sections for non-technicians */}
+			{!isTechnician() && (
+				<div className="rounded-lg w-full p-4 bg-white ">
+					<div className="flex flex-col md:flex-row">
+						{/* Thông tin chung Section - now 2/5 width and includes contact info */}
+						<div className="w-full md:w-2/5 flex flex-col items-start px-2">
+							<div className="flex justify-start items-center mb-1">
+								<CgFileDocument size={16} className="text-primary" />
+								<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN CHUNG</h2>
+							</div>
+							<div className="w-full">
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số hồ sơ lưu</label>
+									{renderField('record_code', currentReceipt?.record_code)}
 								</div>
-							</div>
-
-							{/* Customer details in the same layout as other fields */}
-							{isCustomerDetailsVisible && (
-								<div className="rounded-lg px-1 border-l-4 border-teritary">
-									<div className="flex justify-start items-start mb-1">
-										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
-											Tổ chức / Cá nhân
-										</label>
-										{renderField('client.client_name', currentReceipt?.client?.client_name)}
-									</div>
-									<div className="flex justify-start items-start mb-1 ">
-										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã khách hàng</label>
-										{renderField('client.client_uid', currentReceipt?.client?.client_uid)}
-									</div>
-									<div className="flex justify-start items-start mb-1">
-										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Địa chỉ</label>
-										{renderField('client.client_address', currentReceipt?.client?.client_address)}
-									</div>
-									<div className="flex justify-start items-start mb-1">
-										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
-											Mã số thuế/CCCD
-										</label>
-										{renderField('client.legal_id', currentReceipt?.client?.legal_id)}
-									</div>
-									<div className="flex justify-start items-start mb-1">
-										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Người liên hệ</label>
-										{renderField('contact.name', currentReceipt?.contact?.name)}
-									</div>
-									<div className="flex justify-start items-start mb-1">
-										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Điện thoại</label>
-										{renderField('contact.phone', currentReceipt?.contact?.phone)}
-									</div>
-									<div className="flex justify-start items-start mb-1">
-										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email</label>
-										{renderField('contact.email', currentReceipt?.contact?.email)}
-									</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số yêu cầu đến</label>
+									{renderField('request_number', currentReceipt?.request_number, false, 'number')}
 								</div>
-							)}
-
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số báo giá</label>
-								{renderField('quote_code', currentReceipt?.quote_code)}
-							</div>
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã đơn hàng</label>
-								{renderField('order_code', currentReceipt?.order_code)}
-							</div>
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Giá trị</label>
-								<div className="flex items-center w-1/3">
-									{renderField('total_amount', currentReceipt?.total_amount, false, 'number', true)}
-									<div className="flex items-center ml-2 cursor-pointer" onClick={handlePayStatusToggle}>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã tiếp nhận</label>
+									{renderField('receipt_uid', currentReceipt?.receipt_uid, true)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ngày tiếp nhận</label>
+									{editingGeneralField === 'receipt_date' ? (
+										<DatePicker
+											selected={currentReceipt?.receipt_date}
+											onChange={handleReceiptDateChange}
+											onBlur={() => {
+												handleReceiptApiUpdate('receipt_date', currentReceipt?.receipt_date);
+												setEditingGeneralField(null);
+											}}
+											onKeyDown={handleReceiptDateKeyDown}
+											dateFormat="dd/MM/yyyy"
+											className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
+											calendarClassName="text-black"
+											placeholderText="Chọn hạn trả"
+											autoFocus
+										/>
+									) : (
 										<div
-											className={`min-w-2 h-2 rounded-full mr-1 ${
-												currentReceipt?.pay_status === 1 ? 'bg-green-600' : 'bg-red-500'
-											}`}
-										></div>
-										<span
-											className={`font-medium text-xs min-w-28 ${
-												currentReceipt?.pay_status === 1 ? 'text-green-600' : 'text-red-500'
-											}`}
+											className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
+											onClick={() => setEditingGeneralField('receipt_date')}
 										>
-											{currentReceipt?.pay_status === 1 ? 'Đã thanh toán' : 'Chưa thanh toán'}
+											{currentReceipt?.receipt_date ? formatDate(currentReceipt.receipt_date) : '--'} bởi{' '}
+											<span className="font-semibold"> {getUserName(currentReceipt?.created_by_uid)}</span>
+										</div>
+									)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Hạn trả</label>
+									{editingGeneralField === 'deadline' ? (
+										<DatePicker
+											selected={currentReceipt?.deadline}
+											onChange={handleDeadlineChange}
+											onBlur={() => {
+												handleReceiptApiUpdate('deadline', currentReceipt?.deadline);
+												setEditingGeneralField(null);
+											}}
+											onKeyDown={handleDeadlineKeyDown}
+											dateFormat="dd/MM/yyyy"
+											className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
+											calendarClassName="text-black"
+											placeholderText="Chọn hạn trả"
+											autoFocus
+										/>
+									) : (
+										<div
+											className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
+											onClick={() => setEditingGeneralField('deadline')}
+										>
+											{currentReceipt?.deadline ? formatDate(currentReceipt.deadline) : '--'}
+										</div>
+									)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ghi chú</label>
+									{renderTextareaField('note', currentReceipt?.note)}
+								</div>
+							</div>
+						</div>
+
+						{/* Thông tin đơn hàng Section - now 3/5 width */}
+						<div className="w-full md:w-3/5 flex flex-col items-start px-2">
+							<div className="flex justify-start items-center mb-1">
+								<TiBusinessCard size={16} className="text-primary" />
+								<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN ĐƠN HÀNG</h2>
+							</div>
+							<div className="w-full">
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Tên khách hàng</label>
+									<div
+										className="w-full px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg flex items-center justify-between"
+										onClick={toggleCustomerDetails}
+									>
+										{currentReceipt?.client?.client_name || '--'}
+										<span className="text-xs text-blue-600 font-bold">
+											{isCustomerDetailsVisible ? 'Ẩn' : ' Xem Chi tiết'}
 										</span>
 									</div>
 								</div>
-							</div>
-							<div className="flex justify-start items-start mb-1">
-								<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Người thực hiện</label>
-								{renderField('sale_recorder', currentReceipt?.sale_recorder)}
+
+								{/* Customer details in the same layout as other fields */}
+								{isCustomerDetailsVisible && (
+									<div className="rounded-lg px-1 border-l-4 border-teritary">
+										<div className="flex justify-start items-start mb-1">
+											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
+												Tổ chức / Cá nhân
+											</label>
+											{renderField('client.client_name', currentReceipt?.client?.client_name)}
+										</div>
+										<div className="flex justify-start items-start mb-1 ">
+											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
+												Mã khách hàng
+											</label>
+											{renderField('client.client_uid', currentReceipt?.client?.client_uid)}
+										</div>
+										<div className="flex justify-start items-start mb-1">
+											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Địa chỉ</label>
+											{renderField('client.client_address', currentReceipt?.client?.client_address)}
+										</div>
+										<div className="flex justify-start items-start mb-1">
+											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
+												Mã số thuế/CCCD
+											</label>
+											{renderField('client.legal_id', currentReceipt?.client?.legal_id)}
+										</div>
+										<div className="flex justify-start items-start mb-1">
+											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
+												Người liên hệ
+											</label>
+											{renderField('contact.name', currentReceipt?.contact?.name)}
+										</div>
+										<div className="flex justify-start items-start mb-1">
+											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Điện thoại</label>
+											{renderField('contact.phone', currentReceipt?.contact?.phone)}
+										</div>
+										<div className="flex justify-start items-start mb-1">
+											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email</label>
+											{renderField('contact.email', currentReceipt?.contact?.email)}
+										</div>
+									</div>
+								)}
+
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số báo giá</label>
+									{renderField('quote_code', currentReceipt?.quote_code)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã đơn hàng</label>
+									{renderField('order_code', currentReceipt?.order_code)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Giá trị</label>
+									<div className="flex items-center w-1/3">
+										{renderField('total_amount', currentReceipt?.total_amount, false, 'number', true)}
+										<div className="flex items-center ml-2 cursor-pointer" onClick={handlePayStatusToggle}>
+											<div
+												className={`min-w-2 h-2 rounded-full mr-1 ${
+													currentReceipt?.pay_status === 1 ? 'bg-green-600' : 'bg-red-500'
+												}`}
+											></div>
+											<span
+												className={`font-medium text-xs min-w-28 ${
+													currentReceipt?.pay_status === 1 ? 'text-green-600' : 'text-red-500'
+												}`}
+											>
+												{currentReceipt?.pay_status === 1 ? 'Đã thanh toán' : 'Chưa thanh toán'}
+											</span>
+										</div>
+									</div>
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Người thực hiện</label>
+									{renderField('sale_recorder', currentReceipt?.sale_recorder)}
+								</div>
 							</div>
 						</div>
 					</div>
 				</div>
-			</div>
+			)}
+			{/* Always show view mode selector for all users */}
 			<div className="flex justify-between items-start sm:h-10 sm:flex-row flex-col h-[76px] mt-4">
 				<div className="w-full flex justify-start overflow-auto mr-1">
 					<button
@@ -2401,65 +2414,75 @@ const ReceiptInfor = ({ receipt }) => {
 						/>
 					) : viewMode === 'ppt' ? (
 						<div className="flex items-center space-x-2">
-							<button
-								className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
-								onClick={handleGenerateDraftReports}
-								disabled={isGeneratingReports}
-							>
-								{isGeneratingReports ? (
-									<span className="flex items-center">
-										<svg
-											className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-											xmlns="http://www.w3.org/2000/svg"
-											fill="none"
-											viewBox="0 0 24 24"
-										>
-											<circle
-												className="opacity-25"
-												cx="12"
-												cy="12"
-												r="10"
-												stroke="currentColor"
-												strokeWidth="4"
-											></circle>
-											<path
-												className="opacity-75"
-												fill="currentColor"
-												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-											></path>
-										</svg>
-										{generationProgress}%
-									</span>
-								) : (
-									<span className="flex items-center">
+							{/* Only show these buttons for non-technicians */}
+							{!isTechnician() && (
+								<>
+									<button
+										className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
+										onClick={handleGenerateDraftReports}
+										disabled={isGeneratingReports}
+									>
+										{isGeneratingReports ? (
+											<span className="flex items-center">
+												<svg
+													className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+													xmlns="http://www.w3.org/2000/svg"
+													fill="none"
+													viewBox="0 0 24 24"
+												>
+													<circle
+														className="opacity-25"
+														cx="12"
+														cy="12"
+														r="10"
+														stroke="currentColor"
+														strokeWidth="4"
+													></circle>
+													<path
+														className="opacity-75"
+														fill="currentColor"
+														d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+													></path>
+												</svg>
+												{generationProgress}%
+											</span>
+										) : (
+											<span className="flex items-center">
+												<div className="flex items-center justify-between ">
+													{'Tạo sơ bộ'} <FaFilePdf size={20} className="ml-1" />
+												</div>
+											</span>
+										)}
+									</button>
+									<button
+										className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
+										onClick={handleExportPPT}
+									>
 										<div className="flex items-center justify-between ">
-											{'Tạo sơ bộ'} <FaFilePdf size={20} className="ml-1" />
+											{'Tải PPT'} <PiDownloadSimpleBold size={20} className="ml-1" />
 										</div>
-									</span>
-								)}
-							</button>
-							<button
-								className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
-								onClick={handleExportPPT}
-							>
-								<div className="flex items-center justify-between ">
-									{'Tải PPT'} <PiDownloadSimpleBold size={20} className="ml-1" />
-								</div>
-							</button>
+									</button>
+								</>
+							)}
 						</div>
 					) : (
 						<div className="flex items-center space-x-2">
-							<button
-								className={`w-[34px] h-[34px] p-2 rounded-lg transition-colors duration-200 border border-gray-400 focus:outline-none ${
-									isEditMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white text-black'
-								}`}
-								onClick={toggleEditMode}
-							>
-								{isEditMode ? <FaCheck /> : <FaEdit />}
-							</button>
-							<button className="bg-blue-500 text-white px-1 py-1 rounded-lg w-36" onClick={handleAddSample}>
-								Thêm mẫu mới
-							</button>
+							{/* Only show edit and add sample buttons for non-technicians */}
+							{!isTechnician() && (
+								<>
+									<button
+										className={`w-[34px] h-[34px] p-2 rounded-lg transition-colors duration-200 border border-gray-400 focus:outline-none ${
+											isEditMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white text-black'
+										}`}
+										onClick={toggleEditMode}
+									>
+										{isEditMode ? <FaCheck /> : <FaEdit />}
+									</button>
+									<button className="bg-blue-500 text-white px-1 py-1 rounded-lg w-36" onClick={handleAddSample}>
+										Thêm mẫu mới
+									</button>
+								</>
+							)}
 							{isAddingSample && renderAddSampleForm()}
 						</div>
 					)}
@@ -2701,7 +2724,8 @@ const ReceiptInfor = ({ receipt }) => {
 					)}
 				</div>
 			</div>
-			{isPaymentConfirmVisible && renderPayStatusConfirm()}
+			{/* Only show payment confirmation and delete confirmation dialogs for non-technicians */}
+			{!isTechnician() && isPaymentConfirmVisible && renderPayStatusConfirm()}
 			{isDeleteConfirmVisible &&
 				renderDeleteConfirm(
 					'Bạn có chắc chắn muốn xóa mục này?',

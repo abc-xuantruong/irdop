@@ -50,7 +50,6 @@ const ProcessingSample = () => {
 				if (!isFilter) {
 					setProcessingSample(data);
 				}
-				console.log(response.data);
 			}
 		} catch (error) {
 			console.error('Error fetching processing samples:', error);
@@ -115,7 +114,6 @@ const ProcessingSample = () => {
 					modified_by_uid: currentUser.identity_uid,
 				},
 			});
-			console.log('Analysis saved:', selectedAnalysis);
 
 			if (response.status === 200) {
 				// Update the displayed data
@@ -249,9 +247,6 @@ const ProcessingSample = () => {
 	const handleDrop = (e, targetStatus) => {
 		const parameterId = e.dataTransfer.getData('parameterId');
 		const analysisId = e.dataTransfer.getData('analysisId');
-		console.log('parameterId:', parameterId);
-		console.log('analysisId:', analysisId);
-		console.log('targetStatus:', targetStatus);
 		moveAnalysisButton(parameterId, analysisId, targetStatus);
 	};
 
@@ -491,99 +486,65 @@ const ProcessingSample = () => {
 			const toReview = selectedForReview.filter((id) => id > 0);
 			const toUnreview = selectedForReview.filter((id) => id < 0).map((id) => -id); // Convert back to positive
 
-			// Filter selected analyses to review
-			const selectedAnalysesToReview = allAnalyses.filter((analysis) => toReview.includes(analysis.id));
+			// Create a combined array for batch processing
+			const analysesToConfirm = [
+				// Items to review (with reviewer ID)
+				...toReview.map((id) => ({
+					id,
+					reviewed_by: currentUser?.identity_uid || '',
+				})),
+				// Items to unreview (with empty reviewer)
+				...toUnreview.map((id) => ({
+					id,
+					reviewed_by: '', // Empty string to clear reviewer
+				})),
+			];
 
-			// Filter selected analyses to unreview
-			const selectedAnalysesToUnreview = allAnalyses.filter((analysis) => toUnreview.includes(analysis.id));
+			// Make a single API call with the combined array
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/confirm/analysis', analysesToConfirm);
 
-			let successCount = 0;
-			let failCount = 0;
-
-			// First process items to review
-			for (const analysis of selectedAnalysesToReview) {
-				try {
-					const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-						analysis: {
-							...analysis,
-							reviewed_by: currentUser?.identity_uid || '',
-							modified_by_uid: currentUser?.identity_uid || '',
-						},
-					});
-
-					if (response?.status === 200) {
-						successCount++;
-					} else {
-						failCount++;
+			if (response?.status === 200) {
+				// Update the UI
+				const updatedSamples = processingSample.map((sample) => {
+					if (sample?.analysis && Array.isArray(sample.analysis)) {
+						const updatedAnalysis = sample.analysis.map((analysis) => {
+							if (toReview.includes(analysis.id)) {
+								return {
+									...analysis,
+									reviewed_by: currentUser?.identity_uid || '',
+								};
+							}
+							if (toUnreview.includes(analysis.id)) {
+								return {
+									...analysis,
+									reviewed_by: '', // Clear reviewed_by
+								};
+							}
+							return analysis;
+						});
+						return {
+							...sample,
+							analysis: updatedAnalysis,
+						};
 					}
-				} catch (error) {
-					console.error(`Error updating analysis ID ${analysis.id}:`, error);
-					failCount++;
+					return sample;
+				});
+
+				setProcessingSample(updatedSamples);
+
+				// Show result message
+				const reviewCount = toReview.length;
+				const unreviewCount = toUnreview.length;
+
+				if (reviewCount > 0 && unreviewCount > 0) {
+					toast.success(`Đã duyệt ${reviewCount} chỉ tiêu và hủy duyệt ${unreviewCount} chỉ tiêu thành công`);
+				} else if (reviewCount > 0) {
+					toast.success(`Đã duyệt thành công ${reviewCount} chỉ tiêu`);
+				} else {
+					toast.success(`Đã hủy duyệt thành công ${unreviewCount} chỉ tiêu`);
 				}
-			}
-
-			// Then process items to unreview
-			for (const analysis of selectedAnalysesToUnreview) {
-				try {
-					const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-						analysis: {
-							...analysis,
-							reviewed_by: '', // Clear the reviewer
-							modified_by_uid: currentUser?.identity_uid || '',
-						},
-					});
-
-					if (response?.status === 200) {
-						successCount++;
-					} else {
-						failCount++;
-					}
-				} catch (error) {
-					console.error(`Error updating analysis ID ${analysis.id}:`, error);
-					failCount++;
-				}
-			}
-
-			// Update the UI
-			const updatedSamples = processingSample.map((sample) => {
-				if (sample?.analysis && Array.isArray(sample.analysis)) {
-					const updatedAnalysis = sample.analysis.map((analysis) => {
-						if (toReview.includes(analysis.id)) {
-							return {
-								...analysis,
-								reviewed_by: currentUser?.identity_uid || '',
-							};
-						}
-						if (toUnreview.includes(analysis.id)) {
-							return {
-								...analysis,
-								reviewed_by: '', // Clear reviewed_by
-							};
-						}
-						return analysis;
-					});
-					return {
-						...sample,
-						analysis: updatedAnalysis,
-					};
-				}
-				return sample;
-			});
-
-			setProcessingSample(updatedSamples);
-
-			// Show result message
-			const reviewCount = toReview.length;
-			const unreviewCount = toUnreview.length;
-
-			if (failCount > 0) {
-				toast.warning(`${successCount} chỉ tiêu đã được cập nhật thành công, ${failCount} chỉ tiêu thất bại`);
-			} else if (reviewCount > 0 && unreviewCount > 0) {
-				toast.success(`Đã duyệt ${reviewCount} chỉ tiêu và hủy duyệt ${unreviewCount} chỉ tiêu thành công`);
-			} else if (reviewCount > 0) {
-				toast.success(`Đã duyệt thành công ${reviewCount} chỉ tiêu`);
 			} else {
-				toast.success(`Đã hủy duyệt thành công ${unreviewCount} chỉ tiêu`);
+				toast.error(`Có lỗi xảy ra khi xử lý yêu cầu: ${response?.data?.message || 'Lỗi không xác định'}`);
 			}
 
 			// Reset state
@@ -847,12 +808,8 @@ const ProcessingSample = () => {
 																							onClick={() => handleAnalysisClick(analysis, parameter?.parameter_name)}
 																						>
 																							<span
-																								className="cursor-pointer text-primary hover:underline"
-																								onClick={(e) => {
-																									e.stopPropagation();
-																									navigateToSampleInV2(analysis.sample_uid);
-																								}}
-																							>
+																								className="cursor-pointer text-primary"
+																																													>
 																								{analysis?.sample_uid || 'N/A'}
 																							</span>
 																							<br />
@@ -892,11 +849,8 @@ const ProcessingSample = () => {
 																							onClick={() => handleAnalysisClick(analysis, parameter.parameter_name)}
 																						>
 																							<span
-																								className="cursor-pointer text-primary hover:underline"
-																								onClick={(e) => {
-																									e.stopPropagation();
-																									navigateToSampleInV2(analysis.sample_uid);
-																								}}
+																								className="cursor-pointer text-primary"
+																							
 																							>
 																								{analysis.sample_uid}
 																							</span>
@@ -935,11 +889,8 @@ const ProcessingSample = () => {
 																							onClick={() => handleAnalysisClick(analysis, parameter.parameter_name)}
 																						>
 																							<span
-																								className="cursor-pointer text-primary hover:underline"
-																								onClick={(e) => {
-																									e.stopPropagation();
-																									navigateToSampleInV2(analysis.sample_uid);
-																								}}
+																								className="cursor-pointer text-primary"
+																
 																							>
 																								{analysis.sample_uid}
 																							</span>

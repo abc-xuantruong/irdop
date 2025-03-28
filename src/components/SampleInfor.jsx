@@ -11,6 +11,7 @@ import { GrDocumentText, GrPrint } from 'react-icons/gr';
 import { MdLibraryAdd, MdChevronLeft, MdChevronRight } from 'react-icons/md';
 import FilterBar from './FilterBar';
 import Swal from 'sweetalert2';
+
 import {
 	FaTrashAlt,
 	FaCopy,
@@ -20,6 +21,7 @@ import {
 	FaRegTimesCircle,
 	FaDatabase,
 	FaStar,
+	FaRegCopy,
 	FaCheck,
 } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
@@ -93,6 +95,29 @@ const SampleInfor = () => {
 	const [isParameterWarningVisible, setIsParameterWarningVisible] = useState(false); // Add state for parameter warning modal
 	const [sampleDropdownVisible, setSampleDropdownVisible] = useState(false);
 	let isFetch = false;
+	const [copied, setCopied] = useState(false);
+
+	function CopyButton({ textToCopy }) {
+		// Accept text as a prop
+
+		const copyToClipboard = (text) => {
+			navigator.clipboard.writeText(text); // Use the parameter 'text'
+			setCopied(true);
+			showToast(`Đã copy mã mẫu`);
+		};
+
+		return (
+			<div>
+				<FaRegCopy
+					className="absolute right-2 top-0 translate-y-3 cursor-pointer text-gray-500"
+					size={16}
+					onClick={() => copyToClipboard(textToCopy)} // Pass the text to copy
+					title={copied ? 'Copied!' : 'Copy to Clipboard'}
+				/>
+			</div>
+		);
+	}
+
 	// Check if scroll buttons should be shown
 	useEffect(() => {
 		const checkOverflow = () => {
@@ -235,6 +260,12 @@ const SampleInfor = () => {
 
 	// Function to open PPT in new window
 	const openPPTWindow = () => {
+		// Don't allow technicians to open PPT window
+		if (isTechnician()) {
+			showToast('Bạn không có quyền tạo phiếu kết quả', 'error');
+			return;
+		}
+
 		if (sample?.report?.length > 0) {
 			// Lấy object có publish_date lớn nhất
 			const latestReport = sample.report.reduce((prev, current) =>
@@ -330,7 +361,6 @@ const SampleInfor = () => {
 				matrix: currentSample.matrix,
 			});
 			setParameterList(response.data);
-			console.log(response.data);
 		} catch (error) {
 			console.error('Error searching parameters:', error);
 		}
@@ -933,7 +963,6 @@ const SampleInfor = () => {
 	}, [sample_uid]);
 
 	const handleSampleSelect = (sampleUid) => {
-		console.log('Sample selected:', sampleUid);
 		navigate(`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sampleUid}`);
 	};
 
@@ -950,7 +979,6 @@ const SampleInfor = () => {
 	};
 
 	const handleSaveContent = async (newValue) => {
-		console.log(key);
 		// if (key !== 'Enter') {
 		setInputValue(newValue);
 		const updatedAnalytes = listAnalytes.map((item) => {
@@ -1289,46 +1317,9 @@ const SampleInfor = () => {
 		setSampleDropdownVisible(false);
 	};
 
-	const renderReports = () => {
-		return (
-			<div className=" flex flex-col overflow-hidden hover:overflow-x-auto pb-2 lg:pb-0 hover:pb-0">
-				<table className="border w-full my-2">
-					<thead>
-						<tr>
-							<th className="border w-1/6 min-w-32 text-start p-1 font-medium">Mã PPT</th>
-							<th className="border w-1/6 min-w-32 text-start p-1 font-medium">Ngày phát hành</th>
-							<th className="border w-1/6 min-w-36 text-start p-1 font-medium">Người phát hành</th>
-							<th className="border w-1/6 min-w-28 text-start p-1 font-medium">Chỉ tiêu</th>
-							<th className="border w-1/4 min-w-44 text-start p-1 font-medium">Ngôn ngữ</th>
-							<th className="border w-1/4 min-w-28 text-start p-1 font-medium">Thao tác</th>
-						</tr>
-					</thead>
-					<tbody>
-						{reports.length > 0 ? (
-							reports.map((report) => (
-								<tr>
-									<td className="border text-start p-1">{report.ppt_uid}</td>
-									<td className="border text-start p-1">{report.created_at}</td>
-									<td className="border text-start p-1">{report.created_by}</td>
-									<td className="border text-start p-1">{report.analysis.length}</td>
-									<td className="border text-start p-1">{report.language}</td>
-									<td className="border text-start p-1">
-										<button className="bg-primary text-white rounded-lg p-1">Xem</button>
-										<button className="bg-primary text-white rounded-lg p-1">Sửa</button>
-									</td>
-								</tr>
-							))
-						) : (
-							<tr>
-								<td colSpan="6" className="text-center">
-									Chưa có báo cáo nào được tạo
-								</td>
-							</tr>
-						)}
-					</tbody>
-				</table>
-			</div>
-		);
+	// Add a helper function to check if user is a technician
+	const isTechnician = () => {
+		return currentUser?.role?.staff_technician;
 	};
 
 	const renderNewReport = () => {
@@ -2189,57 +2180,42 @@ const SampleInfor = () => {
 		}
 
 		try {
-			// Get the selected analytes
-			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
-
-			// Update each analyte with the current user as reviewer
-			const updatedAnalytes = selectedItems.map((analyte) => ({
-				...analyte,
+			// Create array of objects with just id and reviewed_by fields
+			const analysesToConfirm = selectedAnalytes.map((id) => ({
+				id,
 				reviewed_by: currentUser.identity_uid,
-				modified_by_uid: currentUser.identity_uid,
 			}));
 
-			let successCount = 0;
-			let failCount = 0;
+			// Make a single API call with the array
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/confirm/analysis', analysesToConfirm);
 
-			// Make API calls for each analyte separately
-			for (const analyte of updatedAnalytes) {
-				try {
-					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', { analysis: analyte });
-					successCount++;
-				} catch (error) {
-					console.error(`Error updating analysis ID ${analyte.id}:`, error);
-					failCount++;
-				}
-			}
-
-			// Update the UI
-			const currentUserName = await getIdenByUid(currentUser.identity_uid);
-			const newAnalytesList = listAnalytes.map((analyte) => {
-				if (selectedAnalytes.includes(analyte.id)) {
-					return {
-						...analyte,
-						reviewed_by: currentUser.identity_uid,
-						reviewerName: currentUserName ? currentUserName.identity_name : 'Unknown',
-					};
-				}
-				return analyte;
-			});
-			setListAnalytes(newAnalytesList);
-
-			if (failCount > 0) {
-				Swal.fire({
-					icon: 'warning',
-					title: 'Kết quả',
-					text: `${successCount} chỉ tiêu đã được duyệt thành công, ${failCount} chỉ tiêu thất bại`,
+			if (response.status === 200) {
+				// Update the UI
+				const currentUserName = await getIdenByUid(currentUser.identity_uid);
+				const newAnalytesList = listAnalytes.map((analyte) => {
+					if (selectedAnalytes.includes(analyte.id)) {
+						return {
+							...analyte,
+							reviewed_by: currentUser.identity_uid,
+							reviewerName: currentUserName ? currentUserName.identity_name : 'Unknown',
+						};
+					}
+					return analyte;
 				});
-			} else {
-				showToast(`Đã duyệt thành công ${selectedAnalytes.length} chỉ tiêu`, 'success');
-			}
+				setListAnalytes(newAnalytesList);
 
-			// Clear selection after successful review
-			setSelectedAnalytes([]);
-			setSelectAll(false);
+				showToast(`Đã duyệt thành công ${selectedAnalytes.length} chỉ tiêu`, 'success');
+
+				// Clear selection after successful review
+				setSelectedAnalytes([]);
+				setSelectAll(false);
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi duyệt chỉ tiêu',
+				});
+			}
 		} catch (error) {
 			console.error('Error reviewing analyses:', error);
 			Swal.fire({
@@ -2305,6 +2281,7 @@ const SampleInfor = () => {
 						link: `/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`,
 					},
 				]}
+				sample_uids={listSampleByReceipt.map((sample) => sample.sample_uid)}
 			/>
 			<div className="flex justify-end mb-1">
 				<button
@@ -2334,7 +2311,7 @@ const SampleInfor = () => {
 			</div>
 			<div className="rounded-lg max-w-full p-4 bg-white">
 				<div className="flex justify-start">
-					{listSampleByReceipt && listSampleByReceipt.length > 0 && (
+					{/* {listSampleByReceipt && listSampleByReceipt.length > 0 && (
 						<>
 							<button
 								className="text-primary border-gray-300 rounded-lg px-2 py-0.5 mr-2"
@@ -2354,7 +2331,7 @@ const SampleInfor = () => {
 								))}
 							</select>
 						</>
-					)}
+					)} */}
 				</div>
 				<div className="hover:overflow-auto overflow-hidden lg:pb-0 md:pb-2 hover:pb-0 flex flex-wrap border rounded-lg mt-2">
 					<div className="flex md:flex-row flex-col md:justify-between items-center justify-center w-full">
@@ -2362,18 +2339,22 @@ const SampleInfor = () => {
 							<table className="w-full border-none">
 								<tbody>
 									<tr>
-										<td className="w-1/5 text-start p-1 font-medium md:min-w-32 min-w-24">Mã mẫu:</td>
-										<td className="w-full text-start p-1 md:min-w-80 min-m-w-40">
+										<td className="w-1/5 text-start p-1 font-medium md:min-w-32 min-w-24 text-gray-500">Mã mẫu:</td>
+										<td className="w-full text-start p-1 md:min-w-80 min-m-w-40 relative">
 											<input
 												type="text"
 												value={sample?.sample_uid || ''}
 												className="w-full bg-white border rounded p-1"
 												disabled
 											/>
+											<CopyButton
+												textToCopy={sample?.sample_uid || ''}
+												className="absolute right-2 top-1/2 transform -translate-y-1/2"
+											/>
 										</td>
 									</tr>
 									<tr>
-										<td className="w-1/5 text-start p-1 font-medium">Tên mẫu:</td>
+										<td className="w-1/5 text-start p-1 font-medium  text-gray-500">Tên mẫu:</td>
 										<td className="w-full text-start p-1">
 											<input
 												type="text"
@@ -2391,7 +2372,7 @@ const SampleInfor = () => {
 										</td>
 									</tr>
 									<tr>
-										<td className="w-1/5 text-start p-1 font-medium">
+										<td className="w-1/5 text-start p-1 font-medium  text-gray-500">
 											<span>Nền mẫu:</span>
 										</td>
 										<td className="w-full text-start p-1">
@@ -2411,7 +2392,7 @@ const SampleInfor = () => {
 										</td>
 									</tr>
 									<tr>
-										<td className="w-1/5 text-start p-1 font-medium align-top">
+										<td className="w-1/5 text-start p-1 font-medium align-top text-gray-500">
 											<span className="">Mô tả:</span>
 										</td>
 										<td className="w-full text-start p-1 flex">
@@ -2439,7 +2420,7 @@ const SampleInfor = () => {
 							<table className="w-full border-none">
 								<tbody>
 									<tr>
-										<td className="w-1/5 text-start p-1 font-medium md:min-w-32 min-w-24">Số lượng:</td>
+										<td className="w-1/5 text-start p-1 font-medium md:min-w-32 min-w-24  text-gray-500">Số lượng:</td>
 										<td className="w-full text-start p-1 md:min-w-80 min-w-40">
 											<input
 												type="text"
@@ -2457,7 +2438,7 @@ const SampleInfor = () => {
 										</td>
 									</tr>
 									<tr>
-										<td className="w-1/5 text-start p-1 font-medium">Mục đích:</td>
+										<td className="w-1/5 text-start p-1 font-medium  text-gray-500">Mục đích:</td>
 										<td className="w-full text-start p-1">
 											<select
 												value={sample?.purpose || ''}
@@ -2474,7 +2455,7 @@ const SampleInfor = () => {
 										</td>
 									</tr>
 									<tr>
-										<td className="w-1/5 text-start p-1 font-medium align-top">
+										<td className="w-1/5 text-start p-1 font-medium align-top text-gray-500">
 											<span>Trạng thái:</span>
 										</td>
 										<td className="w-full text-start p-1 md:max-w-80 max-w-60">
@@ -2492,7 +2473,7 @@ const SampleInfor = () => {
 										</td>
 									</tr>
 									<tr>
-										<td className="w-1/5 text-start p-1 font-medium align-top">
+										<td className="w-1/5 text-start p-1 font-medium align-top text-gray-500">
 											<span className="">Yêu cầu:</span>
 										</td>
 										<td className="w-full text-start p-1 flex">
@@ -2535,39 +2516,40 @@ const SampleInfor = () => {
 						</button>
 					</div>
 				)}
-				{/* Rest of the component remains the same */}
 				<div className="mt-2 flex flex-col">
-					<div className="flex justify-between items-center">
-						<h3 className="font-medium text-lg">Thông tin in phiếu</h3>
-						<div className="relative sample-dropdown-container">
-							<button
-								className="bg-white text-sky-500 border-gray-300 text-sm rounded-lg p-1 active:bg-teritary focus:outline-none ml-2 w-fit copy-button"
-								onClick={() => setSampleDropdownVisible(!sampleDropdownVisible)}
-							>
-								<FaCopy size={20} />
-							</button>
-							{sampleDropdownVisible && (
-								<div className="absolute right-0 mt-1 bg-white border rounded shadow-lg z-10 min-w-40 sample-dropdown-container">
-									<div className="p-2 bg-gray-100 font-medium">Chọn mẫu để sao chép thông tin:</div>
-									<ul>
-										{listSampleByReceipt.map((sample) => (
-											<li
-												key={sample.sample_uid}
-												className={`p-2 cursor-pointer hover:bg-gray-100 ${
-													sample.sample_uid === sample_uid ? 'bg-gray-200' : ''
-												}`}
-												onClick={() => handleCopySampleInfo(sample.sample_uid)}
-											>
-												{sample.sample_uid}
-											</li>
-										))}
-									</ul>
-								</div>
-							)}
+					{!isTechnician() && (
+						<div className="flex justify-between items-center">
+							<h3 className="font-medium text-lg">Thông tin in phiếu</h3>
+							<div className="relative sample-dropdown-container">
+								<button
+									className="bg-white text-sky-500 border-gray-300 text-sm rounded-lg p-1 active:bg-teritary focus:outline-none ml-2 w-fit copy-button"
+									onClick={() => setSampleDropdownVisible(!sampleDropdownVisible)}
+								>
+									<FaCopy size={20} />
+								</button>
+								{sampleDropdownVisible && (
+									<div className="absolute right-0 mt-1 bg-white border rounded shadow-lg z-10 min-w-40 sample-dropdown-container">
+										<div className="p-2 bg-gray-100 font-medium">Chọn mẫu để sao chép thông tin:</div>
+										<ul>
+											{listSampleByReceipt.map((sample) => (
+												<li
+													key={sample.sample_uid}
+													className={`p-2 cursor-pointer hover:bg-gray-100 ${
+														sample.sample_uid === sample_uid ? 'bg-gray-200' : ''
+													}`}
+													onClick={() => handleCopySampleInfo(sample.sample_uid)}
+												>
+													{sample.sample_uid}
+												</li>
+											))}
+										</ul>
+									</div>
+								)}
+							</div>
 						</div>
-					</div>
+					)}
 
-					{renderNewReport()}
+					{!isTechnician() && renderNewReport()}
 				</div>
 			</div>
 
@@ -2642,12 +2624,12 @@ const SampleInfor = () => {
 							<tr className="border-y-2">
 								<th className="p-2 border-x w-[100px] min-w-[100px] text-left">Mã chỉ tiêu </th>
 								<th className="p-2 border-x w-[22%] min-w-60 text-left">Chỉ tiêu</th>
-								<th className="p-2 border-x w-36 min-w-36 text-left">Nền mẫu</th>
+								<th className="p-2 border-x w-32 min-w-32 text-left">Nền mẫu</th>
 								<th className="p-2 border-x w-[20%] min-w-44 text-left">Phương pháp</th>
 								<th className="p-2 border-x w-1/12 min-w-20 text-left">Kết quả</th>
 								<th className="p-2 border-x w-1/12 min-w-20 text-left">Đơn vị</th>
 								<th className="p-2 border-x w-1/12 min-w-28 text-left">Hạn trả</th>
-								<th className="p-2 border-2 w-[12%] min-w-36 text-left">Thực hiện</th>
+								{/* <th className="p-2 border-2 w-[12%] min-w-36 text-left ">Thực hiện</th> */}
 								<th className="p-2 border-x w-[12%] min-w-32 text-left">Review</th>
 								<th className="py-2 border-x w-10 min-w-10">
 									<input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="w-4 h-4" />
@@ -2660,7 +2642,7 @@ const SampleInfor = () => {
 									<td className="p-1 border relative">
 										<input
 											type="text"
-											className="w-full bg-white border rounded p-1 text-left"
+											className="w-full bg-white border rounded p-1 text-left text-gray-500"
 											placeholder="Mã chỉ tiêu"
 											value={newParameter.parameter_uid || ''}
 											onChange={(e) => handleNewParameterChange('parameter_uid', e.target.value)}
@@ -2746,8 +2728,8 @@ const SampleInfor = () => {
 										<div className="relative w-full">
 											<input
 												type="text"
-												className={`w-full font-medium bg-white border-none p-1 hover:cursor-pointer hover:outline hover:outline-1 rounded hover:outline-indigo-500 text-left ${
-													order.parameter_id ? '' : 'text-gray-500'
+												className={`w-full font-normal bg-white border-none p-1 hover:cursor-pointer hover:outline hover:outline-1 rounded hover:outline-indigo-500 text-left ${
+													order.parameter_id ? 'text-gray-700' : 'text-gray-400'
 												}`}
 												value={order.parameter_uid || ''}
 												readOnly
@@ -2875,7 +2857,7 @@ const SampleInfor = () => {
 									<td className="p-1 border relative">
 										<div className="relative">
 											<button
-												className={`w-full dropdown-button ${
+												className={`w-full dropdown-button font-normal ${
 													deadlineDropdownVisible === order.id && 'border border-slate-200'
 												} p-1 rounded bg-white text-left h-fit`}
 												onClick={(event) => toggleDeadlineDropdown(order.id, event)}
@@ -2902,10 +2884,10 @@ const SampleInfor = () => {
 												document.body,
 											)}
 									</td>
-									<td className="p-1 border relative">
+									{/* <td className="p-1 border relative ">
 										<div className="relative">
 											<button
-												className={`w-full dropdown-button ${
+												className={`w-full dropdown-button font-normal ${
 													technicianDropdownVisible === order.id && 'border border-slate-200'
 												} p-1 rounded bg-white text-left h-fit`}
 												onClick={(event) => toggleTechnicianDropdown(order.id, event)}
@@ -2939,8 +2921,7 @@ const SampleInfor = () => {
 												</ul>,
 												document.body,
 											)}
-									</td>
-									{/* Added new cell for Review */}
+									</td> */}
 									<td className="p-1 border relative text-left">
 										{order.reviewed_by ? (
 											<span className="font-medium">

@@ -47,7 +47,6 @@ const AnalyteInfor = () => {
 	useEffect(() => {
 		if (technicians.length > 0 && !isFetch) {
 			isFetch = true;
-			console.log(isFetch);
 			fetchAnalytes();
 		}
 	}, [technicians]);
@@ -61,7 +60,6 @@ const AnalyteInfor = () => {
 					? `${analyte.tat_expected.days} ${analyte.tat_expected.days > 1 ? 'days' : 'day'}`
 					: '',
 			}));
-			console.log('Analytes:', data);
 			setAnalytes(data);
 			setOriginalAnalytes(data);
 		} catch (error) {
@@ -91,7 +89,6 @@ const AnalyteInfor = () => {
 	const handleEditClick = (id) => {
 		setEditingRow(id);
 		setSelectedAnalyteId(id);
-		console.log('Editing row:', id);
 	};
 
 	const handleSaveClick = async (id) => {

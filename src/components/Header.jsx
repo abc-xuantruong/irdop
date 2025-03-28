@@ -3,7 +3,7 @@ const { useContext } = React;
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../assets/IRDOP-LOGO .png';
 import { GlobalContext } from '../contexts/GlobalContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Cookies from 'js-cookie';
 
 const Header = () => {
@@ -13,17 +13,29 @@ const Header = () => {
 	const currentPath = window.location.pathname;
 
 	const dropdownRef = React.useRef(null);
+	const dropdownButtonRef = React.useRef(null);
 
-	React.useEffect(() => {
-		if (!Cookies.get('auth')) {
+	// Check for auth cookie and fetch user info on mount and when auth cookie changes
+	useEffect(() => {
+		const authCookie = Cookies.get('auth');
+		if (!authCookie) {
 			setCurrentUser(null);
 			navigate(`/login`);
+		} else if (fetchUser && (!currentUser || !currentUser.identity_name)) {
+			// Fetch user information if we have an auth cookie but no user info
+			fetchUser();
 		}
-	}, []);
+	}, [navigate, setCurrentUser, fetchUser, currentUser]);
 
-	React.useEffect(() => {
+	useEffect(() => {
 		const handleClickOutside = (event) => {
-			if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+			// Only close dropdown if click is outside both the dropdown and the trigger button
+			if (
+				dropdownRef.current &&
+				!dropdownRef.current.contains(event.target) &&
+				dropdownButtonRef.current &&
+				!dropdownButtonRef.current.contains(event.target)
+			) {
 				setDropdownOpen(false);
 			}
 		};
@@ -32,13 +44,15 @@ const Header = () => {
 		return () => {
 			document.removeEventListener('mousedown', handleClickOutside);
 		};
-	}, [dropdownRef]);
+	}, [dropdownRef, dropdownButtonRef]);
 
 	const handleLogout = () => {
-		setDropdownOpen(false);
+		// Perform logout actions without being affected by dropdown closing
 		setCurrentUser(null);
 		Cookies.remove('auth');
 		navigate(`/login`);
+		// Close dropdown after the actions
+		setDropdownOpen(false);
 	};
 
 	// Function to navigate and close dropdown
@@ -98,19 +112,23 @@ const Header = () => {
 							</Link>
 						</>
 					)}
-					<div className="relative flex items-center " ref={dropdownRef}>
+					<div className="relative flex items-center">
 						{currentPath.includes('/login') ? (
 							<p className="text-primary  cursor-pointer text-end ml-4 text-lg font-semibold">Tài khoản</p>
 						) : (
 							<>
 								<p
+									ref={dropdownButtonRef}
 									className="text-primary cursor-pointer text-end ml-8 text-md mb-0.5 font-semibold"
 									onClick={() => setDropdownOpen(!dropdownOpen)}
 								>
 									{displayName}
 								</p>
 								{dropdownOpen && (
-									<div className="absolute right-0 top-full mt-3 w-52 bg-white border rounded shadow-lg z-10">
+									<div
+										ref={dropdownRef}
+										className="absolute right-0 top-full mt-3 w-52 bg-white border rounded shadow-lg z-10"
+									>
 										<p
 											className="p-1 border-b text-base font-medium text-start"
 											onClick={() => setDropdownOpen(!dropdownOpen)}

@@ -10,7 +10,6 @@ import 'react-datepicker/dist/react-datepicker.css';
 
 const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] }) => {
 	const navigate = useNavigate();
-	const location = useLocation();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const {
 		setCurrentSort,
@@ -47,6 +46,8 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 	const filterRef = useRef(null);
 	const sortButtonRef = useRef(null);
 	const filterButtonRef = useRef(null);
+	// Add a ref to track previous search parameters
+	const prevSearchParamsRef = useRef({ search: null, filter: null, sort: null });
 
 	// Handle clicks outside of dropdown menus
 	useEffect(() => {
@@ -174,6 +175,23 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			const searchQuery = searchParams.get('search') || '';
 			const filterQuery = searchParams.get('filter') || '';
 			const sortQuery = searchParams.get('sort') || '';
+
+			// Check if parameters have changed to avoid duplicate processing
+			const prevParams = prevSearchParamsRef.current;
+			if (
+				prevParams.search === searchQuery && 
+				prevParams.filter === filterQuery && 
+				prevParams.sort === sortQuery
+			) {
+				return; // Skip processing if params haven't changed
+			}
+			
+			// Update reference with current parameters
+			prevSearchParamsRef.current = {
+				search: searchQuery,
+				filter: filterQuery,
+				sort: sortQuery
+			};
 
 			let processedData = [...source];
 
@@ -381,143 +399,9 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 		});
 	};
 
-	// Apply search from URL
-	const applySearchFromUrl = async (searchTerm) => {
-		if (searchTerm.trim() === '') {
-			setCurrentList(source);
-			setIsFilter && setIsFilter(false);
-			return;
-		}
-
-		setIsFilter && setIsFilter(true);
-
-		if (typeSearch === 'protocol') {
-			setCurrentList(searchProtocol(searchTerm, source));
-		} else if (typeSearch === 'parameter') {
-			setCurrentList(searchAnalyte(searchTerm, source));
-		} else if (typeSearch === 'client') {
-			setCurrentList(searchClient(searchTerm, source));
-		} else if (typeSearch === 'analysis') {
-			setCurrentList(searchAnalysis(searchTerm, source));
-		} else if (typeSearch === 'receipt') {
-			try {
-				const response = await axios.post('https://black.irdop.org/khsi19me/db/search/receipt', {
-					query: searchTerm,
-				});
-				setCurrentList(response.data);
-			} catch (error) {
-				console.error('Error searching receipts:', error);
-			}
-		} else if (typeSearch === 'processing_v1') {
-			try {
-				const response = await axios.post('https://black.irdop.org/to82oe92i/sample/processing/search/v1', {
-					query: searchTerm,
-				});
-				setCurrentList(response.data);
-			} catch (error) {
-				console.error('Error searching processing_v1:', error);
-			}
-		} else if (typeSearch === 'processing_v2') {
-			try {
-				const response = await axios.post('https://black.irdop.org/to82oe92i/sample/processing/search/v2', {
-					query: searchTerm,
-				});
-				setCurrentList(response.data);
-			} catch (error) {
-				console.error('Error searching processing_v2:', error);
-			}
-		}
-	};
-
-	// Apply filters from URL
-	const applyFiltersFromUrl = (filters) => {
-		// Reuse existing filter logic but with the provided filters
-		let filteredList = [...source];
-
-		if (typeSearch === 'processing_v2') {
-			// Handle processing_v2 special case using existing logic
-			// ...existing special processing_v2 filter logic...
-			// This would be a copy of the processing_v2 specific logic from the applyFilters function
-
-			// For brevity, calling the existing function
-			setFilterRows(filters);
-			applyFilters();
-		} else {
-			// Regular filtering for other types
-			filters.forEach((filter, index) => {
-				if (filter.logic === 'AND' || index === 0) {
-					filteredList = filteredList.filter((item) => {
-						// Special handling for technician_uid
-						if (filter.key === 'technician_uid') {
-							const techAlias = getTechnicianAlias(item.technician_uid);
-							return applyOperator(techAlias, filter.operator, filter.value);
-						}
-						return applyOperator(item[filter.key], filter.operator, filter.value);
-					});
-				} else if (filter.logic === 'OR') {
-					const additionalItems = source.filter((item) => {
-						// Special handling for technician_uid
-						if (filter.key === 'technician_uid') {
-							const techAlias = getTechnicianAlias(item.technician_uid);
-							return applyOperator(techAlias, filter.operator, filter.value);
-						}
-						return applyOperator(item[filter.key], filter.operator, filter.value);
-					});
-
-					// Add unique items from additionalItems to filteredList
-					additionalItems.forEach((item) => {
-						if (!filteredList.some((existing) => JSON.stringify(existing) === JSON.stringify(item))) {
-							filteredList.push(item);
-						}
-					});
-				}
-			});
-
-			setCurrentList(filteredList);
-			setCurrentFilter(filters);
-			setActiveFilters(true);
-			setIsFilter && setIsFilter(true);
-		}
-	};
-
-	// Apply sorts from URL
-	const applySortsFromUrl = (sorts) => {
-		if (sorts.length > 0) {
-			let sortedList = [...source];
-
-			sortedList.sort((a, b) => {
-				for (const sortConfig of sorts) {
-					let valA, valB;
-
-					if (sortConfig.field === 'technician_uid') {
-						valA = getTechnicianAlias(a.technician_uid || '').toLowerCase();
-						valB = getTechnicianAlias(b.technician_uid || '').toLowerCase();
-					} else {
-						valA = a[sortConfig.field];
-						valB = b[sortConfig.field];
-
-						if (valA === undefined) valA = '';
-						if (valB === undefined) valB = '';
-
-						if (typeof valA === 'string') valA = valA.toLowerCase();
-						if (typeof valB === 'string') valB = valB.toLowerCase();
-					}
-
-					if (valA < valB) return sortConfig.order === 'asc' ? -1 : 1;
-					if (valA > valB) return sortConfig.order === 'asc' ? 1 : -1;
-				}
-				return 0;
-			});
-
-			setCurrentList(sortedList);
-			setCurrentSort(sorts);
-			setActiveSorts(true);
-			setIsFilter && setIsFilter(true);
-		}
-	};
-
 	const handleSearchChange = (e) => {
 		setSearchTerm(e.target.value);
+		// Only perform client-side filtering for these types
 		if (typeSearch === 'protocol') {
 			setCurrentList(searchProtocol(e.target.value, source));
 		} else if (typeSearch === 'parameter') {
@@ -527,6 +411,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 		} else if (typeSearch === 'client') {
 			setCurrentList(searchClient(e.target.value, source));
 		}
+		// Don't do any filtering for receipt type on change
 
 		// Set isFilter to true if search term is not empty
 		if (e.target.value.trim() !== '') {
@@ -553,17 +438,22 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 				return;
 			}
 
-			setIsFilter && setIsFilter(true);
-
-			// For receipt type, always redirect to dashboard with search parameter
+			// For receipt type, immediately navigate without any API calls
 			if (typeSearch === 'receipt') {
-				// Redirect to dashboard with search query
+				// Set isFilter true before navigation (if needed)
+				setIsFilter && setIsFilter(true);
+				// Redirect to dashboard with search query and return immediately
 				navigate(`/dashboard?search=${encodeURIComponent(searchTerm)}`);
 				return;
 			}
 
+			setIsFilter && setIsFilter(true);
+
 			// Update URL with search parameter
 			updateUrlParams('search', searchTerm);
+
+			// Continue with other search logic for non-redirecting types
+			// ...existing code...
 
 			// Apply search first (priority 1)
 			let searchResults = source;

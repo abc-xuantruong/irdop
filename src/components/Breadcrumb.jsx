@@ -1,9 +1,11 @@
 import React, { useContext, useState } from 'react';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { MdArrowRight } from 'react-icons/md';
+
 import FilterBar from './FilterBar';
 
-const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter }) => {
+const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter, sample_uids }) => {
 	const { currentTitlePage } = useContext(GlobalContext);
 	const [searchTerm, setSearchTerm] = useState('');
 	const location = useLocation();
@@ -27,22 +29,42 @@ const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter }) => {
 			<div>
 				<h1 className="text-2xl md:text-3xl font-bold text-primary text-start">{currentTitlePage}</h1>
 			</div>
-			<div className="md:flex justify-between items-center flexx-wrap ">
-				<ul className="flex list-none p-0 text-sm md:text-base ">
+			<div className="md:flex items-start flex-wrap justify-between">
+				<div className="flex list-none p-0 text-sm md:text-base mt-2 ">
 					{paths.map((path, index) => (
-						<li key={index} className="mr-2">
+						<div key={index} className="mr-2 flex items-center">
 							{index === paths.length - 1 ? (
-								<span className="text-blue-500 hover:underline cursor-pointer">
-									<NavLink to={path.link}>{path.name} </NavLink>
-								</span>
+								sample_uids && sample_uids.length > 0 ? (
+									<select
+										className=" bg-transparent text-gray-700 rounded-md p-1 text-"
+										onChange={(e) => navigate(e.target.value)}
+										value={location.pathname}
+									>
+										<option value={path.link} className="text-gray-700 cursor-pointer">
+											{path.name}
+										</option>
+										{sample_uids.map((uid, uidIndex) => (
+											<option key={uidIndex} value={`/dashboard/${uid}`} className="text-gray-700 cursor-pointer">
+												{uid}
+											</option>
+										))}
+									</select>
+								) : (
+									<span className="text-blue-500 hover:underline cursor-pointer align-middle text-center">
+										<NavLink to={path.link}>{path.name} </NavLink>
+									</span>
+								)
 							) : (
-								<NavLink to={path.link} className="text-text-gray cursor-pointer">
-									{path.name} /
-								</NavLink>
+								<>
+									<NavLink to={path.link} className="text-gray-700 cursor-pointer mr-2">
+										{path.name}
+									</NavLink>
+									<MdArrowRight size={16} className="text-gray-700" />
+								</>
 							)}
-						</li>
+						</div>
 					))}
-				</ul>
+				</div>
 
 				{/* Search input - only visible on dashboard/home page */}
 				{isDashboard && (

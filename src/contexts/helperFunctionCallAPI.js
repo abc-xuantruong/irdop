@@ -41,7 +41,6 @@ export const apiGet = async (url, headers = {}) => {
 		}
 
 		const auth = await axios.post('https://pink.irdop.org/ab4dg2/auth/me', {}, { headers: { ...getAuthHeader() } });
-		console.log('Auth:', auth);
 
 		const expiry_date = new Date(auth.data.session_expiry);
 

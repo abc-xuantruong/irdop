@@ -8,9 +8,19 @@ import CreateReceiptFromCRM from './CreateReceiptFromCRM';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import 'react-datepicker/dist/react-datepicker.css';
-// Add FaExternalLinkAlt to the import for the forward icon
-import { FaTrashAlt, FaMoneyBillWave, FaCalendarDay, FaFileAlt, FaExternalLinkAlt } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
+// Add FaRegStickyNote to the import for the note icon
+import {
+	FaTrashAlt,
+	FaMoneyBillWave,
+	FaCalendarDay,
+	FaFileAlt,
+	FaExternalLinkAlt,
+	FaRegStickyNote,
+	FaStickyNote,
+	FaCheck, // Add this icon for the Apply button
+	FaFilter, // Add this icon as an alternative option
+} from 'react-icons/fa';
 
 const Dashboard = () => {
 	const location = useLocation();
@@ -47,7 +57,7 @@ const Dashboard = () => {
 	// Add state for user information
 	const [userInfo, setUserInfo] = useState({});
 
-	const [showRelativeTime, setShowRelativeTime] = useState(false); // Toggle between date format and relative time
+	const [showRelativeTime, setShowRelativeTime] = useState(true); // Toggle between date format and relative time
 	const receiptsPerPage = 15;
 	const [hoveredReceiptId, setHoveredReceiptId] = useState(null);
 	const [hoveredSampleId, setHoveredSampleId] = useState(null);
@@ -69,6 +79,27 @@ const Dashboard = () => {
 
 	// Replace separate view state with a single viewMode state
 	const [viewMode, setViewMode] = useState('normal'); // 'normal', 'payment', 'preliminary'
+
+	// Add a new state for tracking whether we're showing the current list or fetched preliminary data
+	const [isPreliminaryDataFetched, setIsPreliminaryDataFetched] = useState(false);
+
+	// Add state to track which note is being edited
+	const [noteEditing, setNoteEditing] = useState({ receiptId: null, content: '' });
+
+	// Add state to track tooltip position and visibility
+	const [tooltipState, setTooltipState] = useState({
+		visible: false,
+		content: '',
+		x: 0,
+		y: 0,
+	});
+
+	// Add state for date range picker
+	const [showDateRangePicker, setShowDateRangePicker] = useState(false);
+	const [dateRange, setDateRange] = useState({
+		startDate: null,
+		endDate: null,
+	});
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -256,6 +287,12 @@ const Dashboard = () => {
 
 	// 2. API update function - only called on explicit confirmation
 	const handleDeadlineChangeAPI = async (receiptId, newDeadline) => {
+		// Prevent technicians from updating deadline
+		if (isTechnician()) {
+			showToast('Bạn không có quyền cập nhật hạn trả', 'error');
+			return;
+		}
+
 		try {
 			// If we have a date, adjust it for GMT+7 timezone
 			let formattedDate = null;
@@ -410,22 +447,33 @@ const Dashboard = () => {
 		setShowRelativeTime(!showRelativeTime);
 	};
 
-	// Updated togglePreliminaryView function
+	// Updated togglePreliminaryView function to reset to showing current data
 	const togglePreliminaryView = () => {
 		if (viewMode === 'preliminary') {
 			// If already in preliminary view, switch back to normal
 			setViewMode('normal');
 		} else {
-			// Switch to preliminary view and fetch data
+			// Switch to preliminary view but don't fetch data yet
 			setViewMode('preliminary');
-			fetchPreliminaryData();
-			// Turn off other filters
+			// Reset to showing current list when switching to preliminary view
+			setIsPreliminaryDataFetched(false);
+			setSelectedPreliminaryType('current');
+		}
+
+		// Turn off other filters when switching views
+		if (showTodayDeadlines) {
 			setShowTodayDeadlines(false);
 		}
 	};
 
 	// Updated togglePaymentColumn function
 	const togglePaymentColumn = () => {
+		// Prevent technicians from accessing payment view
+		if (isTechnician()) {
+			showToast('Bạn không có quyền xem thông tin thanh toán', 'error');
+			return;
+		}
+
 		if (viewMode === 'payment') {
 			// If already in payment view, switch back to normal
 			setViewMode('normal');
@@ -437,17 +485,125 @@ const Dashboard = () => {
 		}
 	};
 
+	// Add a new function to fetch receipts filtered by deadline
+	const fetchReceiptsByDeadline = async (startDate, endDate) => {
+		try {
+			// Format dates to YYYY-MM-DD format for the API
+			const formattedStartDate = startDate ? startDate.toISOString().split('T')[0] : null;
+			const formattedEndDate = endDate ? endDate.toISOString().split('T')[0] : null;
+
+			if (!formattedStartDate || !formattedEndDate) {
+				showToast('Vui lòng chọn khoảng thời gian', 'error');
+				return;
+			}
+
+			const payload = {
+				start_date: formattedStartDate,
+				end_date: formattedEndDate,
+			};
+
+			const response = await apiPost('https://black.irdop.org/khsi19me/filter/deadline/receipt', payload);
+
+			if (response.status === 200) {
+				if (response.data && Array.isArray(response.data)) {
+					// Update the current list with filtered data
+					setCurrentList(response.data);
+					setIsFilter(true);
+					setCurrentPage(1); // Reset to first page
+
+					// Show toast with count
+					showToast(`Hiển thị ${response.data.length} tiếp nhận trong khoảng thời gian đã chọn`, 'info');
+				} else {
+					showToast('Không tìm thấy dữ liệu', 'info');
+				}
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi lọc dữ liệu theo hạn trả',
+				});
+			}
+		} catch (error) {
+			console.error('Error fetching receipts by deadline:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi lọc dữ liệu theo hạn trả',
+			});
+		}
+	};
+
+	// Update handleDateRangeChange to explicitly close the DatePicker when both dates are selected
+	const handleDateRangeChange = (dates) => {
+		const [start, end] = dates;
+		setDateRange({
+			startDate: start,
+			endDate: end,
+		});
+
+		// If both start and end dates are selected, close the DatePicker
+		if (start && end) {
+			// Close the date picker by clicking outside or forcing blur
+			document.body.click(); // This will trigger a click outside event
+
+			// Additional approach: force blur on any active DatePicker element
+			setTimeout(() => {
+				if (document.activeElement) {
+					document.activeElement.blur();
+				}
+
+				// Find any open DatePicker popper and hide it
+				const datePickerPopper = document.querySelector('.react-datepicker-popper');
+				if (datePickerPopper) {
+					datePickerPopper.style.display = 'none';
+				}
+			}, 100);
+		}
+	};
+
+	// Add function to handle Apply button click
+	const handleApplyDateFilter = () => {
+		// Call the API with selected date range
+		fetchReceiptsByDeadline(dateRange.startDate, dateRange.endDate);
+	};
+
 	// Updated filterTodayDeadlines function that properly filters preliminary data
 	const filterTodayDeadlines = () => {
-		setShowTodayDeadlines(!showTodayDeadlines);
+		// Toggle date range picker
+		setShowDateRangePicker(!showDateRangePicker);
 
-		if (!showTodayDeadlines) {
-			// If turning on the filter
+		// If turning off the date picker, reset the filter
+		if (showDateRangePicker) {
+			// Reset date range
+			setDateRange({
+				startDate: null,
+				endDate: null,
+			});
+
+			// Reset to the original list
+			if (viewMode === 'preliminary') {
+				// For preliminary view, reload the preliminary data
+				fetchPreliminaryData();
+			} else {
+				// For normal and payment views, reset to the original list
+				setCurrentList(originalList);
+				setIsFilter(false);
+			}
+
+			// Turn off today's deadlines filter if it was active
+			if (showTodayDeadlines) {
+				setShowTodayDeadlines(false);
+			}
+		} else if (!showDateRangePicker && !showTodayDeadlines) {
+			// If turning on the date picker and today filter is off,
+			// we'll keep the current behavior of showing today's deadlines
+			setShowTodayDeadlines(true);
+
+			// Logic for filtering today's deadlines (keep existing code)
 			const today = new Date();
 			const todayStr = today.toISOString().split('T')[0]; // Get YYYY-MM-DD format
 
 			if (viewMode === 'preliminary') {
-				// For preliminary view, filter the current preliminary data type
 				const sourceData = [...preliminaryData[selectedPreliminaryType]];
 				const filteredData = sourceData.filter((receipt) => {
 					if (!receipt.deadline) return false;
@@ -457,7 +613,6 @@ const Dashboard = () => {
 					return deadlineStr === todayStr;
 				});
 
-				// Create a new object with the filtered data for the current type
 				const newPreliminaryData = {
 					...preliminaryData,
 					[selectedPreliminaryType]: filteredData,
@@ -466,7 +621,6 @@ const Dashboard = () => {
 				setPreliminaryData(newPreliminaryData);
 				showToast(`Hiển thị ${filteredData.length} tiếp nhận có hạn trả là hôm nay`, 'info');
 			} else {
-				// For normal and payment views, filter from the current list
 				const filteredReceipts = currentList.filter((receipt) => {
 					if (!receipt.deadline) return false;
 
@@ -480,16 +634,6 @@ const Dashboard = () => {
 				setCurrentPage(1); // Reset to first page
 				showToast(`Hiển thị ${filteredReceipts.length} tiếp nhận có hạn trả là hôm nay`, 'info');
 			}
-		} else {
-			// If turning off the filter
-			if (viewMode === 'preliminary') {
-				// For preliminary view, just reload the preliminary data again
-				fetchPreliminaryData();
-			} else {
-				// For normal/payment views, reset to the original list
-				setCurrentList(originalList);
-				setIsFilter(false);
-			}
 		}
 	};
 
@@ -499,7 +643,6 @@ const Dashboard = () => {
 			const response = await apiGet('https://black.irdop.org/to82oe92i/db/sample/get/send_result');
 			if (response.status === 200) {
 				setPreliminaryData(response.data);
-				console.log('Preliminary data fetched:', response.data);
 			} else {
 				Swal.fire({
 					icon: 'error',
@@ -517,13 +660,23 @@ const Dashboard = () => {
 		}
 	};
 
-	// Update the handlePreliminaryTypeChange function to turn off deadlines filter
+	// Update the handlePreliminaryTypeChange function to fetch data only for non-current tabs
 	const handlePreliminaryTypeChange = (type) => {
 		// Turn off deadline filter when changing preliminary list type
 		if (showTodayDeadlines) {
 			setShowTodayDeadlines(false);
 		}
+
+		// Set the selected type
 		setSelectedPreliminaryType(type);
+
+		// Only fetch data if it's not the "current" tab
+		if (type !== 'current') {
+			fetchPreliminaryData(type);
+			setIsPreliminaryDataFetched(true);
+		} else {
+			setIsPreliminaryDataFetched(false);
+		}
 	};
 
 	useEffect(() => {
@@ -552,7 +705,6 @@ const Dashboard = () => {
 						setShowTodayDeadlines(false);
 					}
 				}
-				console.log('Data fetched:', response.data);
 
 				// Fetch user information for all receipts
 				response.data.forEach((receipt) => {
@@ -619,6 +771,10 @@ const Dashboard = () => {
 
 	// Handle clicking on a field to make it editable - this should be specific to a row
 	const handleFieldClick = (receiptId, sampleId, field) => {
+		// Prevent technicians from editing fields except for sample status
+		if (isTechnician() && !(sampleId && field === 'status')) {
+			return;
+		}
 		setEditingField({ receiptId, sampleId, field });
 	};
 
@@ -647,6 +803,12 @@ const Dashboard = () => {
 
 	// Handle sample field updates (status, sample_volume, purpose)
 	const handleSampleChange = async (receiptId, sampleId, field, newValue) => {
+		// Prevent technicians from updating data
+		if (isTechnician()) {
+			showToast('Bạn không có quyền cập nhật thông tin này', 'error');
+			return;
+		}
+
 		try {
 			const payload = {
 				sample: {
@@ -697,6 +859,12 @@ const Dashboard = () => {
 
 	// Handle payment status update
 	const handlePaymentStatusChange = async (receiptId, newStatus) => {
+		// Prevent technicians from updating payment status
+		if (isTechnician()) {
+			showToast('Bạn không có quyền cập nhật thông tin thanh toán', 'error');
+			return;
+		}
+
 		try {
 			const payload = {
 				receipt: {
@@ -746,6 +914,12 @@ const Dashboard = () => {
 
 	// Add this function to handle receipt field updates
 	const handleReceiptChange = async (receiptId, field, newValue) => {
+		// Prevent technicians from updating data
+		if (isTechnician()) {
+			showToast('Bạn không có quyền cập nhật thông tin này', 'error');
+			return;
+		}
+
 		try {
 			const payload = {
 				receipt: {
@@ -789,25 +963,49 @@ const Dashboard = () => {
 		}
 	};
 
-	// Add this function to handle payment confirmation
+	// Update this function to handle payment confirmation with multiple options
 	const handlePaymentConfirmation = (receiptId) => {
+		// Prevent technicians from confirming payments
+		if (isTechnician()) {
+			showToast('Bạn không có quyền cập nhật thông tin thanh toán', 'error');
+			return;
+		}
+
 		const receipt = currentList.find((r) => r.id === receiptId);
 		if (!receipt) return;
 
-		const newStatus = receipt.pay_status === 1 ? 0 : 1;
-		const confirmMessage = newStatus === 1 ? 'Xác nhận đã thanh toán?' : 'Xác nhận chuyển sang chưa thanh toán?';
+		const currentStatus = receipt.pay_status || 0;
 
 		Swal.fire({
-			title: 'Xác nhận',
-			text: confirmMessage,
-			icon: 'question',
+			title: 'Cập nhật trạng thái thanh toán',
+			html: `
+				<div class="flex flex-col space-y-3 text-left mt-4">
+					<label class="inline-flex items-center">
+						<input type="radio" name="pay_status" value="1" class="form-radio" ${currentStatus === 1 ? 'checked' : ''}>
+						<span class="ml-2 text-green-600 font-medium">Đã thanh toán</span>
+					</label>
+					<label class="inline-flex items-center">
+						<input type="radio" name="pay_status" value="0" class="form-radio" ${currentStatus === 0 ? 'checked' : ''}>
+						<span class="ml-2 text-gray-500 font-medium">Chưa thanh toán</span>
+					</label>
+					<label class="inline-flex items-center">
+						<input type="radio" name="pay_status" value="2" class="form-radio" ${currentStatus === 2 ? 'checked' : ''}>
+						<span class="ml-2 text-black font-medium">Công nợ</span>
+					</label>
+				</div>
+			`,
 			showCancelButton: true,
 			confirmButtonColor: '#3085d6',
 			cancelButtonColor: '#d33',
-			confirmButtonText: 'Xác nhận',
+			confirmButtonText: 'Cập nhật',
 			cancelButtonText: 'Hủy',
+			preConfirm: () => {
+				const selectedStatus = document.querySelector('input[name="pay_status"]:checked').value;
+				return parseInt(selectedStatus, 10);
+			},
 		}).then((result) => {
 			if (result.isConfirmed) {
+				const newStatus = result.value;
 				handlePaymentStatusChange(receiptId, newStatus);
 			}
 		});
@@ -856,13 +1054,103 @@ const Dashboard = () => {
 		});
 	};
 
+	// Add this function to check if user is a technician
+	const isTechnician = () => {
+		return currentUser?.role?.staff_technician;
+	};
+
+	// Add function to handle note icon click
+	const handleNoteClick = (receipt) => {
+		// Open a dialog with the current note content
+		Swal.fire({
+			title: 'Ghi chú',
+			input: 'textarea',
+			inputValue: receipt.note || '',
+			showCancelButton: true,
+			confirmButtonText: 'Lưu',
+			cancelButtonText: 'Hủy',
+			inputAttributes: {
+				'aria-label': 'Nhập ghi chú cho phiếu tiếp nhận',
+				rows: 5,
+			},
+			customClass: {
+				input: 'text-sm', // Add smaller text size
+				validationMessage: 'text-sm',
+				popup: 'custom-note-popup',
+			},
+			preConfirm: (note) => {
+				return handleNoteUpdate(receipt.id || receipt.receipt_uid, note);
+			},
+		});
+	};
+
+	// Add function to handle note update
+	const handleNoteUpdate = async (receiptId, noteContent) => {
+		try {
+			const payload = {
+				receipt: {
+					id: receiptId,
+					note: noteContent,
+					modified_by_uid: currentUser?.identity_uid,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+			if (response.status === 200) {
+				showToast('Cập nhật ghi chú thành công!');
+				fetchReceipt(); // Fetch new data to update the list
+				return true;
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật ghi chú',
+				});
+				return false;
+			}
+		} catch (error) {
+			console.error('Error updating receipt note:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật ghi chú',
+			});
+			return false;
+		}
+	};
+
+	// Add function to handle mouse enter for tooltip display
+	const handleTooltipEnter = (e, receipt) => {
+		// Only show tooltip if receipt has a note
+		if (receipt?.note && receipt.note.trim() !== '') {
+			setTooltipState({
+				visible: true,
+				content: receipt.note,
+				x: e.clientX + 10, // Offset by 10px to right of cursor
+				y: e.clientY + 10, // Offset by 10px below cursor
+			});
+		}
+	};
+
+	// Remove the handleMouseMove function to prevent tooltip from following the mouse
+
+	// Add function to handle mouse leave for tooltip
+	const handleTooltipLeave = () => {
+		setTooltipState({
+			...tooltipState,
+			visible: false,
+		});
+	};
+
 	// Calculate if a view mode is currently active
 	const isPreliminaryActive = viewMode === 'preliminary';
 	const isPaymentActive = viewMode === 'payment';
 
 	return (
+		// Remove onMouseMove from the container div
 		<div className="flex flex-col justify-between items-center w-full">
-			{/* Add CSS for custom toast */}
+			{/* Add CSS for custom toast and tooltip */}
 			<style jsx>{`
 				.colored-toast.swal2-icon-success {
 					background-color: #2bae66 !important;
@@ -893,8 +1181,46 @@ const Dashboard = () => {
 						border-color: white;
 						color: white;
 					}
+					/* Tooltip styling */
+					.note-tooltip {
+						position: fixed;
+						background-color: white;
+						color: #333;
+						border: 2px solid #0d9488;
+						border-radius: 6px;
+						padding: 10px;
+						max-width: 300px;
+						z-index: 1000;
+						box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+						font-size: 14px;
+						white-space: pre-wrap;
+						word-break: break-word;
+						pointer-events: none; /* Prevents the tooltip from blocking mouse events */
+					}
+					/* Add custom styling for the note popup */
+					:global(.custom-note-popup) {
+						font-size: 0.875rem !important;
+					}
+					:global(.custom-note-popup textarea) {
+						font-size: 0.875rem !important;
+					}
 				}
 			`}</style>
+
+			{/* Add tooltip element that shows when hovering */}
+			{tooltipState.visible && (
+				<div
+					className="note-tooltip border-2 border-[#d5b31c] p-2 rounded-lg fixed bg-[#ffd632] z-50 max-w-80 text-start shadow-md shadow-slate-400"
+					style={{
+						left: `${tooltipState.x}px`,
+						top: `${tooltipState.y}px`,
+					}}
+				>
+					<p className="font-semibold mb-1">Ghi chú:</p>
+					<p>{tooltipState.content}</p>
+				</div>
+			)}
+
 			<Breadcrumb
 				paths={[{ name: 'Danh sách', link: '/' }]}
 				source={originalList}
@@ -912,6 +1238,15 @@ const Dashboard = () => {
 					<div className="flex width-fit space-x-2">
 						{isPreliminaryActive && (
 							<>
+								{/* Add the "Current" button */}
+								<button
+									className={`px-2 py-1 rounded focus:outline-none ${
+										selectedPreliminaryType === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-200'
+									}`}
+									onClick={() => handlePreliminaryTypeChange('current')}
+								>
+									Hiện tại
+								</button>
 								<button
 									className={`px-2 py-1 rounded focus:outline-none ${
 										selectedPreliminaryType === 'not_sent_preliminary' ? 'bg-blue-600 text-white' : 'bg-gray-200'
@@ -954,14 +1289,27 @@ const Dashboard = () => {
 								Kết quả tìm kiếm cho: <span className="font-medium">{searchTerm}</span>
 								<button
 									onClick={() => {
+										// Reset search term
 										setSearchTerm('');
+										// Reset all filters and states
 										setIsFilter(false);
+										setShowTodayDeadlines(false);
+										setViewMode('normal');
+										setIsPreliminaryDataFetched(false);
+
+										// Navigate to dashboard root
 										navigate('/dashboard');
-										fetchReceipt();
-										// Turn off deadline filter when canceling search
-										if (showTodayDeadlines) {
-											setShowTodayDeadlines(false);
-										}
+
+										// Explicitly fetch fresh data and then update the currentList with that fresh data
+										fetchReceipt().then(() => {
+											// Fetch a new set of receipts and update the UI
+											apiGet('https://black.irdop.org/khsi19me/db/get/recent_receipt').then((response) => {
+												if (response.status === 200) {
+													setOriginalList(response.data);
+													setCurrentList(response.data);
+												}
+											});
+										});
 									}}
 									className="ml-2 text-blue-600 px-2 py-1 bg-background border-2 border-gray-400"
 								>
@@ -971,38 +1319,66 @@ const Dashboard = () => {
 						)}
 					</div>
 					<div className="w-fit px-4 flex justify-end">
-						{/* Today's deadline toggle button */}
-						<button
-							className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none ${
-								showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black'
-							}`}
-							onClick={filterTodayDeadlines}
-							title={showTodayDeadlines ? 'Hiển thị tất cả' : 'Hiển thị các phiếu hạn trả hôm nay'}
-						>
-							<FaCalendarDay />
-						</button>
+						<div className="flex gap-2 items-center">
+							{showDateRangePicker && (
+								<div className="flex gap-1">
+									<DatePicker
+										selected={dateRange.startDate}
+										onChange={handleDateRangeChange}
+										startDate={dateRange.startDate}
+										endDate={dateRange.endDate}
+										selectsRange
+										dateFormat="dd/MM/yyyy"
+										placeholderText="Chọn khoảng thời gian"
+										className="p-1 py-1.5 border border-gray-300 rounded bg-white w-48 text-sm"
+										calendarClassName="text-black"
+									/>
+
+									<button
+										onClick={handleApplyDateFilter}
+										className="border-gray-500 py-1 px-2 rounded hover:bg-blue-200 flex items-center "
+									>
+										<FaFilter size={18} />
+									</button>
+								</div>
+							)}
+							<button
+								className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+									showTodayDeadlines || showDateRangePicker ? 'text-white bg-blue-600' : 'text-black'
+								}`}
+								onClick={filterTodayDeadlines}
+								title={showTodayDeadlines ? 'Hiển thị tất cả' : 'Hiển thị các phiếu hạn trả hôm nay'}
+							>
+								<FaCalendarDay size={18} />
+								<span className="font-normal">Deadline</span>
+							</button>
+						</div>
 
 						{/* Change icon to document icon for preliminary results */}
 						<button
-							className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none ${
+							className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none gap-2 py-0 ${
 								isPreliminaryActive ? 'text-white bg-blue-600' : 'text-black'
 							}`}
 							onClick={togglePreliminaryView}
 							title={isPreliminaryActive ? 'Hiển thị chế độ bình thường' : 'Hiển thị danh sách kết quả sơ bộ'}
 						>
-							<FaFileAlt />
+							<FaFileAlt size={18} />
+							<span className="font-normal">PPT</span>
 						</button>
 
-						{/* Add payment toggle button */}
-						<button
-							className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none ${
-								isPaymentActive ? 'text-white bg-blue-600' : 'text-black'
-							}`}
-							onClick={togglePaymentColumn}
-							title={isPaymentActive ? 'Ẩn cột ghi nhận doanh số' : 'Hiển thị cột ghi nhận doanh số'}
-						>
-							<FaMoneyBillWave />
-						</button>
+						{/* Add payment toggle button - hide for technicians */}
+						{!isTechnician() && (
+							<button
+								className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none gap-2 py-0 ${
+									isPaymentActive ? 'text-white bg-blue-600' : 'text-black'
+								}`}
+								onClick={togglePaymentColumn}
+								title={isPaymentActive ? 'Ẩn cột ghi nhận doanh số' : 'Hiển thị cột ghi nhận doanh số'}
+							>
+								<FaMoneyBillWave size={18} />
+								<span className="font-normal">Thanh toán</span>
+							</button>
+						)}
 
 						<div className="w-fit">
 							<FilterBar
@@ -1032,7 +1408,195 @@ const Dashboard = () => {
 									</tr>
 								</thead>
 								<tbody>
-									{preliminaryData[selectedPreliminaryType]?.length > 0 ? (
+									{selectedPreliminaryType === 'current' ? (
+										// Show current list when "Current" is selected
+										paginatedReceipts.length > 0 ? (
+											paginatedReceipts.map((receipt) => {
+												const samplesToShow = receipt.samples || [];
+
+												return (
+													<React.Fragment key={receipt.receipt_uid || receipt.id}>
+														{samplesToShow.length === 0 ? (
+															<tr key={`empty-${receipt.receipt_uid || receipt.id}`}>
+																<td className="p-1 text-start align-top">
+																	<div className="flex justify-between items-center">
+																		<NavLink
+																			className="text-primary font-semibold hover:text-[#103667]"
+																			to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid || receipt.id}`}
+																		>
+																			{receipt.receipt_uid || receipt.id}
+																		</NavLink>
+																		{receipt?.note && receipt?.note?.trim() !== '' ? (
+																			<FaStickyNote
+																				size={16}
+																				className={` text-[#d5b31c] cursor-pointer`}
+																				onClick={() => handleNoteClick(receipt)}
+																				onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
+																				onMouseLeave={handleTooltipLeave}
+																				title="Thêm ghi chú"
+																			/>
+																		) : (
+																			<FaRegStickyNote
+																				size={16}
+																				className={` text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50`}
+																				onClick={() => handleNoteClick(receipt)}
+																				title="Xem/Cập nhật ghi chú"
+																			/>
+																		)}
+																	</div>
+																	<div className="flex flex-col">
+																		<p className="text-sm">
+																			{!isTechnician() ? receipt.client?.client_name || '--' : '[Thông tin bị ẩn]'}
+																		</p>
+																		<p className="text-xs text-gray-500">
+																			{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
+																			{getUserName(receipt.created_by_uid)}
+																		</p>
+																	</div>
+																</td>
+																<td className="p-1 text-start">
+																	{receipt.deadline ? formatDeadlineWithStyle(receipt.deadline, receipt) : '--'}
+																</td>
+																<td colSpan="5" className="p-1 text-center text-gray-500">
+																	Chưa có thông tin mẫu thử . . .
+																</td>
+															</tr>
+														) : (
+															samplesToShow.map((sample, sampleIndex) => {
+																// Calculate completed tests count
+																const totalTests = sample?.analysis?.length || 0;
+																const completedTests =
+																	sample?.analysis?.filter(
+																		(order) => order?.result_value !== null && order?.result_value !== '<p></p>',
+																	)?.length || 0;
+
+																// Get sample id or uid for lookup
+																const sampleKey = sample.id || sample.sample_uid;
+
+																// Get reports for this sample
+																const reports = sample.report || [];
+
+																return (
+																	<tr
+																		key={`${receipt.receipt_uid || receipt.id}-${
+																			sample.sample_uid || sample.id
+																		}-${sampleIndex}`}
+																	>
+																		{sampleIndex === 0 && (
+																			<>
+																				<td className="p-1 text-start align-top" rowSpan={samplesToShow.length}>
+																					{/* Replace button with direct icon and conditional styling */}
+																					<div className="flex justify-between items-center">
+																						<NavLink
+																							className="text-primary font-semibold hover:text-[#103667]"
+																							to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid || receipt.id}`}
+																						>
+																							{receipt.receipt_uid || receipt.id}
+																						</NavLink>
+																						{receipt?.note && receipt?.note?.trim() !== '' ? (
+																							<FaStickyNote
+																								size={16}
+																								className={` text-[#d5b31c] cursor-pointer`}
+																								onClick={() => handleNoteClick(receipt)}
+																								onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
+																								onMouseLeave={handleTooltipLeave}
+																								title="Xem/Cập nhật ghi chú"
+																							/>
+																						) : (
+																							<FaRegStickyNote
+																								size={16}
+																								className={` text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50`}
+																								onClick={() => handleNoteClick(receipt)}
+																								title="Thêm ghi chú"
+																							/>
+																						)}
+																					</div>
+																					<div className="flex flex-col">
+																						<p className="text-sm">
+																							{!isTechnician()
+																								? receipt.client?.client_name || '--'
+																								: '[Thông tin bị ẩn]'}
+																						</p>
+																						<p className="text-xs text-gray-500">
+																							{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
+																							{getUserName(receipt.created_by_uid)}
+																						</p>
+																					</div>
+																				</td>
+																				<td className="p-1 text-start align-top" rowSpan={samplesToShow.length}>
+																					{receipt.deadline ? formatDeadlineWithStyle(receipt.deadline, receipt) : '--'}
+																				</td>
+																			</>
+																		)}
+																		<td className="p-1 text-start align-top">
+																			<NavLink
+																				className="text-primary font-normal hover:text-[#103667]"
+																				to={`/dashboard/sample?receipt_uid=${
+																					receipt.receipt_uid || receipt.id
+																				}&sample_uid=${sample.sample_uid || sample.id}`}
+																			>
+																				{sample.sample_uid || sample.id}
+																			</NavLink>
+																		</td>
+																		<td className="p-1 text-start align-top">{displayValue(sample.sample_name)}</td>
+																		<td className="p-1 text-start align-top">
+																			{completedTests} / {totalTests}
+																		</td>
+																		{/* Show regular status when viewing current list */}
+																		<td className="p-1 text-start align-top">
+																			{status[sample.status] ? status[sample.status] : '--'}
+																		</td>
+																		<td className="p-1 text-start flex items-center space-x-2 align-top">
+																			<select
+																				className="p-1 border rounded flex-grow text-sm bg-white"
+																				value={selectedReportIds[sampleKey] || ''}
+																				onChange={(e) => handleReportSelection(sampleKey, e.target.value)}
+																			>
+																				{reports.length > 0 ? (
+																					<>
+																						{reports.map((report) => (
+																							<option key={report.ppt_uid} value={report.ppt_uid}>
+																								{report.ppt_uid}
+																							</option>
+																						))}
+																					</>
+																				) : (
+																					<option value="">Chưa tạo PPT</option>
+																				)}
+																			</select>
+																			<button
+																				className="p-2 text-blue-500 hover:text-blue-700 focus:outline-none"
+																				onClick={() => {
+																					const url = `${window.location.origin}/report?sample_uid=${
+																						sample.sample_uid || sample.id
+																					}${
+																						selectedReportIds[sampleKey]
+																							? `&ppt_uid=${selectedReportIds[sampleKey]}`
+																							: ''
+																					}`;
+																					window.open(url, '_blank');
+																				}}
+																				title="Xem báo cáo"
+																			>
+																				<FaExternalLinkAlt />
+																			</button>
+																		</td>
+																	</tr>
+																);
+															})
+														)}
+													</React.Fragment>
+												);
+											})
+										) : (
+											<tr>
+												<td colSpan="7" className="p-4 text-center text-gray-500">
+													Không có dữ liệu để hiển thị
+												</td>
+											</tr>
+										)
+									) : // Show fetched preliminary data for specific filters
+									preliminaryData[selectedPreliminaryType]?.length > 0 ? (
 										preliminaryData[selectedPreliminaryType].map((receipt) => {
 											const samplesToShow = receipt.samples || [];
 
@@ -1041,14 +1605,36 @@ const Dashboard = () => {
 													{samplesToShow.length === 0 ? (
 														<tr key={`empty-${receipt.receipt_uid || receipt.id}`}>
 															<td className="p-1 text-start align-top">
-																<NavLink
-																	className="text-primary font-semibold hover:text-[#103667]"
-																	to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid || receipt.id}`}
-																>
-																	{receipt.receipt_uid || receipt.id}
-																</NavLink>
+																{/* Replace button with direct icon and conditional styling */}
+																<div className="flex justify-between items-center">
+																	<NavLink
+																		className="text-primary font-semibold hover:text-[#103667]"
+																		to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid || receipt.id}`}
+																	>
+																		{receipt.receipt_uid || receipt.id}
+																	</NavLink>
+																	{receipt?.note && receipt?.note?.trim() !== '' ? (
+																		<FaStickyNote
+																			size={16}
+																			className={` text-[#d5b31c] cursor-pointer`}
+																			onClick={() => handleNoteClick(receipt)}
+																			onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
+																			onMouseLeave={handleTooltipLeave}
+																			title="Xem/Cập nhật ghi chú"
+																		/>
+																	) : (
+																		<FaRegStickyNote
+																			size={16}
+																			className={` text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50`}
+																			onClick={() => handleNoteClick(receipt)}
+																			title="Thêm ghi chú"
+																		/>
+																	)}
+																</div>
 																<div className="flex flex-col">
-																	<p className="text-sm">{receipt.client?.client_name || '--'}</p>
+																	<p className="text-sm">
+																		{!isTechnician() ? receipt.client?.client_name || '--' : '[Thông tin bị ẩn]'}
+																	</p>
 																	<p className="text-xs text-gray-500">
 																		{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
 																		{getUserName(receipt.created_by_uid)}
@@ -1086,14 +1672,38 @@ const Dashboard = () => {
 																	{sampleIndex === 0 && (
 																		<>
 																			<td className="p-1 text-start align-top" rowSpan={samplesToShow.length}>
-																				<NavLink
-																					className="text-primary font-semibold hover:text-[#103667]"
-																					to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid || receipt.id}`}
-																				>
-																					{receipt.receipt_uid || receipt.id}
-																				</NavLink>
+																				{/* Replace button with direct icon and conditional styling */}
+																				<div className="flex justify-between items-center">
+																					<NavLink
+																						className="text-primary font-semibold hover:text-[#103667]"
+																						to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid || receipt.id}`}
+																					>
+																						{receipt.receipt_uid || receipt.id}
+																					</NavLink>
+																					{receipt?.note && receipt?.note?.trim() !== '' ? (
+																						<FaStickyNote
+																							size={16}
+																							className={` text-[#d5b31c] cursor-pointer`}
+																							onClick={() => handleNoteClick(receipt)}
+																							onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
+																							onMouseLeave={handleTooltipLeave}
+																							title="Xem/Cập nhật ghi chú"
+																						/>
+																					) : (
+																						<FaRegStickyNote
+																							size={16}
+																							className={` text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50`}
+																							onClick={() => handleNoteClick(receipt)}
+																							title="Thêm ghi chú"
+																						/>
+																					)}
+																				</div>
 																				<div className="flex flex-col">
-																					<p className="text-sm">{receipt.client?.client_name || '--'}</p>
+																					<p className="text-sm">
+																						{!isTechnician()
+																							? receipt.client?.client_name || '--'
+																							: '[Thông tin bị ẩn]'}
+																					</p>
 																					<p className="text-xs text-gray-500">
 																						{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
 																						{getUserName(receipt.created_by_uid)}
@@ -1119,6 +1729,7 @@ const Dashboard = () => {
 																	<td className="p-1 text-start align-top">
 																		{completedTests} / {totalTests}
 																	</td>
+																	{/* Show status_ppt when viewing fetched preliminary data */}
 																	<td className="p-1 text-start align-top">
 																		{sample.status_ppt !== undefined && sample.status_ppt !== null
 																			? sample.status_ppt
@@ -1142,8 +1753,6 @@ const Dashboard = () => {
 																				<option value="">Chưa tạo PPT</option>
 																			)}
 																		</select>
-
-																		{/* Replace button with icon */}
 																		<button
 																			className="p-2 text-blue-500 hover:text-blue-700 focus:outline-none"
 																			onClick={() => {
@@ -1232,16 +1841,38 @@ const Dashboard = () => {
 													onMouseEnter={() => handleReceiptMouseEnter(receipt.receipt_uid)}
 													onMouseLeave={handleReceiptMouseLeave}
 												>
-													<td className="p-1  text-start align-top ">
-														<NavLink
-															className="text-primary font-semibold hover:text-[#103667]"
-															to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid}`}
-														>
-															{receipt.receipt_uid}
-														</NavLink>
+													<td className="p-1 text-start align-top">
+														{/* Replace button with direct icon and conditional styling */}
+														<div className="flex justify-between items-center">
+															<NavLink
+																className="text-primary font-semibold hover:text-[#103667]"
+																to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid}`}
+															>
+																{receipt.receipt_uid}
+															</NavLink>
+															{receipt?.note && receipt?.note?.trim() !== '' ? (
+																<FaStickyNote
+																	size={16}
+																	className={` text-[#d5b31c] cursor-pointer`}
+																	onClick={() => handleNoteClick(receipt)}
+																	onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
+																	onMouseLeave={handleTooltipLeave}
+																	title="Xem/Cập nhật ghi chú"
+																/>
+															) : (
+																<FaRegStickyNote
+																	size={16}
+																	className={` text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50`}
+																	onClick={() => handleNoteClick(receipt)}
+																	title="Thêm ghi chú"
+																/>
+															)}
+														</div>
 														<div className="flex flex-col">
-															<p className="text-sm">{receipt.client.client_name}</p>
-															{receipt.record_code && (
+															<p className="text-sm">
+																{!isTechnician() ? receipt.client.client_name : '[Thông tin bị ẩn]'}
+															</p>
+															{receipt.record_code && !isTechnician() && (
 																<p className="text-xs text-slate-700">HSL: {receipt.record_code}</p>
 															)}
 															<p className="text-xs text-gray-500">
@@ -1278,7 +1909,7 @@ const Dashboard = () => {
 																		autoFocus
 																	/>
 																) : (
-																	<div className="w-full h-full p-1 rounded">{receipt.order_code || '--'}</div>
+																	<div className="w-full h-full p-1 py-0 rounded">{receipt.order_code || '--'}</div>
 																)}
 															</td>
 															<td
@@ -1298,7 +1929,7 @@ const Dashboard = () => {
 																		autoFocus
 																	/>
 																) : (
-																	<div className="w-full h-full p-1 rounded">{receipt.quote_code || '--'}</div>
+																	<div className="w-full h-full p-1 py-0 rounded">{receipt.quote_code || '--'}</div>
 																)}
 															</td>
 															<td
@@ -1318,7 +1949,7 @@ const Dashboard = () => {
 																		autoFocus
 																	/>
 																) : (
-																	<div className="w-full h-full p-1 rounded">{receipt.sale_recorder || '--'}</div>
+																	<div className="w-full h-full p-1 py-0 rounded">{receipt.sale_recorder || '--'}</div>
 																)}
 															</td>
 															<td
@@ -1327,7 +1958,11 @@ const Dashboard = () => {
 															>
 																<div
 																	className={`w-full h-full p-1 rounded font-medium ${
-																		receipt.pay_status === 1 ? 'text-green-600' : 'text-gray-500'
+																		receipt.pay_status === 1
+																			? 'text-green-600'
+																			: receipt.pay_status === 2
+																			? 'text-black'
+																			: 'text-gray-500'
 																	}`}
 																>
 																	{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
@@ -1350,7 +1985,7 @@ const Dashboard = () => {
 																		autoFocus
 																	/>
 																) : (
-																	<div className="w-full h-full p-1 rounded">{receipt.record_code || '--'}</div>
+																	<div className="w-full h-full p-1 py-0 rounded">{receipt.record_code || '--'}</div>
 																)}
 															</td>
 														</>
@@ -1391,15 +2026,37 @@ const Dashboard = () => {
 																		}`}
 																		rowSpan={samplesToShow.length}
 																	>
-																		<NavLink
-																			className="font-semibold text-primary hover:text-[#103667]"
-																			to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid}`}
-																		>
-																			{receipt.receipt_uid}
-																		</NavLink>
+																		{/* Replace button with direct icon and conditional styling */}
+																		<div className="flex justify-between items-center">
+																			<NavLink
+																				className="font-semibold text-primary hover:text-[#103667]"
+																				to={`/dashboard/receipt?receipt_uid=${receipt.receipt_uid}`}
+																			>
+																				{receipt.receipt_uid}
+																			</NavLink>
+																			{receipt?.note && receipt?.note?.trim() !== '' ? (
+																				<FaStickyNote
+																					size={16}
+																					className={` text-[#d5b31c] cursor-pointer`}
+																					onClick={() => handleNoteClick(receipt)}
+																					onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
+																					onMouseLeave={handleTooltipLeave}
+																					title="Xem/Cập nhật ghi chú"
+																				/>
+																			) : (
+																				<FaRegStickyNote
+																					size={16}
+																					className={` text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50`}
+																					onClick={() => handleNoteClick(receipt)}
+																					title="Thêm ghi chú"
+																				/>
+																			)}
+																		</div>
 																		<div className="flex flex-col">
-																			<p className="text-sm">{receipt.client.client_name}</p>
-																			{receipt.record_code && (
+																			<p className="text-sm">
+																				{!isTechnician() ? receipt.client.client_name : '[Thông tin bị ẩn]'}
+																			</p>
+																			{receipt.record_code && !isTechnician() && (
 																				<p className="text-xs text-slate-700">HSL: {receipt.record_code}</p>
 																			)}
 																			<p className="text-xs text-gray-500 mb-2">
@@ -1434,7 +2091,7 @@ const Dashboard = () => {
 																					autoFocus
 																				/>
 																			) : (
-																				<div className="w-full h-full p-1 rounded">
+																				<div className="w-full h-full p-1 py-0 rounded">
 																					{showRelativeTime
 																						? formatDeadlineAsRelative(receipt.deadline, receipt)
 																						: formatDeadlineWithStyle(receipt.deadline, receipt)}
@@ -1668,7 +2325,11 @@ const Dashboard = () => {
 																	>
 																		<p
 																			className={`cursor-pointer hover:bg-gray-100 p-1 rounded font-medium ${
-																				receipt.pay_status === 1 ? 'text-green-600' : 'text-gray-500'
+																				receipt.pay_status === 1
+																					? 'text-green-600'
+																					: receipt.pay_status === 2
+																					? 'text-black'
+																					: 'text-gray-500'
 																			}`}
 																		>
 																			{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
@@ -1728,7 +2389,7 @@ const Dashboard = () => {
 				)}
 
 				{/* Pagination - show only for normal view */}
-				{!isPreliminaryActive && (
+				{!isPreliminaryActive || (isPreliminaryActive && selectedPreliminaryType === 'current') ? (
 					<div
 						className="flex justify-center mt-4 overflow-x-auto max-w-full"
 						style={{ scrollbarWidth: 'thin', scrollbarColor: '#cccccc transparent' }}
@@ -1745,7 +2406,7 @@ const Dashboard = () => {
 							))}
 						</div>
 					</div>
-				)}
+				) : null}
 			</div>
 		</div>
 	);

@@ -6,9 +6,10 @@ import { GlobalContext } from '../contexts/GlobalContext';
 import ProtocolInfor from './ProtocolInfor';
 import AnalyteInfor from './AnalyteInfor';
 import ClientInfor from './ClientInfor';
+import { FaUserAlt, FaBook, FaFlask, FaClipboard } from 'react-icons/fa';
 
 const Library = () => {
-	const { setCurrentTitlePage } = useContext(GlobalContext);
+	const { setCurrentTitlePage, currentUser } = useContext(GlobalContext);
 	const navigate = useNavigate();
 	const location = useLocation();
 
@@ -40,6 +41,11 @@ const Library = () => {
 		navigate(`?view=${tab}`);
 	};
 
+	// Helper function to check if user is a technician
+	const isTechnician = () => {
+		return currentUser?.role?.staff_technician === true;
+	};
+
 	return (
 		<div className="w-full h-full relative">
 			<Breadcrumb paths={[]} />
@@ -63,14 +69,16 @@ const Library = () => {
 					>
 						Phương pháp
 					</button>
-					<button
-						className={`w-40 p-1 ml-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
-							activeTab === 'client' ? 'bg-teritary' : 'bg-gray-200'
-						}`}
-						onClick={() => handleTabChange('client')}
-					>
-						Khách hàng
-					</button>
+					{!isTechnician() && (
+						<button
+							className={`w-40 p-1 ml-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
+								activeTab === 'client' ? 'bg-teritary' : 'bg-gray-200'
+							}`}
+							onClick={() => handleTabChange('client')}
+						>
+							Khách hàng
+						</button>
+					)}
 				</div>
 			</div>
 
@@ -80,7 +88,7 @@ const Library = () => {
 				<div className="flex-1 overflow-auto">
 					{activeTab === 'protocol' && <ProtocolInfor />}
 					{activeTab === 'analyte' && <AnalyteInfor />}
-					{activeTab === 'client' && <ClientInfor />}
+					{activeTab === 'client' && !isTechnician() && <ClientInfor />}
 				</div>
 			</div>
 		</div>

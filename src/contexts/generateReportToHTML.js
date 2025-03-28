@@ -1264,13 +1264,13 @@ function generateAnalysisSection(data, showReference) {
 	// Define column widths here, at the beginning of the function
 	// Adjust span widths based on whether reference column is shown
 	const col2Width = showReference ? '170px' : '190px';
-	const col3Width = showReference ? '110px' : '110px';
+	const col3Width = showReference ? '110px' : '120px';
 	const col4Width = showReference ? '60px' : '70px';
 
 	// Add extra table header for reference if needed
 	const referenceHeader = showReference
 		? `
-		<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:10px;">
+		<th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:10px;">
 			<strong>Tham chiếu</strong> <br> <span style="font-size: 12px; color: #444444; width: 90px;">/ Standard Ref</span>
 		</th>`
 		: '';
@@ -1323,19 +1323,19 @@ function generateAnalysisSection(data, showReference) {
     <table style="width: 100%; min-width: 100%; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4; table-layout: auto;">
         <thead>
             <tr>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: fit-content; text-align:left; font-size:12px; width:10px;">
-                    <strong>STT</strong> <br> <span style="font-size: 12px; color: #444444; width:28px">/ No.</span>
+                <th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: fit-content; text-align:left; font-size:12px; width:45px;">
+                    <strong>STT</strong> <br> <span style="font-size: 12px; color: #444444; width:30px">/ No.</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:10px;">
+                <th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:207px;">
                     <strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444; width:${col2Width};">/ Tests</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:10px;">
+                <th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:137x;">
                     <strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444; width:${col3Width};">/ Test result</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:10px;">
+                <th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:87px;">
                     <strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444; width:${col4Width};">/ Unit</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:fit-content;">
+                <th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:fit-content;">
                     <strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
                 </th>${referenceHeader}
             </tr>

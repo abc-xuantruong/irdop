@@ -7,7 +7,6 @@ const { createContext, useState, useEffect } = React;
 
 export const GlobalContext = createContext();
 
-
 export const GlobalProvider = ({ children }) => {
 	const [currentTitlePage, setCurrentTitlePage] = useState('Nhập kết quả');
 	const [currentReceipt, setCurrentReceiptState] = useState([]);
@@ -93,9 +92,7 @@ export const GlobalProvider = ({ children }) => {
 	};
 
 	const searchClient = (query, listClients) => {
-		console.log('Query:', query);
 		const normalizedQuery = normalizeString(query);
-		console.log('Normalized query:', normalizedQuery);
 		return listClients.filter(
 			(client) =>
 				normalizeString(client.client_name).includes(normalizedQuery) ||
@@ -109,7 +106,6 @@ export const GlobalProvider = ({ children }) => {
 		try {
 			const response = await axios.get('https://pink.irdop.org/db/get/techinician');
 			setTechnicians(response.data);
-			console.log('Technicians:', response.data);
 		} catch (error) {
 			console.error('Error fetching technicians:', error);
 		}
@@ -126,7 +122,12 @@ export const GlobalProvider = ({ children }) => {
 				},
 			);
 			// const response = await apiPost('https://pink.irdop.org/ab4dg2/auth/me');
-			setCurrentUser({ identity_name: response.data.identity_name, identity_uid: response.data.identity_uid });
+			setCurrentUser({
+				identity_name: response.data.identity_name,
+				identity_uid: response.data.identity_uid,
+				role: response.data.role,
+			});
+
 		} catch (error) {
 			console.error('Error fetching user:', error);
 		}

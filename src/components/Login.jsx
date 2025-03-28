@@ -6,8 +6,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Cookies from 'js-cookie';
 import { GlobalContext } from '../contexts/GlobalContext';
-import { use } from 'react';
-import { set } from 'date-fns';
+
 
 const Login = () => {
 	const { setCurrentUser, fetchUser } = useContext(GlobalContext);
@@ -27,13 +26,13 @@ const Login = () => {
 				Cookies.set('auth', auth);
 				setIsLoading(true);
 				document.getElementById('login-container').classList.add('blur');
+				fetchUser();
 				setTimeout(() => {
 					setIsLoading(false);
 					document.getElementById('login-container').classList.remove('blur');
 					const newPath = window.location.pathname.replace('/login', '');
 					navigate(newPath || '/');
 				}, 750);
-				setCurrentUser({ identity_name: response.data.identity_name, identity_uid: response.data.identity_uid });
 			} else {
 			}
 		} catch (error) {
