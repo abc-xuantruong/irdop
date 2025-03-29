@@ -12,7 +12,6 @@ import { MdLibraryAdd, MdChevronLeft, MdChevronRight } from 'react-icons/md';
 import FilterBar from './FilterBar';
 import Swal from 'sweetalert2';
 
-
 import {
 	FaTrashAlt,
 	FaCopy,
@@ -31,6 +30,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 
 const SampleInfor = () => {
+	console.log('SampleInfor component rendered');
 	const [searchParams] = useSearchParams();
 	const receipt_uid = searchParams.get('receipt_uid');
 	const sample_uid = searchParams.get('sample_uid');

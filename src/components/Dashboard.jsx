@@ -9,11 +9,7 @@ import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import 'react-datepicker/dist/react-datepicker.css';
 import DatePicker from 'react-datepicker';
-import { DateRangePicker } from 'react-date-range';
-import 'react-date-range/dist/styles.css'; // main style file
-import 'react-date-range/dist/theme/default.css'; // theme css file
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { createPortal } from 'react-dom';
 
 import {
 	FaAngleRight,
@@ -36,6 +32,7 @@ const Dashboard = () => {
 	const [isFilter, setIsFilter] = useState(false); // State to track if filtering is active
 	const [searchTerm, setSearchTerm] = useState('');
 	const datePickerRef = useRef(null);
+	const [showDateRangePicker, setShowDateRangePicker] = useState(false);
 
 	// Extract search term from URL query params
 	useEffect(() => {
@@ -72,9 +69,6 @@ const Dashboard = () => {
 	const [isDatePickerFocused, setIsDatePickerFocused] = useState(false);
 	const [tempDateValues, setTempDateValues] = useState({});
 
-	// Add new state to track payment column visibility (default is hidden)
-	const [showPaymentColumn, setShowPaymentColumn] = useState(false);
-
 	// Add new state to track today's deadline filter
 	const [showTodayDeadlines, setShowTodayDeadlines] = useState(false);
 
@@ -84,93 +78,23 @@ const Dashboard = () => {
 	// Replace separate view state with a single viewMode state
 	const [viewMode, setViewMode] = useState('normal'); // 'normal', 'payment', 'preliminary'
 
-	// Add a new state for tracking whether we're showing the current list or fetched preliminary data
-	const [isPreliminaryDataFetched, setIsPreliminaryDataFetched] = useState(false);
-
-	// Add state to track which note is being edited
-	const [noteEditing, setNoteEditing] = useState({ receiptId: null, content: '' });
-
 	// Add state to track tooltip position and visibility
 	const [tooltipState, setTooltipState] = useState({
 		visible: false,
 		content: '',
-		x: 0,
-		y: 0,
+		position: { top: 0, left: 0 },
+		sourceElement: null,
 	});
 
-	// Add state for date range picker
-	const [showDateRangePicker, setShowDateRangePicker] = useState(false);
+	// Replace date range picker state with a single state for start and end dates
+	const [dateRange, setDateRange] = useState([null, null]);
+	const [startDate, endDate] = dateRange;
 
-	const [dateRange, setDateRange] = useState([
-		{
-			startDate: startOfMonth(new Date()),
-			endDate: endOfMonth(new Date()),
-			key: 'selection',
-		},
-	]);
-	const [isOpen, setIsOpen] = useState(false);
-	const [isSelectingStart, setIsSelectingStart] = useState(true); // Theo dõi trạng thái chọn startDate hay endDate
-	const containerRef = useRef(null);
+	// Add a state to track if we should close the date picker
+	const [shouldCloseDateRangePicker, setShouldCloseDateRangePicker] = useState(false);
 
-	const handleOnChange = (ranges) => {
-		const { selection } = ranges;
-
-		if (isSelectingStart) {
-			// Chỉ cập nhật startDate
-			setDateRange([
-				{
-					...dateRange[0], // Giữ nguyên các thuộc tính khác
-					startDate: selection.startDate, // Cập nhật startDate
-					endDate: dateRange[0].endDate, // Giữ nguyên endDate
-					key: 'selection',
-				},
-			]);
-			setIsSelectingStart(false); // Chuyển sang trạng thái chọn endDate
-		} else {
-			// Cập nhật endDate
-			setDateRange([
-				{
-					...dateRange[0],
-					startDate: dateRange[0].startDate, // Giữ nguyên startDate
-					endDate: selection.endDate, // Cập nhật endDate
-					key: 'selection',
-				},
-			]);
-			setIsSelectingStart(true); // Reset trạng thái để chọn startDate lần tiếp theo
-			setIsOpen(false); // Đóng calendar sau khi chọn xong
-		}
-	};
-
-	const toggleCalendar = () => {
-		setIsOpen(!isOpen);
-		setIsSelectingStart(true); // Reset trạng thái khi mở calendar
-	};
-
-	const CalendarWrapper = () => {
-		if (!isOpen) return null;
-
-		return createPortal(
-			<div
-				className="absolute z-[9999] shadow-lg rounded-lg border border-gray-300 bg-white"
-				style={{
-					top: containerRef.current?.getBoundingClientRect().bottom + window.scrollY,
-					left: containerRef.current?.getBoundingClientRect().left + window.scrollX,
-				}}
-			>
-				<DateRangePicker
-					onChange={handleOnChange}
-					ranges={dateRange}
-					direction="horizontal"
-					showDateDisplay={true}
-					months={1}
-					inputRanges={[]}
-					staticRanges={[]}
-					moveRangeOnFirstSelection={false} // Ngăn không cho tự động di chuyển range
-				/>
-			</div>,
-			document.body,
-		);
-	};
+	// Add state to control DatePicker visibility
+	const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -267,17 +191,6 @@ const Dashboard = () => {
 		});
 	};
 
-	// Handle date picker blur - only update if value has changed
-	const handleDatePickerBlur = (receiptId, currentDate) => {
-		if (isDatePickerFocused) {
-			// Compare with original value and update if different
-			if (currentDate !== tempDateValues[receiptId]) {
-				handleDeadlineChangeAPI(receiptId, currentDate);
-			}
-			setIsDatePickerFocused(false);
-		}
-	};
-
 	// Handle temporary date change without API call
 	const handleTempDateChange = (receiptId, date) => {
 		// Just update the component state without API call
@@ -351,9 +264,16 @@ const Dashboard = () => {
 	};
 
 	// Split date handling into two functions:
-	// 1. UI update function
+	// 1. UI update function - modified to close the picker immediately after selection
 	const handleDeadlineChange = (receiptId, date) => {
+		// Update the date in the UI
 		handleTempDateChange(receiptId, date);
+		setEditingField({ receiptId: null, sampleId: null, field: null });
+
+		// If we have a valid date, trigger the API update
+		if (date) {
+			handleDeadlineChangeAPI(receiptId, date);
+		}
 	};
 
 	// 2. API update function - only called on explicit confirmation
@@ -557,11 +477,10 @@ const Dashboard = () => {
 	};
 
 	// Add a new function to fetch receipts filtered by deadline
-	const fetchReceiptsByDeadline = async (startDate, endDate) => {
+	const fetchReceiptsByDeadline = async (start, end) => {
 		try {
-			// Format dates to YYYY-MM-DD format for the API
-			const formattedStartDate = startDate ? startDate.toISOString().split('T')[0] : null;
-			const formattedEndDate = endDate ? endDate.toISOString().split('T')[0] : null;
+			const formattedStartDate = start ? start.toISOString().split('T')[0] : null;
+			const formattedEndDate = end ? end.toISOString().split('T')[0] : null;
 
 			if (!formattedStartDate || !formattedEndDate) {
 				showToast('Vui lòng chọn khoảng thời gian', 'error');
@@ -604,11 +523,13 @@ const Dashboard = () => {
 		}
 	};
 
-	// Add function to handle Apply buttonSP2513x2604-01 click
+	// Add function to handle Apply button click
 	const handleApplyDateFilter = () => {
-		// Call the API with selected date range
-		fetchReceiptsByDeadline(dateRange[0].startDate, dateRange[0].endDate);
-		setIsOpen(false); // Close the date picker
+		if (!startDate || !endDate) {
+			showToast('Vui lòng chọn khoảng thời gian', 'error');
+			return;
+		}
+		fetchReceiptsByDeadline(startDate, endDate);
 	};
 
 	// Updated filterTodayDeadlines function that properly filters preliminary data
@@ -618,11 +539,8 @@ const Dashboard = () => {
 
 		// If turning off the date picker, reset the filter
 		if (showDateRangePicker) {
-			// Reset date range
-			setDateRange({
-				startDate: null,
-				endDate: null,
-			});
+			// Reset date range using setDateRange instead of individual setters
+			setDateRange([startOfMonth(new Date()), endOfMonth(new Date())]);
 
 			// Reset to the original list
 			if (viewMode === 'preliminary') {
@@ -723,6 +641,22 @@ const Dashboard = () => {
 		}
 	};
 
+	// Add function to handle date range change with auto-close functionality
+	const handleDateRangeChange = (update) => {
+		setDateRange(update);
+
+		// If both dates are selected, close the calendar and apply filter
+		if (update[0] && update[1]) {
+			// Immediately close the calendar
+			setIsCalendarOpen(false);
+
+			// Apply the filter with a small delay to ensure UI updates first
+			setTimeout(() => {
+				fetchReceiptsByDeadline(update[0], update[1]);
+			}, 100);
+		}
+	};
+
 	useEffect(() => {
 		setCurrentTitlePage('Danh sách tiếp nhận mẫu');
 	}, [setCurrentTitlePage]);
@@ -797,19 +731,27 @@ const Dashboard = () => {
 	const paginatedReceipts = currentList.slice((currentPage - 1) * receiptsPerPage, currentPage * receiptsPerPage);
 
 	const handleReceiptMouseEnter = (receiptId) => {
+		// Don't update state if we're editing a date
+		if (editingField.field === 'deadline') return;
 		setHoveredReceiptId(receiptId);
 	};
 
 	const handleReceiptMouseLeave = () => {
+		// Don't update state if we're editing a date
+		if (editingField.field === 'deadline') return;
 		setHoveredReceiptId(null);
 	};
 
 	const handleSampleMouseEnter = (receiptId, sampleId) => {
+		// Don't update state if we're editing a date
+		if (editingField.field === 'deadline') return;
 		setHoveredReceiptId(receiptId);
 		setHoveredSampleId(sampleId);
 	};
 
 	const handleSampleMouseLeave = () => {
+		// Don't update state if we're editing a date
+		if (editingField.field === 'deadline') return;
 		setHoveredSampleId(null);
 	};
 
@@ -1025,16 +967,16 @@ const Dashboard = () => {
 			html: `
 				<div class="flex flex-col space-y-3 text-left mt-4">
 					<label class="inline-flex items-center">
-						<input type="radio" name="pay_status" value="1" class="form-radio" ${currentStatus === 1 ? 'checked' : ''}>
-						<span class="ml-2 text-green-600 font-medium">Đã thanh toán</span>
-					</label>
-					<label class="inline-flex items-center">
 						<input type="radio" name="pay_status" value="0" class="form-radio" ${currentStatus === 0 ? 'checked' : ''}>
 						<span class="ml-2 text-gray-500 font-medium">Chưa thanh toán</span>
 					</label>
 					<label class="inline-flex items-center">
+						<input type="radio" name="pay_status" value="1" class="form-radio" ${currentStatus === 1 ? 'checked' : ''}>
+						<span class="ml-2 text-green-600 font-medium">Đã thanh toán</span>
+					</label>
+					<label class="inline-flex items-center">
 						<input type="radio" name="pay_status" value="2" class="form-radio" ${currentStatus === 2 ? 'checked' : ''}>
-						<span class="ml-2 text-black font-medium">Công nợ</span>
+						<span class="ml-2 text-black font-medium">Khách hàng công nợ</span>
 					</label>
 				</div>
 			`,
@@ -1168,13 +1110,22 @@ const Dashboard = () => {
 
 	// Add function to handle mouse enter for tooltip display
 	const handleTooltipEnter = (e, receipt) => {
+		// Don't show tooltip if we're editing a date
+		if (editingField.field === 'deadline') return;
+
 		// Only show tooltip if receipt has a note
 		if (receipt?.note && receipt.note.trim() !== '') {
+			const iconElement = e.currentTarget;
+			const rect = iconElement.getBoundingClientRect();
+
 			setTooltipState({
 				visible: true,
 				content: receipt.note,
-				x: e.clientX + 10, // Offset by 10px to right of cursor
-				y: e.clientY + 10, // Offset by 10px below cursor
+				position: {
+					top: rect.top,
+					left: rect.right + 5, // Position tooltip 5px to the right of the icon
+				},
+				sourceElement: iconElement,
 			});
 		}
 	};
@@ -1258,8 +1209,8 @@ const Dashboard = () => {
 				<div
 					className="note-tooltip border-2 border-[#d5b31c] p-2 rounded-lg fixed bg-[#ffd632] z-50 max-w-80 text-start shadow-md shadow-slate-400"
 					style={{
-						left: `${tooltipState.x}px`,
-						top: `${tooltipState.y}px`,
+						top: `${tooltipState.position.top}px`,
+						left: `${tooltipState.position.left}px`,
 					}}
 				>
 					<p className="font-semibold mb-1">Ghi chú:</p>
@@ -1286,7 +1237,7 @@ const Dashboard = () => {
 							<>
 								{/* Add the "Current" button */}
 								<button
-									className={`px-2 py-1 rounded focus:outline-none ${
+									className={`px-2 py-0 rounded focus:outline-none ${
 										selectedPreliminaryType === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-200'
 									}`}
 									onClick={() => handlePreliminaryTypeChange('current')}
@@ -1294,7 +1245,7 @@ const Dashboard = () => {
 									Hiện tại
 								</button>
 								<button
-									className={`px-2 py-1 rounded focus:outline-none ${
+									className={`px-2 py-0 rounded focus:outline-none ${
 										selectedPreliminaryType === 'not_sent_preliminary' ? 'bg-blue-600 text-white' : 'bg-gray-200'
 									}`}
 									onClick={() => handlePreliminaryTypeChange('not_sent_preliminary')}
@@ -1302,7 +1253,7 @@ const Dashboard = () => {
 									Chưa gửi kết quả ({preliminaryData.not_sent_preliminary?.length || 0})
 								</button>
 								<button
-									className={`px-2 py-1 rounded focus:outline-none ${
+									className={`px-2 py-0 rounded focus:outline-none ${
 										selectedPreliminaryType === 'sent_preliminary' ? 'bg-blue-600 text-white' : 'bg-gray-200'
 									}`}
 									onClick={() => handlePreliminaryTypeChange('sent_preliminary')}
@@ -1365,44 +1316,40 @@ const Dashboard = () => {
 						)}
 					</div>
 					<div className="w-fit px-4 flex justify-end">
-						<div className="flex gap-2 items-center">
-							{showDateRangePicker && (
-								<div className="flex gap-1">
-									<div ref={containerRef} className="relative">
-										{/* Input để trigger calendar */}
-										<input
-											type="text"
-											readOnly
-											value={`${format(dateRange[0]?.startDate || startOfMonth(new Date()), 'MM/dd/yyyy')} - ${format(
-												dateRange[0]?.endDate || endOfMonth(new Date()),
-												'MM/dd/yyyy',
-											)}`}
-											onClick={toggleCalendar}
-											className="w-full p-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer bg-white"
-										/>
-										{/* Render calendar */}
-										<CalendarWrapper />
-									</div>
-									<button
-										onClick={handleApplyDateFilter}
-										className="border-gray-500 py-1 px-2 rounded hover:bg-blue-200 flex items-center "
-									>
-										<FaAngleRight size={18} />
-									</button>
+						<div className="flex gap-2 items-center"></div>
+						<button
+							className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+								showTodayDeadlines || showDateRangePicker ? 'text-white bg-blue-600' : 'text-black'
+							}`}
+							onClick={filterTodayDeadlines}
+							title={showTodayDeadlines ? 'Hiển thị tất cả' : 'Hiển thị các phiếu hạn trả hôm nay'}
+						>
+							<FaCalendarDay size={18} />
+							<span className="font-normal">Deadline</span>
+							{showTodayDeadlines && (
+								<div className="relative z-1000 text-black" onClick={(e) => e.stopPropagation()}>
+									<DatePicker
+										ref={datePickerRef}
+										selected={startDate}
+										onChange={handleDateRangeChange}
+										startDate={startDate}
+										endDate={endDate}
+										selectsRange
+										dateFormat="dd/MM/yyyy"
+										placeholderText="Chọn khoảng thời gian"
+										className="p-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-64"
+										// Use the open prop to explicitly control visibility
+										open={isCalendarOpen}
+										onInputClick={() => setIsCalendarOpen(true)}
+										onClickOutside={() => setIsCalendarOpen(false)}
+										onBlur={() => {
+											// When input loses focus, also close the calendar
+											setIsCalendarOpen(false);
+										}}
+									/>
 								</div>
 							)}
-							<button
-								className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none gap-2 py-1 ${
-									showTodayDeadlines || showDateRangePicker ? 'text-white bg-blue-600' : 'text-black'
-								}`}
-								onClick={filterTodayDeadlines}
-								title={showTodayDeadlines ? 'Hiển thị tất cả' : 'Hiển thị các phiếu hạn trả hôm nay'}
-							>
-								<FaCalendarDay size={18} />
-								<span className="font-normal">Deadline</span>
-							</button>
-						</div>
-
+						</button>
 						{/* Change icon to document icon for preliminary results */}
 						<button
 							className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none gap-2 py-0 ${
@@ -1447,10 +1394,18 @@ const Dashboard = () => {
 							<table className="w-full text-black">
 								<thead>
 									<tr className="border-b-2">
+										{/* Common columns - always displayed */}
 										<th className="p-1 border-b text-start min-w-[250px]">Mã tiếp nhận mẫu</th>
-										<th className="p-1 border-b text-start max-w-28 min-w-28">Hạn trả KQ</th>
+										<th
+											className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700"
+											onClick={toggleDeadlineFormat}
+										>
+											Hạn trả KQ
+										</th>
 										<th className="p-1 border-b text-start w-36 min-w-36">Mã mẫu thử</th>
 										<th className="p-1 border-b text-start w-full min-w-72">Thông tin mẫu thử</th>
+
+										{/* Preliminary-specific columns */}
 										<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
 										<th className="p-1 border-b text-start w-[10%] min-w-36">Trạng thái</th>
 										<th className="p-1 border-b text-start w-[15%] min-w-40">Mã PPT</th>
@@ -1489,7 +1444,6 @@ const Dashboard = () => {
 																				size={16}
 																				className={` text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50`}
 																				onClick={() => handleNoteClick(receipt)}
-																				title="Xem/Cập nhật ghi chú"
 																			/>
 																		)}
 																	</div>
@@ -1549,7 +1503,6 @@ const Dashboard = () => {
 																								onClick={() => handleNoteClick(receipt)}
 																								onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
 																								onMouseLeave={handleTooltipLeave}
-																								title="Xem/Cập nhật ghi chú"
 																							/>
 																						) : (
 																							<FaRegStickyNote
@@ -1669,7 +1622,6 @@ const Dashboard = () => {
 																			onClick={() => handleNoteClick(receipt)}
 																			onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
 																			onMouseLeave={handleTooltipLeave}
-																			title="Xem/Cập nhật ghi chú"
 																		/>
 																	) : (
 																		<FaRegStickyNote
@@ -1736,7 +1688,6 @@ const Dashboard = () => {
 																							onClick={() => handleNoteClick(receipt)}
 																							onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
 																							onMouseLeave={handleTooltipLeave}
-																							title="Xem/Cập nhật ghi chú"
 																						/>
 																					) : (
 																						<FaRegStickyNote
@@ -1841,21 +1792,20 @@ const Dashboard = () => {
 							{/* Normal view table head and body */}
 							<thead>
 								<tr className="border-b-2">
+									{/* Common columns - always displayed */}
 									<th className="p-1 border-b text-start  min-w-[300px]">Mã tiếp nhận mẫu</th>
 									<th
-										className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700
-										"
+										className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700"
 										onClick={toggleDeadlineFormat}
 									>
 										Hạn trả KQ
 									</th>
 									<th className="p-1 border-b text-start w-36 min-w-36">Mã mẫu thử</th>
+									<th className="p-1 border-b text-start w-full min-w-72">Thông tin mẫu thử</th>
 
-									{isPaymentActive ? (
-										<th className="p-1 border-b text-start w-[25%] min-w-72">Thông tin mẫu thử</th>
-									) : (
+									{/* Mode-specific additional columns */}
+									{!isPaymentActive && (
 										<>
-											<th className="p-1 border-b text-start w-full min-w-72">Thông tin mẫu thử</th>
 											<th className="p-1 border-b text-start w-[10%] min-w-28">Số lượng</th>
 											<th className="p-1 border-b text-start w-[6%] min-w-24">Mục đích</th>
 											<th className="p-1 border-b text-start w-[6%] min-w-24">Trạng thái</th>
@@ -1863,7 +1813,7 @@ const Dashboard = () => {
 										</>
 									)}
 
-									{/* Display the payment information columns when showPaymentColumn is true */}
+									{/* Payment-specific columns */}
 									{isPaymentActive && (
 										<>
 											<th className="p-1 border-b text-start min-w-32">Mã đơn hàng</th>
@@ -1890,6 +1840,7 @@ const Dashboard = () => {
 													onMouseEnter={() => handleReceiptMouseEnter(receipt.receipt_uid)}
 													onMouseLeave={handleReceiptMouseLeave}
 												>
+													{/* Common empty receipt row columns - always displayed */}
 													<td className="p-1 text-start align-top">
 														{/* Replace button with direct icon and conditional styling */}
 														<div className="flex justify-between items-center">
@@ -1902,16 +1853,15 @@ const Dashboard = () => {
 															{receipt?.note && receipt?.note?.trim() !== '' ? (
 																<FaStickyNote
 																	size={16}
-																	className={` text-[#d5b31c] cursor-pointer`}
+																	className="text-[#d5b31c] cursor-pointer"
 																	onClick={() => handleNoteClick(receipt)}
 																	onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
 																	onMouseLeave={handleTooltipLeave}
-																	title="Xem/Cập nhật ghi chú"
 																/>
 															) : (
 																<FaRegStickyNote
 																	size={16}
-																	className={` text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50`}
+																	className="text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50"
 																	onClick={() => handleNoteClick(receipt)}
 																	title="Thêm ghi chú"
 																/>
@@ -1930,119 +1880,18 @@ const Dashboard = () => {
 															</p>
 														</div>
 													</td>
-
-													<td colSpan={isPaymentActive ? '1' : '6'} className="p-1 text-center text-gray-500">
-														Chưa có thông tin mẫu thử . . .
+													<td className="p-1 text-start">
+														{receipt.deadline ? formatDeadlineWithStyle(receipt.deadline, receipt) : '--'}
 													</td>
 
-													{/* Show sample information column when payment columns are visible */}
-													{isPaymentActive && <td className="p-1 text-center text-gray-500">--</td>}
-
-													{/* Display payment columns instead of a single one */}
-													{isPaymentActive && (
-														<>
-															<td
-																className="p-1 text-start cursor-pointer hover:bg-gray-100"
-																onClick={() => handleFieldClick(receipt.id, null, 'order_code')}
-															>
-																{editingField.receiptId === receipt.id && editingField.field === 'order_code' ? (
-																	<input
-																		type="text"
-																		value={receipt.order_code || ''}
-																		onChange={(e) => handleReceiptInputChange(e, receipt.id, 'order_code')}
-																		onKeyDown={(e) =>
-																			handleReceiptInputKeyDown(e, receipt.id, 'order_code', e.target.value)
-																		}
-																		onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																		className="p-1 border rounded-md w-full text-sm bg-white"
-																		autoFocus
-																	/>
-																) : (
-																	<div className="w-full h-full p-1 py-0 rounded">{receipt.order_code || '--'}</div>
-																)}
-															</td>
-															<td
-																className="p-1 text-start cursor-pointer hover:bg-gray-100"
-																onClick={() => handleFieldClick(receipt.id, null, 'quote_code')}
-															>
-																{editingField.receiptId === receipt.id && editingField.field === 'quote_code' ? (
-																	<input
-																		type="text"
-																		value={receipt.quote_code || ''}
-																		onChange={(e) => handleReceiptInputChange(e, receipt.id, 'quote_code')}
-																		onKeyDown={(e) =>
-																			handleReceiptInputKeyDown(e, receipt.id, 'quote_code', e.target.value)
-																		}
-																		onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																		className="p-1 border rounded-md w-full text-sm bg-white"
-																		autoFocus
-																	/>
-																) : (
-																	<div className="w-full h-full p-1 py-0 rounded">{receipt.quote_code || '--'}</div>
-																)}
-															</td>
-															<td
-																className="p-1 text-start cursor-pointer hover:bg-gray-100"
-																onClick={() => handleFieldClick(receipt.id, null, 'sale_recorder')}
-															>
-																{editingField.receiptId === receipt.id && editingField.field === 'sale_recorder' ? (
-																	<input
-																		type="text"
-																		value={receipt.sale_recorder || ''}
-																		onChange={(e) => handleReceiptInputChange(e, receipt.id, 'sale_recorder')}
-																		onKeyDown={(e) =>
-																			handleReceiptInputKeyDown(e, receipt.id, 'sale_recorder', e.target.value)
-																		}
-																		onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																		className="p-1 border rounded-md w-full text-sm bg-white"
-																		autoFocus
-																	/>
-																) : (
-																	<div className="w-full h-full p-1 py-0 rounded">{receipt.sale_recorder || '--'}</div>
-																)}
-															</td>
-															<td
-																className="p-1 text-start cursor-pointer hover:bg-gray-100"
-																onClick={() => handlePaymentConfirmation(receipt.id)}
-															>
-																<div
-																	className={`w-full h-full p-1 rounded font-medium ${
-																		receipt.pay_status === 1
-																			? 'text-green-600'
-																			: receipt.pay_status === 2
-																			? 'text-black'
-																			: 'text-gray-500'
-																	}`}
-																>
-																	{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
-																</div>
-															</td>
-															<td
-																className="p-1 text-start cursor-pointer hover:bg-gray-100"
-																onClick={() => handleFieldClick(receipt.id, null, 'record_code')}
-															>
-																{editingField.receiptId === receipt.id && editingField.field === 'record_code' ? (
-																	<input
-																		type="text"
-																		value={receipt.record_code || ''}
-																		onChange={(e) => handleReceiptInputChange(e, receipt.id, 'record_code')}
-																		onKeyDown={(e) =>
-																			handleReceiptInputKeyDown(e, receipt.id, 'record_code', e.target.value)
-																		}
-																		onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																		className="p-1 border rounded-md w-full text-sm bg-white"
-																		autoFocus
-																	/>
-																) : (
-																	<div className="w-full h-full p-1 py-0 rounded">{receipt.record_code || '--'}</div>
-																)}
-															</td>
-														</>
-													)}
+													{/* Empty sample message spans across all remaining columns */}
+													<td colSpan={isPaymentActive ? '7' : '6'} className="p-1 text-center text-gray-500">
+														Chưa có thông tin mẫu thử . . .
+													</td>
 												</tr>
 											) : (
 												samplesToShow.map((sample, sampleIndex) => {
-													// Add null check for sample.analysis
+													// Calculate completed tests count
 													const totalTests = sample?.analysis?.length || 0;
 													const completedTests =
 														sample?.analysis?.filter(
@@ -2067,15 +1916,16 @@ const Dashboard = () => {
 																setHoveredReceiptId(null);
 															}}
 														>
+															{/* Common columns - display only for first sample in receipt */}
 															{sampleIndex === 0 && (
 																<>
 																	<td
-																		className={`p-1   text-start align-top ${
+																		className={`p-1 text-start align-top ${
 																			hoveredReceiptId === receipt?.receipt_uid ? 'bg-gray-50' : ''
 																		}`}
 																		rowSpan={samplesToShow.length}
 																	>
-																		{/* Replace button with direct icon and conditional styling */}
+																		{/* Receipt info with note icon */}
 																		<div className="flex justify-between items-center">
 																			<NavLink
 																				className="font-semibold text-primary hover:text-[#103667]"
@@ -2086,16 +1936,15 @@ const Dashboard = () => {
 																			{receipt?.note && receipt?.note?.trim() !== '' ? (
 																				<FaStickyNote
 																					size={16}
-																					className={` text-[#d5b31c] cursor-pointer`}
+																					className="text-[#d5b31c] cursor-pointer"
 																					onClick={() => handleNoteClick(receipt)}
 																					onMouseEnter={(e) => handleTooltipEnter(e, receipt)}
 																					onMouseLeave={handleTooltipLeave}
-																					title="Xem/Cập nhật ghi chú"
 																				/>
 																			) : (
 																				<FaRegStickyNote
 																					size={16}
-																					className={` text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50`}
+																					className="text-gray-500 hover:text-[#d5b31c] cursor-pointer opacity-50"
 																					onClick={() => handleNoteClick(receipt)}
 																					title="Thêm ghi chú"
 																				/>
@@ -2115,21 +1964,26 @@ const Dashboard = () => {
 																		</div>
 																	</td>
 
-																	{sampleIndex === 0 && (
-																		<td
-																			className={`p-1 text-start cursor-pointer align-top ${
-																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																			}`}
-																			rowSpan={samplesToShow.length}
-																			onClick={() => handleFieldClick(receipt.id, null, 'deadline')}
-																		>
-																			{editingField.receiptId === receipt.id &&
-																			editingField.sampleId === null &&
-																			editingField.field === 'deadline' ? (
+																	<td
+																		className={`p-1 text-start cursor-pointer align-top ${
+																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																		}`}
+																		rowSpan={samplesToShow.length}
+																		onClick={() => handleFieldClick(receipt.id, null, 'deadline')}
+																	>
+																		{editingField.receiptId === receipt.id &&
+																		editingField.sampleId === null &&
+																		editingField.field === 'deadline' ? (
+																			<div
+																				onClick={(e) => e.stopPropagation()}
+																				onMouseEnter={(e) => e.stopPropagation()}
+																				onMouseLeave={(e) => e.stopPropagation()}
+																			>
 																				<DatePicker
 																					selected={receipt.deadline ? new Date(receipt.deadline) : null}
 																					onChange={(date) => handleDeadlineChange(receipt.id, date)}
-																					onBlur={() => handleDatePickerBlur(receipt.id, receipt.deadline)}
+																					// Remove onBlur since we're handling closing in onChange now
+																					// onBlur={() => handleDatePickerBlur(receipt.id, receipt.deadline)}
 																					onFocus={() => handleDatePickerFocus(receipt.id, receipt.deadline)}
 																					onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
 																					onKeyDown={(e) => handleDeadlineKeyDown(e, receipt.id)}
@@ -2138,19 +1992,29 @@ const Dashboard = () => {
 																					calendarClassName="text-black"
 																					placeholderText="Chọn hạn trả"
 																					autoFocus
+																					shouldCloseOnSelect={true}
+																					popperModifiers={{
+																						preventOverflow: {
+																							enabled: true,
+																						},
+																						hide: {
+																							enabled: true,
+																						},
+																					}}
 																				/>
-																			) : (
-																				<div className="w-full h-full p-1 py-0 rounded">
-																					{showRelativeTime
-																						? formatDeadlineAsRelative(receipt.deadline, receipt)
-																						: formatDeadlineWithStyle(receipt.deadline, receipt)}
-																				</div>
-																			)}
-																		</td>
-																	)}
+																			</div>
+																		) : (
+																			<div className="w-full h-full p-1 py-0 rounded">
+																				{showRelativeTime
+																					? formatDeadlineAsRelative(receipt.deadline, receipt)
+																					: formatDeadlineWithStyle(receipt.deadline, receipt)}
+																			</div>
+																		)}
+																	</td>
 																</>
 															)}
 
+															{/* Common sample columns - always displayed */}
 															<td
 																className="p-1 text-start align-top"
 																onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
@@ -2163,25 +2027,17 @@ const Dashboard = () => {
 																	{sample.sample_uid}
 																</NavLink>
 															</td>
+															<td
+																className="p-1 text-start align-top line-clamp-2"
+																onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
+																onMouseLeave={handleSampleMouseLeave}
+															>
+																{displayValue(sample.sample_name)}
+															</td>
 
-															{/* Conditionally show either sample information or purpose/status columns */}
-															{isPaymentActive ? (
-																<td
-																	className="p-1 text-start align-top line-clamp-2"
-																	onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
-																	onMouseLeave={handleSampleMouseLeave}
-																>
-																	{displayValue(sample.sample_name)}
-																</td>
-															) : (
+															{/* Normal view specific columns */}
+															{!isPaymentActive && (
 																<>
-																	<td
-																		className="p-1 text-start align-top line-clamp-2"
-																		onMouseEnter={() => handleSampleMouseEnter(receipt.receipt_uid, sample.sample_uid)}
-																		onMouseLeave={handleSampleMouseLeave}
-																	>
-																		{displayValue(sample.sample_name)}
-																	</td>
 																	<td
 																		className="p-1 text-start cursor-text align-top"
 																		onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'sample_volume')}
@@ -2281,7 +2137,7 @@ const Dashboard = () => {
 																</>
 															)}
 
-															{/* Show payment columns for the first sample in each receipt */}
+															{/* Payment view specific columns - displayed only for the first sample in each receipt */}
 															{sampleIndex === 0 && isPaymentActive && (
 																<>
 																	<td

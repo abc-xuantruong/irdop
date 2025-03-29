@@ -991,12 +991,12 @@ const ReceiptInfor = ({ receipt }) => {
 							? JSON.parse(sampleToCopy.sample_information)
 							: sampleToCopy.sample_information;
 
-					// Filter out entries we're already copying elsewhere
+					// Filter out entries we're already copying elsewhere using case-insensitive check
 					const filteredInfo = parsedInfo.filter(
 						(item) =>
-							item.fname !== 'Tên mẫu / name.' &&
-							item.fname !== 'Ngày tiếp nhận / Receipt date.' &&
-							item.fname !== 'Mô tả / desc.',
+							!item.fname.toLowerCase().includes('tên mẫu / name') &&
+							!item.fname.toLowerCase().includes('ngày tiếp nhận / receipt date') &&
+							!item.fname.toLowerCase().includes('mô tả / desc'),
 					);
 
 					setSampleInformation(filteredInfo);
