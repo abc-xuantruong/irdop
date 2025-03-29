@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState, useRef } from 'react';
 import { GlobalContext } from '../contexts/GlobalContext';
 import FilterBar from './FilterBar';
 import Breadcrumb from './Breadcrumb';
@@ -9,17 +9,20 @@ import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import 'react-datepicker/dist/react-datepicker.css';
 import DatePicker from 'react-datepicker';
-// Add FaRegStickyNote to the import for the note icon
+import { DateRangePicker } from 'react-date-range';
+import 'react-date-range/dist/styles.css'; // main style file
+import 'react-date-range/dist/theme/default.css'; // theme css file
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { createPortal } from 'react-dom';
+
 import {
-	FaTrashAlt,
+	FaAngleRight,
 	FaMoneyBillWave,
 	FaCalendarDay,
 	FaFileAlt,
 	FaExternalLinkAlt,
 	FaRegStickyNote,
 	FaStickyNote,
-	FaCheck, // Add this icon for the Apply button
-	FaFilter, // Add this icon as an alternative option
 } from 'react-icons/fa';
 
 const Dashboard = () => {
@@ -32,6 +35,7 @@ const Dashboard = () => {
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isFilter, setIsFilter] = useState(false); // State to track if filtering is active
 	const [searchTerm, setSearchTerm] = useState('');
+	const datePickerRef = useRef(null);
 
 	// Extract search term from URL query params
 	useEffect(() => {
@@ -96,10 +100,77 @@ const Dashboard = () => {
 
 	// Add state for date range picker
 	const [showDateRangePicker, setShowDateRangePicker] = useState(false);
-	const [dateRange, setDateRange] = useState({
-		startDate: null,
-		endDate: null,
-	});
+
+	const [dateRange, setDateRange] = useState([
+		{
+			startDate: startOfMonth(new Date()),
+			endDate: endOfMonth(new Date()),
+			key: 'selection',
+		},
+	]);
+	const [isOpen, setIsOpen] = useState(false);
+	const [isSelectingStart, setIsSelectingStart] = useState(true); // Theo dõi trạng thái chọn startDate hay endDate
+	const containerRef = useRef(null);
+
+	const handleOnChange = (ranges) => {
+		const { selection } = ranges;
+
+		if (isSelectingStart) {
+			// Chỉ cập nhật startDate
+			setDateRange([
+				{
+					...dateRange[0], // Giữ nguyên các thuộc tính khác
+					startDate: selection.startDate, // Cập nhật startDate
+					endDate: dateRange[0].endDate, // Giữ nguyên endDate
+					key: 'selection',
+				},
+			]);
+			setIsSelectingStart(false); // Chuyển sang trạng thái chọn endDate
+		} else {
+			// Cập nhật endDate
+			setDateRange([
+				{
+					...dateRange[0],
+					startDate: dateRange[0].startDate, // Giữ nguyên startDate
+					endDate: selection.endDate, // Cập nhật endDate
+					key: 'selection',
+				},
+			]);
+			setIsSelectingStart(true); // Reset trạng thái để chọn startDate lần tiếp theo
+			setIsOpen(false); // Đóng calendar sau khi chọn xong
+		}
+	};
+
+	const toggleCalendar = () => {
+		setIsOpen(!isOpen);
+		setIsSelectingStart(true); // Reset trạng thái khi mở calendar
+	};
+
+	const CalendarWrapper = () => {
+		if (!isOpen) return null;
+
+		return createPortal(
+			<div
+				className="absolute z-[9999] shadow-lg rounded-lg border border-gray-300 bg-white"
+				style={{
+					top: containerRef.current?.getBoundingClientRect().bottom + window.scrollY,
+					left: containerRef.current?.getBoundingClientRect().left + window.scrollX,
+				}}
+			>
+				<DateRangePicker
+					onChange={handleOnChange}
+					ranges={dateRange}
+					direction="horizontal"
+					showDateDisplay={true}
+					months={1}
+					inputRanges={[]}
+					staticRanges={[]}
+					moveRangeOnFirstSelection={false} // Ngăn không cho tự động di chuyển range
+				/>
+			</div>,
+			document.body,
+		);
+	};
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -533,38 +604,11 @@ const Dashboard = () => {
 		}
 	};
 
-	// Update handleDateRangeChange to explicitly close the DatePicker when both dates are selected
-	const handleDateRangeChange = (dates) => {
-		const [start, end] = dates;
-		setDateRange({
-			startDate: start,
-			endDate: end,
-		});
-
-		// If both start and end dates are selected, close the DatePicker
-		if (start && end) {
-			// Close the date picker by clicking outside or forcing blur
-			document.body.click(); // This will trigger a click outside event
-
-			// Additional approach: force blur on any active DatePicker element
-			setTimeout(() => {
-				if (document.activeElement) {
-					document.activeElement.blur();
-				}
-
-				// Find any open DatePicker popper and hide it
-				const datePickerPopper = document.querySelector('.react-datepicker-popper');
-				if (datePickerPopper) {
-					datePickerPopper.style.display = 'none';
-				}
-			}, 100);
-		}
-	};
-
-	// Add function to handle Apply button click
+	// Add function to handle Apply buttonSP2513x2604-01 click
 	const handleApplyDateFilter = () => {
 		// Call the API with selected date range
-		fetchReceiptsByDeadline(dateRange.startDate, dateRange.endDate);
+		fetchReceiptsByDeadline(dateRange[0].startDate, dateRange[0].endDate);
+		setIsOpen(false); // Close the date picker
 	};
 
 	// Updated filterTodayDeadlines function that properly filters preliminary data
@@ -1071,12 +1115,14 @@ const Dashboard = () => {
 			cancelButtonText: 'Hủy',
 			inputAttributes: {
 				'aria-label': 'Nhập ghi chú cho phiếu tiếp nhận',
-				rows: 5,
+				rows: 6,
 			},
 			customClass: {
-				input: 'text-sm', // Add smaller text size
-				validationMessage: 'text-sm',
 				popup: 'custom-note-popup',
+				input: 'text-lg', // Đã có
+				validationMessage: 'text-sm', // Đã có
+				title: 'text-lg', // Thêm class để làm chữ "Ghi chú" nhỏ hơn
+				padding: 'p-1', // Thêm padding cho popup
 			},
 			preConfirm: (note) => {
 				return handleNoteUpdate(receipt.id || receipt.receipt_uid, note);
@@ -1322,23 +1368,26 @@ const Dashboard = () => {
 						<div className="flex gap-2 items-center">
 							{showDateRangePicker && (
 								<div className="flex gap-1">
-									<DatePicker
-										selected={dateRange.startDate}
-										onChange={handleDateRangeChange}
-										startDate={dateRange.startDate}
-										endDate={dateRange.endDate}
-										selectsRange
-										dateFormat="dd/MM/yyyy"
-										placeholderText="Chọn khoảng thời gian"
-										className="p-1 py-1.5 border border-gray-300 rounded bg-white w-48 text-sm"
-										calendarClassName="text-black"
-									/>
-
+									<div ref={containerRef} className="relative">
+										{/* Input để trigger calendar */}
+										<input
+											type="text"
+											readOnly
+											value={`${format(dateRange[0]?.startDate || startOfMonth(new Date()), 'MM/dd/yyyy')} - ${format(
+												dateRange[0]?.endDate || endOfMonth(new Date()),
+												'MM/dd/yyyy',
+											)}`}
+											onClick={toggleCalendar}
+											className="w-full p-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer bg-white"
+										/>
+										{/* Render calendar */}
+										<CalendarWrapper />
+									</div>
 									<button
 										onClick={handleApplyDateFilter}
 										className="border-gray-500 py-1 px-2 rounded hover:bg-blue-200 flex items-center "
 									>
-										<FaFilter size={18} />
+										<FaAngleRight size={18} />
 									</button>
 								</div>
 							)}

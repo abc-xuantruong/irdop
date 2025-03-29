@@ -1,1550 +1,1569 @@
-const { JSDOM } = require('jsdom');
-
-const getDraftWatermark = () => {
-	return `
-	<div class="draft-watermark" style="
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		pointer-events: none;
-		z-index: 10;
-		opacity: 0.15;
-		transform: rotate(-45deg);
-		font-family: 'Gilroy', sans-serif;
-	">
-		<div style="
-			font-size: 90px;
-			font-weight: bold;
-			color: #888;
-			text-transform: uppercase;
-			letter-spacing: 8px;
-		">SƠ BỘ-DRAFT</div>
-	</div>`;
-};
-
-// Helper function to make API calls using axios instead of fetch
-const apiGet = async (url) => {
+const { Pool } = global.get('pg');
+let pool;
+// CONNECTING TO LAB DB
+async function connect() {
 	try {
-		const response = await axios.get(url, {
-			headers: {
-				'Content-Type': 'application/json',
-				Accept: 'application/json',
-			},
-		});
+		pool = new Pool(JSON.parse(env.get('labDB')));
 
-		return { status: response.status, data: response.data };
-	} catch (error) {
-		console.error('API Get Error:', error);
-		throw error;
-	}
-};
-
-// Helper function for POST requests using axios
-const apiPost = async (url, data) => {
-	try {
-		const response = await axios.post(url, data, {
-			headers: {
-				'Content-Type': 'application/json',
-				Accept: 'application/json',
-			},
-		});
-
-		return { status: response.status, data: response.data };
-	} catch (error) {
-		console.error('API Post Error:', error);
-		throw error;
-	}
-};
-
-export const generateReportToHTML = async (params) => {
-	// Create a JSDOM instance for Node.js environment
-	const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
-	const { window } = dom;
-	const { document } = window;
-
-	// Define global document and window for functions that might need them
-	global.document = document;
-	global.window = window;
-
-	// Extract basic params directly
-	const {
-		sample_uid,
-		ppt_uid,
-		showVlas = false,
-		showComment = false,
-		showReference = false,
-		// Optional custom spacing
-		spacing = '<div style="height: 4mm; margin:0; padding:0;"></div>',
-		nextPageNotification = '<div style="padding: 10px 0; text-align: center; font-size: 12px; font-style: italic; color: #666;">- Xem kết quả ở trang tiếp theo / See the results on the following page -</div>',
-		// Extract additional parameters for sections
-		header: headerParam,
-		footer: footerParam,
-		customerSectionHTML: customerSectionParam,
-		sampleInfoSectionHTML: sampleInfoParam,
-		analysisSectionHTML: analysisParam,
-		commentSectionHTML: commentParam,
-		notesSectionHTML: notesParam,
-		signatureSectionHTML: signatureParam,
-		referenceValues: referenceParam = [],
-		currentUser = null,
-	} = params;
-
-	// Variables to store section content
-	let header,
-		footer,
-		customerSectionHTML,
-		sampleInfoSectionHTML,
-		analysisSectionHTML,
-		commentSectionHTML,
-		notesSectionHTML,
-		signatureSectionHTML,
-		referenceValues = [];
-
-	// Flag to track if the report is a draft
-	let isDraftMode = ppt_uid ? ppt_uid.includes('DRAFT') : true;
-	let currentVlasState = showVlas;
-
-	// Use provided sections if available, otherwise fetch from API
-	if (headerParam && footerParam && customerSectionParam) {
-		// If section data is provided via params, use it directly
-		header = headerParam;
-		footer = footerParam;
-		customerSectionHTML = customerSectionParam;
-		sampleInfoSectionHTML = sampleInfoParam || '';
-		analysisSectionHTML = analysisParam || '';
-		commentSectionHTML = commentParam || '';
-		notesSectionHTML = notesParam || getDefaultNotesSection();
-		signatureSectionHTML = signatureParam || getDefaultSignatureSection();
-		referenceValues = referenceParam || [];
-	} else {
-		// Get data either from report or sample
-		try {
-			if (ppt_uid) {
-				console.log(`Fetching report data for ppt_uid: ${ppt_uid}`);
-				// Fetch report data if ppt_uid is provided
-				const reportResponse = await apiGet(`https://black.irdop.org/to82oe92i/db/get/report/${ppt_uid}`);
-
-				if (reportResponse.status !== 200) {
-					throw new Error(`Report API request failed with status ${reportResponse.status}`);
-				}
-
-				const reportData = reportResponse.data;
-				console.log('Published report data loaded:', reportData);
-
-				// Update draft mode based on ppt_uid
-				isDraftMode = ppt_uid.includes('DRAFT');
-
-				// Update VLAS state from report data
-				currentVlasState = reportData.is_vlas || showVlas;
-
-				// Extract section HTML from report data
-				header = reportData.header_section || getDefaultHeader(currentVlasState);
-				footer = reportData.footer_section || getDefaultFooter();
-				customerSectionHTML = reportData.customer_section || getDefaultCustomerSection();
-				sampleInfoSectionHTML = reportData.sample_section || '';
-				analysisSectionHTML = reportData.analysis_section || '';
-				commentSectionHTML = reportData.comment_section || '';
-				notesSectionHTML = reportData.note_section || getDefaultNotesSection();
-				signatureSectionHTML = reportData.signature_section || getDefaultSignatureSection();
-
-				// Extract reference values if available
-				if (reportData.reference && Array.isArray(reportData.reference)) {
-					// Convert reference array to reference cell HTML elements
-					referenceValues = reportData.reference.map(
-						(refValue) =>
-							`<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:90px;">${refValue}</span></td>`,
-					);
-				}
-			} else if (sample_uid) {
-				console.log(`Fetching sample data for sample_uid: ${sample_uid}`);
-				// Fetch sample data if only sample_uid is provided
-				const sampleResponse = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
-
-				if (sampleResponse.status !== 200) {
-					throw new Error(`Sample API request failed with status ${sampleResponse.status}`);
-				}
-
-				const sampleData = sampleResponse.data;
-				console.log('Sample data fetched:', sampleData);
-
-				// Set draft mode to true when generating from sample data
-				isDraftMode = true;
-
-				// Get client data if receipt_id is available
-				if (sampleData && sampleData.receipt_id) {
-					try {
-						const clientResponse = await apiGet(
-							`https://black.irdop.org/hli1o7az/db/receipt/get/client/${sampleData.receipt_id}`,
-						);
-
-						if (clientResponse.status !== 200) {
-							throw new Error(`Client API request failed with status ${clientResponse.status}`);
-						}
-
-						sampleData.client = clientResponse.data;
-					} catch (clientErr) {
-						console.error('Error fetching client data:', clientErr);
-						// Continue with sample data even if client data fails
-						sampleData.client = {};
-					}
-				} else {
-					sampleData.client = {};
-				}
-
-				// Check if any analysis has protocol_source = 'IRDOP VS' and set showVlas to true if found
-				if (sampleData.analysis && Array.isArray(sampleData.analysis)) {
-					const hasVlasProtocol = sampleData.analysis.some((item) => item.protocol_source === 'IRDOP VS');
-					if (hasVlasProtocol) {
-						currentVlasState = true;
-					}
-				}
-
-				// Set default values
-				header = getDefaultHeader(currentVlasState);
-				footer = getDefaultFooter();
-				customerSectionHTML = generateCustomerSection(sampleData.client);
-				sampleInfoSectionHTML = generateSampleInfoSection(sampleData);
-				analysisSectionHTML = generateAnalysisSection(sampleData, showReference);
-				commentSectionHTML = showComment ? generateCommentSection() : '';
-				notesSectionHTML = getDefaultNotesSection();
-				signatureSectionHTML = getDefaultSignatureSection();
-
-				// Generate reference values if needed
-				if (sampleData.analysis && Array.isArray(sampleData.analysis)) {
-					referenceValues = sampleData.analysis.map(
-						() =>
-							`<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:90px;">--</span></td>`,
-					);
-				}
-			} else {
-				// If neither ppt_uid nor sample_uid is provided, use default values
-				console.log('No ppt_uid or sample_uid provided, using default values');
-				isDraftMode = true;
-				header = getDefaultHeader(currentVlasState);
-				footer = getDefaultFooter();
-				customerSectionHTML = getDefaultCustomerSection();
-				sampleInfoSectionHTML = '';
-				analysisSectionHTML = '';
-				commentSectionHTML = showComment ? generateCommentSection() : '';
-				notesSectionHTML = getDefaultNotesSection();
-				signatureSectionHTML = getDefaultSignatureSection();
-			}
-		} catch (error) {
-			console.error('Error fetching data:', error);
-			// Use default values if API calls fail
-			isDraftMode = true;
-			header = getDefaultHeader(currentVlasState);
-			footer = getDefaultFooter();
-			customerSectionHTML = getDefaultCustomerSection();
-			sampleInfoSectionHTML = '';
-			analysisSectionHTML = '';
-			commentSectionHTML = showComment ? generateCommentSection() : '';
-			notesSectionHTML = getDefaultNotesSection();
-			signatureSectionHTML = getDefaultSignatureSection();
-		}
-	}
-
-	// Similar to Report.jsx, send the sections to createReport API
-	try {
-		// Extract reference values from HTML for API
-		const extractReferenceValues = () => {
-			if (!referenceValues || referenceValues.length === 0) return [];
-
-			// Extract the text content from reference cells
-			return referenceValues.map((cellHtml) => {
-				const tempDiv = document.createElement('div');
-				tempDiv.innerHTML = cellHtml;
-				// Try to find span inside the cell first
-				const span = tempDiv.querySelector('span');
-				return span ? span.textContent.trim() : tempDiv.textContent.trim();
-			});
-		};
-
-		// Prepare the request body similar to Report.jsx
-		const requestBody = {
-			report: {
-				sample_uid: sample_uid,
-				header_section: header,
-				footer_section: footer,
-				customer_section: customerSectionHTML,
-				analysis_section: analysisSectionHTML,
-				sample_section: sampleInfoSectionHTML,
-				note_section: notesSectionHTML,
-				signature_section: signatureSectionHTML,
-				comment_section: commentSectionHTML || '',
-				reference: extractReferenceValues(),
-				is_vlas: currentVlasState,
-				is_comment: showComment,
-				is_reference: showReference,
-				created_by_uid: currentUser?.identity_uid || 'system',
-			},
-			type: 'save',
-		};
-
-		console.log('Sending section data to createReport API:', requestBody);
-
-		// Send the data to the API
-		const createReportResponse = await apiPost('https://black.irdop.org/to82oe92i/db/insert/ppt', requestBody);
-
-		if (createReportResponse.status === 200) {
-			console.log('Report created successfully:', createReportResponse.data);
-		}
-	} catch (error) {
-		console.error('Error sending report data to API:', error);
-		// Continue with report generation even if API fails
-	}
-
-	// Function to format date
-	const formatDate = (date) => {
-		return date.toLocaleDateString('vi-VN', {
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-		});
-	};
-
-	// A4 dimensions in mm with spacing adjustments
-	const A4 = {
-		width: 210,
-		height: 297,
-		topMargin: 15, // 1.5cm
-		bottomMargin: 8, // 0.8cm
-		sideMargin: 10, // 1cm
-		headerSpacing: 8, // spacing between header and content
-		footerSpacing: 3, // spacing between content and footer
-	};
-
-	// Get DPI for pixel to mm conversion
-	const getDPI = () => {
-		const div = document.createElement('div');
-		div.style.width = '1in';
-		div.style.height = '1in';
-		div.style.position = 'absolute';
-		div.style.left = '-100%';
-		div.style.top = '-100%';
-		document.body.appendChild(div);
-		const dpi = div.offsetWidth || 96; // Default to 96 DPI if measurement fails
-		document.body.removeChild(div);
-		return dpi;
-	};
-
-	const dpi = getDPI();
-	const pxToMm = (px) => (px * 25.4) / dpi;
-	const mmToPx = (mm) => (mm * dpi) / 25.4;
-
-	// Log dimensions
-	console.log('📐 Document dimensions:');
-	console.log('- Screen DPI:', dpi);
-	console.log('- A4 paper:', `${A4.width}mm × ${A4.height}mm (${mmToPx(A4.width)}px × ${mmToPx(A4.height)}px)`);
-	console.log(
-		'- Margins:',
-		`top: ${A4.topMargin}mm (${mmToPx(A4.topMargin)}px), bottom: ${A4.bottomMargin}mm (${mmToPx(
-			A4.bottomMargin,
-		)}px), sides: ${A4.sideMargin}mm (${mmToPx(A4.sideMargin)}px)`,
-	);
-
-	// Pagination function with detailed logging
-	const paginateContent = () => {
-		// Create temporary measuring elements
-		const measureArea = document.createElement('div');
-		measureArea.style.position = 'absolute';
-		measureArea.style.visibility = 'hidden';
-		measureArea.style.width = `${A4.width - 2 * A4.sideMargin}mm`;
-		measureArea.style.left = '-9999px';
-		document.body.appendChild(measureArea);
-
-		// Measure header height
-		measureArea.innerHTML = header;
-		const headerHeightPx = measureArea.offsetHeight;
-		const headerHeightMm = pxToMm(headerHeightPx);
-
-		// Measure footer height
-		measureArea.innerHTML = footer;
-		const footerHeightPx = measureArea.offsetHeight;
-		const footerHeightMm = pxToMm(footerHeightPx);
-
-		// Calculate available content height per page
-		const availableContentHeightMm =
-			A4.height -
-			A4.topMargin -
-			A4.bottomMargin -
-			headerHeightMm -
-			footerHeightMm -
-			A4.headerSpacing -
-			A4.footerSpacing;
-
-		const availableContentHeightPx = mmToPx(availableContentHeightMm);
-
-		// Measure all sections individually
-		const measureSection = (sectionHtml) => {
-			measureArea.innerHTML = sectionHtml;
-			return measureArea.offsetHeight;
-		};
-
-		const sectionHeights = {
-			customerSection: measureSection(customerSectionHTML),
-			sampleInfoSection: measureSection(sampleInfoSectionHTML),
-			analysisSection: measureSection(analysisSectionHTML),
-			commentSection: showComment ? measureSection(commentSectionHTML || '') : 0,
-			notesSection: measureSection(notesSectionHTML),
-			signatureSection: measureSection(signatureSectionHTML),
-			spacing: measureSection(spacing),
-			nextPageNotification: measureSection(nextPageNotification),
-		};
-
-		console.log('📏 Section heights (px):', sectionHeights);
-
-		// Calculate total content height
-		let totalContentHeight =
-			sectionHeights.customerSection +
-			sectionHeights.spacing +
-			sectionHeights.sampleInfoSection +
-			sectionHeights.spacing +
-			sectionHeights.analysisSection +
-			sectionHeights.spacing +
-			sectionHeights.notesSection +
-			sectionHeights.spacing +
-			sectionHeights.signatureSection;
-
-		// Add comment section height if enabled
-		if (showComment && commentSectionHTML) {
-			totalContentHeight += sectionHeights.commentSection + sectionHeights.spacing;
-		}
-
-		// Calculate heights for special 2-page layout
-		let page1SpecialLayoutHeight =
-			sectionHeights.customerSection +
-			sectionHeights.spacing +
-			sectionHeights.sampleInfoSection +
-			sectionHeights.spacing +
-			sectionHeights.nextPageNotification +
-			sectionHeights.spacing +
-			sectionHeights.notesSection;
-
-		const page2SpecialLayoutHeight =
-			sectionHeights.analysisSection +
-			sectionHeights.spacing +
-			(showComment ? sectionHeights.commentSection + sectionHeights.spacing : 0) +
-			sectionHeights.signatureSection;
-
-		console.log(`📊 Layout analysis: 
-      - Total content height: ${totalContentHeight}px
-      - Available height per page: ${availableContentHeightPx}px
-      - Special layout page 1 height: ${page1SpecialLayoutHeight}px
-      - Special layout page 2 height: ${page2SpecialLayoutHeight}px
-    `);
-
-		// Determine if content should use special 2-page layout
-		const totalExceedsOnePage = totalContentHeight > availableContentHeightPx;
-		const page2FitsOnePage = page2SpecialLayoutHeight <= availableContentHeightPx;
-		const page1FitsOnePage = page1SpecialLayoutHeight <= availableContentHeightPx;
-
-		const useSpecialLayout = totalExceedsOnePage && page2FitsOnePage && page1FitsOnePage;
-
-		console.log(`🧮 Layout decision criteria:
-      - Total content exceeds one page: ${totalExceedsOnePage}
-      - Page 2 contents fit on one page: ${page2FitsOnePage}
-      - Page 1 content fits on one page: ${page1FitsOnePage}
-      - FINAL DECISION: Using special 2-page layout: ${useSpecialLayout}
-    `);
-
-		// Generate content pages based on selected layout
-		let contentPages = [];
-
-		if (useSpecialLayout) {
-			// Use the custom 2-page layout
-			console.log('📄 Using custom 2-page layout with "see next page" notification');
-
-			// Page 1: customerSection + sampleInfoSection + notification + notesSection
-			const page1Elements = [
-				customerSectionHTML,
-				spacing,
-				sampleInfoSectionHTML,
-				spacing,
-				nextPageNotification,
-				spacing,
-				notesSectionHTML,
-			];
-
-			const page1Content = page1Elements.join('');
-
-			// Page 2: analysisSection + commentSection (if enabled) + signatureSection
-			const page2Elements = [analysisSectionHTML, spacing];
-
-			// Add comment section to page 2 after analysis if enabled
-			if (showComment && commentSectionHTML) {
-				page2Elements.push(commentSectionHTML);
-				page2Elements.push(spacing);
-			}
-
-			page2Elements.push(signatureSectionHTML);
-			const page2Content = page2Elements.join('');
-
-			contentPages = [page1Content, page2Content];
+		if (await testConnection()) {
+			node.warn('[ INFO ] LAB DB pool already connected');
 		} else {
-			// Use standard sequential layout
-			console.log('📄 Using standard sequential layout');
-
-			// Create standard content with sequential sections
-			const contentElements = [];
-			contentElements.push(customerSectionHTML);
-			contentElements.push(spacing);
-			contentElements.push(sampleInfoSectionHTML);
-			contentElements.push(spacing);
-			contentElements.push(analysisSectionHTML);
-			contentElements.push(spacing);
-
-			if (showComment && commentSectionHTML) {
-				contentElements.push(commentSectionHTML);
-				contentElements.push(spacing);
-			}
-
-			contentElements.push(notesSectionHTML);
-			contentElements.push(spacing);
-			contentElements.push(signatureSectionHTML);
-
-			// Parse content into elements for standard pagination
-			measureArea.innerHTML = contentElements.join('');
-			const htmlElements = Array.from(measureArea.childNodes);
-
-			// Standard pagination logic
-			let currentPage = [];
-			let currentPageHeightPx = 0;
-			let pageContentHeights = [];
-			let tableBreakCounts = 0;
-
-			// Process each element for pagination
-			const processElement = (element) => {
-				// Skip empty text nodes
-				if (element.nodeType === 3 && element.textContent.trim() === '') {
-					return;
-				}
-
-				// Create a clone to measure
-				const clone = element.cloneNode(true);
-				measureArea.innerHTML = '';
-				measureArea.appendChild(clone);
-				const elementHeightPx = measureArea.offsetHeight;
-				const elementHeightMm = pxToMm(elementHeightPx);
-
-				// Check if this element is a table
-				const isTable = element.tagName === 'TABLE' || (element.querySelector && element.querySelector('table'));
-
-				// Check if this element fits on the current page
-				if (currentPageHeightPx + elementHeightPx <= availableContentHeightPx) {
-					// Element fits on current page
-					currentPage.push(element.outerHTML || element.textContent);
-					currentPageHeightPx += elementHeightPx;
-				} else if (isTable) {
-					// Table doesn't fit - needs to be split across pages
-					console.log(
-						`📊 Found table that needs splitting: ${elementHeightMm.toFixed(2)}mm (exceeds available space ${pxToMm(
-							availableContentHeightPx - currentPageHeightPx,
-						).toFixed(2)}mm)`,
-					);
-					splitTableAcrossPages(element);
-				} else if (elementHeightPx > availableContentHeightPx && currentPage.length === 0) {
-					// Non-table element larger than a full page and we're at the start of a page
-					console.log(`⚠️ Oversized non-table element: ${elementHeightMm.toFixed(2)}mm (exceeds page height)`);
-					// Force onto a page
-					currentPage.push(element.outerHTML || element.textContent);
-					contentPages.push(currentPage.join(''));
-					pageContentHeights.push(currentPageHeightPx);
-
-					// Start new page
-					currentPage = [];
-					currentPageHeightPx = 0;
-				} else {
-					// Element doesn't fit on current page - start a new page
-					contentPages.push(currentPage.join(''));
-					pageContentHeights.push(currentPageHeightPx);
-
-					// Start new page with this element
-					currentPage = [element.outerHTML || element.textContent];
-					currentPageHeightPx = elementHeightPx;
-				}
-			};
-
-			// Enhanced function to split tables across pages with better width handling
-			const splitTableAcrossPages = (tableElement) => {
-				tableBreakCounts++;
-
-				// Force table to respect page width
-				tableElement.style.width = `${A4.width - 2 * A4.sideMargin}mm`;
-				tableElement.style.maxWidth = `${A4.width - 2 * A4.sideMargin}mm`;
-
-				// Extract table structure
-				const hasHeader = !!tableElement.querySelector('thead');
-				const tableHeader = hasHeader ? tableElement.querySelector('thead').outerHTML : '';
-				const rows = Array.from(tableElement.querySelectorAll('tbody tr'));
-
-				// Extract all attributes and styles from the original table
-				const tableAttributes = Array.from(tableElement.attributes)
-					.map((attr) => `${attr.name}="${attr.value}"`)
-					.join(' ');
-
-				// If there's no space left on the current page for even the header + 1 row,
-				// we need to start a new page
-				if (currentPage.length > 0) {
-					const headerHeight = hasHeader ? measureSection(`<table ${tableAttributes}>${tableHeader}</table>`) : 0;
-					const minTableHeight = headerHeight + (rows.length > 0 ? 50 : 0); // Min height for header + one row
-
-					if (currentPageHeightPx + minTableHeight > availableContentHeightPx) {
-						// Not enough space for table header + one row, move to next page
-						contentPages.push(currentPage.join(''));
-						pageContentHeights.push(currentPageHeightPx);
-						currentPage = [];
-						currentPageHeightPx = 0;
-					}
-				}
-
-				// Create a table structure for the first part (header + rows that fit)
-				let firstPartHTML = `<table ${tableAttributes}>`;
-				if (hasHeader) firstPartHTML += tableHeader;
-				firstPartHTML += '<tbody>';
-
-				// Keep track of remaining height on current page
-				let remainingHeightPx = availableContentHeightPx - currentPageHeightPx;
-
-				// Measure header height if header exists
-				if (hasHeader) {
-					const headerHTML = `<table ${tableAttributes}>${tableHeader}</table>`;
-					measureArea.innerHTML = headerHTML;
-					const headerHeightPx = measureArea.offsetHeight;
-					remainingHeightPx -= headerHeightPx;
-				}
-
-				// Improved row height measurement: Create a complete table with all rows
-				// to accurately measure each row in context
-				const fullTableHTML = `<table ${tableAttributes}>${hasHeader ? tableHeader : ''}<tbody>${rows
-					.map((row) => row.outerHTML)
-					.join('')}</tbody></table>`;
-				measureArea.innerHTML = fullTableHTML;
-
-				// Get all rendered rows to measure actual heights
-				const renderedRows = Array.from(measureArea.querySelectorAll('tbody tr'));
-
-				// Log table information
-				console.log(`📏 TABLE ROWS HEIGHT MEASUREMENT:`);
-				console.log(`- Available space for rows: ${remainingHeightPx}px (${pxToMm(remainingHeightPx).toFixed(2)}mm)`);
-
-				// Measure each row and log its height
-				const rowHeights = renderedRows.map((row, index) => {
-					// Use getBoundingClientRect for more accurate height measurement
-					const rect = row.getBoundingClientRect();
-					const originalRowHeightPx = rect.height;
-					// Reduce height by a small factor to prevent footer overlap
-					const rowHeightPx = originalRowHeightPx * 0.999;
-					const rowHeightMm = pxToMm(rowHeightPx);
-					const percentOfAvailable = (rowHeightPx / availableContentHeightPx) * 100;
-
-					console.log(
-						`- Row ${index + 1}: Original ${originalRowHeightPx.toFixed(1)}px, Adjusted ${rowHeightPx.toFixed(
-							1,
-						)}px (${rowHeightMm.toFixed(2)}mm) - ${percentOfAvailable.toFixed(1)}% of available space`,
-					);
-
-					return rowHeightPx;
-				});
-
-				// Reset measurement area
-				measureArea.innerHTML = '';
-
-				// Try to fit as many rows as possible in the first part using measured heights
-				let rowsInFirstPart = [];
-				let remainingRows = [...rows];
-				let totalUsedHeight = 0;
-				let totalRemainingHeight = remainingHeightPx;
-
-				// Use measured heights to determine how many rows fit
-				console.log(`🔍 FITTING ROWS IN FIRST PART:`);
-				for (let i = 0; i < rows.length && i < rowHeights.length; i++) {
-					const rowHeightPx = rowHeights[i];
-
-					if (rowHeightPx <= totalRemainingHeight) {
-						// This row fits
-						rowsInFirstPart.push(rows[i]);
-						totalRemainingHeight -= rowHeightPx;
-						totalUsedHeight += rowHeightPx;
-						remainingRows.shift();
-						console.log(
-							`- Row ${i + 1} fits: ${rowHeightPx.toFixed(1)}px - Remaining space: ${totalRemainingHeight.toFixed(
-								1,
-							)}px (${pxToMm(totalRemainingHeight).toFixed(2)}mm)`,
-						);
-					} else {
-						// This row doesn't fit
-						console.log(
-							`- Row ${i + 1} doesn't fit: ${rowHeightPx.toFixed(1)}px > ${totalRemainingHeight.toFixed(
-								1,
-							)}px remaining`,
-						);
-						break;
-					}
-				}
-				console.log(`- Total rows that fit: ${rowsInFirstPart.length} of ${rows.length}`);
-				console.log(`- Total height used: ${totalUsedHeight.toFixed(1)}px (${pxToMm(totalUsedHeight).toFixed(2)}mm)`);
-				console.log(
-					`- Remaining height: ${totalRemainingHeight.toFixed(1)}px (${pxToMm(totalRemainingHeight).toFixed(2)}mm)`,
-				);
-
-				// Finish the first part of the table
-				if (rowsInFirstPart.length > 0) {
-					rowsInFirstPart.forEach((row) => {
-						firstPartHTML += row.outerHTML;
-					});
-
-					firstPartHTML += '</tbody></table>';
-					currentPage.push(firstPartHTML);
-
-					// Measure the actual height of the first part
-					measureArea.innerHTML = firstPartHTML;
-					const firstPartHeightPx = measureArea.offsetHeight;
-					currentPageHeightPx += firstPartHeightPx;
-
-					// If there are remaining rows, put them on the next page
-					if (remainingRows.length > 0) {
-						// End current page
-						contentPages.push(currentPage.join(''));
-						pageContentHeights.push(currentPageHeightPx);
-
-						// Create a new page with continuation table
-						let continuationHTML = `<table ${tableAttributes}>`;
-						// Include header in continuation tables
-						if (hasHeader) continuationHTML += tableHeader;
-						continuationHTML += '<tbody>';
-
-						// Process remaining rows (may need further splitting)
-						let rowsInCurrentPart = [];
-						currentPage = [];
-						currentPageHeightPx = 0;
-
-						// Handle case where header might not leave room for even one row
-						let headerHeightPx = 0;
-						if (hasHeader) {
-							const headerHTML = `<table ${tableAttributes}>${tableHeader}</table>`;
-							measureArea.innerHTML = headerHTML;
-							headerHeightPx = measureArea.offsetHeight;
-							currentPageHeightPx += headerHeightPx;
-						}
-
-						// Try to fit as many remaining rows as possible
-						for (let i = 0; i < remainingRows.length; i++) {
-							const row = remainingRows[i];
-
-							// Get precomputed row height from earlier measurements
-							const rowIndex = rows.indexOf(row);
-							const originalRowHeightPx =
-								rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] / 0.999 : 30;
-							const rowHeightPx = rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] : 30 * 0.999;
-
-							if (currentPageHeightPx + rowHeightPx <= availableContentHeightPx) {
-								// This row fits
-								rowsInCurrentPart.push(row);
-								currentPageHeightPx += rowHeightPx;
-								remainingRows.shift();
-								i--; // Adjust index since we're removing from array
-								console.log(
-									`  - Row added: Original height ${originalRowHeightPx.toFixed(1)}px, Used ${rowHeightPx.toFixed(
-										1,
-									)}px, Remaining space: ${(availableContentHeightPx - currentPageHeightPx).toFixed(1)}px`,
-								);
-							} else if (i === 0 && currentPage.length === 0) {
-								// Force at least one row even if it overflows
-								rowsInCurrentPart.push(row);
-								remainingRows.shift();
-								console.log(
-									`  - Force added row: Original height ${originalRowHeightPx.toFixed(1)}px, Used ${rowHeightPx.toFixed(
-										1,
-									)}px (overflow)`,
-								);
-								break;
-							} else {
-								// This row doesn't fit, and we already have content
-								console.log(
-									`  - Row doesn't fit: Original height ${originalRowHeightPx.toFixed(1)}px, Used ${rowHeightPx.toFixed(
-										1,
-									)}px, Available space: ${(availableContentHeightPx - currentPageHeightPx).toFixed(1)}px`,
-								);
-								break;
-							}
-						}
-
-						// Add rows to continuation table
-						rowsInCurrentPart.forEach((row) => {
-							continuationHTML += row.outerHTML;
-						});
-						continuationHTML += '</tbody></table>';
-
-						// Add continuation to current page
-						currentPage.push(continuationHTML);
-
-						// If there are still more rows, recursively process them
-						if (remainingRows.length > 0) {
-							// End current page
-							contentPages.push(currentPage.join(''));
-
-							// Build a new table element with remaining rows
-							let remainingTableHTML = `<table ${tableAttributes}>`;
-							if (hasHeader) remainingTableHTML += tableHeader;
-							remainingTableHTML += '<tbody>';
-							remainingRows.forEach((row) => {
-								remainingTableHTML += row.outerHTML;
-							});
-							remainingTableHTML += '</tbody></table>';
-
-							// Create a DOM element from the HTML
-							const tempDiv = document.createElement('div');
-							tempDiv.innerHTML = remainingTableHTML;
-							const remainingTableElement = tempDiv.firstChild;
-
-							// Reset for next page
-							currentPage = [];
-							currentPageHeightPx = 0;
-
-							// Process remaining rows recursively
-							splitTableAcrossPages(remainingTableElement);
-						}
-					}
-				} else {
-					// Special case: can't fit even one row with header
-					// Start a new page and try again
-					if (currentPage.length > 0) {
-						contentPages.push(currentPage.join(''));
-						pageContentHeights.push(currentPageHeightPx);
-						currentPage = [];
-						currentPageHeightPx = 0;
-					}
-
-					// Try again with empty page
-					splitTableAcrossPages(tableElement);
-				}
-			};
-
-			// Process all content elements in order
-			htmlElements.forEach((element) => {
-				processElement(element);
-			});
-
-			// Add the last page if not empty
-			if (currentPage.length > 0) {
-				contentPages.push(currentPage.join(''));
-				pageContentHeights.push(currentPageHeightPx);
-			}
-
-			// Log detailed information about each page's content height
-			console.log(`📊 PAGE CONTENT HEIGHT ANALYSIS:`);
-			pageContentHeights.forEach((height, index) => {
-				const heightMm = pxToMm(height);
-				const percentUsed = (height / availableContentHeightPx) * 100;
-				const remainingPx = availableContentHeightPx - height;
-				const remainingMm = pxToMm(remainingPx);
-
-				console.log(`- Page ${index + 1}: Content height = ${height.toFixed(1)}px (${heightMm.toFixed(2)}mm)`);
-				console.log(`  • ${percentUsed.toFixed(1)}% of available space used`);
-				console.log(`  • Remaining space: ${remainingPx.toFixed(1)}px (${remainingMm.toFixed(2)}mm)`);
-			});
-
-			// Verify our actual page count
-			console.log(`📄 Standard layout resulted in ${contentPages.length} pages`);
-			console.log(`📄 Table breaks count: ${tableBreakCounts}`);
+			await pool.connect();
+			node.warn('[ SUCCESS ] LAB DB pool connected');
 		}
+		global.set('labRepoClient', pool);
+	} catch (error) {
+		node.warn(`[ LAB REPO ERROR ] LABDB connection failed: ${error.stack}`);
+		node.warn(error.stack);
+	}
+}
 
-		// Clean up
-		document.body.removeChild(measureArea);
+async function testConnection() {
+	try {
+		const client = global.get('labRepoClient');
+		const result = await client.query('SELECT 1');
+		return true; // return true if connected
+	} catch (error) {
+		return false;
+	}
+}
 
-		return {
-			pages: contentPages,
-			headerHeightPx,
-			headerHeightMm,
-			footerHeightPx,
-			footerHeightMm,
-			availableContentHeightPx,
-			availableContentHeightMm,
-			contentTopPx: headerHeightPx + mmToPx(A4.headerSpacing),
-			contentTopMm: headerHeightMm + A4.headerSpacing,
-			is2PageLayout: useSpecialLayout,
-		};
+async function disconnect() {
+	const client = global.get('labRepoClient');
+	await client.end();
+	global.set('labRepoClient', undefined);
+	node.warn('[ INFO ] LAB DB disconnected');
+}
+
+await connect();
+
+const repoClient = global.get('labRepoClient');
+
+/** CREATE */
+
+// Create Report
+async function createReport(report) {
+	const generateReportUID = () => {
+		let splitSampleUid = report.sample_uid.split('-'); // "SPxYYQMDDTT"
+		let date = splitSampleUid[0].slice(2); // "xYYQMDDTT" "XX"
+		const currentDate = new Date(Date.now() + 7 * 60 * 60 * 1000); // GMT +7
+		const year = currentDate.getFullYear().toString().slice(-1); // last current year's char
+		const month = (currentDate.getMonth() + 1).toString(16).toUpperCase(); // convert hex (months are 0-indexed)
+		const day = currentDate.getDate().toString(32); // convert base32 (use getDate() not getDay())
+		const secondsSinceMidnight =
+			currentDate.getHours() * 3600 + currentDate.getMinutes() * 60 + currentDate.getSeconds(); // get Seconds
+		let encodeSeconds = Math.floor(secondsSinceMidnight / 2.7)
+			.toString(32)
+			.padStart(3, '0')
+			.toUpperCase(); // 86400/2.7 = 32000 -> 3 chars base 32
+		let result = `PPT${date}${splitSampleUid[1]}-${day}${year}${month}${encodeSeconds}`; // 'PPT' + 'xYYQMDDTT' + 'XX'  + '-' + DYMSSS
+		return result;
 	};
 
-	// Execute pagination
-	const paginationResult = paginateContent();
+	try {
+		report.ppt_uid = generateReportUID();
 
-	// Prepare custom font support
-	const fontFaces = `
-    @font-face {
-      font-family: 'Gilroy';
-      src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
-      font-weight: 400;
-      font-style: normal;
-      font-display: swap;
-    }
-    
-    @font-face {
-      font-family: 'Gilroy';
-      src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-      font-weight: 500;
-      font-style: normal;
-      font-display: swap;
-    }
-    
-    @font-face {
-      font-family: 'Gilroy';
-      src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-      font-weight: 700;
-      font-style: normal;
-      font-display: swap;
-    }
-  `;
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete report.created_at;
+		delete report.modified_at;
 
-	// Format current date as DD-MM-YYYY for document title
-	const today = new Date();
-	const day = String(today.getDate()).padStart(2, '0');
-	const month = String(today.getMonth() + 1).padStart(2, '0');
-	const year = today.getFullYear();
-	const formattedDate = `${day}-${month}-${year}`;
-	const documentTitle = `PPT-${sample_uid || ''} ${formattedDate}`;
+		const validColumns = await matchValidColumns('report', Object.keys(report));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid report columns: ${Object.keys(report).join(', ')}`);
+		}
 
-	// Create all page elements HTML
-	let pagesHTML = '';
-	paginationResult.pages.forEach((pageContent, index) => {
-		const pageNumber = (index + 1).toString().padStart(2, '0');
-		const totalPages = paginationResult.pages.length.toString().padStart(2, '0');
+		// replace report.header_section : '-- NH&Aacute;P / DRAFT --' -> report.ppt_uid
+		report.header_section = report.header_section.replace('-- SƠ BỘ / DRAFT --', report.ppt_uid);
 
-		// Replace page numbers in footer
-		const pageFooter = footer
-			.replace(`>00</span>`, `>${pageNumber}</span>`)
-			.replace(`>00</span>`, `>${totalPages}</span>`);
+		report.reference = JSON.stringify(report.reference);
 
-		// Replace pptUid in header
-		const pageHeader = header.replace(/-- SƠ BỘ \/ DRAFT --/g, ppt_uid || '-- SƠ BỘ / DRAFT --');
+		const query = `INSERT INTO report (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *`;
 
-		// Add draft watermark if in draft mode
-		const draftWatermarkHTML = isDraftMode ? getDraftWatermark() : '';
+		const params = validColumns.map((column) => report[column]);
+		const result = await repoClient.query(query, params);
 
-		// Create the page element similar to Report.jsx
-		pagesHTML += `
-      <div class="page">
-	  	${draftWatermarkHTML}
-        <div class="header">${pageHeader}</div>
-        <div class="content">${pageContent}</div>
-        <div class="footer">${pageFooter}</div>
-      </div>
-    `;
-	});
-
-	// Create a single complete HTML document with all pages
-	const completeHTML = `<!DOCTYPE html>
-<html>
-<head>
-  <title>${documentTitle}</title>
-  <meta charset="utf-8">
-  <style>
-    ${fontFaces}
-    
-    @page {
-      size: A4;
-      margin: ${A4.topMargin}mm ${A4.sideMargin}mm ${A4.bottomMargin}mm ${A4.sideMargin}mm;
-    }
-    
-    html, body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Gilroy', sans-serif !important;
-      background-color: #f0f0f0;
-    }
-    
-    .print-container {
-      width: 720px; /* Exact width: 210mm - 2*10mm margins at 96 DPI */
-      margin: 20px auto;
-      background-color: white;
-      font-family: 'Gilroy', sans-serif !important;
-      padding: 0 1px; /* Add 1px padding on left and right */
-    }
-    
-    .page {
-      position: relative;
-      width: 100%;
-      height: ${A4.height - A4.topMargin - A4.bottomMargin}mm;
-      overflow: hidden;
-      box-sizing: border-box;
-      page-break-after: always;
-      background-color: white;
-      border-bottom: 1px dashed #ccc;
-      font-family: 'Gilroy', sans-serif !important;
-      padding: 0 1px; /* Add 1px padding on left and right */
-    }
-
-    /* Allow VLAS icon to overflow the container */
-    .vlas_icon {
-      overflow: visible !important;
-      z-index: 10;
-    }
-    .vlas_icon img {
-      transform: translateX(-5mm);
-    }
-    
-    /* Improved table styling for better width handling */
-    table {
-      border-collapse: collapse;
-      width: 100% !important;
-      min-width: 100% !important;
-      max-width: 100% !important;
-      font-family: 'Gilroy', sans-serif !important;
-      table-layout: fixed; /* Changed from auto to fixed for better width control */
-      word-break: break-word; /* Add word-break to handle long text */
-      page-break-inside: auto; /* Allow tables to break across pages */
-    }
-    
-    table tr {
-      height: auto !important; /* Allow rows to grow with content */
-      page-break-inside: avoid; /* Try to avoid breaking rows across pages */
-    }
-    
-    table td, table th {
-      padding: 4px 8px !important; /* Changed from 6px to 4px */
-      border: 1px solid black;
-      vertical-align: middle; /* Better alignment for multi-line content */
-      height: auto !important; /* Allow cells to grow with content */
-      line-height: 1.2; /* Ensure consistent line height */
-      overflow: hidden; /* Prevent content from overflowing cells */
-      text-overflow: ellipsis; /* Show ellipsis for overflowing text */
-    }
-    
-    /* Fix paragraph styling in table cells */
-    table td span, table th span {
-      margin: 0 !important;
-      padding: 0 !important;
-      line-height: 14.39px !important;
-      font-family: 'Gilroy', sans-serif !important;
-      font-size: 12px;
-      display: block;
-      word-break: break-word; /* Better handling of long text */
-    }
-    
-    /* Ensure STT/No. column has consistent width */
-    table th:first-child, table td:first-child {
-      width: 8mm !important;
-      min-width: 8mm !important;
-      max-width: 8mm !important;
-    }
-
-    .header {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      box-sizing: border-box;
-      padding-bottom: 0 !important;
-      font-family: 'Gilroy', sans-serif !important;
-      overflow: visible !important; /* Allow header content to overflow */
-    }
-    
-    .header > div:last-child {
-      padding-bottom: 0 !important;
-      margin-bottom: 0 !important;
-      overflow: visible !important;
-    }
-    
-    .content {
-      position: absolute;
-      top: ${paginationResult.contentTopMm}mm;
-      left: 0;
-      width: 100%;
-      box-sizing: border-box;
-      overflow: hidden;
-      padding: 0 1px !important; /* Add 1px padding on left and right */
-      font-family: 'Gilroy', sans-serif !important;
-    }
-    
-    .content > * {
-      padding-top: 0 !important;
-      padding-bottom: 0 !important;
-      margin-top: 0 !important;
-      margin-bottom: 0 !important;
-      font-family: 'Gilroy', sans-serif !important;
-    }
-    
-    .footer {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      box-sizing: border-box;
-      padding-top: 0 !important;
-      font-family: 'Gilroy', sans-serif !important;
-    }
-    
-    .footer > div:first-child {
-      padding-top: 0 !important;
-      margin-top: 0 !important;
-    }
-    
-    p, div, span, td, th {
-      margin-top: 0;
-      margin-bottom: 0;
-      line-height: inherit;
-      font-family: 'Gilroy', sans-serif !important;
-    }
-    
-    img {
-      max-width: 100%;
-    }
-    
-    @media print {
-      body {
-        background-color: white;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-        font-family: 'Gilroy', sans-serif !important;
-      }
-      
-      .print-container {
-        width: 720px !important; /* Force exact width even in print */
-        margin: 0 auto;
-        box-shadow: none;
-        padding: 0 1px !important; /* Ensure padding in print mode */
-      }
-      
-      .page {
-        width: 100% !important;
-        margin: 0;
-        border-bottom: none;
-        padding: 0 1px !important; /* Ensure padding in print mode */
-      }
-      
-      /* Critical: ensure overflow is visible in print mode for VLAS icon */
-      .vlas_icon, .header, .header > div {
-        overflow: visible !important;
-      }
-      
-      /* Preserve table row heights in print mode */
-      table { page-break-inside: auto; }
-      tr { page-break-inside: avoid; }
-      
-      /* Ensure paragraph styling in table cells is preserved when printing */
-      table td span, table th span {
-        margin: 0 !important;
-        padding: 0 !important;
-        line-height: 14.39px !important;
-      }
-
-      /* Last page should not have a page break */
-      .page:last-child {
-        page-break-after: auto;
-      }
-    }
-  </style>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Force 96 DPI rendering -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
-</head>
-<body>
-  <div class="print-container">
-    ${pagesHTML}
-  </div>
-  <script>
-    // Ensure fonts are loaded before printing
-    document.fonts.ready.then(function() {
-      console.log('Fonts loaded in print window');
-      setTimeout(function() {
-        // Fix for VLAS icon positioning in print view
-        const vlasIcons = document.querySelectorAll('.vlas_icon');
-        vlasIcons.forEach(icon => {
-          icon.style.overflow = 'visible';
-          if (icon.querySelector('img')) {
-            icon.querySelector('img').style.maxWidth = 'none';
-          }
-        });
-        // Uncomment to automatically print when loaded
-        // window.print();
-      }, 1000);
-    });
-  </script>
-</body>
-</html>`;
-
-	// Log the complete HTML containing all pages
-	console.log('🖨️ Report HTML generation complete with', paginationResult.pages.length, 'pages');
-	console.log(
-		'🔍 Using layout:',
-		paginationResult.is2PageLayout ? 'Custom 2-page layout' : 'Standard sequential layout',
-	);
-
-	// Clean up global references to prevent memory leaks
-	global.document = undefined;
-	global.window = undefined;
-
-	// Return the complete HTML
-	return completeHTML;
-};
-
-// Helper function to get default header
-function getDefaultHeader(showVlas) {
-	return `
-<div class=" content_page_header_box" id="thead" style="position:relative; height: fit-content;">
-    <div class=" " style="position:relative; display:flex;  overflow:visible;">
-        <div>
-            <img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg" 
-                 loading="lazy" 
-                 class="OQtYGs6LmEKlbdTnVjZ4oA" 
-                 style="width:5cm;">
-        </div>
-		<div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
-			<p class="" 
-			style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
-				Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
-			</p>
-			<p class="" 
-			style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
-				/ Institute for Research and Development of Organic Products
-			</p>
-			<span class="" 
-				style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
-						width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
-				Phòng Phân tích - Kiểm nghiệm / Analysis Control Department
-			</span>
-		</div>
-
-    </div>
-    <div class=" " 
-         style="padding-top:6mm; position:relative; ">
-        <div style="position:relative; text-align:left;">
-            <p contenteditable="true" class=" content-header-title" 
-               style="font-weight:700; font-size:24pt; color:#0058A3; height: 28px;">
-                PHIẾU KẾT QUẢ THỬ NGHIỆM
-            </p>
-            <p class=" content-header-title_eng" 
-               style="font-weight:700; font-size:21pt; color:#0058A3; height: 28px;">
-                / Certificate of Analysis
-            </p>
-            <div class=" display-flex" 
-                 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 10px; height: 20px;">
-                <span class=" std_ref-title">Xuất bản / ref.:</span>
-                <p contenteditable="true" 
-                   class="  ref_code" 
-                   style="min-width:5pt; margin: 0; margin-right: 2mm;">
-                    SƠ BỘ / DRAFT
-                </p>
-                <span class="  published_date" 
-                      style="min-width:5pt; margin: 0;">
-					  Ngày / Date: ${new Date().toLocaleDateString('vi-VN', {
-							year: 'numeric',
-							month: '2-digit',
-							day: '2-digit',
-						})}
-                </span>
-            </div>
-        </div>
-        <div class=" vlas_icon" 
-             style="position:absolute; right:-5mm; top:0.2cm; ${showVlas ? '' : 'display:none;'}">
-            <img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png" 
-                 loading="lazy" 
-                 class="" 
-                 style="width:5.2cm;">
-        </div>
-    </div>
-</div>`;
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create report: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
 }
 
-// Helper function to get default footer
-function getDefaultFooter() {
-	return `
-<div style="border-top:1px solid #4CB748; height:50px; display:flex; padding-top:0pt; align-items: center;">
-    <div style="flex-grow:1; text-align: left;">
-        <p style="color:#0058A3; margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">
-            VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN
-        </p>
-        <p style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">
-            IRDOP.ORG
-        </p>
-        <p style="color: #444444; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">
-            Form: BM06-QT010-KN / Version: 05 / Effective date: 12/03/2025
-        </p>
-    </div>
-    <div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;">
-        <div style="display: flex; align-items: center; height: 14px;">
-            <span style="font-size: 11px; margin: 0; padding: 0; line-height: 1; margin-right:2px;">Trang / Pages:</span>
-            <div style="display: flex; align-items: center; height: 14px;">
-                <span class="page-number" style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">00</span>
-                <span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">/</span>
-                <span class="page-total" style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">00</span>
-            </div>
-        </div>
-    </div>
-</div>`;
+async function upsertDraftReport(report) {
+    try {
+        // Generate draft ppt_uid
+        let splitSampleUid = report.sample_uid.split("-"); // "SPxYYQMDDTT"
+        let date = splitSampleUid[0].slice(2); // "xYYQMDDTT" "XX"
+        report.ppt_uid = `PPT${date}${splitSampleUid[1]}-DRAFT`;
+
+        // Remove timestamp fields - let PostgreSQL handle them
+        delete report.created_at;
+        delete report.modified_at;
+
+        const validColumns = await matchValidColumns(
+            "report",
+            Object.keys(report),
+        );
+        if (validColumns.length === 0) {
+            throw new Error(
+                `Invalid report columns: ${Object.keys(report).join(", ")}`,
+            );
+        }
+
+        // replace report.header_section : '-- NH&Aacute;P / DRAFT --' -> report.ppt_uid
+        report.header_section = report.header_section.replace(
+            "-- SƠ BỘ / DRAFT --",
+            report.ppt_uid,
+        );
+
+        report.reference = JSON.stringify(report.reference);
+
+        // Check if report with this ppt_uid already exists
+        const checkQuery = "SELECT id FROM report WHERE ppt_uid = $1";
+        const checkResult = await repoClient.query(checkQuery, [
+            report.ppt_uid,
+        ]);
+
+        let result;
+
+        if (checkResult.rows.length > 0) {
+            // Update existing report
+            const reportId = checkResult.rows[0].id;
+
+            const query = `UPDATE report SET 
+                ${validColumns
+                    .map((column, index) => `${column} = $${index + 2}`)
+                    .join(", ")}, 
+                modified_at = NOW() 
+                WHERE id = $1 
+                RETURNING *`;
+
+            const params = [
+                reportId,
+                ...validColumns.map((column) => report[column]),
+            ];
+            result = await repoClient.query(query, params);
+        } else {
+            // Insert new report
+            const query = `INSERT INTO report (${validColumns.join(
+                ",",
+            )}, created_at, modified_at) 
+                VALUES (${validColumns
+                    .map((_, index) => `$${index + 1}`)
+                    .join(",")}, NOW(), NOW())
+                RETURNING *`;
+
+            const params = validColumns.map((column) => report[column]);
+            result = await repoClient.query(query, params);
+        }
+
+        return result.rows[0];
+    } catch (error) {
+        const enhancedError = new Error(
+            `Failed to upsert draft report: ${error.message}`,
+        );
+        enhancedError.statusCode = 500;
+        enhancedError.originalError = error;
+        throw enhancedError;
+    }
 }
 
-// Helper function to get default customer section
-function getDefaultCustomerSection() {
-	return `
-<div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-	<div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
-		<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: left;">Nơi / người gửi mẫu / Customer information</p>
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right;"></p>
-		</div>		
-		<div style="display: flex; flex-direction: column; gap: 2px; height: fit-content;">
-			<p style="font-weight: bold; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;"></p>
-			<p style="margin: 0; font-size: 12px; text-align: left; line-height: 1.2;">--</p>
-		</div>
-	</div>
-</div>`;
+
+// Create protocol
+async function createProtocol(protocol) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete protocol.created_at;
+		delete protocol.modified_at;
+
+		const validColumns = await matchValidColumns('protocol', Object.keys(protocol));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid protocol columns: ${Object.keys(protocol).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO protocol (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *`;
+
+		const params = validColumns.map((column) => protocol[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create protocol: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
 }
 
-// Helper function to generate customer section from client data
-function generateCustomerSection(clientData) {
-	// Default values in case client data is not available
-	const clientUid = clientData?.client_uid || '';
-	const clientName = clientData?.client_name || '';
-	const clientAddress = clientData?.client_address || '';
+// Create parameter
+async function createParameter(parameter) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete parameter.created_at;
+		delete parameter.modified_at;
 
-	return `
-<div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-	<div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
-		<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: left;">Nơi / người gửi mẫu / Customer information</p>
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right;">${clientUid}</p>
-		</div>		
-		<div style="display: flex; flex-direction: column; gap: 2px; height: fit-content;">
-			<p style="font-weight: bold; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;">${clientName}</p>
-			<p style="margin: 0; font-size: 12px; text-align: left; line-height: 1.2;">${clientAddress || '--'}</p>
-		</div>
-	</div>
-</div>`;
+		const validColumns = await matchValidColumns('parameter', Object.keys(parameter));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid parameter columns: ${Object.keys(parameter).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO parameter (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *`;
+
+		const params = validColumns.map((column) => parameter[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
 }
 
-// Helper function to generate sample information section from API data
-function generateSampleInfoSection(data) {
-	// Get the sample_uid from data
-	const sampleId = data.sample_uid || '';
+// Create bulk parameters
+async function createBulkParameters(parameters) {
+	try {
+		if (!Array.isArray(parameters) || parameters.length === 0) {
+			throw new Error('Parameters must be a non-empty array');
+		}
 
-	// Get the sample_information array from data and filter out items with empty fvalue
-	const sampleInfo = data.sample_information || [];
-	// Map each sample information item to a row in the sample info section
-	const infoRows = sampleInfo
-		.map((item) => {
-			const fieldName = item.fname || '';
-			const fieldValue = item.fvalue || '--';
+		// Remove timestamp fields from each parameter
+		parameters = parameters.map((param) => {
+			const newParam = { ...param };
+			delete newParam.created_at;
+			delete newParam.modified_at;
+			return newParam;
+		});
 
-			// Extract field label and English translation (if present)
-			const parts = fieldName.split('/');
-			const mainLabel = parts[0].trim();
-			const engLabel = parts.length > 1 ? ` / ${parts[1].trim()}` : '';
+		const validColumns = await matchValidColumns('parameter', Object.keys(parameters[0]));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid parameter columns: ${Object.keys(parameters[0]).join(', ')}`);
+		}
 
-			// Process mainLabel to replace "SX" with "sản xuất" and "HSD" with "Hạn sử dụng"
-			let displayMainLabel = mainLabel;
-			if (mainLabel.includes('SX')) {
-				displayMainLabel = mainLabel.replace('SX', 'sản xuất');
-			} else if (mainLabel.includes('HSD')) {
-				displayMainLabel = mainLabel.replace('HSD', 'Hạn sử dụng');
+		const query = `
+			INSERT INTO parameter (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES ${parameters
+				.map((_, i) => `(${validColumns.map((_, j) => `$${i * validColumns.length + j + 1}`).join(',')}, NOW(), NOW())`)
+				.join(',')}
+			RETURNING *`;
+
+		const params = parameters.flatMap((parameter) => validColumns.map((column) => parameter[column]));
+		const result = await repoClient.query(query, params);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create bulk parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+//create client
+async function createClient(client) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete client.created_at;
+		delete client.modified_at;
+
+		const validColumns = await matchValidColumns('client', Object.keys(client));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid client columns: ${Object.keys(client).join(', ')}`);
+		}
+
+		client.contacts = JSON.stringify(client?.contacts || []);
+
+		const query = `
+			INSERT INTO client (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *`;
+
+		const params = validColumns.map((column) => client[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Create analysis
+async function createAnalysis(analysis) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete analysis.created_at;
+		delete analysis.modified_at;
+
+		const validColumns = await matchValidColumns('analysis', Object.keys(analysis));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid analysis columns: ${Object.keys(analysis).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO analysis (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *`;
+
+		const params = validColumns.map((column) => analysis[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create analysis: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function upsertParameterByUid(parameter) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete parameter.created_at;
+		delete parameter.modified_at;
+
+		// Chỉ lấy các key hợp lệ
+		const validColumns = ['parameter_uid', 'parameter_name', 'matrix', 'protocol_code', 'protocol_source'];
+		const filteredParam = validColumns.reduce((acc, key) => {
+			if (parameter[key] !== undefined) acc[key] = parameter[key];
+			return acc;
+		}, {});
+
+		// Nếu không có dữ liệu hợp lệ, báo lỗi
+		if (Object.keys(filteredParam).length === 0) {
+			throw new Error('No valid columns provided for upsert.');
+		}
+
+		const query = `
+			INSERT INTO parameter (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			ON CONFLICT (parameter_uid) DO UPDATE 
+			SET ${validColumns
+				.slice(1)
+				.map((col, index) => `${col} = $${index + validColumns.length + 1}`)
+				.join(', ')}, modified_at = NOW()
+			RETURNING *`;
+
+		// Gộp giá trị cho INSERT và UPDATE
+		const params = [
+			...validColumns.map((col) => parameter[col]),
+			...validColumns.slice(1).map((col) => parameter[col]),
+		];
+
+		// Thực hiện truy vấn
+		const result = await repoClient.query(query, params);
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to upsert parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Create bulk analysis from parameters
+async function createBulkAnalysisFromParameters(analyses) {
+	try {
+		if (!Array.isArray(analyses) || analyses.length === 0) {
+			throw new Error('Analyses must be a non-empty array');
+		}
+
+		// Remove timestamp fields from each analysis
+		analyses = analyses.map((analysis) => {
+			const newAnalysis = { ...analysis };
+			delete newAnalysis.created_at;
+			delete newAnalysis.modified_at;
+			return newAnalysis;
+		});
+
+		const validColumns = await matchValidColumns('analysis', Object.keys(analyses[0]));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid analysis columns: ${Object.keys(analyses[0]).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO analysis (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES ${analyses
+				.map((_, i) => `(${validColumns.map((_, j) => `$${i * validColumns.length + j + 1}`).join(',')}, NOW(), NOW())`)
+				.join(',')}
+			RETURNING *`;
+
+		const params = analyses.flatMap((analysis) => validColumns.map((column) => analysis[column]));
+		const result = await repoClient.query(query, params);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create bulk analyses: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function createReceipt(receipt) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete receipt.created_at;
+		delete receipt.modified_at;
+
+		if (!receipt.receipt_date) {
+			receipt.receipt_date = new Date();
+		}
+
+		// Generate baseUid
+		const now = new Date();
+		const year = now.getFullYear().toString().slice(-2);
+		const quarter = Math.floor((now.getMonth() + 3) / 3);
+		const monthInQuarter = (now.getMonth() % 3) + 1;
+		const day = String(now.getDate()).padStart(2, '0');
+
+		const baseUid = `TNM${year}${quarter}${monthInQuarter}x${day}`;
+
+		// Query to get the maximum value of the last two characters
+		const query = `
+			SELECT MAX(SUBSTRING(receipt_uid FROM LENGTH(receipt_uid) - 1 FOR 2)) AS max_suffix
+			FROM receipt
+			WHERE receipt_uid LIKE '${baseUid}%';
+		`;
+		const result = await repoClient.query(query);
+		let maxSuffix = result.rows[0].max_suffix;
+
+		// Determine the new suffix
+		let newSuffix;
+		if (maxSuffix) {
+			newSuffix = String(parseInt(maxSuffix, 10) + 1).padStart(2, '0');
+		} else {
+			newSuffix = '01';
+		}
+
+		// Create the new receipt_uid
+		receipt.receipt_uid = `${baseUid}${newSuffix}`;
+
+		// Validate columns
+		const validColumns = await matchValidColumns('receipt', Object.keys(receipt));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid receipt columns: ${Object.keys(receipt).join(', ')}`);
+		}
+
+		// Insert the new receipt with timestamps
+		const insertQuery = `
+			INSERT INTO receipt (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *;
+		`;
+
+		const params = validColumns.map((column) => receipt[column]);
+		const insertResult = await repoClient.query(insertQuery, params);
+
+		return insertResult.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function createSample(sample) {
+	try {
+// 		// Remove timestamp fields - let PostgreSQL handle them
+		delete sample.created_at;
+		delete sample.modified_at;
+
+		// Get the receipt for the sample
+		const receiptQuery = 'SELECT receipt_uid FROM receipt WHERE id = $1';
+		const receiptResult = await repoClient.query(receiptQuery, [sample.receipt_id]);
+		const receiptUid = receiptResult.rows[0].receipt_uid;
+
+		// Extract the base UID from the receipt UID
+		const baseUid = receiptUid.slice(3); // Remove 'TNM' prefix
+
+		// Get the highest sample UID for the same receipt
+		const sampleQuery = `
+			SELECT MAX(SUBSTRING(sample_uid FROM LENGTH(sample_uid) - 1 FOR 2)) AS max_uid
+			FROM sample
+			WHERE receipt_id = $1;
+		`;
+		const sampleResult = await repoClient.query(sampleQuery, [sample.receipt_id]);
+		const maxUid = sampleResult.rows[0].max_uid;
+		const newUidSuffix = maxUid ? String(parseInt(maxUid) + 1).padStart(2, '0') : '01';
+
+		// Generate the new sample UID
+		sample.sample_uid = `SP${baseUid}-${newUidSuffix}`;
+
+		// Add default sample_information if not provided
+        if (!sample.sample_information) {
+            sample.sample_information = JSON.stringify([
+                { fname: 'Tên mẫu thử / name.', fvalue: sample?.sample_name || '' },
+                { fname: 'Số lô / LOT no.', fvalue: '' },
+                { fname: 'Ngày SX / mfg.', fvalue: '' },
+                { fname: 'HSD / exp.', fvalue: '' },
+                { fname: 'Nơi SX / mfr.', fvalue: '' },
+                { 
+                    fname: 'Ngày tiếp nhận / receipt date.', 
+                    fvalue: new Date().toLocaleDateString('vi-VN') 
+                },
+                { fname: 'Mô tả / desc.', fvalue: sample?.sample_description || '' },
+            ]);
+        }
+
+		const validColumns = await matchValidColumns('sample', Object.keys(sample));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid sample columns: ${Object.keys(sample).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO sample (${validColumns.join(',')}) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+			RETURNING *`;
+
+		const params = validColumns.map((column) => sample[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+/** READ */
+// Get report by sample UID (SELECT ppt_uid)
+async function getPptUidBySampleUid({ id, sample_uid }) {
+	try {
+		if (!id && !sample_uid) throw new Error('Sample id or sample_uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE sample_uid = $1';
+		const param = id ? [id] : [sample_uid];
+		const query = 'SELECT ppt_uid,created_at FROM report ' + conditional;
+
+		const result = await repoClient.query(query, param);
+		return result.rows.map((row) => {
+		    const data ={ppt_uid: row.ppt_uid, publish_date:row.created_at}
+		    return data;
+		 });
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get PPT UID: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Get report by PPT UID
+async function getReport({ id, ppt_uid }) {
+	try {
+		if (!id && !ppt_uid) throw new Error('Report id or ppt_uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE ppt_uid = $1';
+		const param = id ? [id] : [ppt_uid];
+		const query = 'SELECT * FROM report ' + conditional;
+		const result = await repoClient.query(query, param);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get report: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Get protocol by ID
+async function getProtocolById(id) {
+	try {
+		const query = 'SELECT * FROM protocol WHERE id = $1';
+		const values = [id];
+		const result = await repoClient.query(query, values);
+
+		const protocol = result.rows[0];
+		if (protocol) {
+			const parameters = await getParametersByProtocolId(protocol.id);
+			return { ...protocol, parameters };
+		}
+		return protocol;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get protocol with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Get all protocols
+async function getAllProtocols() {
+	const client = await repoClient.connect();
+	try {
+		await client.query('BEGIN');
+		const query = 'SELECT * FROM protocol ORDER BY id DESC';
+		const result = await client.query(query);
+
+		const protocols = result.rows;
+		for (let protocol of protocols) {
+			const parameters = await getParametersByProtocolId(protocol.id);
+			protocol.parameters = parameters;
+		}
+
+		await client.query('COMMIT');
+		return protocols;
+	} catch (error) {
+		await client.query('ROLLBACK');
+		const enhancedError = new Error(`Failed to get all protocols: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	} finally {
+		client.release();
+	}
+}
+
+// Get parameter by ID
+async function getParameter({ id, uid }) {
+	try {
+		if (!id && !uid) throw new Error('Parameter id or uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE parameter_uid = $1';
+		const param = id ? [id] : [uid];
+		const query = 'SELECT * FROM parameter ' + conditional;
+
+		const result = await repoClient.query(query, param);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Get bulk parameters by IDs or UIDs
+async function getBulkParameter({ ids, uids }) {
+	const client = await repoClient.connect();
+	try {
+		await client.query('BEGIN');
+		let query, values;
+		if (ids) {
+			query = 'SELECT * FROM parameter WHERE id = ANY($1::int[])';
+			values = [Array.isArray(ids) ? ids : [ids]];
+		} else if (uids) {
+			query = 'SELECT * FROM parameter WHERE parameter_uid = ANY($1::text[])';
+			values = [Array.isArray(uids) ? uids : [uids]];
+		} else {
+			throw new Error('Either ids or uids must be provided');
+		}
+		const result = await client.query(query, values);
+		await client.query('COMMIT');
+		return result.rows;
+	} catch (error) {
+		await client.query('ROLLBACK');
+		const enhancedError = new Error(`Failed to get bulk parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	} finally {
+		client.release();
+	}
+}
+
+async function getAllParameters() {
+	try {
+		const query = 'SELECT * FROM parameter ORDER BY id DESC';
+		const result = await repoClient.query(query);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Get parameters by protocol ID
+async function getParametersByProtocolId(protocol_id) {
+	try {
+		const query = 'SELECT * FROM parameter WHERE protocol_id = $1 ORDER BY id DESC';
+		const values = [protocol_id];
+		const result = await repoClient.query(query, values);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get parameters for protocol ID ${protocol_id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAllReceipt() {
+	try {
+		const query = 'SELECT * FROM receipt ORDER BY id DESC';
+		const result = await repoClient.query(query);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getReceiptByDeadline({start,end}) {
+	try {
+		const query = 'SELECT * FROM receipt WHERE deadline BETWEEN $1 AND $2  ORDER BY id DESC';
+		const values = [start, end];
+		const result = await repoClient.query(query, values);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getReceipt({ id, receipt_uid }) {
+	try {
+		if (!id && !receipt_uid) throw new Error('Receipt id or uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE receipt_uid = $1';
+		const param = id ? [id] : [receipt_uid];
+		const query = 'SELECT * FROM receipt ' + conditional;
+		const result = await repoClient.query(query, param);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAllSample() {
+	try {
+		const query = 'SELECT * FROM sample ORDER BY id DESC';
+		const result = await repoClient.query(query);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all samples: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getSample({ id, sample_uid }) {
+	try {
+		if (!id && !sample_uid) throw new Error('Sample id or uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE sample_uid = $1';
+		const param = id ? [id] : [sample_uid];
+		const query = 'SELECT * FROM sample ' + conditional;
+		const result = await repoClient.query(query, param);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getSampleByReceipt({ id, receipt_uid }) {
+	try {
+		if (!receipt_uid && !id) throw new Error('Receipt id or uid must be not null!');
+		else if (!id && receipt_uid) {
+			const query = 'SELECT * FROM receipt WHERE receipt_uid = $1';
+			const result = await repoClient.query(query, [receipt_uid]);
+			id = result.rows[0].id;
+		}
+        
+		const query = 'SELECT * FROM sample WHERE receipt_id = $1 ORDER BY id DESC';
+		const result = await repoClient.query(query, [id]);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get samples by receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAllAnalysis() {
+	try {
+		const query = 'SELECT * FROM analysis ORDER BY id DESC';
+		const result = await repoClient.query(query);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all analyses: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAnalysis({ id }) {
+	try {
+		if (!id) throw new Error('Analysis id must be not null!');
+		const query = 'SELECT * FROM analysis WHERE id = $1';
+		const result = await repoClient.query(query, [id]);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get analysis with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAnalysisBySample({ id, sample_uid }) {
+	try {
+		if (!sample_uid && !id) throw new Error('Sample id or uid must be not null!');
+		else if (!id && sample_uid) {
+			const query = 'SELECT * FROM sample WHERE sample_uid = $1 ORDER BY id DESC';
+			const result = await repoClient.query(query, [sample_uid]);
+			id = result.rows[0].id;
+		}
+
+		const query = 'SELECT * FROM analysis WHERE sample_id = $1 ORDER BY id ASC';
+		const result = await repoClient.query(query, [id]);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get analyses by sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAnalysisByReceipt({ id, receipt_uid }) {
+	try {
+		if (!receipt_uid && !id) throw new Error('Receipt id or uid must be not null!');
+		else if (!id && receipt_uid) {
+			const query = 'SELECT * FROM receipt WHERE receipt_uid = $1';
+			const result = await repoClient.query(query, [receipt_uid]);
+			id = result.rows[0].id;
+		}
+
+		const query = 'SELECT * FROM analysis WHERE receipt_id = $1 ORDER BY id DESC';
+		const result = await repoClient.query(query, [id]);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get analyses by receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAllClient() {
+	try {
+		const query = 'SELECT * FROM client ORDER BY id DESC';
+		const result = await repoClient.query(query);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all clients: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getClient({ id, client_uid }) {
+	try {
+		if (!id && !client_uid) throw new Error('Client id or uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE client_uid = $1';
+		const param = id ? [id] : [client_uid];
+		const query = 'SELECT * FROM client ' + conditional;
+		const result = await repoClient.query(query, param);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getTemporaryClient() {
+	try {
+		const query = `
+			SELECT client, contact, id
+			FROM receipt
+			WHERE client IS NOT NULL AND client_id IS NULL;
+		`;
+		const result = await repoClient.query(query);
+		return result.rows.map((row) => ({ receipt_id: row.id, ...row.client, contacts: [row.contact] }));
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get temporary client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getTemporaryContact() {
+	try {
+		const query = `
+			SELECT client, contact , client_id , id
+			FROM receipt
+			WHERE client_id IS NOT NULL AND (contact IS NOT NULL AND contact->>'index' IS NULL);
+		`;
+		const result = await repoClient.query(query);
+		return result.rows.map((row) => ({
+			receipt_id: row.id,
+			id: row.client_id,
+			...row.client,
+			contacts: [row.contact],
+		}));
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get temporary contact: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getClientByReceipt({ id, receipt_uid }) {
+	// get receipt => get receipt.client
+	try {
+		if (!receipt_uid && !id) throw new Error('Receipt id or uid must be not null!');
+		else if (!id && receipt_uid) {
+			const query = 'SELECT * FROM receipt WHERE receipt_uid = $1';
+			const result = await repoClient.query(query, [receipt_uid]);
+			return result.rows[0].client;
+		} else {
+			const query = 'SELECT * FROM receipt WHERE id = $1';
+			const result = await repoClient.query(query, [id]);
+			return result.rows[0].client;
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get client by receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+/** UPDATE */
+// Update protocol
+async function updateProtocol(protocol) {
+	try {
+		if (typeof protocol === 'object' && protocol.id) {
+			// Remove timestamp fields
+			delete protocol.created_at;
+			delete protocol.modified_at;
+
+			const validColumns = await matchValidColumns('protocol', Object.keys(protocol));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid protocol columns: ${Object.keys(protocol).join(', ')}`);
 			}
 
-			return `
-	<div style="display: flex; ${fieldName.includes('Ngày tiếp nhận') && 'margin-top: 8px;'}">
-		<div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: center;">
-			<p style="font-weight:bold; margin-right: 4px;">${displayMainLabel}</p> ${engLabel}:
-		</div>
-		<div style="width: 70%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;" >
-			<p style="margin: 0; ${mainLabel.toLowerCase().includes('tên mẫu') ? 'font-weight: bold;' : ''}">${fieldValue}</p>
-		</div>
-	</div>`;
-		})
-		.join('');
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE protocol SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [protocol.id, ...validColumns.map((column) => protocol[column])];
 
-	return `
-<div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-    <div style="padding: 5pt 8pt;; flex-grow: 1; position: relative;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-            <p style="font-size: 11px; line-height: 1.2; margin: 0; text-align: left;">
-                Thông tin mẫu thử / Sample information:
-            </p>
-            <p style="font-size: 11px; line-height: 1.4; margin: 0; text-align: left;">
-                ${sampleId}
-            </p>
-        </div>
+			const result = await repoClient.query(query, values);
 
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-            ${infoRows}
-        </div>
-    </div>
-</div>`;
-}
-
-// Helper function to generate analysis section from API data
-function generateAnalysisSection(data, showReference) {
-	// Get the analysis array from data
-	const analysisItems = data.analysis || [];
-
-	// Define column widths here, at the beginning of the function
-	// Adjust span widths based on whether reference column is shown
-	const col2Width = showReference ? '170px' : '190px';
-	const col3Width = showReference ? '110px' : '110px';
-	const col4Width = showReference ? '60px' : '70px';
-
-	// Add extra table header for reference if needed
-	const referenceHeader = showReference
-		? `
-		<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:10px;">
-			<strong>Tham chiếu</strong> <br> <span style="font-size: 12px; color: #444444; width: 90px;">/ Standard Ref</span>
-		</th>`
-		: '';
-
-	// Map each analysis item to a row in the table
-	let analysisRows = '';
-	if (analysisItems.length > 0) {
-		analysisRows = analysisItems
-			.map((item, index) => {
-				const parameterName = item.parameter_name || '--';
-				const result = item.result_value || '--';
-				const unit = item.result_unit || '--';
-				const protocol = item?.protocol_source + ' ' + item.protocol_code || '--';
-
-				// Reference cell
-				const referenceCell = showReference
-					? `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:90px;">--</span></td>`
-					: '';
-
-				return `
-			<tr style="height:10px;">
-				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width:fit-content; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:26px;">${
-					index + 1
-				}.</span></td>
-				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col2Width};">${parameterName}</span></td>
-				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col3Width};">${result}</span></td>
-				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col4Width};">${unit}</span></td>
-				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block;">${protocol}</span></td>${referenceCell}
-			</tr>`;
-			})
-			.join('');
-	} else {
-		// If no analysis items, include a placeholder row
-		const referenceCell = showReference
-			? `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:90px;">--</span></td>`
-			: '';
-
-		analysisRows = `
-		<tr style="height:auto;">
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width:fit-content; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:26px;">1</span></td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col2Width};">--</span></td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col3Width};">--</span></td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col4Width};">--</span></td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block;">--</span></td>${referenceCell}
-		</tr>`;
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid protocol');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update protocol: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
-
-	return `
-<div style="margin:0; padding:0;">
-    <table style="width: 100%; min-width: 100%; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4; table-layout: auto;">
-        <thead>
-            <tr>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: fit-content; text-align:left; font-size:12px; width:10px;">
-                    <strong>STT</strong> <br> <span style="font-size: 12px; color: #444444; width:28px">/ No.</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:10px;">
-                    <strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444; width:${col2Width};">/ Tests</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:10px;">
-                    <strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444; width:${col3Width};">/ Test result</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:10px;">
-                    <strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444; width:${col4Width};">/ Unit</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:fit-content;">
-                    <strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
-                </th>${referenceHeader}
-            </tr>
-        </thead>
-        <tbody>
-            ${analysisRows}
-        </tbody>
-    </table>
-</div>`;
 }
 
-// Helper function to generate comment section
-function generateCommentSection() {
-	return `
-<div style="padding-top: 0; display: flex; flex-direction: column; ; margin:0;">
-    <div style="padding: 0pt; flex-grow: 1; position: relative;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-			<p style="margin:0; font-size:12px; line-height:1.2;">
-				Nhận xét / Comment:
-			</p>
-		</div>
-		<div style="display: flex; flex-direction: column; gap: 2px; padding-left: 8px;">
-			<p class="comment-content print-text-paragraph" 
-			   style="font-size:12px; margin:0; padding:0; line-height: 1.2; text-align:left;">
-				--
-			</p>
-		</div>
-	</div>
-</div>`;
+// Update parameter
+async function matchParameter(parameter) {
+	try {
+		const query = `
+		SELECT *
+		FROM parameter
+		WHERE similarity(parameter_name, $1) > 0.8
+			AND (
+				similarity(matrix, $2) > 0.6
+				OR $2 ILIKE '%' || matrix || '%'
+			)
+		ORDER BY similarity(parameter_name, $1) DESC, 
+				 similarity(matrix, $2) DESC
+		LIMIT 1;  
+		`;
+
+		const params = [parameter.parameter_name, parameter.matrix];
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0] || null; // Tránh lỗi undefined khi không có kết quả
+	} catch (error) {
+		console.error("Database query error:", error); // Ghi log lỗi
+		throw error; // Nên throw error thay vì chỉ console.warn
+	}
 }
 
-// Helper function to get default notes section
-function getDefaultNotesSection() {
-	return `
-<div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-    <div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-			<p class="note test_note_title" 
-			   style="font-weight:bold ; margin:0; font-size:11px; line-height:1.0; height: fit-content; ">
-				Ghi chú / Note:
-			</p>
-		</div>
-		<div style="display: flex; flex-direction: column; gap: 2px;">
-			<p class="note test_note_detail print-text-paragraph" 
-			   style="font-size:11px; margin:0; padding:0; line-height: 1.2; text-align:left;">
-				KPH: Không phát hiện / Not detected.<br>
-				LOD: Giới hạn phát hiện / Limit of detection.<br>
-				LOQ: Giới hạn định lượng / Limit of quantification.<br>
-				IRDOP: Thử nghiệm thử do IRDOP thực hiện / Protocol conducted by IRDOP.<br>
-				VS: Phương pháp được công nhận theo VILAS / VILAS accredited items.<br>
-				(EX): Phép thử thực hiện bởi nhà thầu phụ / Tests conducted by subcontractors.<br>
-				Thông tin mẫu thử do khách hàng cung cấp / Sample information provided by the customer.<br>
-				Kết quả chỉ có giá trị với mẫu thử / The results are only valid for the tested sample(s).
-			</p>
-		</div>
-		
-	</div>
-</div>`;
+async function updateParameter(parameter) {
+	try {
+		if (typeof parameter === 'object' && parameter.id) {
+			// Remove timestamp fields
+			delete parameter.created_at;
+			delete parameter.modified_at;
+
+			const validColumns = await matchValidColumns('parameter', Object.keys(parameter));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid parameter columns: ${Object.keys(parameter).join(', ')}`);
+			}
+
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE parameter SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [parameter.id, ...validColumns.map((column) => parameter[column])];
+
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid parameter');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
 }
 
-// Helper function to get default signature section
-function getDefaultSignatureSection() {
-	return `
-<div style="padding-top: 0; display: flex; ; margin:0;">
-	<div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
-		<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-			<strong contenteditable="true" 
-					class="signature signer_second_title print-text-paragraph"
-					style="font-size:12px; line-height:1.2; margin:0;">
-				PHÒNG PHÂN TÍCH KIỂM NGHIỆM/<br>KIỂM SOÁT CHẤT LƯỢNG / Laboratory Manager
-			</strong>
-			<p contenteditable="true" 
-			   class="signature signer_second_name print-text-paragraph" 
-			   style="font-size:12px; margin:0; line-height:1.4;">
-				Trần Thị Oanh
-			</p>
-		</div>
-		<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-			<strong contenteditable="true" 
-					class="signature signer_fist_title print-text-paragraph"
-					style="font-size:12px; line-height:1.2; margin:0;">
-				KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President
-			</strong>
-			<p contenteditable="true" 
-			   class="signature signer_first_name print-text-paragraph" 
-			   style="font-size:12px; margin:0; line-height:1.4;">
-				Nguyễn Bá Xuân Trường
-			</p>
-		</div>
-	</div>
-</div>`;
+async function updateReceipt(receipt) {
+	try {
+		if (typeof receipt === 'object' && receipt.id) {
+			// Remove timestamp fields
+			delete receipt.created_at;
+			delete receipt.modified_at;
+
+			const validColumns = await matchValidColumns('receipt', Object.keys(receipt));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid receipt columns: ${Object.keys(receipt).join(', ')}`);
+			}
+
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE receipt SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [receipt.id, ...validColumns.map((column) => receipt[column])];
+
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid receipt');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
 }
+
+async function updateSample(sample) {
+	try {
+		if (typeof sample === 'object' && sample.id) {
+			// Remove timestamp fields
+			delete sample.created_at;
+			delete sample.modified_at;
+
+			const validColumns = await matchValidColumns('sample', Object.keys(sample));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid sample columns: ${Object.keys(sample).join(', ')}`);
+			}
+			if (sample?.sample_information) {
+				sample.sample_information = JSON.stringify(sample.sample_information);
+			}
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE sample SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [sample.id, ...validColumns.map((column) => sample[column])];
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid sample');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function updateAnalysis(analysis) {
+	try {
+		if (typeof analysis === 'object' && analysis.id) {
+			// Remove timestamp fields
+			delete analysis.created_at;
+			delete analysis.modified_at;
+
+			const validColumns = await matchValidColumns('analysis', Object.keys(analysis));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid analysis columns: ${Object.keys(analysis).join(', ')}`);
+			}
+
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE analysis SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [analysis.id, ...validColumns.map((column) => analysis[column])];
+
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid analysis');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update analysis: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function updateClient(client) {
+	try {
+		if (typeof client === 'object' && client.id) {
+			// Remove timestamp fields
+			delete client.created_at;
+			delete client.modified_at;
+
+			const validColumns = await matchValidColumns('client', Object.keys(client));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid client columns: ${Object.keys(client).join(', ')}`);
+			}
+			client.contacts = JSON.stringify(client.contacts || []);
+
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE client SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [client.id, ...validColumns.map((column) => client[column])];
+
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid client');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function updateTemporaryClient(client) {
+	try {
+		if (typeof client !== 'object' || !client) {
+			throw new Error('Invalid client');
+		}
+
+		// Remove timestamp fields
+		delete client.created_at;
+		delete client.modified_at;
+
+		if (client.contacts && client.contacts === null) delete client.contact;
+
+		if (client.contacts && Array.isArray(client.contacts)) {
+			client.contacts = client.contacts.filter((contact) => contact !== null);
+		}
+
+		const validColumns = await matchValidColumns('client', Object.keys(client));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid client columns: ${Object.keys(client).join(', ')}`);
+		}
+
+		const queryCheckUid = await repoClient.query('SELECT id FROM client WHERE client_uid = $1', [client.client_uid]);
+		const client_id = queryCheckUid.rows.length > 0 ? queryCheckUid.rows[0].id : null;
+		if (client_id) client.id = client_id;
+
+		const contact = client.contacts?.[0] ? { ...client.contacts[0], index: 0 } : null;
+
+		// Process contacts
+		client.contacts = client.contacts?.length
+			? JSON.stringify(client.contacts.filter((c) => !c.index).map((c, i) => ({ ...c, index: i })))
+			: null;
+
+		let query, values;
+		if (client.id) {
+			query = `UPDATE client SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			values = [client.id, ...validColumns.map((column) => client[column])];
+		} else {
+			query = `INSERT INTO client (${validColumns.join(',')}, created_at, modified_at) 
+                     VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+                     RETURNING *`;
+			values = validColumns.map((column) => client[column]);
+		}
+
+		const result = await repoClient.query(query, values);
+		const updatedClient = result.rows[0];
+
+		// Update receipt
+		let receiptQuery, receiptValues;
+		if (client.id) {
+			receiptQuery = `UPDATE receipt SET client_id = $1, contact = $2 WHERE id = $3 RETURNING *`;
+			receiptValues = [updatedClient.id, JSON.stringify(contact), client.receipt_id];
+		} else {
+			receiptQuery = `UPDATE receipt SET client_id = $1, contact = $2 WHERE client->>'client_uid' = $3 RETURNING *`;
+			receiptValues = [updatedClient.id, JSON.stringify(contact), client.client_uid];
+		}
+		await repoClient.query(receiptQuery, receiptValues);
+
+		return updatedClient;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update temporary client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+/** DELETE */
+// Delete protocol
+async function deleteProtocol(id) {
+	try {
+		const query = 'DELETE FROM protocol WHERE id = $1';
+		const values = [id];
+		await repoClient.query(query, values);
+
+		return { message: 'Protocol deleted successfully' };
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete protocol with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Delete parameter
+async function deleteParameter(id) {
+	try {
+		const query = 'DELETE FROM parameter WHERE id = $1';
+		const values = [id];
+		await repoClient.query(query, values);
+
+		return { message: 'Parameter deleted successfully' };
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete parameter with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Delete analysis
+async function deleteAnalysis({ id, ids }) {
+	try {
+		// Case 1: Delete a single analysis by ID
+		if (id) {
+			const query = 'DELETE FROM analysis WHERE id = $1';
+			const values = [id];
+			await repoClient.query(query, values);
+			return { message: 'Analysis deleted successfully' };
+		}
+		// Case 2: Delete multiple analyses by IDs array
+		else if (ids && Array.isArray(ids) && ids.length > 0) {
+			const query = 'DELETE FROM analysis WHERE id = ANY($1::int[])';
+			const values = [ids];
+			await repoClient.query(query, values);
+			return { message: `${ids.length} analyses deleted successfully` };
+		} else {
+			throw new Error('No valid ID or IDs provided for deletion');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete analysis: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Delete receipt
+async function deleteReceipt(id) {
+	try {
+		const query = 'DELETE FROM receipt WHERE id = $1';
+		const values = [id];
+		await repoClient.query(query, values);
+
+		return { message: 'Receipt deleted successfully' };
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete receipt with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Delete sample
+async function deleteSample(id) {
+	try {
+		const query = 'DELETE FROM sample WHERE id = $1';
+		const values = [id];
+		await repoClient.query(query, values);
+
+		return { message: 'Sample deleted successfully' };
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete sample with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Delete client
+async function deleteClient(id) {
+	try {
+		const query = 'DELETE FROM client WHERE id = $1';
+		const values = [id];
+		await repoClient.query(query, values);
+
+		return { message: 'Client deleted successfully' };
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete client with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+/** MATCH COLUMN */
+async function matchValidColumns(table_name, columns) {
+	try {
+		/** 1. Get table columns from server */
+		// Construct the SQL query to get the column names from the information schema
+		const validColumnsQuery = `SELECT column_name FROM information_schema.columns WHERE table_name = $1`;
+		const validColumnsParams = [table_name];
+
+		// Execute the SQL query
+		const validColumnsResult = await repoClient.query(validColumnsQuery, validColumnsParams);
+
+		// Extract the column names from the query result
+		const validColumns = validColumnsResult.rows.map((row) => row.column_name);
+
+		/** 2. Match columns */
+		// Filter the input columns to include only valid columns
+		const matchedColumns = columns.filter((column) => validColumns.includes(column));
+
+		// Return the matched columns
+		return matchedColumns; // if no match return []
+	} catch (error) {
+		const enhancedError = new Error(`Failed to match columns for table ${table_name}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Lấy danh sách bảng
+const getTables = async () => {
+	try {
+		const result = await pool.query(`
+     SELECT column_name FROM information_schema.columns WHERE table_name = 'inventory';
+    `);
+
+		// In danh sách bảng
+		console.log('Danh sách cột:', result.rows);
+	} catch (err) {
+		const enhancedError = new Error(`Failed to get tables: ${err.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = err;
+		throw enhancedError;
+	} finally {
+		await pool.end();
+	}
+};
+
+/** SEARCH */
+
+// Search parameter
+async function searchParameter(searchText, matrixValue) {
+	try {
+		let sqlQuery = `
+        SELECT * 
+        FROM parameter
+        WHERE 
+            (parameter_name_unaccent ILIKE '%' || $1 || '%' 
+             OR parameter_name ILIKE '%' || $1 || '%' 
+             OR similarity(parameter_name_unaccent, $1) > 0.3)
+    `;
+
+		const params = [searchText];
+
+		if (matrixValue) {
+			sqlQuery += ` ORDER BY similarity(parameter_name_unaccent, $1) DESC, similarity(matrix, $2) DESC `;
+			params.push(matrixValue);
+		} else {
+			sqlQuery += ` ORDER BY similarity(parameter_name_unaccent, $1) DESC`;
+		}
+
+		const result = await pool.query(sqlQuery, params);
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to search parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Search receipt
+async function searchReceipt(query) {
+	node.warn(query);
+	try {
+		const sqlQuery = `
+WITH ranked_receipts AS (
+    SELECT 
+        receipt.id, 
+        similarity(LOWER(unaccent(receipt.client->>'client_name')), LOWER(unaccent($1))) AS sim_client_name
+    FROM receipt
+    JOIN sample ON receipt.id = sample.receipt_id
+    WHERE 
+        similarity(LOWER(unaccent(sample.sample_name)), LOWER(unaccent($1))) > 0.3
+        OR receipt.receipt_uid ILIKE CONCAT('%', $1, '%')
+        OR receipt.client->>'client_uid' ILIKE CONCAT('%', $1, '%')
+        OR receipt.client->>'client_name' ILIKE CONCAT('%', $1, '%')
+        OR sample.sample_uid ILIKE CONCAT('%', $1, '%')
+        OR receipt.order_code ILIKE CONCAT('%', $1, '%')
+        OR receipt.quote_code ILIKE CONCAT('%', $1, '%')
+        OR receipt.sale_recorder ILIKE CONCAT('%', $1, '%')
+        OR to_tsvector('simple', receipt.client->>'client_uid') @@ websearch_to_tsquery($1)
+        OR to_tsvector('simple', receipt.client->>'client_name') @@ websearch_to_tsquery($1)
+        OR to_tsvector('simple', sample.sample_name) @@ websearch_to_tsquery($1)
+)
+SELECT DISTINCT id, sim_client_name 
+FROM ranked_receipts
+ORDER BY id DESC
+LIMIT 60;
+		`;
+		const params = [query];
+		const result = await pool.query(sqlQuery, params);
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to search receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Search recent receipts
+async function recentReceipt() {
+	try {
+		const sqlQuery = `
+SELECT DISTINCT receipt.id
+FROM receipt
+LEFT JOIN sample ON receipt.id = sample.receipt_id
+WHERE 
+    (sample.status < 3 OR sample.id IS NULL)  -- 👈 Lấy cả receipt không có sample
+    AND receipt.created_at > NOW() - INTERVAL '40 days'
+ORDER BY id DESC
+		`;
+
+		const result = await pool.query(sqlQuery);
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get recent receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+const postgreSQL = {
+	getTables,
+	createProtocol,
+	getProtocolById,
+	getAllProtocols,
+	updateProtocol,
+	deleteProtocol,
+	getAllParameters,
+	getAllAnalysis,
+	getAllClient,
+	getAllReceipt,
+	getReceiptByDeadline,
+	getAllSample,
+	getReceipt,
+	getSample,
+	getSampleByReceipt,
+	getAnalysis,
+	getAnalysisBySample,
+	getAnalysisByReceipt,
+	updateReceipt,
+	updateSample,
+	updateAnalysis,
+	getClient,
+	createReceipt,
+	createSample,
+	createParameter,
+	getParameter,
+	updateParameter,
+	matchParameter,
+	deleteParameter,
+	getParametersByProtocolId,
+	createBulkParameters,
+	createAnalysis,
+	createBulkAnalysisFromParameters,
+	deleteAnalysis,
+	searchParameter,
+	getBulkParameter,
+	searchReceipt,
+	recentReceipt,
+	deleteReceipt,
+	deleteSample,
+	deleteClient,
+	getTemporaryClient,
+	getTemporaryContact,
+	updateClient,
+	createClient,
+	upsertParameterByUid,
+	updateTemporaryClient,
+	getClientByReceipt,
+	createReport,
+	getPptUidBySampleUid,
+	getReport,
+	upsertDraftReport
+};
+
+global.set('postgreSQL', postgreSQL);
+
+return msg;

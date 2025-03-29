@@ -12,18 +12,6 @@ const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter, sample_uids })
 	const navigate = useNavigate();
 	const isDashboard = location.pathname.includes('dashboard') || location.pathname === '/';
 
-	// Handle search term change
-	const handleSearchChange = (e) => {
-		setSearchTerm(e.target.value);
-	};
-
-	// Handle key press in search field
-	const handleKeyPress = (e) => {
-		if (e.key === 'Enter' && searchTerm.trim()) {
-			navigate(`/dashboard?search=${encodeURIComponent(searchTerm)}`);
-		}
-	};
-
 	return (
 		<nav className="flex flex-col w-lvw 2xl:max-w-screen-2xl xl:max-w-screen-xl lg:max-w-screen-lg md:max-w-screen-md sm:max-w-screen-sm max-w-sm mb-4 font-semibold py-4 border-b-2">
 			<div>
@@ -38,13 +26,14 @@ const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter, sample_uids })
 									<select
 										className=" bg-transparent text-gray-700 rounded-md p-1 text-"
 										onChange={(e) => navigate(e.target.value)}
-										value={location.pathname}
+										value={location.pathname + location.search}
 									>
-										<option value={path.link} className="text-gray-700 cursor-pointer">
-											{path.name}
-										</option>
 										{sample_uids.map((uid, uidIndex) => (
-											<option key={uidIndex} value={`/dashboard/${uid}`} className="text-gray-700 cursor-pointer">
+											<option
+												key={uidIndex}
+												value={`/dashboard/sample?receipt_uid=${paths[index - 1].name}&sample_uid=${uid}`}
+												className="text-gray-700 cursor-pointer"
+											>
 												{uid}
 											</option>
 										))}
