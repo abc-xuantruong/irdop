@@ -2126,6 +2126,44 @@ const ReceiptInfor = ({ receipt }) => {
 		return currentUser?.role?.staff_technician;
 	};
 
+	// Add this function before the return statement, near other helper functions
+	const isToday = (date) => {
+		const today = new Date();
+		return (
+			date.getDate() === today.getDate() &&
+			date.getMonth() === today.getMonth() &&
+			date.getFullYear() === today.getFullYear()
+		);
+	};
+
+	// Add this function before the return statement
+	// Function to check if any client or contact information is empty or null
+	const hasEmptyClientOrContactFields = () => {
+		if (!currentReceipt) return false;
+
+		// Check client information
+		if (currentReceipt.client) {
+			const clientFields = ['client_name', 'client_address', 'legal_id', 'client_uid'];
+			for (const field of clientFields) {
+				if (!currentReceipt.client[field] || currentReceipt.client[field].trim() === '') {
+					return true;
+				}
+			}
+		}
+
+		// Check contact information
+		if (currentReceipt.contact) {
+			const contactFields = ['name', 'phone', 'email'];
+			for (const field of contactFields) {
+				if (!currentReceipt.contact[field] || currentReceipt.contact[field].trim() === '') {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	};
+
 	return (
 		<div className="w-full">
 			{/* Add custom styling for SweetAlert toasts */}
@@ -2230,6 +2268,7 @@ const ReceiptInfor = ({ receipt }) => {
 											calendarClassName="text-black"
 											placeholderText="Chọn hạn trả"
 											autoFocus
+											dayClassName={(date) => (isToday(date) ? 'bg-blue-100 font-bold rounded-full' : undefined)}
 										/>
 									) : (
 										<div
@@ -2257,6 +2296,7 @@ const ReceiptInfor = ({ receipt }) => {
 											calendarClassName="text-black"
 											placeholderText="Chọn hạn trả"
 											autoFocus
+											dayClassName={(date) => (isToday(date) ? 'bg-blue-100 font-bold rounded-full' : undefined)}
 										/>
 									) : (
 										<div
@@ -2288,7 +2328,11 @@ const ReceiptInfor = ({ receipt }) => {
 										onClick={toggleCustomerDetails}
 									>
 										{currentReceipt?.client?.client_name || '--'}
-										<span className="text-xs text-blue-600 font-bold">
+										<span
+											className={`text-xs ${
+												hasEmptyClientOrContactFields() ? 'text-red-600' : 'text-blue-600'
+											} font-bold`}
+										>
 											{isCustomerDetailsVisible ? 'Ẩn' : ' Xem Chi tiết'}
 										</span>
 									</div>

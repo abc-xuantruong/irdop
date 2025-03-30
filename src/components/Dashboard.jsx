@@ -9,7 +9,6 @@ import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import 'react-datepicker/dist/react-datepicker.css';
 import DatePicker from 'react-datepicker';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 import {
 	FaAngleRight,
@@ -19,6 +18,7 @@ import {
 	FaExternalLinkAlt,
 	FaRegStickyNote,
 	FaStickyNote,
+	FaTimes,
 } from 'react-icons/fa';
 
 const Dashboard = () => {
@@ -59,7 +59,7 @@ const Dashboard = () => {
 	const [userInfo, setUserInfo] = useState({});
 
 	const [showRelativeTime, setShowRelativeTime] = useState(true); // Toggle between date format and relative time
-	const receiptsPerPage = 15;
+	const receiptsPerPage = 50;
 	const [hoveredReceiptId, setHoveredReceiptId] = useState(null);
 	const [hoveredSampleId, setHoveredSampleId] = useState(null);
 	let isFetch = false;
@@ -87,14 +87,24 @@ const Dashboard = () => {
 	});
 
 	// Replace date range picker state with a single state for start and end dates
-	const [dateRange, setDateRange] = useState([null, null]);
+	const [dateRange, setDateRange] = useState([new Date(), new Date()]);
 	const [startDate, endDate] = dateRange;
-
-	// Add a state to track if we should close the date picker
-	const [shouldCloseDateRangePicker, setShouldCloseDateRangePicker] = useState(false);
 
 	// Add state to control DatePicker visibility
 	const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+
+	// Add a new state to track filter information
+	const [filterInfo, setFilterInfo] = useState({
+		isFilterActive: false,
+		count: 0,
+		startDate: null,
+		endDate: null,
+	});
+
+	// Add new state for status filtering
+	const [statusFilter, setStatusFilter] = useState(null);
+	const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+	const statusDropdownRef = useRef(null);
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -261,6 +271,30 @@ const Dashboard = () => {
 				document.activeElement.blur();
 			}
 		}
+	};
+
+	const handleClearSearch = () => {
+		// Reset search term
+		setSearchTerm('');
+		// Reset all filters and states
+		setIsFilter(false);
+		setShowTodayDeadlines(false);
+		setViewMode('normal');
+
+		// Always navigate to the clean path without query parameters
+		// This will remove any search parameters from the URL
+		navigate(location.pathname);
+
+		// Fetch fresh data only once
+		fetchReceipt().then(() => {
+			// Fetch a new set of receipts and update the UI
+			apiGet('https://black.irdop.org/khsi19me/db/get/recent_receipt').then((response) => {
+				if (response.status === 200) {
+					setOriginalList(response.data);
+					setCurrentList(response.data);
+				}
+			});
+		});
 	};
 
 	// Split date handling into two functions:
@@ -447,7 +481,6 @@ const Dashboard = () => {
 			// Switch to preliminary view but don't fetch data yet
 			setViewMode('preliminary');
 			// Reset to showing current list when switching to preliminary view
-			setIsPreliminaryDataFetched(false);
 			setSelectedPreliminaryType('current');
 		}
 
@@ -501,10 +534,47 @@ const Dashboard = () => {
 					setIsFilter(true);
 					setCurrentPage(1); // Reset to first page
 
-					// Show toast with count
-					showToast(`Hiển thị ${response.data.length} tiếp nhận trong khoảng thời gian đã chọn`, 'info');
+					// Reset search term since we're now filtering by date
+					setSearchTerm('');
+
+					// Store filter information
+					setFilterInfo({
+						isFilterActive: true,
+						count: response.data.length,
+						startDate: start,
+						endDate: end,
+					});
+
+					// Remove search query from URL if it exists
+					const queryParams = new URLSearchParams(location.search);
+					if (queryParams.has('search')) {
+						// Navigate to the current path but without search parameters
+						navigate(location.pathname);
+					}
+
+					// Show toast with count - updated text format
+					showToast(
+						`Hiển thị ${response.data.length} tiếp nhận có hạn trả kết quả từ ${formatDate(start)} đến ${formatDate(
+							end,
+						)}`,
+						'info',
+					);
 				} else {
 					showToast('Không tìm thấy dữ liệu', 'info');
+
+					// Also update filter info in this case
+					setFilterInfo({
+						isFilterActive: true,
+						count: 0,
+						startDate: start,
+						endDate: end,
+					});
+
+					// Still remove search query from URL if it exists
+					const queryParams = new URLSearchParams(location.search);
+					if (queryParams.has('search')) {
+						navigate(location.pathname);
+					}
 				}
 			} else {
 				Swal.fire({
@@ -532,36 +602,37 @@ const Dashboard = () => {
 		fetchReceiptsByDeadline(startDate, endDate);
 	};
 
-	// Updated filterTodayDeadlines function that properly filters preliminary data
+	// Updated filterTodayDeadlines function to respond to a single click
 	const filterTodayDeadlines = () => {
-		// Toggle date range picker
-		setShowDateRangePicker(!showDateRangePicker);
+		// If deadline filter is already active, turn it off
+		if (showTodayDeadlines) {
+			// Turn off deadline filter
+			setShowTodayDeadlines(false);
+			setShowDateRangePicker(false);
 
-		// If turning off the date picker, reset the filter
-		if (showDateRangePicker) {
-			// Reset date range using setDateRange instead of individual setters
-			setDateRange([startOfMonth(new Date()), endOfMonth(new Date())]);
+			// Reset date range
+			setDateRange([new Date(), new Date()]);
 
-			// Reset to the original list
+			// Reset to the appropriate list based on search state
 			if (viewMode === 'preliminary') {
 				// For preliminary view, reload the preliminary data
 				fetchPreliminaryData();
 			} else {
-				// For normal and payment views, reset to the original list
-				setCurrentList(originalList);
-				setIsFilter(false);
+				// Only reset to original list if there's no search term
+				if (!searchTerm) {
+					setCurrentList(originalList);
+					setIsFilter(false);
+				} else {
+					// If we have a search term, preserve the search results
+					setIsFilter(true);
+				}
 			}
-
-			// Turn off today's deadlines filter if it was active
-			if (showTodayDeadlines) {
-				setShowTodayDeadlines(false);
-			}
-		} else if (!showDateRangePicker && !showTodayDeadlines) {
-			// If turning on the date picker and today filter is off,
-			// we'll keep the current behavior of showing today's deadlines
+		} else {
+			// Turn on today's filter - set both flags in one go
 			setShowTodayDeadlines(true);
+			setShowDateRangePicker(true);
 
-			// Logic for filtering today's deadlines (keep existing code)
+			// Logic for filtering today's deadlines
 			const today = new Date();
 			const todayStr = today.toISOString().split('T')[0]; // Get YYYY-MM-DD format
 
@@ -583,6 +654,7 @@ const Dashboard = () => {
 				setPreliminaryData(newPreliminaryData);
 				showToast(`Hiển thị ${filteredData.length} tiếp nhận có hạn trả là hôm nay`, 'info');
 			} else {
+				// Filter the current list which may already be search results
 				const filteredReceipts = currentList.filter((receipt) => {
 					if (!receipt.deadline) return false;
 
@@ -594,7 +666,13 @@ const Dashboard = () => {
 				setCurrentList(filteredReceipts);
 				setIsFilter(true);
 				setCurrentPage(1); // Reset to first page
-				showToast(`Hiển thị ${filteredReceipts.length} tiếp nhận có hạn trả là hôm nay`, 'info');
+
+				// Show appropriate toast message based on whether we're filtering search results
+				if (searchTerm) {
+					showToast(`Hiển thị ${filteredReceipts.length} kết quả tìm kiếm có hạn trả hôm nay`, 'info');
+				} else {
+					showToast(`Hiển thị ${filteredReceipts.length} tiếp nhận có hạn trả là hôm nay`, 'info');
+				}
 			}
 		}
 	};
@@ -635,9 +713,7 @@ const Dashboard = () => {
 		// Only fetch data if it's not the "current" tab
 		if (type !== 'current') {
 			fetchPreliminaryData(type);
-			setIsPreliminaryDataFetched(true);
 		} else {
-			setIsPreliminaryDataFetched(false);
 		}
 	};
 
@@ -650,12 +726,170 @@ const Dashboard = () => {
 			// Immediately close the calendar
 			setIsCalendarOpen(false);
 
-			// Apply the filter with a small delay to ensure UI updates first
 			setTimeout(() => {
+				// Force removal of focus from any active element
+				if (document.activeElement) {
+					document.activeElement.blur();
+				}
+
+				// Also try to access and blur the DatePicker input specifically
+				if (datePickerRef.current && datePickerRef.current.input) {
+					datePickerRef.current.input.blur();
+				}
+
+				// Apply the filter
 				fetchReceiptsByDeadline(update[0], update[1]);
 			}, 100);
 		}
 	};
+
+	// Add this function to handle resetting the date filter to today
+	const handleResetDateFilter = () => {
+		// Reset date range to today
+		const today = new Date();
+		setDateRange([today, today]);
+
+		// Close the calendar if open
+		setIsCalendarOpen(false);
+
+		// Reset filter info
+		setFilterInfo({
+			isFilterActive: false,
+			count: 0,
+			startDate: null,
+			endDate: null,
+		});
+
+		// Filter for today's deadlines
+		const todayStr = today.toISOString().split('T')[0]; // Get YYYY-MM-DD format
+
+		if (viewMode === 'preliminary') {
+			const sourceData = [...preliminaryData[selectedPreliminaryType]];
+			const filteredData = sourceData.filter((receipt) => {
+				if (!receipt.deadline) return false;
+
+				const deadlineDate = new Date(receipt.deadline);
+				const deadlineStr = deadlineDate.toISOString().split('T')[0];
+				return deadlineStr === todayStr;
+			});
+
+			const newPreliminaryData = {
+				...preliminaryData,
+				[selectedPreliminaryType]: filteredData,
+			};
+
+			setPreliminaryData(newPreliminaryData);
+			showToast(`Hiển thị ${filteredData.length} tiếp nhận có hạn trả là hôm nay`, 'info');
+		} else {
+			const filteredReceipts = originalList.filter((receipt) => {
+				if (!receipt.deadline) return false;
+
+				const deadlineDate = new Date(receipt.deadline);
+				const deadlineStr = deadlineDate.toISOString().split('T')[0];
+				return deadlineStr === todayStr;
+			});
+
+			setCurrentList(filteredReceipts);
+			setIsFilter(true);
+			setCurrentPage(1); // Reset to first page
+			showToast(`Hiển thị ${filteredReceipts.length} tiếp nhận có hạn trả là hôm nay`, 'info');
+		}
+	};
+
+	// Handle status filter application
+	const handleStatusFilter = (statusIndex) => {
+		// If clicking the same status filter that's already active, clear the filter
+		if (statusFilter === statusIndex) {
+			setStatusFilter(null);
+			// Reset to original list or maintain other filters
+			if (viewMode === 'preliminary') {
+				// For preliminary view, reload the preliminary data
+				fetchPreliminaryData();
+			} else {
+				// Reset to appropriate list based on other active filters
+				if (isFilter && !searchTerm) {
+					// Keep other filters like date range
+					const filteredList = originalList.filter((receipt) => {
+						// Apply any other active filters here
+						return true;
+					});
+					setCurrentList(filteredList);
+				} else if (!isFilter) {
+					// No other filters, reset to original list
+					setCurrentList(originalList);
+				}
+				// If search is active, we don't reset the list
+			}
+		} else {
+			// Apply the new status filter
+			setStatusFilter(statusIndex);
+
+			if (viewMode === 'preliminary') {
+				// Filter preliminary data
+				const sourceData = [...preliminaryData[selectedPreliminaryType]];
+				const filteredData = sourceData.filter((receipt) => {
+					// Check if any sample in the receipt has the selected status
+					return receipt.samples?.some((sample) => sample.status === statusIndex);
+				});
+
+				const newPreliminaryData = {
+					...preliminaryData,
+					[selectedPreliminaryType]: filteredData,
+				};
+
+				setPreliminaryData(newPreliminaryData);
+				showToast(`Hiển thị ${filteredData.length} tiếp nhận có trạng thái "${status[statusIndex]}"`, 'info');
+			} else {
+				// Filter current list (which may already be filtered by search or date)
+				const filteredReceipts = currentList.filter((receipt) => {
+					// Check if any sample in the receipt has the selected status
+					return receipt.samples?.some((sample) => sample.status === statusIndex);
+				});
+
+				setCurrentList(filteredReceipts);
+				setCurrentPage(1); // Reset to first page
+				showToast(`Hiển thị ${filteredReceipts.length} tiếp nhận có trạng thái "${status[statusIndex]}"`, 'info');
+			}
+		}
+		// Close the dropdown after selection
+		setShowStatusDropdown(false);
+	};
+
+	// Toggle status dropdown
+	const toggleStatusDropdown = () => {
+		if (statusFilter !== null) {
+			// If filter is active, clear it
+			handleStatusFilter(statusFilter);
+		} else {
+			// Toggle dropdown visibility
+			setShowStatusDropdown(!showStatusDropdown);
+		}
+	};
+
+	// Close status dropdown when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target)) {
+				setShowStatusDropdown(false);
+			}
+		};
+
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside);
+		};
+	}, []);
+
+	// Clear status filter when changing views or applying other filters
+	useEffect(() => {
+		setStatusFilter(null);
+	}, [viewMode, selectedPreliminaryType]);
+
+	useEffect(() => {
+		if (searchTerm) {
+			setStatusFilter(null);
+		}
+	}, [searchTerm]);
 
 	useEffect(() => {
 		setCurrentTitlePage('Danh sách tiếp nhận mẫu');
@@ -1144,6 +1378,16 @@ const Dashboard = () => {
 	const isPreliminaryActive = viewMode === 'preliminary';
 	const isPaymentActive = viewMode === 'payment';
 
+	// Add this helper function if it doesn't already exist
+	const isToday = (date) => {
+		const today = new Date();
+		return (
+			date.getDate() === today.getDate() &&
+			date.getMonth() === today.getMonth() &&
+			date.getFullYear() === today.getFullYear()
+		);
+	};
+
 	return (
 		// Remove onMouseMove from the container div
 		<div className="flex flex-col justify-between items-center w-full">
@@ -1281,45 +1525,42 @@ const Dashboard = () => {
 				<div className="bg-white rounded-lg w-full pb-4 pt-2 flex justify-between items-center flex-wrap">
 					{/* Preliminary Results View */}
 					<div>
-						{searchTerm && (
-							<div className="text-sm text-gray-600">
-								Kết quả tìm kiếm cho: <span className="font-medium">{searchTerm}</span>
+						{location.search.includes('search=') && searchTerm && (
+							<div className="text-sm text-gray-500">
+								Tìm thấy <span className="font-medium">{currentList.length}</span> tiếp nhận có từ khoá{' '}
+								<span className="font-medium">{searchTerm}</span>
 								<button
-									onClick={() => {
-										// Reset search term
-										setSearchTerm('');
-										// Reset all filters and states
-										setIsFilter(false);
-										setShowTodayDeadlines(false);
-										setViewMode('normal');
-										setIsPreliminaryDataFetched(false);
-
-										// Navigate to dashboard root
-										navigate('/dashboard');
-
-										// Explicitly fetch fresh data and then update the currentList with that fresh data
-										fetchReceipt().then(() => {
-											// Fetch a new set of receipts and update the UI
-											apiGet('https://black.irdop.org/khsi19me/db/get/recent_receipt').then((response) => {
-												if (response.status === 200) {
-													setOriginalList(response.data);
-													setCurrentList(response.data);
-												}
-											});
-										});
-									}}
-									className="ml-2 text-blue-600 px-2 py-1 bg-background border-2 border-gray-400"
+									onClick={handleClearSearch}
+									className="ml-2 text-blue-600 px-2 py-0.5 bg-background border-2 border-gray-400"
 								>
 									Hủy
 								</button>
 							</div>
 						)}
+
+						{/* Add filter info display - now hidden when there's a search query */}
+						{filterInfo.isFilterActive &&
+							filterInfo.startDate &&
+							filterInfo.endDate &&
+							!location.search.includes('search=') && (
+								<div className="text-sm text-gray-500 mt-1">
+									Hiển thị <span className="font-medium">{filterInfo.count}</span> tiếp nhận có hạn trả kết quả từ{' '}
+									<span className="font-medium">{formatDate(filterInfo.startDate)}</span> đến{' '}
+									<span className="font-medium">{formatDate(filterInfo.endDate)}</span>
+									<button
+										onClick={handleResetDateFilter}
+										className="ml-2 text-blue-600 px-2 py-0.5 bg-background border-2 border-gray-400"
+									>
+										Hủy
+									</button>
+								</div>
+							)}
 					</div>
 					<div className="w-fit px-4 flex justify-end">
 						<div className="flex gap-2 items-center"></div>
 						<button
 							className={`p-2 rounded-lg border-gray-400 mr-2 flex items-center justify-center focus:outline-none gap-2 py-1 ${
-								showTodayDeadlines || showDateRangePicker ? 'text-white bg-blue-600' : 'text-black'
+								showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black'
 							}`}
 							onClick={filterTodayDeadlines}
 							title={showTodayDeadlines ? 'Hiển thị tất cả' : 'Hiển thị các phiếu hạn trả hôm nay'}
@@ -1327,7 +1568,7 @@ const Dashboard = () => {
 							<FaCalendarDay size={18} />
 							<span className="font-normal">Deadline</span>
 							{showTodayDeadlines && (
-								<div className="relative z-1000 text-black" onClick={(e) => e.stopPropagation()}>
+								<div className="relative z-1000 text-black flex items-center" onClick={(e) => e.stopPropagation()}>
 									<DatePicker
 										ref={datePickerRef}
 										selected={startDate}
@@ -1337,7 +1578,7 @@ const Dashboard = () => {
 										selectsRange
 										dateFormat="dd/MM/yyyy"
 										placeholderText="Chọn khoảng thời gian"
-										className="p-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-64"
+										className="p-2 py-0 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-52 cursor-pointer"
 										// Use the open prop to explicitly control visibility
 										open={isCalendarOpen}
 										onInputClick={() => setIsCalendarOpen(true)}
@@ -1346,7 +1587,16 @@ const Dashboard = () => {
 											// When input loses focus, also close the calendar
 											setIsCalendarOpen(false);
 										}}
+										dayClassName={(date) => (isToday(date) ? 'bg-blue-100 font-bold rounded-full' : undefined)}
+										// Add reset button
 									/>
+									<button
+										className="ml-2 p-1 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
+										onClick={handleResetDateFilter}
+										title="Đặt lại để xem hạn trả hôm nay"
+									>
+										<FaTimes size={14} />
+									</button>
 								</div>
 							)}
 						</button>
@@ -1377,13 +1627,13 @@ const Dashboard = () => {
 						)}
 
 						<div className="w-fit">
-							<FilterBar
+							{/* <FilterBar
 								source={originalList} // Pass the original list to FilterBar
 								setCurrentList={setCurrentList}
 								typeSearch="receipt"
 								setIsFilter={setIsFilter} // Pass the setIsFilter function
 								hide={hideElements()} // Conditionally hide search
-							/>
+							/> */}
 						</div>
 					</div>
 				</div>
@@ -1407,7 +1657,35 @@ const Dashboard = () => {
 
 										{/* Preliminary-specific columns */}
 										<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
-										<th className="p-1 border-b text-start w-[10%] min-w-36">Trạng thái</th>
+										<th
+											className="p-1 border-b text-start w-[6%] min-w-[100px] cursor-pointer hover:text-[#103667] underline text-blue-700"
+											onClick={toggleStatusDropdown}
+										>
+											{statusFilter !== null ? status[statusFilter] : 'Trạng thái'}
+											{/* Status dropdown */}
+											{showStatusDropdown && (
+												<div
+													ref={statusDropdownRef}
+													className="absolute z-10 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 max-h-80 overflow-y-auto"
+													style={{ top: '100%', left: 0, minWidth: '200px' }}
+												>
+													{status.map((statusName, index) => (
+														<div
+															key={index}
+															className={`px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
+																statusFilter === index ? 'bg-blue-100 text-blue-700 font-medium' : ''
+															}`}
+															onClick={(e) => {
+																e.stopPropagation();
+																handleStatusFilter(index);
+															}}
+														>
+															{statusName}
+														</div>
+													))}
+												</div>
+											)}
+										</th>
 										<th className="p-1 border-b text-start w-[15%] min-w-40">Mã PPT</th>
 									</tr>
 								</thead>
@@ -1808,19 +2086,40 @@ const Dashboard = () => {
 										<>
 											<th className="p-1 border-b text-start w-[10%] min-w-28">Số lượng</th>
 											<th className="p-1 border-b text-start w-[6%] min-w-24">Mục đích</th>
-											<th className="p-1 border-b text-start w-[6%] min-w-24">Trạng thái</th>
-											<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
-										</>
-									)}
 
-									{/* Payment-specific columns */}
-									{isPaymentActive && (
-										<>
-											<th className="p-1 border-b text-start min-w-32">Mã đơn hàng</th>
-											<th className="p-1 border-b text-start min-w-32">Mã báo giá</th>
-											<th className="p-1 border-b text-start min-w-32">Người ghi nhận</th>
-											<th className="p-1 border-b text-start min-w-32">Doanh số</th>
-											<th className="p-1 border-b text-start min-w-32">Số hồ sơ lưu</th>
+											{/* Modified Status header with filter capability - Fixed dropdown */}
+											<th
+												className="p-1 border-b text-start w-[6%] min-w-[100px] cursor-pointer hover:text-[#103667] underline text-blue-700 relative"
+												onClick={toggleStatusDropdown}
+											>
+												{statusFilter !== null ? status[statusFilter] : 'Trạng thái'}
+
+												{/* Status dropdown - Add back the dropdown content */}
+												{showStatusDropdown && (
+													<div
+														ref={statusDropdownRef}
+														className="absolute z-10 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 max-h-80 overflow-y-auto"
+														style={{ top: '100%', left: 0, minWidth: '200px' }}
+													>
+														{status.map((statusName, index) => (
+															<div
+																key={index}
+																className={`px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
+																	statusFilter === index ? 'bg-blue-100 text-blue-700 font-medium' : ''
+																}`}
+																onClick={(e) => {
+																	e.stopPropagation();
+																	handleStatusFilter(index);
+																}}
+															>
+																{statusName}
+															</div>
+														))}
+													</div>
+												)}
+											</th>
+
+											<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
 										</>
 									)}
 								</tr>
