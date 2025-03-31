@@ -2526,6 +2526,7 @@ export default function MultiPageEditor() {
 							vertical-align: middle; /* Better alignment for multi-line content */
 							height: auto !important; /* Allow cells to grow with content */
 							line-height: 1.2; /* Ensure consistent line height */
+							box-sizing: border-box !important; /* Ensure padding is included in height */
 						}
 						
 						/* Fix paragraph styling in table cells */
@@ -2642,6 +2643,7 @@ export default function MultiPageEditor() {
 								margin: 0 !important;
 								padding: 0 !important;
 								line-height: 1.2 !important;
+								
 							}
 							
 							/* Critical: ensure box-sizing is consistent in print mode */
@@ -2651,11 +2653,6 @@ export default function MultiPageEditor() {
 							
 							/* Adjust column widths for print view to account for padding+border */
 							@media print {
-								table th:nth-child(1) { width: 33px !important; } /* STT column adjusted */
-								table th:nth-child(3) { width: 83px !important; } /* Kết quả column adjusted */
-								table th:nth-child(4) { width: 73px !important; } /* Đơn vị column adjusted */
-								
-								/* Table cells in print mode need explicit box-sizing */
 								table td, table th {
 									box-sizing: border-box !important;
 									padding: 4px 8px !important;
