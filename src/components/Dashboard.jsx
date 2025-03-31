@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState, useRef } from 'react';
 import { GlobalContext } from '../contexts/GlobalContext';
-import FilterBar from './FilterBar';
+import { FiRefreshCcw } from "react-icons/fi";
 import Breadcrumb from './Breadcrumb';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import CreateReceipt from './CreateReceipt';
@@ -11,7 +11,6 @@ import 'react-datepicker/dist/react-datepicker.css';
 import DatePicker from 'react-datepicker';
 
 import {
-	FaAngleRight,
 	FaMoneyBillWave,
 	FaCalendarDay,
 	FaFileAlt,
@@ -1591,11 +1590,11 @@ const Dashboard = () => {
 										// Add reset button
 									/>
 									<button
-										className="ml-2 p-1 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
+										className="ml-1 p-1 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
 										onClick={handleResetDateFilter}
 										title="Đặt lại để xem hạn trả hôm nay"
 									>
-										<FaTimes size={14} />
+										<FiRefreshCcw size={14} />
 									</button>
 								</div>
 							)}
@@ -2120,6 +2119,17 @@ const Dashboard = () => {
 											</th>
 
 											<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
+										</>
+									)}
+
+									{/* Payment view specific columns */}
+									{isPaymentActive && (
+										<>
+											<th className="p-1 border-b text-start w-[10%] min-w-28">Mã đơn hàng</th>
+											<th className="p-1 border-b text-start w-[10%] min-w-28">Mã báo giá</th>
+											<th className="p-1 border-b text-start w-[15%] min-w-36">Người ghi nhận</th>
+											<th className="p-1 border-b text-start w-[10%] min-w-28">Giá trị</th>
+											<th className="p-1 border-b text-start w-[10%] min-w-28">HSL</th>
 										</>
 									)}
 								</tr>

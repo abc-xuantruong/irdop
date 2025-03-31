@@ -16,7 +16,7 @@ export default function MultiPageEditor() {
 	const { currentUser, formatDate } = useContext(GlobalContext);
 
 	// Add state to track if we're in read-only mode (when a ppt_uid is in the URL)
-	const [isReadOnly, setIsReadOnly] = useState(!!selected_ppt_uid);
+	const [isReadOnly, setIsReadOnly] = useState(false);
 
 	// Add new toggle states for VLAS, COMMENT, and REFERENCE
 	const [showVlas, setShowVlas] = useState(false);
@@ -71,7 +71,7 @@ export default function MultiPageEditor() {
 	useEffect(() => {
 		// Allow editing if it's a DRAFT
 		const isDraft = selected_ppt_uid && selected_ppt_uid.includes('DRAFT');
-		setIsReadOnly(!!selected_ppt_uid && !isDraft);
+		// setIsReadOnly(!!selected_ppt_uid && !isDraft);
 		if (!selected_ppt_uid) {
 			setPptUid('');
 		}
@@ -125,8 +125,21 @@ export default function MultiPageEditor() {
 			setShowComment(reportData.is_comment || false);
 			setShowReference(reportData.is_reference || false);
 
-			// Update HTML content
-			setHeaderHTML(reportData.header_section || header);
+			// Process the header content to replace the draft text with actual ppt_uid
+			let processedHeader = reportData.header_section || header;
+			if (reportData.ppt_uid && !reportData.ppt_uid.includes('DRAFT')) {
+				// Replace any draft text variations with the actual ppt_uid
+				processedHeader = processedHeader
+					.replace(
+						/<p[^>]*class="[^"]*ref_code[^"]*"[^>]*>.*?<\/p>/i,
+						`<p class="ref_code" style="min-width:5pt; margin: 0; margin-right: 2mm;">${reportData.ppt_uid}</p>`,
+					)
+					.replace(/SƠ BỘ \/ DRAFT/g, reportData.ppt_uid)
+					.replace(/-- SƠ BỘ \/ DRAFT --/g, reportData.ppt_uid);
+			}
+
+			// Update HTML content with processed header
+			setHeaderHTML(processedHeader);
 			setFooterHTML(reportData.footer_section || footer);
 			setCustomerSectionHTML(reportData.customer_section || '');
 			setSampleInfoSectionHTML(reportData.sample_section || '');
@@ -179,29 +192,18 @@ export default function MultiPageEditor() {
 				if (headerElements.length > 0 && headerElements[0].id) {
 					const headerEditor = window.tinymce.get(headerElements[0].id);
 					if (headerEditor) {
-						headerEditor.setContent(reportData.header_section || header);
+						headerEditor.setContent(processedHeader);
 					}
 				}
 			}
 
 			// Update footer in TinyMCE if loaded
-			if (window.tinymce) {
-				const footerElements = document.getElementsByClassName('footer-editable');
-				if (footerElements.length > 0 && footerElements[0].id) {
-					const footerEditor = window.tinymce.get(footerElements[0].id);
-					if (footerEditor) {
-						footerEditor.setContent(reportData.footer_section || footer);
-					}
-				}
-			}
-
-			setHeader(reportData.header_section || header);
 			setFooter(reportData.footer_section || footer);
 
 			// After loading the report, update the read-only state
 			// Allow editing if it's a DRAFT
 			const isDraft = reportData.ppt_uid && reportData.ppt_uid.includes('DRAFT');
-			setIsReadOnly(!isDraft);
+			// setIsReadOnly(!isDraft);
 		} catch (err) {
 			console.error('Error loading published report:', err);
 			setError(`Failed to load published report: ${err.message}`);
@@ -485,7 +487,7 @@ export default function MultiPageEditor() {
     <div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
 	    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
 			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: left;">Nơi / người gửi mẫu / Customer information</p>
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right;">${clientUid}</p>
+			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right; color: black; text-decoration: none;">${clientUid}</p>
         </div>		
 		<div style="display: flex; flex-direction: column; gap: 2px; height: fit-content;">
 			<p style="font-weight: bold; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;">${clientName}</p>
@@ -557,7 +559,7 @@ export default function MultiPageEditor() {
 		// Make sure we have table row refs
 		if (tableRowRefs.current && tableRowRefs.current.length > 0) {
 			if (shouldLog) console.log('📏 MEASURING TABLE ROWS (total rows: ' + tableRowRefs.current.length + ')');
-			
+
 			// Helper function to safely parse numeric style values
 			const safeParseFloat = (value) => {
 				if (!value) return 0;
@@ -566,18 +568,18 @@ export default function MultiPageEditor() {
 				const result = parseFloat(numericPart);
 				return isNaN(result) ? 0 : result;
 			};
-			
+
 			// Measure each row's height using computed styles
 			const heights = tableRowRefs.current
 				.map((rowRef, index) => {
 					if (!rowRef) {
 						return { index, heightPx: 30, heightMm: pxToMm(30) };
 					}
-					
+
 					try {
 						// Get the computed style for the row
 						const computedStyle = window.getComputedStyle(rowRef);
-						
+
 						// Get direct measurements first (most reliable)
 						const offsetHeight = rowRef.offsetHeight || 0;
 						const clientHeight = rowRef.clientHeight || 0;
@@ -597,16 +599,21 @@ export default function MultiPageEditor() {
 						const marginBottom = safeParseFloat(computedStyle.marginBottom);
 
 						// Calculate total height including padding and borders
-						const totalHeight = contentHeight + paddingTop + paddingBottom + 
-											borderTopWidth + borderBottomWidth + 
-											marginTop + marginBottom;
+						const totalHeight =
+							contentHeight +
+							paddingTop +
+							paddingBottom +
+							borderTopWidth +
+							borderBottomWidth +
+							marginTop +
+							marginBottom;
 
 						// Use box-sizing to adjust the calculation if needed
 						const boxSizing = computedStyle.boxSizing;
-						
+
 						// Determine the most reliable height value
 						let finalHeight;
-						
+
 						if (offsetHeight > 0) {
 							// offset height is usually most reliable
 							finalHeight = offsetHeight;
@@ -624,29 +631,29 @@ export default function MultiPageEditor() {
 						// Convert to mm
 						const heightMm = pxToMm ? pxToMm(finalHeight) : finalHeight / 3.78;
 
-							// Only log detailed information if shouldLog is true (during print)
-							if (shouldLog) {
-								console.log(`📊 Row #${index + 1} measurements:`, {
-									offsetHeight: offsetHeight + 'px', 
-									clientHeight: clientHeight + 'px',
-									scrollHeight: scrollHeight + 'px',
-									boundingHeight: boundingHeight + 'px',
-									computedHeight: contentHeight + 'px',
-									totalCalculated: totalHeight.toFixed(2) + 'px',
-									finalHeight: finalHeight.toFixed(2) + 'px',
-									heightInMm: heightMm.toFixed(2) + 'mm',
-									cellCount: rowRef.cells ? rowRef.cells.length : 'N/A',
-									boxSizing,
-									computedStyle: {
-										paddingTop: paddingTop + 'px',
-										paddingBottom: paddingBottom + 'px',
-										borderTopWidth: borderTopWidth + 'px',
-										borderBottomWidth: borderBottomWidth + 'px',
-										marginTop: marginTop + 'px',
-										marginBottom: marginBottom + 'px',
-									}
-								});
-							}
+						// Only log detailed information if shouldLog is true (during print)
+						if (shouldLog) {
+							console.log(`📊 Row #${index + 1} measurements:`, {
+								offsetHeight: offsetHeight + 'px',
+								clientHeight: clientHeight + 'px',
+								scrollHeight: scrollHeight + 'px',
+								boundingHeight: boundingHeight + 'px',
+								computedHeight: contentHeight + 'px',
+								totalCalculated: totalHeight.toFixed(2) + 'px',
+								finalHeight: finalHeight.toFixed(2) + 'px',
+								heightInMm: heightMm.toFixed(2) + 'mm',
+								cellCount: rowRef.cells ? rowRef.cells.length : 'N/A',
+								boxSizing,
+								computedStyle: {
+									paddingTop: paddingTop + 'px',
+									paddingBottom: paddingBottom + 'px',
+									borderTopWidth: borderTopWidth + 'px',
+									borderBottomWidth: borderBottomWidth + 'px',
+									marginTop: marginTop + 'px',
+									marginBottom: marginBottom + 'px',
+								},
+							});
+						}
 
 						return {
 							index,
@@ -672,14 +679,14 @@ export default function MultiPageEditor() {
 			// Only log summary information if shouldLog is true (during print)
 			if (shouldLog) {
 				console.log('📏 SUMMARY: Measured row heights with computed styles:', heights);
-				
+
 				// Calculate average height for debugging
 				if (heights.length > 0) {
 					const avgHeight = heights.reduce((sum, h) => sum + h.heightPx, 0) / heights.length;
 					console.log(`📊 Average row height: ${avgHeight.toFixed(1)}px (${pxToMm(avgHeight).toFixed(2)}mm)`);
 				}
 			}
-			
+
 			setTableRowHeights(heights);
 			return heights;
 		} else {
@@ -860,7 +867,7 @@ export default function MultiPageEditor() {
 			const tableRows = document.querySelectorAll('.table-row');
 			if (tableRows.length > 0) {
 				console.log(`📋 Found ${tableRows.length} table rows to measure`);
-				
+
 				// Create a new array with the right length
 				tableRowRefs.current = new Array(tableRows.length);
 
@@ -881,13 +888,13 @@ export default function MultiPageEditor() {
 	const debugTableRows = (shouldLog = false) => {
 		const rows = document.querySelectorAll('.table-row');
 		if (shouldLog) console.log(`🔍 DOM CHECK: Found ${rows.length} rows with .table-row class`);
-		
+
 		rows.forEach((row, index) => {
 			const height = row.offsetHeight;
 			const cells = row.cells ? row.cells.length : 'unknown';
-			if (shouldLog) console.log(`Row #${index+1}: height=${height}px, cells=${cells}, id=${row.id || 'none'}`);
+			if (shouldLog) console.log(`Row #${index + 1}: height=${height}px, cells=${cells}, id=${row.id || 'none'}`);
 		});
-		
+
 		// Also check our current refs
 		if (shouldLog) console.log(`🔗 Current tableRowRefs length: ${tableRowRefs.current.length}`);
 	};
@@ -1247,7 +1254,6 @@ export default function MultiPageEditor() {
 								const style = div.getAttribute('style');
 								if (style) {
 									div.setAttribute('style', style + '; border-style: solid !important;');
-									
 								}
 							});
 
@@ -1319,25 +1325,25 @@ export default function MultiPageEditor() {
 	// Add this function to extract table cell dimensions from the editor
 	const extractTableDimensions = (shouldLog = false) => {
 		if (!contentRef.current || !window.tinymce) return null;
-		
+
 		const contentEditor = window.tinymce.get(contentRef.current?.id);
 		if (!contentEditor) return null;
-		
+
 		const editorBody = contentEditor.getBody();
 		const tables = editorBody.querySelectorAll('table');
-		
+
 		if (!tables.length) {
 			if (shouldLog) console.log('📊 No tables found in editor to extract dimensions');
 			return null;
 		}
-		
+
 		// Get the analysis table (first table)
 		const analysisTable = tables[0];
-		
+
 		// Extract header dimensions
 		const headerRow = analysisTable.querySelector('thead tr');
 		if (!headerRow) return null;
-		
+
 		// Helper function to calculate adjusted width by subtracting 17px
 		const getAdjustedWidth = (originalWidth) => {
 			// Extract numeric part if it's a string with units
@@ -1347,17 +1353,17 @@ export default function MultiPageEditor() {
 					return `${Math.max(0, numericPart - 17)}px`;
 				}
 			}
-			
+
 			// Use calc for other cases (like percentages)
 			return `calc(${originalWidth} - 17px)`;
 		};
-		
+
 		const headerCells = headerRow.querySelectorAll('th');
 		const headerDimensions = Array.from(headerCells).map((th, index) => {
 			const computedStyle = window.getComputedStyle(th);
 			// Apply the width - 17px formula for header cells
 			const adjustedWidth = getAdjustedWidth(computedStyle.width);
-			
+
 			const dimensions = {
 				index,
 				type: 'th',
@@ -1370,16 +1376,16 @@ export default function MultiPageEditor() {
 					top: computedStyle.paddingTop,
 					right: computedStyle.paddingRight,
 					bottom: computedStyle.paddingBottom,
-					left: computedStyle.paddingLeft
+					left: computedStyle.paddingLeft,
 				},
 				border: {
 					top: computedStyle.borderTopWidth,
 					right: computedStyle.borderRightWidth,
 					bottom: computedStyle.borderBottomWidth,
-					left: computedStyle.borderLeftWidth
-				}
+					left: computedStyle.borderLeftWidth,
+				},
 			};
-			
+
 			if (shouldLog) {
 				console.log(`📏 Header cell #${index + 1} "${th.textContent.trim()}" dimensions:`, {
 					width: adjustedWidth, // Use adjusted width in logs
@@ -1389,24 +1395,24 @@ export default function MultiPageEditor() {
 					padding: `${computedStyle.paddingTop} ${computedStyle.paddingRight} ${computedStyle.paddingBottom} ${computedStyle.paddingLeft}`,
 					border: `${computedStyle.borderTopWidth} ${computedStyle.borderRightWidth} ${computedStyle.borderBottomWidth} ${computedStyle.borderLeftWidth}`,
 					boxSizing: computedStyle.boxSizing,
-					display: computedStyle.display
+					display: computedStyle.display,
 				});
 			}
-			
+
 			return dimensions;
 		});
-		
+
 		// Extract data row dimensions - also apply the same width adjustment
 		const rows = analysisTable.querySelectorAll('tbody tr');
 		const rowDimensions = Array.from(rows).map((tr, rowIndex) => {
 			const computedTrStyle = window.getComputedStyle(tr);
 			const cells = tr.querySelectorAll('td');
-			
+
 			const cellDimensions = Array.from(cells).map((td, cellIndex) => {
 				const computedStyle = window.getComputedStyle(td);
 				// Apply the same width adjustment to body cells
 				const adjustedWidth = getAdjustedWidth(computedStyle.width);
-				
+
 				return {
 					rowIndex,
 					cellIndex,
@@ -1418,18 +1424,18 @@ export default function MultiPageEditor() {
 						top: computedStyle.paddingTop,
 						right: computedStyle.paddingRight,
 						bottom: computedStyle.paddingBottom,
-						left: computedStyle.paddingLeft
+						left: computedStyle.paddingLeft,
 					},
 					border: {
 						top: computedStyle.borderTopWidth,
 						right: computedStyle.borderRightWidth,
 						bottom: computedStyle.borderBottomWidth,
-						left: computedStyle.borderLeftWidth
+						left: computedStyle.borderLeftWidth,
 					},
-					content: td.textContent.trim()
+					content: td.textContent.trim(),
 				};
 			});
-			
+
 			return {
 				rowIndex,
 				rowHeight: computedTrStyle.height,
@@ -1437,27 +1443,28 @@ export default function MultiPageEditor() {
 				computedStyle: {
 					height: computedTrStyle.height,
 					boxSizing: computedTrStyle.boxSizing,
-					display: computedTrStyle.display
-				}
+					display: computedTrStyle.display,
+				},
 			};
 		});
-		
+
 		if (shouldLog) {
 			console.log('📏 Extracted header dimensions:', headerDimensions);
 			console.log('📏 Extracted row dimensions:', rowDimensions);
+			console.log('📏 Extracted row dimensions:', rowDimensions);
 		}
-		
+
 		return {
 			headerDimensions,
-			rowDimensions
-			};;
-	};;
+			rowDimensions,
+		};
+	};
 
 	const handlePrint = () => {
 		let currentContent = content;
 		let currentHeader = header;
 		let currentFooter = footer;
-	
+
 		// First, ensure we have the most current content from TinyMCE
 		if (contentRef.current && window.tinymce) {
 			const contentEditor = window.tinymce.get(contentRef.current?.id);
@@ -1465,7 +1472,7 @@ export default function MultiPageEditor() {
 				currentContent = contentEditor.getContent();
 				setContent(currentContent); // Update state with latest content
 			}
-	
+
 			const headerElements = document.getElementsByClassName('header-editable');
 			if (headerElements.length > 0 && headerElements[0].id) {
 				const headerEditor = window.tinymce.get(headerElements[0].id);
@@ -1482,7 +1489,7 @@ export default function MultiPageEditor() {
 					setHeader(currentHeader); // Update state with latest header
 				}
 			}
-	
+
 			const footerElements = document.getElementsByClassName('footer-editable');
 			if (footerElements.length > 0 && footerElements[0].id) {
 				const footerEditor = window.tinymce.get(footerElements[0].id);
@@ -1492,18 +1499,18 @@ export default function MultiPageEditor() {
 				}
 			}
 		}
-	
+
 		// Perform detailed table measurements right before printing
 		console.log('🖨️ PRINT BUTTON CLICKED - STARTING PRE-PRINT MEASUREMENTS');
 		performDetailedTableMeasurements();
-	
+
 		// Replace pptUid in header
 		currentHeader = currentHeader.replace(/-- SƠ BỘ \/ DRAFT --/g, pptUid || '-- SƠ BỘ / DRAFT --');
 		setHeaderHTML(currentHeader); // Store header in headerHTML state
-	
+
 		// Extract and store all current sections with their latest HTML values
 		const extractedSections = extractCurrentSections(currentContent);
-	
+
 		// Update all section state variables with current values from editor
 		setCustomerSectionHTML(extractedSections.customerSection);
 		setSampleInfoSectionHTML(extractedSections.sampleInfoSection);
@@ -1512,13 +1519,13 @@ export default function MultiPageEditor() {
 		setNotesSectionHTML(extractedSections.notesSection);
 		setSignatureSectionHTML(extractedSections.signatureSection);
 		setFooterHTML(currentFooter);
-	
+
 		// Before printing, extract current reference cells from the editor content
 		// to ensure we capture any changes made in the editor
 		const extractCurrentReferenceValues = () => {
 			const tempDiv = document.createElement('div');
 			tempDiv.innerHTML = extractedSections.analysisSection;
-	
+
 			const referenceCells = tempDiv.querySelectorAll('.reference-cell');
 			if (referenceCells.length > 0) {
 				const refs = Array.from(referenceCells).map((cell) => cell.outerHTML);
@@ -1528,9 +1535,9 @@ export default function MultiPageEditor() {
 			}
 			return [];
 		};
-	
+
 		const currentRefs = extractCurrentReferenceValues();
-	
+
 		// Update sectionContent state to reflect current editor content
 		setSectionContent({
 			customerSection: extractedSections.customerSection,
@@ -1540,7 +1547,7 @@ export default function MultiPageEditor() {
 			notesSection: extractedSections.notesSection,
 			signatureSection: extractedSections.signatureSection,
 		});
-	
+
 		// Create print window with custom title for PDF filename
 		// Format current date as DD-MM-YYYY
 		const today = new Date();
@@ -1548,16 +1555,16 @@ export default function MultiPageEditor() {
 		const month = String(today.getMonth() + 1).padStart(2, '0');
 		const year = today.getFullYear();
 		const formattedDate = `${day}-${month}-${year}`;
-	
+
 		// Create window title with format: PPT-${sample_uid} DD-MM-YYYY
 		const documentTitle = `PPT-${sample_uid} ${formattedDate}`;
-	
+
 		const printWindow = window.open('', '_blank', 'width=1100,height=1000,toolbar=no,scrollbars=yes');
 		if (!printWindow) {
 			alert('Please allow pop-ups to print the document.');
 			return;
 		}
-	
+
 		// A4 dimensions in mm with spacing adjustments
 		const A4 = {
 			width: 210,
@@ -1568,7 +1575,7 @@ export default function MultiPageEditor() {
 			headerSpacing: 8, // spacing between header and content
 			footerSpacing: 3, // removed spacing between content and footer
 		};
-	
+
 		console.log('📐 Document dimensions:');
 		console.log('- Screen DPI:', getDPI());
 		console.log('- A4 paper:', `${A4.width}mm × ${A4.height}mm (${mmToPx(A4.width)}px × ${mmToPx(A4.height)}px)`);
@@ -1578,13 +1585,13 @@ export default function MultiPageEditor() {
 				A4.bottomMargin,
 			)}px), sides: ${A4.sideMargin}mm (${mmToPx(A4.sideMargin)}px)`,
 		);
-	
+
 		// Extract current sections from TinyMCE editor content
 		function extractCurrentSections(currentContent) {
 			// Create a temporary container to parse the current content
 			const tempContainer = document.createElement('div');
 			tempContainer.innerHTML = currentContent;
-	
+
 			// We'll extract sections based on known patterns and structures
 			const extractedSections = {
 				customerSection: '',
@@ -1594,12 +1601,12 @@ export default function MultiPageEditor() {
 				notesSection: '',
 				signatureSection: '',
 			};
-	
+
 			// Find customer section (div containing "Customer information" text)
 			const customerSectionDiv = Array.from(tempContainer.querySelectorAll('div')).find(
 				(div) => div.innerHTML && div.innerHTML.includes('Customer information'),
 			);
-	
+
 			// Look for the parent container of the customer section (typically a top-level div)
 			if (customerSectionDiv) {
 				// Find the closest parent that wraps the entire customer section
@@ -1611,32 +1618,36 @@ export default function MultiPageEditor() {
 				) {
 					customerParent = customerParent.parentElement;
 				}
-	
+
 				extractedSections.customerSection = customerParent.outerHTML;
 			} else {
 				extractedSections.customerSection = customerSectionHTML || sectionContent.customerSection;
 			}
-	
+
 			// Find sample info section (div containing "Sample information" text)
 			const sampleInfoDiv = Array.from(tempContainer.querySelectorAll('div')).find(
 				(div) => div.innerHTML && div.innerHTML.includes('Sample information'),
 			);
-	
+
 			// Look for the parent container of the sample info section
 			if (sampleInfoDiv) {
 				// Find the closest parent that wraps the entire sample info section
 				let sampleParent = sampleInfoDiv;
-				while (sampleParent.parentElement && sampleParent.parentElement !== tempContainer && !sampleParent.style.border) {
+				while (
+					sampleParent.parentElement &&
+					sampleParent.parentElement !== tempContainer &&
+					!sampleParent.style.border
+				) {
 					sampleParent = sampleParent.parentElement;
 					// If we reach a major section break, stop climbing
 					if (sampleParent === tempContainer) break;
 				}
-	
+
 				extractedSections.sampleInfoSection = sampleParent.outerHTML;
 			} else {
 				extractedSections.sampleInfoSection = sampleInfoSectionHTML || sectionContent.sampleInfoSection;
 			}
-	
+
 			// Find analysis section (contains a table with "Tests" header)
 			const analysisTable = tempContainer.querySelector('table');
 			if (analysisTable && analysisTable.innerHTML.includes('Tests')) {
@@ -1647,17 +1658,17 @@ export default function MultiPageEditor() {
 					// If we reach a major section break, stop climbing
 					if (analysisParent === tempContainer) break;
 				}
-	
+
 				extractedSections.analysisSection = analysisParent.outerHTML;
 			} else {
 				extractedSections.analysisSection = analysisSectionHTML || sectionContent.analysisSection;
 			}
-	
+
 			// Find comment section (div with "Comment:" text)
 			const commentDiv = Array.from(tempContainer.querySelectorAll('div')).find(
 				(div) => div.innerHTML && div.innerHTML.includes('Nhận xét / Comment:'),
 			);
-	
+
 			if (commentDiv) {
 				// Find the parent container of the comment section
 				let commentParent = commentDiv;
@@ -1666,17 +1677,17 @@ export default function MultiPageEditor() {
 					// If we reach a major section break, stop climbing
 					if (commentParent === tempContainer) break;
 				}
-	
+
 				extractedSections.commentSection = commentParent.outerHTML;
 			} else {
 				extractedSections.commentSection = showComment ? commentSectionHTML || sectionContent.commentSection : '';
 			}
-	
+
 			// Find notes section (div with "Note:" text)
 			const notesDiv = Array.from(tempContainer.querySelectorAll('div')).find(
 				(div) => div.innerHTML && div.innerHTML.includes('Ghi chú / Note:'),
 			);
-	
+
 			if (notesDiv) {
 				// Find the parent container of the notes section
 				let notesParent = notesDiv;
@@ -1685,17 +1696,17 @@ export default function MultiPageEditor() {
 					// If we reach a major section break, stop climbing
 					if (notesParent === tempContainer) break;
 				}
-	
+
 				extractedSections.notesSection = notesParent.outerHTML;
 			} else {
 				extractedSections.notesSection = notesSectionHTML || sectionContent.notesSection;
 			}
-	
+
 			// Find signature section (div with "Laboratory Manager" text)
 			const signatureDiv = Array.from(tempContainer.querySelectorAll('div')).find(
 				(div) => div.innerHTML && div.innerHTML.includes('Laboratory Manager'),
 			);
-	
+
 			if (signatureDiv) {
 				// Find the parent container of the signature section
 				let signatureParent = signatureDiv;
@@ -1704,15 +1715,15 @@ export default function MultiPageEditor() {
 					// If we reach a major section break, stop climbing
 					if (signatureParent === tempContainer) break;
 				}
-	
+
 				extractedSections.signatureSection = signatureParent.outerHTML;
 			} else {
 				extractedSections.signatureSection = signatureSectionHTML || sectionContent.signatureSection;
 			}
-	
+
 			return extractedSections;
 		}
-	
+
 		// Pagination function with detailed logging and layout adjustment
 		const paginateContent = () => {
 			// Create temporary measuring elements
@@ -1722,21 +1733,21 @@ export default function MultiPageEditor() {
 			measureArea.style.width = `${A4.width - 2 * A4.sideMargin}mm`; // Standard width without extra for VLAS
 			measureArea.style.left = '-9999px';
 			document.body.appendChild(measureArea);
-	
+
 			// Measure header height
 			measureArea.innerHTML = currentHeader;
 			const headerHeightPx = measureArea.offsetHeight;
 			const headerHeightMm = pxToMm(headerHeightPx);
-	
+
 			// Measure footer height
 			measureArea.innerHTML = currentFooter;
 			const footerHeightPx = measureArea.offsetHeight;
 			const footerHeightMm = pxToMm(footerHeightPx);
-	
+
 			// Define minimum spacing between content and footer (4mm)
 			const minSpacingFromFooterMm = 0;
 			const minSpacingFromFooterPx = mmToPx(minSpacingFromFooterMm);
-	
+
 			// Calculate available content height per page, accounting for spacing
 			const availableContentHeightMm =
 				A4.height -
@@ -1747,15 +1758,15 @@ export default function MultiPageEditor() {
 				A4.headerSpacing -
 				A4.footerSpacing -
 				minSpacingFromFooterMm; // Account for minimum space above footer
-	
+
 			const availableContentHeightPx = mmToPx(availableContentHeightMm);
-	
+
 			// First, let's measure all sections individually
 			const measureSection = (sectionHtml) => {
 				measureArea.innerHTML = sectionHtml;
 				return measureArea.offsetHeight;
 			};
-	
+
 			const sectionHeights = {
 				customerSection: measureSection(extractedSections.customerSection),
 				sampleInfoSection: measureSection(extractedSections.sampleInfoSection),
@@ -1765,10 +1776,10 @@ export default function MultiPageEditor() {
 				signatureSection: measureSection(extractedSections.signatureSection),
 				spacing: measureSection(spacing),
 				nextPageNotification: measureSection(nextPageNotification),
-				};
-	
+			};
+
 			console.log('📏 Section heights (px):', sectionHeights);
-	
+
 			// Calculate total content height including spacing and optional comment section
 			let totalContentHeight =
 				sectionHeights.customerSection +
@@ -1780,12 +1791,12 @@ export default function MultiPageEditor() {
 				sectionHeights.notesSection +
 				sectionHeights.spacing +
 				sectionHeights.signatureSection;
-	
+
 			// Add comment section height if it's enabled
 			if (showComment && extractedSections.commentSection) {
 				totalContentHeight += sectionHeights.commentSection + sectionHeights.spacing;
 			}
-	
+
 			// Calculate height of page 1 in special layout
 			let page1SpecialLayoutHeight =
 				sectionHeights.customerSection +
@@ -1795,7 +1806,7 @@ export default function MultiPageEditor() {
 				sectionHeights.nextPageNotification +
 				sectionHeights.spacing +
 				sectionHeights.notesSection;
-	
+
 			// Calculate height of page 2 in special layout
 			// Include comment section on page 2 with analysis section
 			const page2SpecialLayoutHeight =
@@ -1803,14 +1814,14 @@ export default function MultiPageEditor() {
 				sectionHeights.spacing +
 				(showComment ? sectionHeights.commentSection + sectionHeights.spacing : 0) +
 				sectionHeights.signatureSection;
-	
+
 			console.log(`📊 Layout analysis: 
 				- Total content height: ${totalContentHeight}px
 				- Available height per page: ${availableContentHeightPx}px
 				- Special layout page 1 height: ${page1SpecialLayoutHeight}px
 				- Special layout page 2 height: ${page2SpecialLayoutHeight}px
 			`);
-	
+
 			// Determine if content should use special 2-page layout
 			// Criteria:
 			// 1. Total content exceeds 1 page
@@ -1819,23 +1830,23 @@ export default function MultiPageEditor() {
 			const totalExceedsOnePage = totalContentHeight > availableContentHeightPx;
 			const page2FitsOnePage = page2SpecialLayoutHeight <= availableContentHeightPx;
 			const page1FitsOnePage = page1SpecialLayoutHeight <= availableContentHeightPx;
-	
+
 			const useSpecialLayout = totalExceedsOnePage && page2FitsOnePage && page1FitsOnePage;
-	
+
 			console.log(`🧮 Layout decision criteria:
 				- Total content exceeds one page: ${totalExceedsOnePage}
 				- Page 2 contents fit on one page: ${page2FitsOnePage}
 				- Page 1 content fits on one page: ${page1FitsOnePage}
 				- FINAL DECISION: Using special 2-page layout: ${useSpecialLayout}
 			`);
-	
+
 			// Decide which layout to use based on our analysis
 			let contentPages = [];
-	
+
 			if (useSpecialLayout) {
 				// Use the custom 2-page layout
 				console.log('📄 Using custom 2-page layout with "see next page" notification');
-	
+
 				// Page 1: customerSection + sampleInfoSection + notification + notesSection
 				const page1Elements = [
 					extractedSections.customerSection,
@@ -1846,26 +1857,26 @@ export default function MultiPageEditor() {
 					spacing,
 					extractedSections.notesSection,
 				];
-	
+
 				const page1Content = page1Elements.join('');
-	
+
 				// Page 2: analysisSection + commentSection (if enabled) + signatureSection
 				const page2Elements = [extractedSections.analysisSection, spacing];
-	
+
 				// Add comment section to page 2 after analysis section if enabled
 				if (showComment && extractedSections.commentSection) {
 					page2Elements.push(extractedSections.commentSection);
 					page2Elements.push(spacing);
 				}
-	
+
 				page2Elements.push(extractedSections.signatureSection);
 				const page2Content = page2Elements.join('');
-	
+
 				contentPages = [page1Content, page2Content];
 			} else {
 				// Use standard sequential layout
 				console.log('📄 Using standard sequential layout');
-	
+
 				// Create standard content with sequential sections
 				const contentElements = [];
 				contentElements.push(extractedSections.customerSection);
@@ -1874,43 +1885,43 @@ export default function MultiPageEditor() {
 				contentElements.push(spacing);
 				contentElements.push(extractedSections.analysisSection);
 				contentElements.push(spacing);
-	
+
 				if (showComment && extractedSections.commentSection) {
 					contentElements.push(extractedSections.commentSection);
 					contentElements.push(spacing);
 				}
-	
+
 				contentElements.push(extractedSections.notesSection);
 				contentElements.push(spacing);
 				contentElements.push(extractedSections.signatureSection);
-	
+
 				// Parse content into elements for standard pagination
 				measureArea.innerHTML = contentElements.join('');
 				const htmlElements = Array.from(measureArea.childNodes);
-	
+
 				// Standard pagination logic
 				let currentPage = [];
 				let currentPageHeightPx = 0;
 				let pageContentHeights = [];
 				let tableBreakCounts = 0;
-	
+
 				// Process each element for pagination
 				const processElement = (element) => {
 					// Skip empty text nodes
 					if (element.nodeType === 3 && element.textContent.trim() === '') {
 						return;
 					}
-	
+
 					// Create a clone to measure
 					const clone = element.cloneNode(true);
 					measureArea.innerHTML = '';
 					measureArea.appendChild(clone);
 					const elementHeightPx = measureArea.offsetHeight;
 					const elementHeightMm = pxToMm(elementHeightPx);
-	
+
 					// Check if this element is a table
 					const isTable = element.tagName === 'TABLE' || (element.querySelector && element.querySelector('table'));
-	
+
 					// Check if this element fits on the current page
 					// Ensure we maintain minimum spacing from footer
 					if (currentPageHeightPx + elementHeightPx <= availableContentHeightPx) {
@@ -1932,7 +1943,7 @@ export default function MultiPageEditor() {
 						currentPage.push(element.outerHTML || element.textContent);
 						contentPages.push(currentPage.join(''));
 						pageContentHeights.push(currentPageHeightPx);
-	
+
 						// Start new page
 						currentPage = [];
 						currentPageHeightPx = 0;
@@ -1940,13 +1951,13 @@ export default function MultiPageEditor() {
 						// Element doesn't fit on current page - start a new page
 						contentPages.push(currentPage.join(''));
 						pageContentHeights.push(currentPageHeightPx);
-	
+
 						// Start new page with this element
 						currentPage = [element.outerHTML || element.textContent];
 						currentPageHeightPx = elementHeightPx;
 					}
 				};
-	
+
 				// Enhanced function to split tables across pages with minimum footer spacing
 				const splitTableAcrossPages = (tableElement, recursionDepth = 0) => {
 					// Add recursion depth counter to prevent stack overflow
@@ -1955,251 +1966,266 @@ export default function MultiPageEditor() {
 						currentPage.push(`<div style="color: red; padding: 5px;">Table pagination limit reached</div>`);
 						return;
 					}
-					
+
 					tableBreakCounts++;
-				
+
 					// Extract table structure
 					const hasHeader = !!tableElement.querySelector('thead');
 					const tableHeader = hasHeader ? tableElement.querySelector('thead').outerHTML : '';
 					const rows = Array.from(tableElement.querySelectorAll('tbody tr'));
-				
+
 					// Exit early if no rows to process
 					if (!rows.length) {
 						console.log('No rows to process in table');
 						currentPage.push(`<table ${tableAttributes}>${hasHeader ? tableHeader : ''}<tbody></tbody></table>`);
 						return;
 					}
-				
+
 					// Extract all attributes and styles from the original table
 					const tableAttributes = Array.from(tableElement.attributes)
-					  .map((attr) => `${attr.name}="${attr.value}"`)
-					  .join(' ');
-				
+						.map((attr) => `${attr.name}="${attr.value}"`)
+						.join(' ');
+
 					// If there's no space left on the current page for even the header + 1 row,
 					// we need to start a new page
 					if (currentPage.length > 0) {
-					  const headerHeight = hasHeader ? measureSection(`<table ${tableAttributes}>${tableHeader}</table>`) : 0;
-					  const minTableHeight = headerHeight + (rows.length > 0 ? 50 : 0); // Minimum height for header + at least one row
-				
-					  if (currentPageHeightPx + minTableHeight > availableContentHeightPx) {
-						// Not enough space for table header + one row, move to next page
-						contentPages.push(currentPage);
-						pageContentHeights.push(currentPageHeightPx);
-						currentPage = [];
-						currentPageHeightPx = 0;
-					  }
+						const headerHeight = hasHeader ? measureSection(`<table ${tableAttributes}>${tableHeader}</table>`) : 0;
+						const minTableHeight = headerHeight + (rows.length > 0 ? 50 : 0); // Minimum height for header + at least one row
+
+						if (currentPageHeightPx + minTableHeight > availableContentHeightPx) {
+							// Not enough space for table header + one row, move to next page
+							contentPages.push(currentPage);
+							pageContentHeights.push(currentPageHeightPx);
+							currentPage = [];
+							currentPageHeightPx = 0;
+						}
 					}
-				
+
 					// Create a table structure for the first part (header + rows that fit)
 					let firstPartHTML = `<table ${tableAttributes}>`;
 					if (hasHeader) firstPartHTML += tableHeader;
 					firstPartHTML += '<tbody>';
-				
+
 					// Keep track of remaining height on current page
 					let remainingHeightPx = availableContentHeightPx - currentPageHeightPx;
-				
+
 					// Measure header height if header exists
 					if (hasHeader) {
-					  const headerHTML = `<table ${tableAttributes}>${tableHeader}</table>`;
-					  measureArea.innerHTML = headerHTML;
-					  const headerHeightPx = measureArea.offsetHeight;
-					  remainingHeightPx -= headerHeightPx;
+						const headerHTML = `<table ${tableAttributes}>${tableHeader}</table>`;
+						measureArea.innerHTML = headerHTML;
+						const headerHeightPx = measureArea.offsetHeight;
+						remainingHeightPx -= headerHeightPx;
 					}
-				
+
 					// Get the computed style heights directly from the source rows
 					// Use a more efficient logging approach to avoid excessive console operations
 					if (recursionDepth === 0) {
-					  console.log(`📏 EXTRACTING ROW HEIGHTS: ${rows.length} rows, ${remainingHeightPx.toFixed(1)}px available space`);
+						console.log(
+							`📏 EXTRACTING ROW HEIGHTS: ${rows.length} rows, ${remainingHeightPx.toFixed(1)}px available space`,
+						);
 					}
-				
+
 					// Extract actual computed heights from each row - use a more efficient approach
 					const rowHeights = [];
 					const rowHeightData = [];
-					
+
 					// Build a single string for the table header instead of multiple console.log calls
 					let heightTableHeader = '';
 					if (recursionDepth === 0) {
-					  heightTableHeader = "Row # | Computed | Offset | Height(mm) | % Available\n" +
-										  "------ | -------- | ------ | ---------- | -----------";
+						heightTableHeader =
+							'Row # | Computed | Offset | Height(mm) | % Available\n' +
+							'------ | -------- | ------ | ---------- | -----------';
 					}
-				
+
 					// Create a helper function to safely parse numeric values from computed styles
 					const safeParseFloat = (value) => {
-					  if (!value) return 0;
-					  // First, ensure we're working with a string
-					  const strValue = String(value || '0');
-					  // Extract just the numeric part (remove 'px', '%', etc.)
-					  const numericPart = strValue.replace(/[^\d.-]/g, '');
-					  const result = parseFloat(numericPart);
-					  return isNaN(result) ? 0 : result;
+						if (!value) return 0;
+						// First, ensure we're working with a string
+						const strValue = String(value || '0');
+						// Extract just the numeric part (remove 'px', '%', etc.)
+						const numericPart = strValue.replace(/[^\d.-]/g, '');
+						const result = parseFloat(numericPart);
+						return isNaN(result) ? 0 : result;
 					};
-				
+
 					// Function to get a reliable height measurement for a row
 					const getReliableRowHeight = (row) => {
-					  try {
-						// 1. Try direct DOM properties first (most reliable)
-						const offsetHeight = row.offsetHeight || 0;
-						const clientHeight = row.clientHeight || 0;
-						const scrollHeight = row.scrollHeight || 0;
-						
-						// Get height from bounding client rect as another option
-						const boundingHeight = row.getBoundingClientRect ? row.getBoundingClientRect().height : 0;
-						
-						// 2. Try computed style
-						let computedHeight = 0;
-						let totalCalculatedHeight = 0;
-						
-						// Get styles if possible
 						try {
-						  const computedStyle = window.getComputedStyle(row);
-						  if (computedStyle) {
-							// Extract values carefully
-							computedHeight = safeParseFloat(computedStyle.height);
-							
-							// Calculate total height including padding, borders, and margins
-							const paddingTop = safeParseFloat(computedStyle.paddingTop);
-							const paddingBottom = safeParseFloat(computedStyle.paddingBottom);
-							const borderTopWidth = safeParseFloat(computedStyle.borderTopWidth);
-							const borderBottomWidth = safeParseFloat(computedStyle.borderBottomWidth);
-							const marginTop = safeParseFloat(computedStyle.marginTop);
-							const marginBottom = safeParseFloat(computedStyle.marginBottom);
-							
-							const boxSizing = computedStyle.boxSizing;
-							
-							// Adjust calculation based on box-sizing
-							if (boxSizing === 'border-box') {
-							  // Content height already includes padding and border
-							  totalCalculatedHeight = computedHeight + marginTop + marginBottom;
-							} else {
-							  // Content-box - need to add padding and borders
-							  totalCalculatedHeight = computedHeight + paddingTop + paddingBottom + 
-													 borderTopWidth + borderBottomWidth +
-													 marginTop + marginBottom;
+							// 1. Try direct DOM properties first (most reliable)
+							const offsetHeight = row.offsetHeight || 0;
+							const clientHeight = row.clientHeight || 0;
+							const scrollHeight = row.scrollHeight || 0;
+
+							// Get height from bounding client rect as another option
+							const boundingHeight = row.getBoundingClientRect ? row.getBoundingClientRect().height : 0;
+
+							// 2. Try computed style
+							let computedHeight = 0;
+							let totalCalculatedHeight = 0;
+
+							// Get styles if possible
+							try {
+								const computedStyle = window.getComputedStyle(row);
+								if (computedStyle) {
+									// Extract values carefully
+									computedHeight = safeParseFloat(computedStyle.height);
+
+									// Calculate total height including padding, borders, and margins
+									const paddingTop = safeParseFloat(computedStyle.paddingTop);
+									const paddingBottom = safeParseFloat(computedStyle.paddingBottom);
+									const borderTopWidth = safeParseFloat(computedStyle.borderTopWidth);
+									const borderBottomWidth = safeParseFloat(computedStyle.borderBottomWidth);
+									const marginTop = safeParseFloat(computedStyle.marginTop);
+									const marginBottom = safeParseFloat(computedStyle.marginBottom);
+
+									const boxSizing = computedStyle.boxSizing;
+
+									// Adjust calculation based on box-sizing
+									if (boxSizing === 'border-box') {
+										// Content height already includes padding and border
+										totalCalculatedHeight = computedHeight + marginTop + marginBottom;
+									} else {
+										// Content-box - need to add padding and borders
+										totalCalculatedHeight =
+											computedHeight +
+											paddingTop +
+											paddingBottom +
+											borderTopWidth +
+											borderBottomWidth +
+											marginTop +
+											marginBottom;
+									}
+								}
+							} catch (styleError) {
+								console.warn('Error accessing computed style:', styleError);
 							}
-						  }
-						} catch (styleError) {
-						  console.warn('Error accessing computed style:', styleError);
+
+							// 3. Determine the best value to use
+							// Default to a minimum reasonable value for a table row if all else fails
+							const DEFAULT_ROW_HEIGHT = 30; // 30px is a reasonable minimum height for a table row
+
+							// Choose the most reliable value, in order of reliability
+							let finalHeight;
+
+							if (offsetHeight > 0) {
+								// offsetHeight is usually the most reliable
+								finalHeight = offsetHeight;
+							} else if (boundingHeight > 0) {
+								// boundingClientRect height is next most reliable
+								finalHeight = boundingHeight;
+							} else if (totalCalculatedHeight > 0) {
+								// Use our calculated height if available
+								finalHeight = totalCalculatedHeight;
+							} else if (computedHeight > 0) {
+								// Use just the computed height if that's all we have
+								finalHeight = computedHeight;
+							} else if (clientHeight > 0) {
+								// clientHeight as a fallback
+								finalHeight = clientHeight;
+							} else if (scrollHeight > 0) {
+								// scrollHeight as a last resort
+								finalHeight = scrollHeight;
+							} else {
+								// Default height if all else fails
+								finalHeight = DEFAULT_ROW_HEIGHT;
+							}
+
+							// Apply a small safety factor to prevent perfect edge cases causing overflows
+							const safetyFactor = 1.02; // Add 2% to height to account for any rendering issues
+							return finalHeight * safetyFactor;
+						} catch (error) {
+							console.warn('Error measuring row height:', error);
+							return 30; // Default height of 30px
 						}
-						
-						// 3. Determine the best value to use
-						// Default to a minimum reasonable value for a table row if all else fails
-						const DEFAULT_ROW_HEIGHT = 30; // 30px is a reasonable minimum height for a table row
-						
-						// Choose the most reliable value, in order of reliability
-						let finalHeight;
-						
-						if (offsetHeight > 0) {
-						  // offsetHeight is usually the most reliable
-						  finalHeight = offsetHeight;
-						} else if (boundingHeight > 0) {
-						  // boundingClientRect height is next most reliable
-						  finalHeight = boundingHeight;
-						} else if (totalCalculatedHeight > 0) {
-						  // Use our calculated height if available
-						  finalHeight = totalCalculatedHeight;
-						} else if (computedHeight > 0) {
-						  // Use just the computed height if that's all we have
-						  finalHeight = computedHeight;
-						} else if (clientHeight > 0) {
-						  // clientHeight as a fallback
-						  finalHeight = clientHeight;
-						} else if (scrollHeight > 0) {
-						  // scrollHeight as a last resort
-						  finalHeight = scrollHeight;
-						} else {
-						  // Default height if all else fails
-						  finalHeight = DEFAULT_ROW_HEIGHT;
-						}
-						
-						// Apply a small safety factor to prevent perfect edge cases causing overflows
-						const safetyFactor = 1.02; // Add 2% to height to account for any rendering issues
-						return finalHeight * safetyFactor;
-						
-					  } catch (error) {
-						console.warn('Error measuring row height:', error);
-						return 30; // Default height of 30px
-					  }
 					};
-				
+
 					// Process all rows to measure their heights
 					rows.forEach((row, index) => {
-					  // Get a reliable height measurement for this row
-					  const rowHeightPx = getReliableRowHeight(row);
-					  
-					  // Convert to mm for logging
-					  const heightMm = pxToMm ? pxToMm(rowHeightPx) : rowHeightPx / 3.78;
-					  
-					  // Calculate percentage of available space
-					  const percentOfAvailable = (rowHeightPx / availableContentHeightPx) * 100;
-					  
-					  // Store the height
-					  rowHeights.push(rowHeightPx);
-					  
-					  // Only log detailed info for first 10 rows to avoid console spam
-					  if (recursionDepth === 0 && index < 10) {
-						// Get offset height for comparison
-						const offsetHeight = row.offsetHeight || 0;
-						
-						rowHeightData.push(
-						  `${(index + 1).toString().padStart(5)} | ` +
-						  `${rowHeightPx.toFixed(1).padStart(8)} | ` +
-						  `${offsetHeight.toFixed(1).padStart(6)} | ` +
-						  `${heightMm.toFixed(2).padStart(10)} | ` +
-						  `${percentOfAvailable.toFixed(1).padStart(9)}%`
-						);
-					  }
+						// Get a reliable height measurement for this row
+						const rowHeightPx = getReliableRowHeight(row);
+
+						// Convert to mm for logging
+						const heightMm = pxToMm ? pxToMm(rowHeightPx) : rowHeightPx / 3.78;
+
+						// Calculate percentage of available space
+						const percentOfAvailable = (rowHeightPx / availableContentHeightPx) * 100;
+
+						// Store the height
+						rowHeights.push(rowHeightPx);
+
+						// Only log detailed info for first 10 rows to avoid console spam
+						if (recursionDepth === 0 && index < 10) {
+							// Get offset height for comparison
+							const offsetHeight = row.offsetHeight || 0;
+
+							rowHeightData.push(
+								`${(index + 1).toString().padStart(5)} | ` +
+									`${rowHeightPx.toFixed(1).padStart(8)} | ` +
+									`${offsetHeight.toFixed(1).padStart(6)} | ` +
+									`${heightMm.toFixed(2).padStart(10)} | ` +
+									`${percentOfAvailable.toFixed(1).padStart(9)}%`,
+							);
+						}
 					});
-				
+
 					// Log the height data table only on the first recursion level
 					if (recursionDepth === 0 && rowHeightData.length > 0) {
-					  console.log(heightTableHeader);
-					  console.log(rowHeightData.join('\n'));
-					  
-					  // Log a summary of the measurements
-					  console.log(`📏 ROW HEIGHT SUMMARY:`);
-					  console.log(`- Average row height: ${(rowHeights.reduce((sum, h) => sum + h, 0) / rowHeights.length).toFixed(1)}px`);
-					  console.log(`- Min height: ${Math.min(...rowHeights).toFixed(1)}px, Max height: ${Math.max(...rowHeights).toFixed(1)}px`);
+						console.log(heightTableHeader);
+						console.log(rowHeightData.join('\n'));
+
+						// Log a summary of the measurements
+						console.log(`📏 ROW HEIGHT SUMMARY:`);
+						console.log(
+							`- Average row height: ${(rowHeights.reduce((sum, h) => sum + h, 0) / rowHeights.length).toFixed(1)}px`,
+						);
+						console.log(
+							`- Min height: ${Math.min(...rowHeights).toFixed(1)}px, Max height: ${Math.max(...rowHeights).toFixed(
+								1,
+							)}px`,
+						);
 					}
-				
+
 					// Try to fit as many rows as possible in the first part using measured heights
 					let rowsInFirstPart = [];
 					let remainingRows = [...rows];
 					let totalUsedHeight = 0;
 					let totalRemainingHeight = remainingHeightPx;
-					
+
 					let lastFittedRow = -1;
-				
+
 					// Use computed heights to determine how many rows fit
 					if (recursionDepth === 0) {
-					  console.log(`🔍 FITTING ROWS ON PAGE ${contentPages.length + 1}`);
+						console.log(`🔍 FITTING ROWS ON PAGE ${contentPages.length + 1}`);
 					}
-					
+
 					for (let i = 0; i < rows.length; i++) {
-					  const rowHeightPx = rowHeights[i];
-					  
-					  if (rowHeightPx <= totalRemainingHeight) {
-						// This row fits
-						rowsInFirstPart.push(rows[i]);
-						totalRemainingHeight -= rowHeightPx;
-						totalUsedHeight += rowHeightPx;
-						lastFittedRow = i;
-					  } else {
-						// This row doesn't fit - stop processing
-						break;
-					  }
+						const rowHeightPx = rowHeights[i];
+
+						if (rowHeightPx <= totalRemainingHeight) {
+							// This row fits
+							rowsInFirstPart.push(rows[i]);
+							totalRemainingHeight -= rowHeightPx;
+							totalUsedHeight += rowHeightPx;
+							lastFittedRow = i;
+						} else {
+							// This row doesn't fit - stop processing
+							break;
+						}
 					}
-				
+
 					// Remove the rows that fit from the remaining rows
 					if (lastFittedRow >= 0) {
-					  remainingRows = rows.slice(lastFittedRow + 1);
+						remainingRows = rows.slice(lastFittedRow + 1);
 					}
-					
+
 					// Log a summary of what fits on this page (only on first recursion level)
 					if (recursionDepth === 0) {
-					  console.log(`- ${rowsInFirstPart.length} of ${rows.length} rows fit on page ${contentPages.length + 1}`);
-					  console.log(`- Height used: ${totalUsedHeight.toFixed(1)}px, Remaining: ${totalRemainingHeight.toFixed(1)}px`);
+						console.log(`- ${rowsInFirstPart.length} of ${rows.length} rows fit on page ${contentPages.length + 1}`);
+						console.log(
+							`- Height used: ${totalUsedHeight.toFixed(1)}px, Remaining: ${totalRemainingHeight.toFixed(1)}px`,
+						);
 					}
-				
+
 					// Continue with the rest of the function as before...
 					// ...existing code...
 					// Finish the first part of the table
@@ -2209,153 +2235,153 @@ export default function MultiPageEditor() {
 							const rowIndex = rows.indexOf(row);
 							const rowHeight = rowHeights[rowIndex];
 							const heightAttr = `data-original-height="${rowHeight}"`;
-							
+
 							// Add original height as data attribute for debugging
 							const rowHtml = row.outerHTML.replace('<tr', `<tr ${heightAttr}`);
 							firstPartHTML += rowHtml;
 						});
-				
+
 						firstPartHTML += '</tbody></table>';
 						currentPage.push(firstPartHTML);
-				
+
 						// Measure the actual height of the first part
 						measureArea.innerHTML = firstPartHTML;
 						const firstPartHeightPx = measureArea.offsetHeight;
 						currentPageHeightPx += firstPartHeightPx;
-				
+
 						// If there are remaining rows, put them on the next page
 						if (remainingRows.length > 0) {
 							// End current page
 							contentPages.push(currentPage);
 							pageContentHeights.push(currentPageHeightPx);
-				
+
 							// Create a new page with continuation table
 							let continuationHTML = `<table ${tableAttributes}>`;
 							// Include header in continuation tables
 							if (hasHeader) continuationHTML += tableHeader;
 							continuationHTML += '<tbody>';
-				
+
 							// Process remaining rows (may need further splitting)
 							let rowsInCurrentPart = [];
 							currentPage = [];
 							currentPageHeightPx = 0;
-				
+
 							// Handle case where header might not leave room for even one row
 							let headerHeightPx = 0;
 							if (hasHeader) {
-							  const headerHTML = `<table ${tableAttributes}>${tableHeader}</table>`;
-							  measureArea.innerHTML = headerHTML;
-							  headerHeightPx = measureArea.offsetHeight;
-							  currentPageHeightPx += headerHeightPx;
+								const headerHTML = `<table ${tableAttributes}>${tableHeader}</table>`;
+								measureArea.innerHTML = headerHTML;
+								headerHeightPx = measureArea.offsetHeight;
+								currentPageHeightPx += headerHeightPx;
 							}
-				
+
 							// Try to fit as many remaining rows as possible using computed heights
 							if (recursionDepth === 0) {
-							  console.log(`🔍 CONTINUATION TABLE ON PAGE ${contentPages.length + 1}`);
+								console.log(`🔍 CONTINUATION TABLE ON PAGE ${contentPages.length + 1}`);
 							}
-							
+
 							lastFittedRow = -1;
 							for (let i = 0; i < remainingRows.length; i++) {
-							  const row = remainingRows[i];
-							  const rowIndex = rows.indexOf(row);
-							  const rowHeightPx = rowHeights[rowIndex] || 30;
-				
-							  if (currentPageHeightPx + rowHeightPx <= availableContentHeightPx) {
-								// This row fits on continuation page
-								rowsInCurrentPart.push(row);
-								currentPageHeightPx += rowHeightPx;
-								lastFittedRow = i;
-							  } else if (i === 0) {
-								// Force at least one row even if it overflows
-								rowsInCurrentPart.push(row);
-								lastFittedRow = 0;
-								break;
-							  } else {
-								// This row doesn't fit, and we already have content - stop processing
-								break;
-							  }
-							}
-				
-								// Remove the rows that fit from remaining rows
-								if (lastFittedRow >= 0) {
-									remainingRows = remainingRows.slice(lastFittedRow + 1);
+								const row = remainingRows[i];
+								const rowIndex = rows.indexOf(row);
+								const rowHeightPx = rowHeights[rowIndex] || 30;
+
+								if (currentPageHeightPx + rowHeightPx <= availableContentHeightPx) {
+									// This row fits on continuation page
+									rowsInCurrentPart.push(row);
+									currentPageHeightPx += rowHeightPx;
+									lastFittedRow = i;
+								} else if (i === 0) {
+									// Force at least one row even if it overflows
+									rowsInCurrentPart.push(row);
+									lastFittedRow = 0;
+									break;
+								} else {
+									// This row doesn't fit, and we already have content - stop processing
+									break;
 								}
-				
-								// Add rows to continuation table with original height attributes
-								rowsInCurrentPart.forEach((row) => {
+							}
+
+							// Remove the rows that fit from remaining rows
+							if (lastFittedRow >= 0) {
+								remainingRows = remainingRows.slice(lastFittedRow + 1);
+							}
+
+							// Add rows to continuation table with original height attributes
+							rowsInCurrentPart.forEach((row) => {
+								const rowIndex = rows.indexOf(row);
+								const rowHeight = rowHeights[rowIndex] || 30;
+								const heightAttr = `data-original-height="${rowHeight}"`;
+
+								// Add original height as data attribute
+								const rowHtml = row.outerHTML.replace('<tr', `<tr ${heightAttr}`);
+								continuationHTML += rowHtml;
+							});
+
+							continuationHTML += '</tbody></table>';
+
+							// Add continuation to current page
+							currentPage.push(continuationHTML);
+
+							// If there are still more rows, recursively process them
+							if (remainingRows.length > 0) {
+								// End current page
+								contentPages.push(currentPage);
+
+								// Build a new table element with remaining rows
+								let remainingTableHTML = `<table ${tableAttributes}>`;
+								if (hasHeader) remainingTableHTML += tableHeader;
+								remainingTableHTML += '<tbody>';
+								remainingRows.forEach((row) => {
 									const rowIndex = rows.indexOf(row);
 									const rowHeight = rowHeights[rowIndex] || 30;
 									const heightAttr = `data-original-height="${rowHeight}"`;
-									
+
 									// Add original height as data attribute
 									const rowHtml = row.outerHTML.replace('<tr', `<tr ${heightAttr}`);
-									continuationHTML += rowHtml;
+									remainingTableHTML += rowHtml;
 								});
-								
-								continuationHTML += '</tbody></table>';
-				
-								// Add continuation to current page
-								currentPage.push(continuationHTML);
-				
-								// If there are still more rows, recursively process them
-								if (remainingRows.length > 0) {
-									// End current page
-									contentPages.push(currentPage);
-				
-									// Build a new table element with remaining rows
-									let remainingTableHTML = `<table ${tableAttributes}>`;
-									if (hasHeader) remainingTableHTML += tableHeader;
-									remainingTableHTML += '<tbody>';
-									remainingRows.forEach((row) => {
-										const rowIndex = rows.indexOf(row);
-										const rowHeight = rowHeights[rowIndex] || 30;
-										const heightAttr = `data-original-height="${rowHeight}"`;
-										
-										// Add original height as data attribute
-										const rowHtml = row.outerHTML.replace('<tr', `<tr ${heightAttr}`);
-										remainingTableHTML += rowHtml;
-									});
-									remainingTableHTML += '</tbody></table>';
-				
-									// Create a DOM element from the HTML
-									const tempDiv = document.createElement('div');
-									tempDiv.innerHTML = remainingTableHTML;
-									const remainingTableElement = tempDiv.firstChild;
-				
-									// Reset for next page
-									currentPage = [];
-									currentPageHeightPx = 0;
-				
-									// Process remaining rows recursively - increment recursion depth
-									splitTableAcrossPages(remainingTableElement, recursionDepth + 1);
-								}
-							}
-						} else {
-							// Special case: can't fit even one row with header
-							// Start a new page and try again
-							if (currentPage.length > 0) {
-								contentPages.push(currentPage);
-								pageContentHeights.push(currentPageHeightPx);
+								remainingTableHTML += '</tbody></table>';
+
+								// Create a DOM element from the HTML
+								const tempDiv = document.createElement('div');
+								tempDiv.innerHTML = remainingTableHTML;
+								const remainingTableElement = tempDiv.firstChild;
+
+								// Reset for next page
 								currentPage = [];
 								currentPageHeightPx = 0;
+
+								// Process remaining rows recursively - increment recursion depth
+								splitTableAcrossPages(remainingTableElement, recursionDepth + 1);
 							}
-				
-							// Try again with empty page - increment recursion depth
-							splitTableAcrossPages(tableElement, recursionDepth + 1);
 						}
-					};
-	
+					} else {
+						// Special case: can't fit even one row with header
+						// Start a new page and try again
+						if (currentPage.length > 0) {
+							contentPages.push(currentPage);
+							pageContentHeights.push(currentPageHeightPx);
+							currentPage = [];
+							currentPageHeightPx = 0;
+						}
+
+						// Try again with empty page - increment recursion depth
+						splitTableAcrossPages(tableElement, recursionDepth + 1);
+					}
+				};
+
 				// Process all content elements in order
 				htmlElements.forEach((element) => {
 					processElement(element);
 				});
-	
+
 				// Add the last page if not empty
 				if (currentPage.length > 0) {
 					contentPages.push(currentPage.join(''));
 					pageContentHeights.push(currentPageHeightPx);
 				}
-	
+
 				// Log detailed information about each page's content height
 				console.log(`📊 PAGE CONTENT HEIGHT ANALYSIS:`);
 				pageContentHeights.forEach((height, index) => {
@@ -2363,20 +2389,20 @@ export default function MultiPageEditor() {
 					const percentUsed = (height / availableContentHeightPx) * 100;
 					const remainingPx = availableContentHeightPx - height;
 					const remainingMm = pxToMm(remainingPx);
-	
+
 					console.log(`- Page ${index + 1}: Content height = ${height.toFixed(1)}px (${heightMm.toFixed(2)}mm)`);
 					console.log(`  • ${percentUsed.toFixed(1)}% of available space used`);
 					console.log(`  • Remaining space: ${remainingPx.toFixed(1)}px (${remainingMm.toFixed(2)}mm)`);
 				});
-	
+
 				// Verify our actual page count
 				console.log(`📄 Standard layout resulted in ${contentPages.length} pages`);
 				console.log(`📄 Table breaks count: ${tableBreakCounts}`);
 			}
-	
+
 			// Clean up
 			document.body.removeChild(measureArea);
-	
+
 			return {
 				pages: contentPages,
 				headerHeightPx,
@@ -2384,16 +2410,16 @@ export default function MultiPageEditor() {
 				footerHeightPx,
 				footerHeightMm,
 				availableContentHeightPx,
-					availableContentHeightMm,
+				availableContentHeightMm,
 				contentTopPx: headerHeightPx + mmToPx(A4.headerSpacing),
 				contentTopMm: headerHeightMm + A4.headerSpacing,
 				is2PageLayout: useSpecialLayout,
 			};
 		};
-	
+
 		// Get paginated content
 		const paginationResult = paginateContent();
-	
+
 		// Prepare custom font support for print window
 		const fontFaces = `
 				@font-face {
@@ -2420,7 +2446,7 @@ export default function MultiPageEditor() {
 					font-display: swap;
 				}
 			`;
-	
+
 		// Write the print document with proper CSS for printing
 		printWindow.document.write(`
 				<!DOCTYPE html>
@@ -2441,6 +2467,13 @@ export default function MultiPageEditor() {
 							padding: 0;
 							font-family: 'Gilroy', sans-serif !important;
 							background-color: #f0f0f0;
+						}
+						
+						/* Style for anchor tags in printing - no underline, black text, not bold */
+						a {
+							text-decoration: none;
+							color: black;
+							font-weight: normal;
 						}
 						
 						.print-container {
@@ -2574,6 +2607,13 @@ export default function MultiPageEditor() {
 								font-family: 'Gilroy', sans-serif !important;
 							}
 							
+							/* Ensure anchor styling is maintained in print */
+							a {
+								text-decoration: none !important;
+								color: black !important;
+								font-weight: normal !important;
+							}
+							
 							.print-container {
 								width: 720px !important; /* Force exact width even in print */
 								margin: 0 auto;
@@ -2647,10 +2687,10 @@ export default function MultiPageEditor() {
 				</body>
 				</html>
 			`);
-	
+
 		// Build the HTML for all pages
 		const printContainer = printWindow.document.querySelector('.print-container');
-	
+
 		// Generate pages with actual content
 		paginationResult.pages.forEach((pageContent, index) => {
 			const pageNumber = (index + 1).toString().padStart(2, '0');
@@ -2659,10 +2699,10 @@ export default function MultiPageEditor() {
 			const pageFooter = currentFooter
 				.replace(`>00</span>`, `>${pageNumber}</span>`)
 				.replace(`>00</span>`, `>${totalPages}</span>`);
-	
+
 			const page = document.createElement('div');
 			page.className = 'page';
-	
+
 			// Ensure pageContent is a string regardless of whether it's an array or already a string
 			const pageContentHTML =
 				typeof pageContent === 'string'
@@ -2670,7 +2710,7 @@ export default function MultiPageEditor() {
 					: Array.isArray(pageContent)
 					? pageContent.join('')
 					: String(pageContent);
-	
+
 			// Measure the actual content height for this page
 			const tempMeasureDiv = document.createElement('div');
 			tempMeasureDiv.style.position = 'absolute';
@@ -2678,28 +2718,28 @@ export default function MultiPageEditor() {
 			tempMeasureDiv.style.width = `${A4.width - 2 * A4.sideMargin}mm`;
 			tempMeasureDiv.innerHTML = pageContentHTML;
 			document.body.appendChild(tempMeasureDiv);
-	
+
 			const actualContentHeight = tempMeasureDiv.offsetHeight;
 			const actualContentHeightMm = pxToMm(actualContentHeight);
 			const percentOfAvailable = (actualContentHeight / paginationResult.availableContentHeightPx) * 100;
 			const remainingSpace = paginationResult.availableContentHeightPx - actualContentHeight;
 			const remainingSpaceMm = pxToMm(remainingSpace);
-	
+
 			console.log(`📃 Final Page ${pageNumber}/${totalPages} content measurements:`);
 			console.log(`- Content height: ${actualContentHeight.toFixed(1)}px (${actualContentHeightMm.toFixed(2)}mm)`);
 			console.log(`- ${percentOfAvailable.toFixed(1)}% of available space used`);
 			console.log(`- Remaining space: ${remainingSpace.toFixed(1)}px (${remainingSpaceMm.toFixed(2)}mm)`);
-	
+
 			document.body.removeChild(tempMeasureDiv);
-	
+
 			page.innerHTML = `
 					<div class="header">${currentHeader}</div>
 					<div class="content">${pageContentHTML}</div>
 					<div class="footer">${pageFooter}</div>
 				`;
-	
+
 			printContainer.appendChild(page);
-	
+
 			// Log page creation
 			console.log(
 				`✅ Page ${pageNumber}/${totalPages} created with ${
@@ -2707,13 +2747,13 @@ export default function MultiPageEditor() {
 				} layout`,
 			);
 		});
-	
+
 		console.log('🖨️ Print preparation complete with', paginationResult.pages.length, 'pages');
 		console.log(
 			'🔍 Using layout:',
 			paginationResult.is2PageLayout ? 'Custom 2-page layout' : 'Standard sequential layout',
 		);
-	
+
 		// Focus the window to bring it to the front
 		printWindow.focus();
 	};
@@ -2884,7 +2924,7 @@ export default function MultiPageEditor() {
 
 				// Set isReadOnly based on whether this is a draft
 				const isDraft = newPptUid.includes('DRAFT');
-				setIsReadOnly(!isDraft);
+				// setIsReadOnly(!isDraft);
 			} else {
 				// Show error notification
 				showNotification(
@@ -3159,28 +3199,28 @@ export default function MultiPageEditor() {
 			const vlasIcon = tempDiv.querySelector('.vlas_icon');
 
 			if (vlasIcon) {
-					// Update the style directly on the DOM element
-					if (showVlas) {
-						vlasIcon.style.display = ''; // Show the element
-					} else {
-						vlasIcon.style.display = 'none'; // Hide the element
-					}
+				// Update the style directly on the DOM element
+				if (showVlas) {
+					vlasIcon.style.display = ''; // Show the element
+				} else {
+					vlasIcon.style.display = 'none'; // Hide the element
+				}
 
-					// Update the header state with the modified HTML
-					setHeader(tempDiv.innerHTML);
+				// Update the header state with the modified HTML
+				setHeader(tempDiv.innerHTML);
 
-					// If we're in the editor, also update the TinyMCE content
-					if (window.tinymce) {
-						const headerElements = document.getElementsByClassName('header-editable');
-						if (headerElements.length > 0 && headerElements[0].id) {
-							const headerEditor = window.tinymce.get(headerElements[0].id);
-							if (headerEditor) {
-								headerEditor.setContent(tempDiv.innerHTML);
-							}
+				// If we're in the editor, also update the TinyMCE content
+				if (window.tinymce) {
+					const headerElements = document.getElementsByClassName('header-editable');
+					if (headerElements.length > 0 && headerElements[0].id) {
+						const headerEditor = window.tinymce.get(headerElements[0].id);
+						if (headerEditor) {
+							headerEditor.setContent(tempDiv.innerHTML);
 						}
 					}
 				}
-			};
+			}
+		};
 
 		// Call the function to update VLAS visibility
 		updateVlasVisibility();
@@ -3230,16 +3270,16 @@ export default function MultiPageEditor() {
 	// Add a new detailed table measurement function for print time
 	const performDetailedTableMeasurements = () => {
 		console.log('🔍 PERFORMING DETAILED TABLE MEASUREMENTS FOR PRINT');
-		
+
 		// First debug the table rows in the DOM
 		debugTableRows(true);
-		
+
 		// Measure table row heights with detailed logging
 		measureTableRowHeights(true);
-		
+
 		// Extract table dimensions with detailed logging
 		extractTableDimensions(true);
-		
+
 		// Additional table header measurement - detailed logging of thead element
 		if (contentRef.current && window.tinymce) {
 			const contentEditor = window.tinymce.get(contentRef.current?.id);
@@ -3254,18 +3294,18 @@ export default function MultiPageEditor() {
 							top: headerComputedStyle.paddingTop,
 							right: headerComputedStyle.paddingRight,
 							bottom: headerComputedStyle.paddingBottom,
-							left: headerComputedStyle.paddingLeft
+							left: headerComputedStyle.paddingLeft,
 						},
 						border: {
 							top: headerComputedStyle.borderTopWidth,
 							right: headerComputedStyle.borderRightWidth,
 							bottom: headerComputedStyle.borderBottomWidth,
-							left: headerComputedStyle.borderLeftWidth
+							left: headerComputedStyle.borderLeftWidth,
 						},
 						boxSizing: headerComputedStyle.boxSizing,
-						display: headerComputedStyle.display
+						display: headerComputedStyle.display,
 					});
-					
+
 					// Also measure the tr within thead
 					const headerRow = tableHeader.querySelector('tr');
 					if (headerRow) {
@@ -3277,22 +3317,22 @@ export default function MultiPageEditor() {
 								top: headerRowStyle.paddingTop,
 								right: headerRowStyle.paddingRight,
 								bottom: headerRowStyle.paddingBottom,
-								left: headerRowStyle.paddingLeft
+								left: headerRowStyle.paddingLeft,
 							},
 							border: {
 								top: headerRowStyle.borderTopWidth,
 								right: headerRowStyle.borderRightWidth,
 								bottom: headerRowStyle.borderBottomWidth,
-								left: headerRowStyle.borderLeftWidth
+								left: headerRowStyle.borderLeftWidth,
 							},
 							boxSizing: headerRowStyle.boxSizing,
-							display: headerRowStyle.display
+							display: headerRowStyle.display,
 						});
 					}
 				}
 			}
 		}
-		
+
 		// Log the final data
 		console.log('📊 DETAILED MEASUREMENTS COMPLETE - READY FOR PRINT');
 	};
@@ -3390,10 +3430,10 @@ export default function MultiPageEditor() {
 						>
 							REFERENCE
 						</button>
-					{/* Simple arrow using a div instead of pseudo-element */}
-					<div className="absolute -left-2 top-5 w-0 h-0 border-t-8 border-b-8 border-r-8 border-transparent border-r-green-50"></div>
+						{/* Simple arrow using a div instead of pseudo-element */}
+						<div className="absolute -left-2 top-5 w-0 h-0 border-t-8 border-b-8 border-r-8 border-transparent border-r-green-50"></div>
+					</div>
 				</div>
-			</div>
 			</div>
 
 			{/* </div>

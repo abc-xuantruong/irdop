@@ -24,7 +24,7 @@ const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter, sample_uids })
 							{index === paths.length - 1 ? (
 								sample_uids && sample_uids.length > 0 ? (
 									<select
-										className=" bg-transparent text-gray-700 rounded-md p-1 text-"
+										className=" bg-transparent text-gray-700 rounded-md p-1 "
 										onChange={(e) => navigate(e.target.value)}
 										value={location.pathname + location.search}
 									>
@@ -57,7 +57,7 @@ const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter, sample_uids })
 
 				{/* Search input - only visible on dashboard/home page */}
 				{isDashboard && (
-					<div className="w-full md:w-fit">
+					<div className="w-full md:max-w-xl bg-none">
 						<FilterBar
 							source={source || []} // Pass the original list to FilterBar
 							setCurrentList={setCurrentList}

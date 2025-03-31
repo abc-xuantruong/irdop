@@ -2624,14 +2624,14 @@ const SampleInfor = () => {
 						<thead>
 							<tr className="border-y-2">
 								<th className="p-2 border-x w-[100px] min-w-[100px] text-left">Mã chỉ tiêu </th>
-								<th className="p-2 border-x w-[22%] min-w-60 text-left">Chỉ tiêu</th>
-								<th className="p-2 border-x w-32 min-w-32 text-left">Nền mẫu</th>
-								<th className="p-2 border-x w-[20%] min-w-44 text-left">Phương pháp</th>
-								<th className="p-2 border-x w-1/12 min-w-20 text-left">Kết quả</th>
-								<th className="p-2 border-x w-1/12 min-w-20 text-left">Đơn vị</th>
+								<th className="p-2 border-x w-[24%] min-w-60 text-left">Chỉ tiêu</th>
+								{/* <th className="p-2 border-x w-32 min-w-32 text-left">Nền mẫu</th> */}
+								<th className="p-2 border-x w-[25%] min-w-44 text-left">Phương pháp</th>
+								<th className="p-2 border-x w-[12%] min-w-28 text-left">Kết quả</th>
+								<th className="p-2 border-x w-1/12 min-w-24 text-left">Đơn vị</th>
 								<th className="p-2 border-x w-1/12 min-w-28 text-left">Hạn trả</th>
 								{/* <th className="p-2 border-2 w-[12%] min-w-36 text-left ">Thực hiện</th> */}
-								<th className="p-2 border-x w-[12%] min-w-32 text-left">Review</th>
+								<th className="p-2 border-x w-32 min-w-32 text-left">Review</th>
 								<th className="py-2 border-x w-10 min-w-10">
 									<input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="w-4 h-4" />
 								</th>
@@ -2658,7 +2658,7 @@ const SampleInfor = () => {
 											onChange={(e) => handleNewParameterChange('parameter_name', e.target.value)}
 										/>
 									</td>
-									<td className="p-1 border relative">
+									{/* <td className="p-1 border relative">
 										<input
 											type="text"
 											className="w-full bg-white border rounded p-1 text-left"
@@ -2666,7 +2666,7 @@ const SampleInfor = () => {
 											value={newParameter.matrix || ''}
 											onChange={(e) => handleNewParameterChange('matrix', e.target.value)}
 										/>
-									</td>
+									</td> */}
 									<td className="p-1 border relative">
 										<div className="flex items-center gap-0.5">
 											<select
@@ -2767,7 +2767,7 @@ const SampleInfor = () => {
 											</div>
 										)}
 									</td>
-									<td className="p-1 border relative align-top">
+									{/* <td className="p-1 border relative align-top">
 										{editingMatrixField === order.id ? (
 											<input
 												type="text"
@@ -2789,7 +2789,7 @@ const SampleInfor = () => {
 												<span>{order.matrix && order.matrix.trim() !== '' ? order.matrix : '--'}</span>
 											</div>
 										)}
-									</td>
+									</td> */}
 									<td className="p-1 border relative">
 										<div className="flex items-center gap-0.5">
 											<select

@@ -178,19 +178,15 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 
 			// Check if parameters have changed to avoid duplicate processing
 			const prevParams = prevSearchParamsRef.current;
-			if (
-				prevParams.search === searchQuery && 
-				prevParams.filter === filterQuery && 
-				prevParams.sort === sortQuery
-			) {
+			if (prevParams.search === searchQuery && prevParams.filter === filterQuery && prevParams.sort === sortQuery) {
 				return; // Skip processing if params haven't changed
 			}
-			
+
 			// Update reference with current parameters
 			prevSearchParamsRef.current = {
 				search: searchQuery,
 				filter: filterQuery,
-				sort: sortQuery
+				sort: sortQuery,
 			};
 
 			let processedData = [...source];
@@ -1266,7 +1262,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			{/* Remove the quick filters that were here before */}
 
 			<div className="flex flex-col md:flex-row items-center w-full justify-end">
-				<div className="flex items-center">
+				<div className="flex items-center w-full max-w-2xl">
 					{!hide.includes('sort') && (
 						<button
 							ref={sortButtonRef}
@@ -1299,7 +1295,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 							value={searchTerm}
 							onChange={handleSearchChange}
 							onKeyPress={handleSearchKeyPress}
-							className="p-1.5 border text-md border-gray-400 rounded-lg bg-white w-60 md:w-auto min-w-60"
+							className="p-1.5 border text-md border-gray-400 rounded-lg bg-white w-60 md:w-full min-w-60"
 							placeholder="Search..."
 						/>
 					)}

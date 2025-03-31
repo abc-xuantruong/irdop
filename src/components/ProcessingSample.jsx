@@ -733,12 +733,16 @@ const ProcessingSample = () => {
 				<div className="w-full">
 					{viewMode === 'v1' ? (
 						<>
-							<FilterBar
-								source={originalProcessingSample || []} // Ensure source is always an array
-								setCurrentList={setProcessingSample}
-								typeSearch={'processing_v1'}
-								setIsFilter={setIsFilter} // Pass the setIsFilter function
-							/>
+							<div className="flex items-center justify-end mb-2 ">
+								<div className="max-w-96">
+									<FilterBar
+										source={originalProcessingSample || []} // Ensure source is always an array
+										setCurrentList={setProcessingSample}
+										typeSearch={'processing_v1'}
+										setIsFilter={setIsFilter} // Pass the setIsFilter function
+									/>
+								</div>
+							</div>
 							<div>
 								{Array.isArray(processingSample) && processingSample.length > 0 ? (
 									processingSample.map((parameter, rowIndex) => (
@@ -807,9 +811,7 @@ const ProcessingSample = () => {
 																							onDragStart={(e) => handleDragStart(e, parameter?.id, analysis?.id)}
 																							onClick={() => handleAnalysisClick(analysis, parameter?.parameter_name)}
 																						>
-																							<span
-																								className="cursor-pointer text-primary"
-																																													>
+																							<span className="cursor-pointer text-primary">
 																								{analysis?.sample_uid || 'N/A'}
 																							</span>
 																							<br />
@@ -848,12 +850,7 @@ const ProcessingSample = () => {
 																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
 																							onClick={() => handleAnalysisClick(analysis, parameter.parameter_name)}
 																						>
-																							<span
-																								className="cursor-pointer text-primary"
-																							
-																							>
-																								{analysis.sample_uid}
-																							</span>
+																							<span className="cursor-pointer text-primary">{analysis.sample_uid}</span>
 																							<br />
 																							{getTechnicianName(analysis.technician_uid)}
 																						</button>
@@ -888,12 +885,7 @@ const ProcessingSample = () => {
 																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
 																							onClick={() => handleAnalysisClick(analysis, parameter.parameter_name)}
 																						>
-																							<span
-																								className="cursor-pointer text-primary"
-																
-																							>
-																								{analysis.sample_uid}
-																							</span>
+																							<span className="cursor-pointer text-primary">{analysis.sample_uid}</span>
 																							<br />
 																							{getTechnicianName(analysis.technician_uid)}
 																						</button>
