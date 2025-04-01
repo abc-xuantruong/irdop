@@ -20,11 +20,11 @@ const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter, sample_uids })
 			<div className="md:flex items-start flex-wrap justify-between">
 				<div className="flex list-none p-0 text-sm md:text-base mt-2 ">
 					{paths.map((path, index) => (
-						<div key={index} className="mr-2 flex items-center">
+						<div key={index} className="mr-1 flex items-center">
 							{index === paths.length - 1 ? (
 								sample_uids && sample_uids.length > 0 ? (
 									<select
-										className=" bg-transparent text-gray-700 rounded-md p-1 "
+										className=" bg-transparent text-gray-700 rounded-md p-1 px-0"
 										onChange={(e) => navigate(e.target.value)}
 										value={location.pathname + location.search}
 									>
@@ -57,7 +57,7 @@ const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter, sample_uids })
 
 				{/* Search input - only visible on dashboard/home page */}
 				{isDashboard && (
-					<div className="w-full md:max-w-xl bg-none">
+					<div className="w-full md:max-w-[400px] xl:max-w-xl bg-none mt-1.5">
 						<FilterBar
 							source={source || []} // Pass the original list to FilterBar
 							setCurrentList={setCurrentList}

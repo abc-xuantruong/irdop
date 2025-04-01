@@ -8,7 +8,7 @@ import Breadcrumb from './Breadcrumb';
 import TinyMceInput from './Input';
 import { RiEdit2Line } from 'react-icons/ri';
 import { GrDocumentText, GrPrint } from 'react-icons/gr';
-import { MdLibraryAdd, MdChevronLeft, MdChevronRight } from 'react-icons/md';
+import { MdLibraryAdd, MdChevronLeft, MdChevronRight, MdCalendarMonth } from 'react-icons/md';
 import FilterBar from './FilterBar';
 import Swal from 'sweetalert2';
 
@@ -30,7 +30,6 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 
 const SampleInfor = () => {
-	console.log('SampleInfor component rendered');
 	const [searchParams] = useSearchParams();
 	const receipt_uid = searchParams.get('receipt_uid');
 	const sample_uid = searchParams.get('sample_uid');
@@ -95,6 +94,8 @@ const SampleInfor = () => {
 	const [updateParameterMode, setUpdateParameterMode] = useState(false); // Add state to track parameter update mode
 	const [isParameterWarningVisible, setIsParameterWarningVisible] = useState(false); // Add state for parameter warning modal
 	const [sampleDropdownVisible, setSampleDropdownVisible] = useState(false);
+	const [isBulkDeadlineVisible, setIsBulkDeadlineVisible] = useState(false);
+	const [bulkDeadlineDate, setBulkDeadlineDate] = useState(new Date());
 	let isFetch = false;
 	const [copied, setCopied] = useState(false);
 
@@ -502,20 +503,29 @@ const SampleInfor = () => {
 
 				// Update the parameter_id in the analysis object
 				if (parameterResponse.status === 200) {
-					const updatedAnalysis = {
-						...analysis,
+					// Create minimal update object with only required fields
+					const updateData = {
+						id: analysis.id,
+						sample_id: analysis.sample_id,
+						receipt_id: analysis.receipt_id,
 						parameter_id: parameterResponse.data.id,
 						modified_by_uid: currentUser.identity_uid,
 					};
 
+					// Add fields that were updated
+					if (analysis.parameter_name) updateData.parameter_name = analysis.parameter_name;
+					if (analysis.matrix) updateData.matrix = analysis.matrix;
+					if (analysis.protocol_code) updateData.protocol_code = analysis.protocol_code;
+					if (analysis.protocol_source) updateData.protocol_source = analysis.protocol_source;
+
 					// Now update the analysis with the new parameter_id
 					const analysisResponse = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-						analysis: updatedAnalysis,
+						analysis: updateData,
 					});
 
 					if (analysisResponse.status === 200) {
 						showToast('Chỉ tiêu và thư viện đã được cập nhật!');
-						return updatedAnalysis;
+						return { ...analysis, parameter_id: parameterResponse.data.id };
 					} else {
 						Swal.fire({
 							icon: 'error',
@@ -534,11 +544,26 @@ const SampleInfor = () => {
 				}
 			} else {
 				// Standard analysis update without parameter changes
+				const changedFields = {};
+
+				// Identify which fields need to be updated
+				if (analysis.result_value !== undefined) changedFields.result_value = analysis.result_value;
+				if (analysis.result_unit !== undefined) changedFields.result_unit = analysis.result_unit;
+				if (analysis.protocol_code !== undefined) changedFields.protocol_code = analysis.protocol_code;
+				if (analysis.protocol_source !== undefined) changedFields.protocol_source = analysis.protocol_source;
+				if (analysis.deadline !== undefined) changedFields.deadline = analysis.deadline;
+
+				// Create minimal update object
+				const updateData = {
+					id: analysis.id,
+					sample_id: analysis.sample_id,
+					receipt_id: analysis.receipt_id,
+					modified_by_uid: currentUser.identity_uid,
+					...changedFields,
+				};
+
 				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: {
-						...analysis,
-						modified_by_uid: currentUser.identity_uid,
-					},
+					analysis: updateData,
 				});
 
 				if (response.status === 200) {
@@ -572,12 +597,28 @@ const SampleInfor = () => {
 			) {
 				return await updateParameterAndAnalysis(analysis);
 			} else {
-				// Standard analysis update without parameter changes
+				// Determine which field is being updated
+				const fieldBeingUpdated = {};
+
+				// Check each field that might have been updated
+				if (analysis.result_value !== undefined) fieldBeingUpdated.result_value = analysis.result_value;
+				if (analysis.result_unit !== undefined) fieldBeingUpdated.result_unit = analysis.result_unit;
+				if (analysis.protocol_code !== undefined) fieldBeingUpdated.protocol_code = analysis.protocol_code;
+				if (analysis.protocol_source !== undefined) fieldBeingUpdated.protocol_source = analysis.protocol_source;
+				if (analysis.technician_uid !== undefined) fieldBeingUpdated.technician_uid = analysis.technician_uid;
+				if (analysis.deadline !== undefined) fieldBeingUpdated.deadline = analysis.deadline;
+
+				// Create minimal update object
+				const updateData = {
+					id: analysis.id,
+					sample_id: analysis.sample_id,
+					receipt_id: analysis.receipt_id,
+					modified_by_uid: currentUser.identity_uid,
+					...fieldBeingUpdated,
+				};
+
 				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: {
-						...analysis,
-						modified_by_uid: currentUser.identity_uid,
-					},
+					analysis: updateData,
 				});
 
 				if (response.status === 200) {
@@ -980,7 +1021,6 @@ const SampleInfor = () => {
 	};
 
 	const handleSaveContent = async (newValue) => {
-		// if (key !== 'Enter') {
 		setInputValue(newValue);
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === parseInt(editingField.split('-')[2])) {
@@ -1000,7 +1040,41 @@ const SampleInfor = () => {
 
 		try {
 			const analysis = updatedAnalytes.find((item) => item.id === parseInt(editingField.split('-')[2]));
-			await onUpdateAnalysis(analysis);
+
+			// Create minimal update object with only required fields
+			const updateData = {
+				id: analysis.id,
+				sample_id: analysis.sample_id,
+				receipt_id: analysis.receipt_id,
+				modified_by_uid: currentUser.identity_uid,
+			};
+
+			// Add only the field being updated
+			if (editingField.startsWith('result_value')) {
+				updateData.result_value = newValue;
+				// Add submission information when updating result value
+				updateData.submit_result_by = currentUser?.identity_name;
+				updateData.submit_result_at = new Date().toISOString();
+			} else if (editingField.startsWith('result_unit')) {
+				updateData.result_unit = newValue;
+			} else if (editingField.startsWith('technician_uid')) {
+				updateData.technician_uid = newValue;
+			}
+			
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				analysis: updateData
+			});
+
+			if (response.status === 200) {
+				// Show more specific toast message based on what was updated
+				if (editingField.startsWith('result_value')) {
+					showToast(`Đã cập nhật kết quả thành công!`);
+				} else if (editingField.startsWith('result_unit')) {
+					showToast(`Đã cập nhật đơn vị thành công!`);
+				} else {
+					showToast(`Đã cập nhật thông tin thành công!`);
+				}
+			}
 		} catch (error) {
 			console.error('Error updating analysis:', error);
 			Swal.fire({
@@ -1009,7 +1083,6 @@ const SampleInfor = () => {
 				text: error.message || 'An error occurred while updating analysis.',
 			});
 		}
-		// }
 	};
 
 	const handleKeyDown = async (e, newValue) => {
@@ -1593,8 +1666,19 @@ const SampleInfor = () => {
 		const analysis = updatedAnalytes.find((item) => item.id === index);
 
 		try {
+			// Create minimal update object with only required fields
+			const updateData = {
+				id: analysis.id,
+				sample_id: analysis.sample_id,
+				receipt_id: analysis.receipt_id,
+				technician_uid: identity_uid,
+				modified_by_uid: currentUser.identity_uid,
+			};
+
 			// Send the update to the server
-			await onUpdateAnalysis(analysis);
+			await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				analysis: updateData,
+			});
 		} catch (error) {
 			console.error('Error updating analysis:', error);
 			Swal.fire({
@@ -1652,8 +1736,19 @@ const SampleInfor = () => {
 		const analysis = updatedAnalytes.find((item) => item.id === index);
 
 		try {
+			// Create minimal update object with only required fields
+			const updateData = {
+				id: analysis.id,
+				sample_id: analysis.sample_id,
+				receipt_id: analysis.receipt_id,
+				deadline: newDeadline,
+				modified_by_uid: currentUser.identity_uid,
+			};
+
 			// Send the update to the server
-			await onUpdateAnalysis(analysis);
+			await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				analysis: updateData,
+			});
 		} catch (error) {
 			console.error('Error updating deadline:', error);
 			Swal.fire({
@@ -1848,17 +1943,34 @@ const SampleInfor = () => {
 
 		try {
 			const analysis = updatedAnalytes.find((item) => item.id === index);
-			const updatedAnalysis = await updateParameterAndAnalysis(analysis);
 
-			// Update the list with the returned analysis that has the new parameter_id
-			const finalAnalytes = updatedAnalytes.map((item) => {
-				if (item.id === index) {
-					return updatedAnalysis;
-				}
-				return item;
-			});
+			if (updateParameterMode) {
+				const updatedAnalysis = await updateParameterAndAnalysis(analysis);
 
-			setListAnalytes(finalAnalytes);
+				// Update the list with the returned analysis that has the new parameter_id
+				const finalAnalytes = updatedAnalytes.map((item) => {
+					if (item.id === index) {
+						return updatedAnalysis;
+					}
+					return item;
+				});
+
+				setListAnalytes(finalAnalytes);
+			} else {
+				// Create minimal update object with only required fields
+				const updateData = {
+					id: analysis.id,
+					sample_id: analysis.sample_id,
+					receipt_id: analysis.receipt_id,
+					protocol_source: newValue,
+					modified_by_uid: currentUser.identity_uid,
+				};
+
+				// Send the update to the server
+				await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+					analysis: updateData,
+				});
+			}
 		} catch (error) {
 			console.error('Error updating protocol source:', error);
 			Swal.fire({
@@ -2053,20 +2165,24 @@ const SampleInfor = () => {
 			// Get the selected analytes
 			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
 
-			// Update each analyte with the new technician
-			const updatedAnalytes = selectedItems.map((analyte) => ({
-				...analyte,
-				technician_uid: selectedTechnician,
-				modified_by_uid: currentUser.identity_uid,
-			}));
-
 			let successCount = 0;
 			let failCount = 0;
 
-			// Make API calls for each analyte separately
-			for (const analyte of updatedAnalytes) {
+			// Make API calls for each analyte separately with minimal data
+			for (const analyte of selectedItems) {
 				try {
-					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', { analysis: analyte });
+					// Create minimal update object
+					const updateData = {
+						id: analyte.id,
+						sample_id: analyte.sample_id,
+						receipt_id: analyte.receipt_id,
+						technician_uid: selectedTechnician,
+						modified_by_uid: currentUser.identity_uid,
+					};
+
+					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+						analysis: updateData,
+					});
 					successCount++;
 				} catch (error) {
 					console.error(`Error updating analysis ID ${analyte.id}:`, error);
@@ -2226,6 +2342,102 @@ const SampleInfor = () => {
 			});
 		}
 	};
+
+	// Add function to handle bulk deadline updates
+	const handleBulkDeadlineUpdate = async () => {
+		if (selectedAnalytes.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Vui lòng chọn ít nhất một chỉ tiêu để cập nhật hạn trả',
+			});
+			return;
+		}
+
+		setIsBulkDeadlineVisible(true);
+	};
+
+	// Function to apply the new deadline to all selected analyses
+	const handleConfirmBulkDeadline = async () => {
+		try {
+			// Get the selected analytes
+			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
+			const newDeadline = bulkDeadlineDate.toISOString();
+
+			let successCount = 0;
+			let failCount = 0;
+
+			// Make API calls for each analyte separately with minimal data
+			for (const analyte of selectedItems) {
+				try {
+					// Create minimal update object
+					const updateData = {
+						id: analyte.id,
+						sample_id: analyte.sample_id,
+						receipt_id: analyte.receipt_id,
+						deadline: newDeadline,
+						modified_by_uid: currentUser.identity_uid,
+					};
+
+					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+						analysis: updateData,
+					});
+					successCount++;
+				} catch (error) {
+					console.error(`Error updating analysis ID ${analyte.id}:`, error);
+					failCount++;
+				}
+			}
+
+			// Update the UI
+			const newAnalytesList = listAnalytes.map((analyte) => {
+				if (selectedAnalytes.includes(analyte.id)) {
+					return { ...analyte, deadline: newDeadline };
+				}
+				return analyte;
+			});
+			setListAnalytes(newAnalytesList);
+
+			if (failCount > 0) {
+				Swal.fire({
+					icon: 'warning',
+					title: 'Kết quả',
+					text: `${successCount} analyses updated successfully, ${failCount} failed`,
+				});
+			} else {
+				showToast(`Đã cập nhật hạn trả cho ${selectedAnalytes.length} chỉ tiêu thành ${formatDate(bulkDeadlineDate)}`);
+			}
+
+			setIsBulkDeadlineVisible(false);
+		} catch (error) {
+			console.error('Error updating deadlines:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'An error occurred while updating deadlines',
+			});
+		}
+	};
+
+	// Add the bulk deadline picker modal
+	const renderBulkDeadlinePicker = () => (
+		<div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
+			<div className="bg-white p-4 rounded-lg w-[320px] relative">
+				<h2 className="text-xl font-semibold mb-4">Cập nhật hạn trả cho {selectedAnalytes.length} chỉ tiêu</h2>
+				<div className="mb-4 flex justify-center">
+					<DatePicker selected={bulkDeadlineDate} onChange={(date) => setBulkDeadlineDate(date)} inline />
+				</div>
+				<div className="flex justify-end">
+					<button className="bg-gray-500 text-white p-2 rounded mr-2" onClick={() => setIsBulkDeadlineVisible(false)}>
+						Hủy bỏ
+					</button>
+					<button className="bg-green-500 text-white p-2 rounded" onClick={handleConfirmBulkDeadline}>
+						Xác nhận
+					</button>
+				</div>
+			</div>
+		</div>
+	);
 
 	if (!sample) {
 		return <div>Loading...</div>;
@@ -2574,6 +2786,18 @@ const SampleInfor = () => {
 								onClick={selectedAnalytes.length > 0 ? handleBulkTransfer : undefined}
 							>
 								<FaUserCog className="mr-1" />
+								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
+							</button>
+
+							{/* Add the bulk deadline update button */}
+							<button
+								className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+									selectedAnalytes.length > 0 ? 'bg-orange-500' : 'bg-gray-300 cursor-not-allowed'
+								} mr-2`}
+								onClick={selectedAnalytes.length > 0 ? handleBulkDeadlineUpdate : undefined}
+								title="Cập nhật hạn trả"
+							>
+								<MdCalendarMonth className="mr-1" size={16} />
 								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
 							</button>
 
@@ -2961,6 +3185,7 @@ const SampleInfor = () => {
 						: handleDeleteAnalysisConfirmAction,
 				)}
 			{isParameterWarningVisible && renderParameterWarningModal()}
+			{isBulkDeadlineVisible && renderBulkDeadlinePicker()}
 		</div>
 	);
 };

@@ -10,7 +10,12 @@ import 'react-datepicker/dist/react-datepicker.css';
 
 const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] }) => {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const [searchParams, setSearchParams] = useSearchParams();
+
+	// Determine width classes based on typeSearch instead of URL
+	const filterBarWidthClasses = typeSearch === 'receipt' ? 'xl:max-w-2xl md:max-w-md w-96' : 'w-96';
+
 	const {
 		setCurrentSort,
 		setCurrentFilter,
@@ -443,6 +448,19 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 				return;
 			}
 
+			// For processing types, navigate with mode parameter
+			if (typeSearch === 'processing_v1' || typeSearch === 'processing_v2') {
+				// Set isFilter true before navigation
+				setIsFilter && setIsFilter(true);
+
+				// Determine the mode based on typeSearch
+				const mode = typeSearch === 'processing_v1' ? 'v1' : 'v2';
+
+				// Navigate to URL with mode and search parameters
+				navigate(`/processing?mode=${mode}&search=${encodeURIComponent(searchTerm)}`);
+				return;
+			}
+
 			setIsFilter && setIsFilter(true);
 
 			// Update URL with search parameter
@@ -454,7 +472,8 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			// Apply search first (priority 1)
 			let searchResults = source;
 
-			if (typeSearch === 'processing_v1') {
+			const mode = new URLSearchParams(location.mode);
+			if (typeSearch === 'processing_v1' && mode === 'v1') {
 				try {
 					const response = await axios.post('https://black.irdop.org/to82oe92i/sample/processing/search/v1', {
 						query: searchTerm,
@@ -464,7 +483,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 				} catch (error) {
 					console.error('Error searching processing_v1:', error);
 				}
-			} else if (typeSearch === 'processing_v2') {
+			} else if (typeSearch === 'processing_v2' && mode === 'v2') {
 				try {
 					const response = await axios.post('https://black.irdop.org/to82oe92i/sample/processing/search/v2', {
 						query: searchTerm,
@@ -1258,7 +1277,9 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 	};
 
 	return (
-		<div className="relative flex flex-col md:flex-row items-center justify-end text-black w-full bg-white rounded-lg leading-none">
+		<div
+			className={`relative flex flex-col md:flex-row items-center justify-end text-black w-full bg-white rounded-lg leading-none ${filterBarWidthClasses}`}
+		>
 			{/* Remove the quick filters that were here before */}
 
 			<div className="flex flex-col md:flex-row items-center w-full justify-end">
@@ -1295,7 +1316,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 							value={searchTerm}
 							onChange={handleSearchChange}
 							onKeyPress={handleSearchKeyPress}
-							className="p-1.5 border text-md border-gray-400 rounded-lg bg-white w-60 md:w-full min-w-60"
+							className="p-1.5 border text-md border-gray-400 rounded-lg bg-white w-full min-w-60"
 							placeholder="Search..."
 						/>
 					)}

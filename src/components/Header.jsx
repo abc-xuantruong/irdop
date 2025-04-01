@@ -27,6 +27,20 @@ const Header = () => {
 		}
 	}, [navigate, setCurrentUser, fetchUser, currentUser]);
 
+	// Add new useEffect to redirect technicians to /processing when user data is loaded
+	useEffect(() => {
+		// Only perform redirect if user is logged in and roles are defined
+		if (currentUser && currentUser.role) {
+			// Check if the user is a technician but not an admin
+			if (currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin) {
+				// Check if we're not already on the processing page
+				if (!currentPath.includes('/processing')) {
+					navigate('/processing');
+				}
+			}
+		}
+	}, [currentUser, navigate, currentPath]);
+
 	useEffect(() => {
 		const handleClickOutside = (event) => {
 			// Only close dropdown if click is outside both the dropdown and the trigger button
@@ -68,6 +82,11 @@ const Header = () => {
 			: currentUser.identity_name
 		: 'Tài khoản';
 
+	// Helper function to determine if "Tiếp nhận" link should be shown
+	const shouldShowReception = () => {
+		return !(currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin);
+	};
+
 	return (
 		<div className="w-screen bg-white border-b shadow flex justify-center items-center ">
 			<div className="flex justify-between items-center w-full 2xl:max-w-screen-2xl xl:max-w-screen-xl lg:max-w-screen-lg md:max-w-screen-md sm:max-w-screen-sm  max-w-sm ">
@@ -91,16 +110,18 @@ const Header = () => {
 								Lab
 							</Link>
 
-							<Link
-								to="/dashboard"
-								className={`cursor-pointer md:text-md ml-4 text-md font-medium ${
-									currentPath === '/' || currentPath.includes('/dashboard')
-										? 'text-primary'
-										: 'text-teritary hover:text-primary'
-								}`}
-							>
-								Tiếp nhận
-							</Link>
+							{shouldShowReception() && (
+								<Link
+									to="/dashboard"
+									className={`cursor-pointer md:text-md ml-4 text-md font-medium ${
+										currentPath === '/' || currentPath.includes('/dashboard')
+											? 'text-primary'
+											: 'text-teritary hover:text-primary'
+									}`}
+								>
+									Tiếp nhận
+								</Link>
+							)}
 
 							<Link
 								to="/library"
@@ -169,7 +190,7 @@ const Header = () => {
 									<div className="p-2 pl-3 border-b-2 bg-gray-50 flex justify-between items-center">
 										<p className="text-base font-medium truncate w-full text-start">{displayName}</p>
 										<button onClick={() => setDropdownOpen(false)} className="text-gray-500 hover:text-gray-700 p-2">
-											✕
+													✕
 										</button>
 									</div>
 									<div className="flex flex-col w-full">
@@ -179,12 +200,14 @@ const Header = () => {
 										>
 											Lab
 										</button>
-										<button
-											onClick={() => handleNavigate('/dashboard')}
-											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
-										>
-											Tiếp nhận
-										</button>
+										{shouldShowReception() && (
+											<button
+												onClick={() => handleNavigate('/dashboard')}
+												className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
+											>
+												Tiếp nhận
+											</button>
+										)}
 										<button
 											onClick={() => handleNavigate('/library')}
 											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"

@@ -204,11 +204,8 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 		}));
 
 		const errors = {};
-		// Remove created_by_uid validation since it's auto-filled
+		// Only validate receipt date, remove client validation
 		if (!receipt.receipt_date) errors.receipt_date = true;
-		if (!customer?.client_name) errors.client_name = true;
-		if (!customer?.client_address) errors.client_address = true;
-		if (!customer?.legal_id) errors.legal_id = true;
 
 		if (Object.keys(errors).length > 0) {
 			setValidationErrors(errors);
@@ -560,10 +557,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 										placeholder="Tên khách hàng"
 										value={customer?.client_name || ''}
 										onChange={(e) => handleInputChange(e, setCustomer)}
-										className={`w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border ${
-											validationErrors.client_name ? 'border-red-500' : 'border-gray-300'
-										} rounded mb-2 placeholder-gray-500 text-black ${isNewCustomer ? 'bg-white' : 'bg-gray-200'}`}
-										disabled={!isNewCustomer}
+										className="w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded mb-2 placeholder-gray-500 text-black bg-white"
 										required
 									/>
 								</div>
@@ -575,10 +569,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 										placeholder="Địa chỉ"
 										value={customer?.client_address || ''}
 										onChange={(e) => handleInputChange(e, setCustomer)}
-										className={`outline-none focus:border-primary w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 border ${
-											validationErrors.client_address ? 'border-red-500' : 'border-gray-300'
-										} rounded mb-2 placeholder-gray-500 text-black ${isNewCustomer ? 'bg-white' : 'bg-gray-200'}`}
-										disabled={!isNewCustomer}
+										className="w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded mb-2 placeholder-gray-500 text-black bg-white"
 										required
 									/>
 								</div>
@@ -590,10 +581,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 										placeholder="MST/CCCD"
 										value={customer?.legal_id || ''}
 										onChange={(e) => handleInputChange(e, setCustomer)}
-										className={`outline-none focus:border-primary w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 border ${
-											validationErrors.legal_id ? 'border-red-500' : 'border-gray-300'
-										} rounded placeholder-gray-500 text-black ${isNewCustomer ? 'bg-white' : 'bg-gray-200'}`}
-										disabled={!isNewCustomer}
+										className="w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded placeholder-gray-500 text-black bg-white"
 										required
 									/>
 								</div>
@@ -622,9 +610,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 										placeholder={isNewContact ? 'Liên hệ mới' : 'Tìm kiếm người liên hệ'}
 										value={contact?.search || ''}
 										onChange={handleContactSearch}
-										className={`w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded mb-2 placeholder-gray-500 text-black 
-											${isNewContact ? 'bg-gray-200' : 'bg-white'} `}
-										disabled={isNewContact}
+										className="w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded mb-2 placeholder-gray-500 text-black bg-white"
 									/>
 									{!isNewContact && isDisplayContact && contact.search.length > 2 && (
 										<div className="absolute z-10 border border-gray-300 rounded bg-white max-h-72 overflow-y-auto w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72">
@@ -669,10 +655,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 										placeholder="Họ tên"
 										value={contact?.name || ''}
 										onChange={(e) => handleInputChange(e, setContact)}
-										className={`w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded mb-2 placeholder-gray-500 text-black ${
-											isNewContact ? 'bg-white' : 'bg-gray-200'
-										}`}
-										disabled={!isNewContact}
+										className="w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded mb-2 placeholder-gray-500 text-black bg-white"
 										required
 									/>
 								</div>
@@ -684,10 +667,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 										placeholder="Email"
 										value={contact?.email || ''}
 										onChange={(e) => handleInputChange(e, setContact)}
-										className={`w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded mb-2 placeholder-gray-500 text-black ${
-											isNewContact ? 'bg-white' : 'bg-gray-200'
-										}`}
-										disabled={!isNewContact}
+										className="w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded mb-2 placeholder-gray-500 text-black bg-white"
 										required
 									/>
 								</div>
@@ -699,10 +679,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 										placeholder="Điện thoại"
 										value={contact?.phone || ''}
 										onChange={(e) => handleInputChange(e, setContact)}
-										className={`w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded placeholder-gray-500 text-black ${
-											isNewContact ? 'bg-white' : 'bg-gray-200'
-										}`}
-										disabled={!isNewContact}
+										className="w-80 md:w-48 lg:w-56 xl:w-64 2xl:w-72 p-2 outline-none focus:border-primary border border-gray-300 rounded placeholder-gray-500 text-black bg-white"
 										required
 									/>
 								</div>

@@ -35,6 +35,29 @@ const TinyMceInput = ({ value, onUpdate, onKey }) => {
 			menubar: false,
 			toolbar: 'undo redo | superscript subscript',
 			// content_style: 'body { font-family:Inter, Helvetica; font-size:10.5pt}',
+			plugins: 'paste',
+			paste_preprocess: function(plugin, args) {
+				// Check if content contains table tags (likely from Excel)
+				if (args.content.indexOf('<table') !== -1) {
+					let content = args.content;
+					
+					// Replace table row endings with line breaks
+					content = content.replace(/<\/tr>/gi, '<br>');
+					
+					// Strip table cell tags but keep content
+					content = content.replace(/<t[dh][^>]*>/gi, '');
+					content = content.replace(/<\/t[dh]>/gi, ' ');
+					
+					// Remove all other table tags
+					content = content.replace(/<table[^>]*>/gi, '');
+					content = content.replace(/<\/table>/gi, '');
+					content = content.replace(/<tbody[^>]*>/gi, '');
+					content = content.replace(/<\/tbody>/gi, '');
+					content = content.replace(/<tr[^>]*>/gi, '');
+					
+					args.content = content;
+				}
+			},
 			setup: (editor) => {
 				editor.on('init', () => {
 					editor.setContent(value);

@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
+import Swal from 'sweetalert2'; // Add SweetAlert2 import
 
 export default function MultiPageEditor() {
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -15,7 +16,7 @@ export default function MultiPageEditor() {
 	const { currentUser, formatDate } = useContext(GlobalContext);
 
 	// Add state to track if we're in read-only mode (when a ppt_uid is in the URL)
-	const [isReadOnly, setIsReadOnly] = useState(!!selected_ppt_uid);
+	const [isReadOnly, setIsReadOnly] = useState(false);
 
 	// Add new toggle states for VLAS, COMMENT, and REFERENCE
 	const [showVlas, setShowVlas] = useState(false);
@@ -33,9 +34,44 @@ export default function MultiPageEditor() {
 	const [signatureSectionHTML, setSignatureSectionHTML] = useState('');
 	const [referenceValues, setReferenceValues] = useState([]);
 
+	// Add new state variables for notes and requirements
+	const [receiptNote, setReceiptNote] = useState('');
+	const [additionalRequest, setAdditionalRequest] = useState('');
+
+	// Add new state to store row heights
+	const [tableRowHeights, setTableRowHeights] = useState([]);
+	// Create ref array for table rows
+	const tableRowRefs = useRef([]);
+
+	// Add utility function for pixel to millimeter conversion at component level
+	const getDPI = () => {
+		const div = document.createElement('div');
+		div.style.width = '1in';
+		div.style.height = '1in';
+		div.style.position = 'absolute';
+		div.style.left = '-100%';
+		div.style.top = '-100%';
+		document.body.appendChild(div);
+		const dpi = div.offsetWidth;
+		document.body.removeChild(div);
+		return dpi;
+	};
+
+	const pxToMm = (px) => {
+		const dpi = getDPI();
+		return (px * 25.4) / dpi;
+	};
+
+	const mmToPx = (mm) => {
+		const dpi = getDPI();
+		return (mm * dpi) / 25.4;
+	};
+
 	// Set read-only mode whenever selected_ppt_uid changes
 	useEffect(() => {
-		setIsReadOnly(!!selected_ppt_uid);
+		// Allow editing if it's a DRAFT
+		const isDraft = selected_ppt_uid && selected_ppt_uid.includes('DRAFT');
+		// setIsReadOnly(!!selected_ppt_uid && !isDraft);
 		if (!selected_ppt_uid) {
 			setPptUid('');
 		}
@@ -53,7 +89,7 @@ export default function MultiPageEditor() {
 					}
 
 					console.log('PPT list fetched:', response.data);
-					setPptList(response.data);
+					setPptList(response.data); // Now data structure is [{ppt_uid, publish_date},...]
 
 					// Check if a specific ppt_uid was requested in URL
 					if (selected_ppt_uid) {
@@ -89,8 +125,21 @@ export default function MultiPageEditor() {
 			setShowComment(reportData.is_comment || false);
 			setShowReference(reportData.is_reference || false);
 
-			// Update HTML content
-			setHeaderHTML(reportData.header_section || header);
+			// Process the header content to replace the draft text with actual ppt_uid
+			let processedHeader = reportData.header_section || header;
+			if (reportData.ppt_uid && !reportData.ppt_uid.includes('DRAFT')) {
+				// Replace any draft text variations with the actual ppt_uid
+				processedHeader = processedHeader
+					.replace(
+						/<p[^>]*class="[^"]*ref_code[^"]*"[^>]*>.*?<\/p>/i,
+						`<p class="ref_code" style="min-width:5pt; margin: 0; margin-right: 2mm;">${reportData.ppt_uid}</p>`,
+					)
+					.replace(/SƠ BỘ \/ DRAFT/g, reportData.ppt_uid)
+					.replace(/-- SƠ BỘ \/ DRAFT --/g, reportData.ppt_uid);
+			}
+
+			// Update HTML content with processed header
+			setHeaderHTML(processedHeader);
 			setFooterHTML(reportData.footer_section || footer);
 			setCustomerSectionHTML(reportData.customer_section || '');
 			setSampleInfoSectionHTML(reportData.sample_section || '');
@@ -107,6 +156,15 @@ export default function MultiPageEditor() {
 						`<td class="reference-cell" style="border: 1px solid black; padding: 6px 8px; text-align:left; font-size:12px;">${refValue}</td>`,
 				);
 				setReferenceValues(refCells);
+			}
+
+			// Extract receipt note and additional request if available in report data
+			if (reportData.receipt_note) {
+				setReceiptNote(reportData.receipt_note);
+			}
+
+			if (reportData.additional_request) {
+				setAdditionalRequest(reportData.additional_request);
 			}
 
 			// Update the editor content
@@ -134,30 +192,23 @@ export default function MultiPageEditor() {
 				if (headerElements.length > 0 && headerElements[0].id) {
 					const headerEditor = window.tinymce.get(headerElements[0].id);
 					if (headerEditor) {
-						headerEditor.setContent(reportData.header_section || header);
+						headerEditor.setContent(processedHeader);
 					}
 				}
 			}
 
 			// Update footer in TinyMCE if loaded
-			if (window.tinymce) {
-				const footerElements = document.getElementsByClassName('footer-editable');
-				if (footerElements.length > 0 && footerElements[0].id) {
-					const footerEditor = window.tinymce.get(footerElements[0].id);
-					if (footerEditor) {
-						footerEditor.setContent(reportData.footer_section || footer);
-					}
-				}
-			}
-
-			setHeader(reportData.header_section || header);
 			setFooter(reportData.footer_section || footer);
 
 			// After loading the report, update the read-only state
-			setIsReadOnly(true);
+			// Allow editing if it's a DRAFT
+			const isDraft = reportData.ppt_uid && reportData.ppt_uid.includes('DRAFT');
+			// setIsReadOnly(!isDraft);
 		} catch (err) {
 			console.error('Error loading published report:', err);
 			setError(`Failed to load published report: ${err.message}`);
+			// Add notification for error
+			showNotification(`Tải phiếu không thành công: ${err.message}`, 'error');
 		} finally {
 			setLoading(false);
 		}
@@ -216,7 +267,7 @@ export default function MultiPageEditor() {
 			});
 
 			// Load the selected report data and set editor to read-only mode
-			setIsReadOnly(true);
+			// (unless it's a draft, which is handled in loadPublishedReport)
 			loadPublishedReport(selectedValue);
 		}
 	};
@@ -238,6 +289,23 @@ export default function MultiPageEditor() {
 			const sampleResult = sampleResponse.data;
 			setSampleData(sampleResult);
 			console.log('Sample data fetched:', sampleResult);
+
+			// Check if any analysis has protocol_source = 'IRDOP VS' and set showVlas to true if found
+			if (sampleResult.analysis && Array.isArray(sampleResult.analysis)) {
+				const hasVlasProtocol = sampleResult.analysis.some((item) => item.protocol_source === 'IRDOP VS');
+				if (hasVlasProtocol) {
+					setShowVlas(true);
+				}
+			}
+
+			// Extract receipt note and additional request data
+			if (sampleResult.receipt && sampleResult.receipt.note) {
+				setReceiptNote(sampleResult.receipt.note);
+			}
+
+			if (sampleResult.additional_request) {
+				setAdditionalRequest(sampleResult.additional_request);
+			}
 
 			// Get receipt_id from sample data to fetch client info
 			if (sampleResult && sampleResult.receipt_id) {
@@ -419,7 +487,7 @@ export default function MultiPageEditor() {
 	<div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
 		<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
 			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: left;">Nơi / người gửi mẫu / Customer information</p>
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right;">${clientUid}</p>
+			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right; color: black; text-decoration: none;">${clientUid}</p>
 		</div>		
 		<div style="display: flex; flex-direction: column; gap: 2px; height: fit-content;">
 			<p style="font-weight: bold; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;">${clientName}</p>
@@ -434,9 +502,8 @@ export default function MultiPageEditor() {
 		// Get the sample_uid from data
 		const sampleId = data.sample_uid || sample_uid;
 
-		// Get the sample_information array from data
-		const sampleInfo = data.sample_information || [];
-
+		// Get the sample_information array from data and filter out items with empty fvalue
+		const sampleInfo = data.sample_information;
 		// Map each sample information item to a row in the sample info section
 		const infoRows = sampleInfo
 			.map((item) => {
@@ -446,12 +513,20 @@ export default function MultiPageEditor() {
 				// Extract field label and English translation (if present)
 				const parts = fieldName.split('/');
 				const mainLabel = parts[0].trim();
-				const engLabel = parts.length > 1 ? `/ ${parts[1].trim()}` : '';
+				const engLabel = parts.length > 1 ? ` / ${parts[1].trim()}` : '';
+
+				// Process mainLabel to replace "SX" with "sản xuất" and "HSD" with "Hạn sử dụng"
+				let displayMainLabel = mainLabel;
+				if (mainLabel.includes('SX')) {
+					displayMainLabel = mainLabel.replace('SX', 'sản xuất');
+				} else if (mainLabel.includes('HSD')) {
+					displayMainLabel = mainLabel.replace('HSD', 'Hạn sử dụng');
+				}
 
 				return `
 			<div style="display: flex; ${fieldName.includes('Ngày tiếp nhận') && 'margin-top: 8px;'}">
 				<div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: center;">
-					<p style="font-weight:bold">${mainLabel}</p> ${engLabel}:
+					<p style="font-weight:bold; margin-right: 4px;">${displayMainLabel}</p> ${engLabel}:
 				</div>
 				<div style="width: 70%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;" >
 					<p style="margin: 0; ${mainLabel.toLowerCase().includes('tên mẫu') ? 'font-weight: bold;' : ''}">${fieldValue}</p>
@@ -479,8 +554,152 @@ export default function MultiPageEditor() {
 </div>`;
 	};
 
+	// Function to measure row heights using window.getComputedStyle
+	const measureTableRowHeights = (shouldLog = false) => {
+		// Make sure we have table row refs
+		if (tableRowRefs.current && tableRowRefs.current.length > 0) {
+			if (shouldLog) console.log('📏 MEASURING TABLE ROWS (total rows: ' + tableRowRefs.current.length + ')');
+
+			// Helper function to safely parse numeric style values
+			const safeParseFloat = (value) => {
+				if (!value) return 0;
+				const strValue = String(value || '0');
+				const numericPart = strValue.replace(/[^\d.-]/g, '');
+				const result = parseFloat(numericPart);
+				return isNaN(result) ? 0 : result;
+			};
+
+			// Measure each row's height using computed styles
+			const heights = tableRowRefs.current
+				.map((rowRef, index) => {
+					if (!rowRef) {
+						return { index, heightPx: 30, heightMm: pxToMm(30) };
+					}
+
+					try {
+						// Get the computed style for the row
+						const computedStyle = window.getComputedStyle(rowRef);
+
+						// Get direct measurements first (most reliable)
+						const offsetHeight = rowRef.offsetHeight || 0;
+						const clientHeight = rowRef.clientHeight || 0;
+						const scrollHeight = rowRef.scrollHeight || 0;
+						const boundingClientRect = rowRef.getBoundingClientRect();
+						const boundingHeight = boundingClientRect ? boundingClientRect.height : 0;
+
+						// Get the base height from the computed style (content height)
+						const contentHeight = safeParseFloat(computedStyle.height);
+
+						// Calculate padding and border heights
+						const paddingTop = safeParseFloat(computedStyle.paddingTop);
+						const paddingBottom = safeParseFloat(computedStyle.paddingBottom);
+						const borderTopWidth = safeParseFloat(computedStyle.borderTopWidth);
+						const borderBottomWidth = safeParseFloat(computedStyle.borderBottomWidth);
+						const marginTop = safeParseFloat(computedStyle.marginTop);
+						const marginBottom = safeParseFloat(computedStyle.marginBottom);
+
+						// Calculate total height including padding and borders
+						const totalHeight =
+							contentHeight +
+							paddingTop +
+							paddingBottom +
+							borderTopWidth +
+							borderBottomWidth +
+							marginTop +
+							marginBottom;
+
+						// Use box-sizing to adjust the calculation if needed
+						const boxSizing = computedStyle.boxSizing;
+
+						// Determine the most reliable height value
+						let finalHeight;
+
+						if (offsetHeight > 0) {
+							// offset height is usually most reliable
+							finalHeight = offsetHeight;
+						} else if (boundingHeight > 0) {
+							finalHeight = boundingHeight;
+						} else if (totalHeight > 0) {
+							finalHeight = totalHeight;
+						} else if (contentHeight > 0) {
+							finalHeight = contentHeight;
+						} else {
+							// Default if we can't get any reliable measurement
+							finalHeight = 30; // 30px is a reasonable minimum
+						}
+
+						// Convert to mm
+						const heightMm = pxToMm ? pxToMm(finalHeight) : finalHeight / 3.78;
+
+						// Only log detailed information if shouldLog is true (during print)
+						if (shouldLog) {
+							console.log(`📊 Row #${index + 1} measurements:`, {
+								offsetHeight: offsetHeight + 'px',
+								clientHeight: clientHeight + 'px',
+								scrollHeight: scrollHeight + 'px',
+								boundingHeight: boundingHeight + 'px',
+								computedHeight: contentHeight + 'px',
+								totalCalculated: totalHeight.toFixed(2) + 'px',
+								finalHeight: finalHeight.toFixed(2) + 'px',
+								heightInMm: heightMm.toFixed(2) + 'mm',
+								cellCount: rowRef.cells ? rowRef.cells.length : 'N/A',
+								boxSizing,
+								computedStyle: {
+									paddingTop: paddingTop + 'px',
+									paddingBottom: paddingBottom + 'px',
+									borderTopWidth: borderTopWidth + 'px',
+									borderBottomWidth: borderBottomWidth + 'px',
+									marginTop: marginTop + 'px',
+									marginBottom: marginBottom + 'px',
+								},
+							});
+						}
+
+						return {
+							index,
+							heightPx: finalHeight,
+							heightMm,
+							rowRef,
+							offsetHeight,
+							computedStyle: {
+								paddingTop,
+								paddingBottom,
+								borderTopWidth,
+								borderBottomWidth,
+								boxSizing,
+							},
+						};
+					} catch (error) {
+						if (shouldLog) console.warn(`Error measuring row #${index + 1}:`, error);
+						return { index, heightPx: 30, heightMm: pxToMm(30) };
+					}
+				})
+				.filter((item) => item.heightPx > 0);
+
+			// Only log summary information if shouldLog is true (during print)
+			if (shouldLog) {
+				console.log('📏 SUMMARY: Measured row heights with computed styles:', heights);
+
+				// Calculate average height for debugging
+				if (heights.length > 0) {
+					const avgHeight = heights.reduce((sum, h) => sum + h.heightPx, 0) / heights.length;
+					console.log(`📊 Average row height: ${avgHeight.toFixed(1)}px (${pxToMm(avgHeight).toFixed(2)}mm)`);
+				}
+			}
+
+			setTableRowHeights(heights);
+			return heights;
+		} else {
+			if (shouldLog) console.log('⚠️ No table rows found to measure');
+		}
+		return [];
+	};
+
 	// Function to generate analysis section from API data
 	const generateAnalysisSection = (data) => {
+		// Reset table row refs array
+		tableRowRefs.current = [];
+
 		// Get the analysis array from data
 		const analysisItems = data.analysis || [];
 
@@ -520,7 +739,7 @@ export default function MultiPageEditor() {
 				// Create default reference cells for each analysis item
 				refsArray = analysisItems.map(
 					() =>
-						`<td class="reference-cell" style="border: 1px solid black; padding: 6px 10px; text-align:left; font-size:12px;">--</td>`,
+						`<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>`,
 				);
 			}
 
@@ -529,7 +748,7 @@ export default function MultiPageEditor() {
 				// Add default cells for any new rows
 				const additionalCells = analysisItems.length - refsArray.length;
 				const defaultCells = Array(additionalCells).fill(
-					`<td class="reference-cell" style="border: 1px solid black; padding: 6px 10px; text-align:left; font-size:12px;">--</td>`,
+					`<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>`,
 				);
 				refsArray = [...refsArray, ...defaultCells];
 			}
@@ -551,7 +770,7 @@ export default function MultiPageEditor() {
 		// Add extra table header for reference if needed
 		const referenceHeader = showReference
 			? `
-			<th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 15%; text-align:left; font-size:12px;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 15%; text-align:left; font-size:12px;box-sizing: border-box;">
 				<strong>Tham chiếu</strong> <br> <span style="font-size: 12px; color: #444444  ;">/ Standard Ref</span>
 			</th>`
 			: '';
@@ -573,67 +792,65 @@ export default function MultiPageEditor() {
 						if (index < refsArray.length && refsArray[index]) {
 							// Use existing reference cell if available
 							if (refsArray[index].includes('class="reference-cell"')) {
-								referenceCell = refsArray[index].replace(/padding: 6px 8px/g, 'padding: 6px 10px');
+								referenceCell = refsArray[index].replace(/padding: 6px 8px/g, 'padding: 4px 8px');
 							} else {
 								// Create a properly formatted cell from stored value
-								referenceCell = `<td class="reference-cell" style="border: 1px solid black; padding: 6px 10px; text-align:left; font-size:12px;">${refsArray[
+								referenceCell = `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${refsArray[
 									index
 								].replace(/<\/?td[^>]*>/g, '')}</td>`;
 							}
 						} else {
 							// Create default cell if no stored value exists
-							referenceCell = `<td class="reference-cell" style="border: 1px solid black; padding: 6px 10px; text-align:left; font-size:12px;">--</td>`;
+							referenceCell = `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>`;
 						}
 					}
 
+					// Add data-row-index attribute for easier ref assignment
 					return `
-				<tr>
-					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px; ">${index + 1}.</td>
-					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${parameterName}</td>
-					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${result}</td>
-					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${unit}</td>
-					<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">${protocol}</td>${referenceCell}
+				<tr class="table-row" data-row-index="${index}">
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${index + 1}.</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${parameterName}</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${result}</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${unit}</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${protocol}</td>${referenceCell}
 				</tr>`;
 				})
 				.join('');
 		} else {
 			// If no analysis items, include a placeholder row
 			const referenceCell = showReference
-				? `<td class="reference-cell" style="border: 1px solid black; padding: 6px 10px; text-align:left; font-size:12px;">--</td>`
+				? `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>`
 				: '';
 
 			analysisRows = `
-		<tr>
-			<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px; ">1</td>
-			<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">--</td>
-			<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">--</td>
-			<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">--</td>
-			<td style="border: 1px solid black; padding: 4px 10px; text-align:left; font-size:12px;">--</td>${referenceCell}
-		</tr>`;
+			<tr class="table-row" data-row-index="0">
+				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; ">1</td>
+				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
+				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
+				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
+				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>${referenceCell}
+			</tr>`;
 		}
 
-		return `
+		// Create full table HTML
+		const tableHTML = `
 <div style="margin:0; padding:0;">
-	<table style="width: 100%; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
+	<table style="width: auto; min-width: 100% ; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
 		<thead>
 			<tr>
-				<th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 6%; text-align:left; font-size:12px;">
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 50px; text-align:left; font-size:12px;box-sizing: border-box;">
 					<strong>STT</strong> <br> <span style="font-size: 12px; color: #444444;">/ No.</span>
 				</th>
-				<th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: ${
-									showReference ? '25%' : '26%'
-								}; text-align:left; font-size:12px; min-width: 25%;">
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500;  text-align:left; font-size:12px; min-width: 20%;box-sizing: border-box;">
 					<strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444;">/ Tests</span>
 				</th>
-				<th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 17%; text-align:left; font-size:12px;">
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:100px; text-align:left; font-size:12px; box-sizing: border-box;">
 					<strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444;">/ Test result</span>
 				</th>
-				<th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: 11%; text-align:left; font-size:12px;">
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:90px; text-align:left; font-size:12px;box-sizing: border-box;">
 					<strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
 				</th>
-				<th style="border: 1px solid black; padding: 4px 10px; background-color: #f2f2f2; font-weight: 500; width: ${
-									showReference ? '22%' : '35%'
-								}; text-align:left; font-size:12px;">
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box;">
 					<strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
 				</th>${referenceHeader}
 			</tr>
@@ -643,6 +860,43 @@ export default function MultiPageEditor() {
 		</tbody>
 	</table>
 </div>`;
+
+		// Schedule measurement after table is rendered
+		setTimeout(() => {
+			// Attach refs to table rows after rendering
+			const tableRows = document.querySelectorAll('.table-row');
+			if (tableRows.length > 0) {
+				console.log(`📋 Found ${tableRows.length} table rows to measure`);
+
+				// Create a new array with the right length
+				tableRowRefs.current = new Array(tableRows.length);
+
+				// Assign DOM elements to the refs array
+				tableRows.forEach((row, i) => {
+					tableRowRefs.current[i] = row;
+				});
+
+				// Measure heights after refs are attached
+				setTimeout(() => measureTableRowHeights(false), 50);
+			}
+		}, 100);
+
+		return tableHTML;
+	};
+
+	// Add new function to debug table rows in DOM with optional logging
+	const debugTableRows = (shouldLog = false) => {
+		const rows = document.querySelectorAll('.table-row');
+		if (shouldLog) console.log(`🔍 DOM CHECK: Found ${rows.length} rows with .table-row class`);
+
+		rows.forEach((row, index) => {
+			const height = row.offsetHeight;
+			const cells = row.cells ? row.cells.length : 'unknown';
+			if (shouldLog) console.log(`Row #${index + 1}: height=${height}px, cells=${cells}, id=${row.id || 'none'}`);
+		});
+
+		// Also check our current refs
+		if (shouldLog) console.log(`🔗 Current tableRowRefs length: ${tableRowRefs.current.length}`);
 	};
 
 	// Add new function to generate comment section
@@ -747,24 +1001,24 @@ export default function MultiPageEditor() {
 				 style="width:5cm;">
 		</div>
 		<div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
-	<p class="" 
-	   style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
-		Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
-	</p>
-	<p class="" 
-	   style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
-		/ Institute for Research and Development of Organic Products
-	</p>
-	<span class="" 
-		  style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
-				 width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
-		Phòng Phân tích - Kiểm nghiệm / Analysis Control Department
-	</span>
-</div>
+			<p class="" 
+			style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
+				Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
+			</p>
+			<p class="" 
+			style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
+				/ Institute for Research and Development of Organic Products
+			</p>
+			<span class="" 
+				style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
+						width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
+				Phòng Phân tích - Kiểm nghiệm / Analysis Control Department
+			</span>
+		</div>
 
 	</div>
 	<div class=" " 
-		 style="padding-top:10mm; position:relative; ">
+		 style="padding-top:6mm; position:relative; ">
 		<div style="position:relative; text-align:left;">
 			<p contenteditable="true" class=" content-header-title" 
 			   style="font-weight:700; font-size:24pt; color:#0058A3; height: 28px;">
@@ -776,20 +1030,20 @@ export default function MultiPageEditor() {
 			</p>
 			<div class=" display-flex" 
 				 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px;; height: 28px;">
-				<span class=" std_ref-title">Ref:</span>
+				<span class=" std_ref-title">Xuất bản / ref.:</span>
 				<p contenteditable="true" 
 				   class="  ref_code" 
-				   style="min-width:5pt; margin: 0;">
+				   style="min-width:5pt; margin: 0; margin-right: 2mm;">
 					SƠ BỘ / DRAFT
 				</p>
 				<span class="  published_date" 
 					  style="min-width:5pt; margin: 0;">
-					${formatDate(new Date())}
+					  Ngày / Date: ${formatDate(new Date())}
 				</span>
 			</div>
 		</div>
 		<div class=" vlas_icon" 
-			 style="position:absolute; right:-5mm; top:0.5cm; ${showVlas ? '' : 'display:none;'}">
+			 style="position:absolute; right:-5mm; top:0.2cm; ${showVlas ? '' : 'display:none;'}">
 			<img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png" 
 				 loading="lazy" 
 				 class="" 
@@ -800,17 +1054,13 @@ export default function MultiPageEditor() {
 	`);
 	const [footer, setFooter] = useState(`
 <div style="border-top:1px solid #4CB748; height:50px; display:flex; padding-top:0pt; align-items: center;">
-	<div style="flex-grow:1; text-align: left;">
-		<p style="color:#0058A3; margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">
-			VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN
-		</p>
-		<p style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">
-			IRDOP.ORG
-		</p>
-		<p style="color: #444444; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">
-			Form: BM06-QT010-KN / Version: 04 / Effective date: 01/08/2023
-		</p>
+   <div style="flex-grow: 1; text-align: left; display: flex; align-items: center;"><img style="width: 38px; height: 38px; margin-right: 8px;" src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&amp;data=https://irdop.org" alt="QR Code">
+	<div>
+		<p style="color: #0058a3; margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</p>
+		<p style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">IRDOP.ORG</p>
+		<p style="color: #444444; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">Form: BM06-QT010-KN / Version: 05 / Effective date: 12/03/2025</p>
 	</div>
+</div>
 	<div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;">
 		<div style="display: flex; align-items: center; height: 14px;">
 			<span style="font-size: 11px; margin: 0; padding: 0; line-height: 1; margin-right:2px;">Trang / Pages:</span>
@@ -1068,6 +1318,144 @@ export default function MultiPageEditor() {
 		});
 	};
 
+	// Add this function to extract table cell dimensions from the editor
+	const extractTableDimensions = (shouldLog = false) => {
+		if (!contentRef.current || !window.tinymce) return null;
+
+		const contentEditor = window.tinymce.get(contentRef.current?.id);
+		if (!contentEditor) return null;
+
+		const editorBody = contentEditor.getBody();
+		const tables = editorBody.querySelectorAll('table');
+
+		if (!tables.length) {
+			if (shouldLog) console.log('📊 No tables found in editor to extract dimensions');
+			return null;
+		}
+
+		// Get the analysis table (first table)
+		const analysisTable = tables[0];
+
+		// Extract header dimensions
+		const headerRow = analysisTable.querySelector('thead tr');
+		if (!headerRow) return null;
+
+		// Helper function to calculate adjusted width by subtracting 17px
+		const getAdjustedWidth = (originalWidth) => {
+			// Extract numeric part if it's a string with units
+			if (typeof originalWidth === 'string' && originalWidth.includes('px')) {
+				const numericPart = parseFloat(originalWidth);
+				if (!isNaN(numericPart)) {
+					return `${Math.max(0, numericPart - 17)}px`;
+				}
+			}
+
+			// Use calc for other cases (like percentages)
+			return `calc(${originalWidth} - 17px)`;
+		};
+
+		const headerCells = headerRow.querySelectorAll('th');
+		const headerDimensions = Array.from(headerCells).map((th, index) => {
+			const computedStyle = window.getComputedStyle(th);
+			// Apply the width - 17px formula for header cells
+			const adjustedWidth = getAdjustedWidth(computedStyle.width);
+
+			const dimensions = {
+				index,
+				type: 'th',
+				text: th.textContent.trim(),
+				width: adjustedWidth, // Use adjusted width
+				originalWidth: computedStyle.width, // Store original for reference
+				minWidth: computedStyle.minWidth,
+				height: computedStyle.height,
+				padding: {
+					top: computedStyle.paddingTop,
+					right: computedStyle.paddingRight,
+					bottom: computedStyle.paddingBottom,
+					left: computedStyle.paddingLeft,
+				},
+				border: {
+					top: computedStyle.borderTopWidth,
+					right: computedStyle.borderRightWidth,
+					bottom: computedStyle.borderBottomWidth,
+					left: computedStyle.borderLeftWidth,
+				},
+			};
+
+			if (shouldLog) {
+				console.log(`📏 Header cell #${index + 1} "${th.textContent.trim()}" dimensions:`, {
+					width: adjustedWidth, // Use adjusted width in logs
+					originalWidth: computedStyle.width,
+					height: computedStyle.height,
+					minWidth: computedStyle.minWidth,
+					padding: `${computedStyle.paddingTop} ${computedStyle.paddingRight} ${computedStyle.paddingBottom} ${computedStyle.paddingLeft}`,
+					border: `${computedStyle.borderTopWidth} ${computedStyle.borderRightWidth} ${computedStyle.borderBottomWidth} ${computedStyle.borderLeftWidth}`,
+					boxSizing: computedStyle.boxSizing,
+					display: computedStyle.display,
+				});
+			}
+
+			return dimensions;
+		});
+
+		// Extract data row dimensions - also apply the same width adjustment
+		const rows = analysisTable.querySelectorAll('tbody tr');
+		const rowDimensions = Array.from(rows).map((tr, rowIndex) => {
+			const computedTrStyle = window.getComputedStyle(tr);
+			const cells = tr.querySelectorAll('td');
+
+			const cellDimensions = Array.from(cells).map((td, cellIndex) => {
+				const computedStyle = window.getComputedStyle(td);
+				// Apply the same width adjustment to body cells
+				const adjustedWidth = getAdjustedWidth(computedStyle.width);
+
+				return {
+					rowIndex,
+					cellIndex,
+					type: 'td',
+					width: adjustedWidth, // Use adjusted width
+					originalWidth: computedStyle.width, // Store original for reference
+					height: computedStyle.height,
+					padding: {
+						top: computedStyle.paddingTop,
+						right: computedStyle.paddingRight,
+						bottom: computedStyle.paddingBottom,
+						left: computedStyle.paddingLeft,
+					},
+					border: {
+						top: computedStyle.borderTopWidth,
+						right: computedStyle.borderRightWidth,
+						bottom: computedStyle.borderBottomWidth,
+						left: computedStyle.borderLeftWidth,
+					},
+					content: td.textContent.trim(),
+				};
+			});
+
+			return {
+				rowIndex,
+				rowHeight: computedTrStyle.height,
+				cellDimensions,
+				computedStyle: {
+					height: computedTrStyle.height,
+					boxSizing: computedTrStyle.boxSizing,
+					display: computedTrStyle.display,
+				},
+			};
+		});
+
+		if (shouldLog) {
+			console.log('📏 Extracted header dimensions:', headerDimensions);
+			console.log('📏 Extracted row dimensions:', rowDimensions);
+			console.log('📏 Extracted row dimensions:', rowDimensions);
+		}
+
+		return {
+			headerDimensions,
+			rowDimensions,
+		};
+	};
+
 	const handlePrint = () => {
 		let currentContent = content;
 		let currentHeader = header;
@@ -1108,6 +1496,10 @@ export default function MultiPageEditor() {
 			}
 		}
 
+		// Perform detailed table measurements right before printing
+		console.log('🖨️ PRINT BUTTON CLICKED - STARTING PRE-PRINT MEASUREMENTS');
+		performDetailedTableMeasurements();
+
 		// Replace pptUid in header
 		currentHeader = currentHeader.replace(/-- SƠ BỘ \/ DRAFT --/g, pptUid || '-- SƠ BỘ / DRAFT --');
 		setHeaderHTML(currentHeader); // Store header in headerHTML state
@@ -1141,19 +1533,6 @@ export default function MultiPageEditor() {
 		};
 
 		const currentRefs = extractCurrentReferenceValues();
-
-		// Log all section values
-		console.log('=== PRINTING REPORT SECTIONS ===');
-		console.log('Header HTML:', currentHeader);
-		console.log('Footer HTML:', currentFooter);
-		console.log('Customer Section HTML:', extractedSections.customerSection);
-		console.log('Sample Info Section HTML:', extractedSections.sampleInfoSection);
-		console.log('Analysis Section HTML:', extractedSections.analysisSection);
-		console.log('Comment Section HTML:', extractedSections.commentSection || '');
-		console.log('Notes Section HTML:', extractedSections.notesSection);
-		console.log('Signature Section HTML:', extractedSections.signatureSection);
-		console.log('Reference Cells (Current HTML elements):', currentRefs);
-		console.log('=== END OF REPORT SECTIONS ===');
 
 		// Update sectionContent state to reflect current editor content
 		setSectionContent({
@@ -1189,30 +1568,12 @@ export default function MultiPageEditor() {
 			topMargin: 15, // 1.5cm
 			bottomMargin: 8, // 0.8cm
 			sideMargin: 10, // 1cm
-			headerSpacing: 5, // spacing between header and content
+			headerSpacing: 8, // spacing between header and content
 			footerSpacing: 3, // removed spacing between content and footer
 		};
 
-		// Get DPI for pixel to mm conversion
-		const getDPI = () => {
-			const div = document.createElement('div');
-			div.style.width = '1in';
-			div.style.height = '1in';
-			div.style.position = 'absolute';
-			div.style.left = '-100%';
-			div.style.top = '-100%';
-			document.body.appendChild(div);
-			const dpi = div.offsetWidth;
-			document.body.removeChild(div);
-			return dpi;
-		};
-
-		const dpi = getDPI();
-		const pxToMm = (px) => (px * 25.4) / dpi;
-		const mmToPx = (mm) => (mm * dpi) / 25.4;
-
 		console.log('📐 Document dimensions:');
-		console.log('- Screen DPI:', dpi);
+		console.log('- Screen DPI:', getDPI());
 		console.log('- A4 paper:', `${A4.width}mm × ${A4.height}mm (${mmToPx(A4.width)}px × ${mmToPx(A4.height)}px)`);
 		console.log(
 			'- Margins:',
@@ -1274,6 +1635,8 @@ export default function MultiPageEditor() {
 					!sampleParent.style.border
 				) {
 					sampleParent = sampleParent.parentElement;
+					// If we reach a major section break, stop climbing
+					if (sampleParent === tempContainer) break;
 				}
 
 				extractedSections.sampleInfoSection = sampleParent.outerHTML;
@@ -1592,13 +1955,27 @@ export default function MultiPageEditor() {
 				};
 
 				// Enhanced function to split tables across pages with minimum footer spacing
-				const splitTableAcrossPages = (tableElement) => {
+				const splitTableAcrossPages = (tableElement, recursionDepth = 0) => {
+					// Add recursion depth counter to prevent stack overflow
+					if (recursionDepth > 10) {
+						console.warn('⚠️ Maximum recursion depth reached in table pagination - stopping to prevent stack overflow');
+						currentPage.push(`<div style="color: red; padding: 5px;">Table pagination limit reached</div>`);
+						return;
+					}
+
 					tableBreakCounts++;
 
 					// Extract table structure
 					const hasHeader = !!tableElement.querySelector('thead');
 					const tableHeader = hasHeader ? tableElement.querySelector('thead').outerHTML : '';
 					const rows = Array.from(tableElement.querySelectorAll('tbody tr'));
+
+					// Exit early if no rows to process
+					if (!rows.length) {
+						console.log('No rows to process in table');
+						currentPage.push(`<table ${tableAttributes}>${hasHeader ? tableHeader : ''}<tbody></tbody></table>`);
+						return;
+					}
 
 					// Extract all attributes and styles from the original table
 					const tableAttributes = Array.from(tableElement.attributes)
@@ -1636,42 +2013,173 @@ export default function MultiPageEditor() {
 						remainingHeightPx -= headerHeightPx;
 					}
 
-					// Improved row height measurement: Create a complete table with all rows
-					// to accurately measure each row in context
-					const fullTableHTML = `<table ${tableAttributes}>${hasHeader ? tableHeader : ''}<tbody>${rows
-						.map((row) => row.outerHTML)
-						.join('')}</tbody></table>`;
-					measureArea.innerHTML = fullTableHTML;
+					// Get the computed style heights directly from the source rows
+					// Use a more efficient logging approach to avoid excessive console operations
+					if (recursionDepth === 0) {
+						console.log(
+							`📏 EXTRACTING ROW HEIGHTS: ${rows.length} rows, ${remainingHeightPx.toFixed(1)}px available space`,
+						);
+					}
 
-					// Get all rendered rows to measure actual heights
-					const renderedRows = Array.from(measureArea.querySelectorAll('tbody tr'));
+					// Extract actual computed heights from each row - use a more efficient approach
+					const rowHeights = [];
+					const rowHeightData = [];
 
-					// Log table information
-					console.log(`📏 TABLE ROWS HEIGHT MEASUREMENT:`);
-					console.log(`- Available space for rows: ${remainingHeightPx}px (${pxToMm(remainingHeightPx).toFixed(2)}mm)`);
+					// Build a single string for the table header instead of multiple console.log calls
+					let heightTableHeader = '';
+					if (recursionDepth === 0) {
+						heightTableHeader =
+							'Row # | Computed | Offset | Height(mm) | % Available\n' +
+							'------ | -------- | ------ | ---------- | -----------';
+					}
 
-					// Measure each row and log its height
-					const rowHeights = renderedRows.map((row, index) => {
-						// Use getBoundingClientRect for more accurate height measurement
-						const rect = row.getBoundingClientRect();
-						const originalRowHeightPx = rect.height;
-						// Reduce height by 12% to prevent footer overlap
-						const rowHeightPx = originalRowHeightPx * 0.9; // 100% - 12% = 88%
-						const rowHeightMm = pxToMm(rowHeightPx);
+					// Create a helper function to safely parse numeric values from computed styles
+					const safeParseFloat = (value) => {
+						if (!value) return 0;
+						// First, ensure we're working with a string
+						const strValue = String(value || '0');
+						// Extract just the numeric part (remove 'px', '%', etc.)
+						const numericPart = strValue.replace(/[^\d.-]/g, '');
+						const result = parseFloat(numericPart);
+						return isNaN(result) ? 0 : result;
+					};
+
+					// Function to get a reliable height measurement for a row
+					const getReliableRowHeight = (row) => {
+						try {
+							// 1. Try direct DOM properties first (most reliable)
+							const offsetHeight = row.offsetHeight || 0;
+							const clientHeight = row.clientHeight || 0;
+							const scrollHeight = row.scrollHeight || 0;
+
+							// Get height from bounding client rect as another option
+							const boundingHeight = row.getBoundingClientRect ? row.getBoundingClientRect().height : 0;
+
+							// 2. Try computed style
+							let computedHeight = 0;
+							let totalCalculatedHeight = 0;
+
+							// Get styles if possible
+							try {
+								const computedStyle = window.getComputedStyle(row);
+								if (computedStyle) {
+									// Extract values carefully
+									computedHeight = safeParseFloat(computedStyle.height);
+
+									// Calculate total height including padding, borders, and margins
+									const paddingTop = safeParseFloat(computedStyle.paddingTop);
+									const paddingBottom = safeParseFloat(computedStyle.paddingBottom);
+									const borderTopWidth = safeParseFloat(computedStyle.borderTopWidth);
+									const borderBottomWidth = safeParseFloat(computedStyle.borderBottomWidth);
+									const marginTop = safeParseFloat(computedStyle.marginTop);
+									const marginBottom = safeParseFloat(computedStyle.marginBottom);
+
+									const boxSizing = computedStyle.boxSizing;
+
+									// Adjust calculation based on box-sizing
+									if (boxSizing === 'border-box') {
+										// Content height already includes padding and border
+										totalCalculatedHeight = computedHeight + marginTop + marginBottom;
+									} else {
+										// Content-box - need to add padding and borders
+										totalCalculatedHeight =
+											computedHeight +
+											paddingTop +
+											paddingBottom +
+											borderTopWidth +
+											borderBottomWidth +
+											marginTop +
+											marginBottom;
+									}
+								}
+							} catch (styleError) {
+								console.warn('Error accessing computed style:', styleError);
+							}
+
+							// 3. Determine the best value to use
+							// Default to a minimum reasonable value for a table row if all else fails
+							const DEFAULT_ROW_HEIGHT = 30; // 30px is a reasonable minimum height for a table row
+
+							// Choose the most reliable value, in order of reliability
+							let finalHeight;
+
+							if (offsetHeight > 0) {
+								// offsetHeight is usually the most reliable
+								finalHeight = offsetHeight;
+							} else if (boundingHeight > 0) {
+								// boundingClientRect height is next most reliable
+								finalHeight = boundingHeight;
+							} else if (totalCalculatedHeight > 0) {
+								// Use our calculated height if available
+								finalHeight = totalCalculatedHeight;
+							} else if (computedHeight > 0) {
+								// Use just the computed height if that's all we have
+								finalHeight = computedHeight;
+							} else if (clientHeight > 0) {
+								// clientHeight as a fallback
+								finalHeight = clientHeight;
+							} else if (scrollHeight > 0) {
+								// scrollHeight as a last resort
+								finalHeight = scrollHeight;
+							} else {
+								// Default height if all else fails
+								finalHeight = DEFAULT_ROW_HEIGHT;
+							}
+
+							// Apply a small safety factor to prevent perfect edge cases causing overflows
+							const safetyFactor = 1.02; // Add 2% to height to account for any rendering issues
+							return finalHeight * safetyFactor;
+						} catch (error) {
+							console.warn('Error measuring row height:', error);
+							return 30; // Default height of 30px
+						}
+					};
+
+					// Process all rows to measure their heights
+					rows.forEach((row, index) => {
+						// Get a reliable height measurement for this row
+						const rowHeightPx = getReliableRowHeight(row);
+
+						// Convert to mm for logging
+						const heightMm = pxToMm ? pxToMm(rowHeightPx) : rowHeightPx / 3.78;
+
+						// Calculate percentage of available space
 						const percentOfAvailable = (rowHeightPx / availableContentHeightPx) * 100;
 
-						// Log detailed information about this row with both original and adjusted heights
-						console.log(
-							`- Row ${index + 1}: Original ${originalRowHeightPx.toFixed(1)}px, Adjusted ${rowHeightPx.toFixed(
-								1,
-							)}px (${rowHeightMm.toFixed(2)}mm) - ${percentOfAvailable.toFixed(1)}% of available space`,
-						);
+						// Store the height
+						rowHeights.push(rowHeightPx);
 
-						return rowHeightPx;
+						// Only log detailed info for first 10 rows to avoid console spam
+						if (recursionDepth === 0 && index < 10) {
+							// Get offset height for comparison
+							const offsetHeight = row.offsetHeight || 0;
+
+							rowHeightData.push(
+								`${(index + 1).toString().padStart(5)} | ` +
+									`${rowHeightPx.toFixed(1).padStart(8)} | ` +
+									`${offsetHeight.toFixed(1).padStart(6)} | ` +
+									`${heightMm.toFixed(2).padStart(10)} | ` +
+									`${percentOfAvailable.toFixed(1).padStart(9)}%`,
+							);
+						}
 					});
 
-					// Reset measurement area
-					measureArea.innerHTML = '';
+					// Log the height data table only on the first recursion level
+					if (recursionDepth === 0 && rowHeightData.length > 0) {
+						console.log(heightTableHeader);
+						console.log(rowHeightData.join('\n'));
+
+						// Log a summary of the measurements
+						console.log(`📏 ROW HEIGHT SUMMARY:`);
+						console.log(
+							`- Average row height: ${(rowHeights.reduce((sum, h) => sum + h, 0) / rowHeights.length).toFixed(1)}px`,
+						);
+						console.log(
+							`- Min height: ${Math.min(...rowHeights).toFixed(1)}px, Max height: ${Math.max(...rowHeights).toFixed(
+								1,
+							)}px`,
+						);
+					}
 
 					// Try to fit as many rows as possible in the first part using measured heights
 					let rowsInFirstPart = [];
@@ -1679,9 +2187,14 @@ export default function MultiPageEditor() {
 					let totalUsedHeight = 0;
 					let totalRemainingHeight = remainingHeightPx;
 
-					// Use measured heights to determine how many rows fit
-					console.log(`🔍 FITTING ROWS IN FIRST PART:`);
-					for (let i = 0; i < rows.length && i < rowHeights.length; i++) {
+					let lastFittedRow = -1;
+
+					// Use computed heights to determine how many rows fit
+					if (recursionDepth === 0) {
+						console.log(`🔍 FITTING ROWS ON PAGE ${contentPages.length + 1}`);
+					}
+
+					for (let i = 0; i < rows.length; i++) {
 						const rowHeightPx = rowHeights[i];
 
 						if (rowHeightPx <= totalRemainingHeight) {
@@ -1689,32 +2202,39 @@ export default function MultiPageEditor() {
 							rowsInFirstPart.push(rows[i]);
 							totalRemainingHeight -= rowHeightPx;
 							totalUsedHeight += rowHeightPx;
-							remainingRows.shift();
-							console.log(
-								`- Row ${i + 1} fits: ${rowHeightPx.toFixed(1)}px - Remaining space: ${totalRemainingHeight.toFixed(
-									1,
-								)}px (${pxToMm(totalRemainingHeight).toFixed(2)}mm)`,
-							);
+							lastFittedRow = i;
 						} else {
-							// This row doesn't fit
-							console.log(
-								`- Row ${i + 1} doesn't fit: ${rowHeightPx.toFixed(1)}px > ${totalRemainingHeight.toFixed(
-									1,
-								)}px remaining`,
-							);
+							// This row doesn't fit - stop processing
 							break;
 						}
 					}
-					console.log(`- Total rows that fit: ${rowsInFirstPart.length} of ${rows.length}`);
-					console.log(`- Total height used: ${totalUsedHeight.toFixed(1)}px (${pxToMm(totalUsedHeight).toFixed(2)}mm)`);
-					console.log(
-						`- Remaining height: ${totalRemainingHeight.toFixed(1)}px (${pxToMm(totalRemainingHeight).toFixed(2)}mm)`,
-					);
 
+					// Remove the rows that fit from the remaining rows
+					if (lastFittedRow >= 0) {
+						remainingRows = rows.slice(lastFittedRow + 1);
+					}
+
+					// Log a summary of what fits on this page (only on first recursion level)
+					if (recursionDepth === 0) {
+						console.log(`- ${rowsInFirstPart.length} of ${rows.length} rows fit on page ${contentPages.length + 1}`);
+						console.log(
+							`- Height used: ${totalUsedHeight.toFixed(1)}px, Remaining: ${totalRemainingHeight.toFixed(1)}px`,
+						);
+					}
+
+					// Continue with the rest of the function as before...
+					// ...existing code...
 					// Finish the first part of the table
 					if (rowsInFirstPart.length > 0) {
 						rowsInFirstPart.forEach((row) => {
-							firstPartHTML += row.outerHTML;
+							// Preserve original row height in output
+							const rowIndex = rows.indexOf(row);
+							const rowHeight = rowHeights[rowIndex];
+							const heightAttr = `data-original-height="${rowHeight}"`;
+
+							// Add original height as data attribute for debugging
+							const rowHtml = row.outerHTML.replace('<tr', `<tr ${heightAttr}`);
+							firstPartHTML += rowHtml;
 						});
 
 						firstPartHTML += '</tbody></table>';
@@ -1733,7 +2253,7 @@ export default function MultiPageEditor() {
 
 							// Create a new page with continuation table
 							let continuationHTML = `<table ${tableAttributes}>`;
-							// Optionally include header in continuation tables
+							// Include header in continuation tables
 							if (hasHeader) continuationHTML += tableHeader;
 							continuationHTML += '<tbody>';
 
@@ -1751,54 +2271,49 @@ export default function MultiPageEditor() {
 								currentPageHeightPx += headerHeightPx;
 							}
 
-							// Try to fit as many remaining rows as possible
+							// Try to fit as many remaining rows as possible using computed heights
+							if (recursionDepth === 0) {
+								console.log(`🔍 CONTINUATION TABLE ON PAGE ${contentPages.length + 1}`);
+							}
+
+							lastFittedRow = -1;
 							for (let i = 0; i < remainingRows.length; i++) {
 								const row = remainingRows[i];
-
-								// Get precomputed row height from earlier measurements
 								const rowIndex = rows.indexOf(row);
-								const originalRowHeightPx =
-									rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] / 0.9 : 30; // Convert back to original height for display purposes only
-								const rowHeightPx = rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] : 30 * 0.9; // Default height if not found, with 12% reduction
+								const rowHeightPx = rowHeights[rowIndex] || 30;
 
 								if (currentPageHeightPx + rowHeightPx <= availableContentHeightPx) {
-									// This row fits
+									// This row fits on continuation page
 									rowsInCurrentPart.push(row);
 									currentPageHeightPx += rowHeightPx;
-									remainingRows.shift();
-									i--; // Adjust index since we're removing from array
-									console.log(
-										`  - Row added: Original height ${originalRowHeightPx.toFixed(1)}px, Used ${rowHeightPx.toFixed(
-											1,
-										)}px, Remaining space: ${(availableContentHeightPx - currentPageHeightPx).toFixed(1)}px`,
-									);
-								} else if (i === 0 && currentPage.length === 0) {
+									lastFittedRow = i;
+								} else if (i === 0) {
 									// Force at least one row even if it overflows
 									rowsInCurrentPart.push(row);
-									remainingRows.shift();
-									console.log(
-										`  - Force added row: Original height ${originalRowHeightPx.toFixed(
-											1,
-										)}px, Used ${rowHeightPx.toFixed(1)}px (overflow)`,
-									);
+									lastFittedRow = 0;
 									break;
 								} else {
-									// This row doesn't fit, and we already have content
-									console.log(
-										`  - Row doesn't fit: Original height ${originalRowHeightPx.toFixed(
-											1,
-										)}px, Used ${rowHeightPx.toFixed(1)}px, Available space: ${(
-											availableHeightForRows - currentPageHeightPx
-										).toFixed(1)}px`,
-									);
+									// This row doesn't fit, and we already have content - stop processing
 									break;
 								}
 							}
 
-							// Add rows to continuation table
+							// Remove the rows that fit from remaining rows
+							if (lastFittedRow >= 0) {
+								remainingRows = remainingRows.slice(lastFittedRow + 1);
+							}
+
+							// Add rows to continuation table with original height attributes
 							rowsInCurrentPart.forEach((row) => {
-								continuationHTML += row.outerHTML;
+								const rowIndex = rows.indexOf(row);
+								const rowHeight = rowHeights[rowIndex] || 30;
+								const heightAttr = `data-original-height="${rowHeight}"`;
+
+								// Add original height as data attribute
+								const rowHtml = row.outerHTML.replace('<tr', `<tr ${heightAttr}`);
+								continuationHTML += rowHtml;
 							});
+
 							continuationHTML += '</tbody></table>';
 
 							// Add continuation to current page
@@ -1814,7 +2329,13 @@ export default function MultiPageEditor() {
 								if (hasHeader) remainingTableHTML += tableHeader;
 								remainingTableHTML += '<tbody>';
 								remainingRows.forEach((row) => {
-									remainingTableHTML += row.outerHTML;
+									const rowIndex = rows.indexOf(row);
+									const rowHeight = rowHeights[rowIndex] || 30;
+									const heightAttr = `data-original-height="${rowHeight}"`;
+
+									// Add original height as data attribute
+									const rowHtml = row.outerHTML.replace('<tr', `<tr ${heightAttr}`);
+									remainingTableHTML += rowHtml;
 								});
 								remainingTableHTML += '</tbody></table>';
 
@@ -1827,8 +2348,8 @@ export default function MultiPageEditor() {
 								currentPage = [];
 								currentPageHeightPx = 0;
 
-								// Process remaining rows recursively
-								splitTableAcrossPages(remainingTableElement);
+								// Process remaining rows recursively - increment recursion depth
+								splitTableAcrossPages(remainingTableElement, recursionDepth + 1);
 							}
 						}
 					} else {
@@ -1841,8 +2362,8 @@ export default function MultiPageEditor() {
 							currentPageHeightPx = 0;
 						}
 
-						// Try again with empty page
-						splitTableAcrossPages(tableElement);
+						// Try again with empty page - increment recursion depth
+						splitTableAcrossPages(tableElement, recursionDepth + 1);
 					}
 				};
 
@@ -1944,12 +2465,19 @@ export default function MultiPageEditor() {
 							background-color: #f0f0f0;
 						}
 						
+						/* Style for anchor tags in printing - no underline, black text, not bold */
+						a {
+							text-decoration: none;
+							color: black;
+							font-weight: normal;
+						}
+						
 						.print-container {
 							width: 720px; /* Exact width: 210mm - 2*10mm margins at 96 DPI */
 							margin: 20px auto;
-							box-shadow: 0 0 10px rgba(0,0,0,0.2);
 							background-color: white;
 							font-family: 'Gilroy', sans-serif !important;
+							padding: 0 1px; /* Add 1px padding on left and right */
 						}
 						
 						.page {
@@ -1962,6 +2490,7 @@ export default function MultiPageEditor() {
 							background-color: white;
 							border-bottom: 1px dashed #ccc;
 							font-family: 'Gilroy', sans-serif !important;
+							padding: 0 1px; /* Add 1px padding on left and right */
 						}
 			
 						/* Allow VLAS icon to overflow the container */
@@ -1976,9 +2505,10 @@ export default function MultiPageEditor() {
 						/* Additional styles for table rows to preserve height */
 						table {
 							border-collapse: collapse;
-							width: 100%;
 							font-family: 'Gilroy', sans-serif !important;
 							table-layout: fixed; /* Helps with consistent row heights */
+							min-width: 100%;
+	
 						}
 						
 						table tr {
@@ -1992,6 +2522,7 @@ export default function MultiPageEditor() {
 							vertical-align: middle; /* Better alignment for multi-line content */
 							height: auto !important; /* Allow cells to grow with content */
 							line-height: 1.2; /* Ensure consistent line height */
+							box-sizing: border-box !important; /* Ensure padding is included in height */
 						}
 						
 						/* Fix paragraph styling in table cells */
@@ -2001,13 +2532,6 @@ export default function MultiPageEditor() {
 							line-height: 1.2;
 							font-family: 'Gilroy', sans-serif !important;
 							font-size: 12px;
-						}
-						
-						/* Ensure STT/No. column has consistent width */
-						table th:first-child, table td:first-child {
-							width: 28px !important;
-							min-width: 28px !important;
-							max-width: 28px !important;
 						}
 						
 						.header {
@@ -2034,8 +2558,7 @@ export default function MultiPageEditor() {
 							width: 100%;
 							box-sizing: border-box;
 							overflow: hidden;
-							padding-top: 0 !important;
-							padding-bottom: 0 !important;
+							padding: 0 1px !important; /* Add 1px padding on left and right */
 							font-family: 'Gilroy', sans-serif !important;
 						}
 						
@@ -2081,16 +2604,25 @@ export default function MultiPageEditor() {
 								font-family: 'Gilroy', sans-serif !important;
 							}
 							
+							/* Ensure anchor styling is maintained in print */
+							a {
+								text-decoration: none !important;
+								color: black !important;
+								font-weight: normal !important;
+							}
+							
 							.print-container {
 								width: 720px !important; /* Force exact width even in print */
 								margin: 0 auto;
 								box-shadow: none;
+								padding: 0 1px !important; /* Ensure padding in print mode */
 							}
 							
 							.page {
 								width: 100% !important;
 								margin: 0;
 								border-bottom: none;
+								padding: 0 1px !important; /* Ensure padding in print mode */
 							}
 							
 							/* Critical: ensure overflow is visible in print mode for VLAS icon */
@@ -2107,6 +2639,21 @@ export default function MultiPageEditor() {
 								margin: 0 !important;
 								padding: 0 !important;
 								line-height: 1.2 !important;
+								
+							}
+							
+							/* Critical: ensure box-sizing is consistent in print mode */
+							table, table td, table th {
+								box-sizing: border-box !important;
+							}
+							
+							/* Adjust column widths for print view to account for padding+border */
+							@media print {
+								table td, table th {
+									box-sizing: border-box !important;
+									padding: 4px 8px !important;
+									border-width: 1px !important;
+								}
 							}
 						}
 					</style>
@@ -2126,7 +2673,7 @@ export default function MultiPageEditor() {
 										icon.querySelector('img').style.maxWidth = 'none';
 									}
 								});
-								window.print();
+								// window.print();
 							}, 1000);
 						});
 					</script>
@@ -2208,16 +2755,46 @@ export default function MultiPageEditor() {
 	const handlePublishNewReport = () => {
 		const isRepublishing = pptList.length > 0;
 		const confirmMessage = isRepublishing
-			? 'Bạn có chắc chắn muốn phát hành lại phiếu phân tích này? Phiếu phân tích cũ sẽ vẫn được lưu trữ trong hệ thống.'
+			? 'Bạn có chắc chắn muốn phát hành phiếu phân tích này? Phiếu phân tích cũ sẽ vẫn được lưu trữ trong hệ thống.'
 			: 'Bạn có chắc chắn muốn phát hành phiếu phân tích này?';
 
-		if (window.confirm(confirmMessage)) {
-			publishReport();
-		}
+		// Replace window.confirm with SweetAlert2
+		Swal.fire({
+			title: 'Xác nhận',
+			text: confirmMessage,
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonColor: '#3085d6',
+			cancelButtonColor: '#d33',
+			confirmButtonText: 'Xác nhận',
+			cancelButtonText: 'Hủy',
+		}).then((result) => {
+			if (result.isConfirmed) {
+				publishReport('publish');
+			}
+		});
 	};
 
-	// Rename the original function to publishReport
-	const publishReport = async () => {
+	// Add handler for the SAVE button
+	const handleSaveReport = () => {
+		Swal.fire({
+			title: 'Xác nhận',
+			text: 'Bạn có chắc chắn muốn lưu phiếu phân tích này?',
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonColor: '#3085d6',
+			cancelButtonColor: '#d33',
+			confirmButtonText: 'Xác nhận',
+			cancelButtonText: 'Hủy',
+		}).then((result) => {
+			if (result.isConfirmed) {
+				publishReport('save');
+			}
+		});
+	};
+
+	// Rename the original function to publishReport and add type parameter
+	const publishReport = async (type) => {
 		try {
 			setLoading(true);
 
@@ -2291,19 +2868,24 @@ export default function MultiPageEditor() {
 				is_comment: showComment,
 				is_reference: showReference,
 				created_by_uid: currentUser.identity_uid,
+				receipt_note: receiptNote,
+				additional_request: additionalRequest,
 			};
 
-			console.log('Publishing new report with data:', requestBody);
+			console.log(`${type === 'publish' ? 'Publishing' : 'Saving'} report with data:`, requestBody);
 
-			// Send the data to the API
-			const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/ppt', { report: requestBody });
+			// Send the data to the API with the type parameter
+			const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/ppt', {
+				report: requestBody,
+				type: type, // Add the type param (publish/save)
+			});
 
 			if (response.status !== 200) {
 				throw new Error(`API request failed with status ${response.status}`);
 			}
 
 			const result = response.data;
-			console.log('Published successfully:', result);
+			console.log(`${type === 'publish' ? 'Published' : 'Saved'} successfully:`, result);
 
 			// If we get a ppt_uid back from the API, update our state and URL
 			if (result && result.ppt_uid) {
@@ -2312,8 +2894,14 @@ export default function MultiPageEditor() {
 
 				// Add the new ppt_uid to the pptList if it's not already there
 				setPptList((prevList) => {
-					if (!prevList.includes(newPptUid)) {
-						return [...prevList, newPptUid];
+					// Check if the item with this ppt_uid already exists
+					const exists = prevList.some((item) => item.ppt_uid === newPptUid);
+					if (!exists) {
+						const newItem = {
+							ppt_uid: newPptUid,
+							publish_date: new Date().toISOString(),
+						};
+						return [...prevList, newItem];
 					}
 					return prevList;
 				});
@@ -2324,13 +2912,27 @@ export default function MultiPageEditor() {
 					return params;
 				});
 
-				alert(`Report published successfully with ID: ${newPptUid}`);
+				// Show success notification
+				showNotification(`${type === 'publish' ? 'Phát hành' : 'Lưu'} phiếu phân tích thành công!`, 'success');
+
+				// Set isReadOnly based on whether this is a draft
+				const isDraft = newPptUid.includes('DRAFT');
+				// setIsReadOnly(!isDraft);
 			} else {
-				alert('Report published successfully!');
+				// Show error notification
+				showNotification(
+					`${type === 'publish' ? 'Phát hành' : 'Lưu'} không thành công, không nhận được mã phiếu`,
+					'error',
+				);
 			}
 		} catch (err) {
-			console.error('Error publishing report:', err);
-			alert(`Failed to publish report: ${err.message}`);
+			console.error(`Error ${type === 'publish' ? 'publishing' : 'saving'} report:`, err);
+			// Replace alert with SweetAlert2
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: `${type === 'publish' ? 'Phát hành' : 'Lưu'} không thành công: ${err.message}`,
+			});
 		} finally {
 			setLoading(false);
 		}
@@ -2385,6 +2987,8 @@ export default function MultiPageEditor() {
 			let sampleParent = sampleInfoDiv;
 			while (sampleParent.parentElement && sampleParent.parentElement !== tempContainer && !sampleParent.style.border) {
 				sampleParent = sampleParent.parentElement;
+				// If we reach a major section break, stop climbing
+				if (sampleParent === tempContainer) break;
 			}
 
 			extractedSections.sampleInfoSection = sampleParent.outerHTML;
@@ -2499,7 +3103,7 @@ export default function MultiPageEditor() {
 				}
 				
 				.content-editable p, .content-editable div, .content-editable span,
-				.content-editable td, .content-editable th, .content-editable li,
+					.content-editable td, .content-editable th, .content-editable li,
 				.header-editable p, .header-editable div, .header-editable span,
 				.footer-editable p, .footer-editable div, .footer-editable span {
 					line-height: inherit;
@@ -2615,26 +3219,148 @@ export default function MultiPageEditor() {
 		updateVlasVisibility();
 	}, [showVlas, showComment, showReference, sampleData]);
 
+	// Custom function to show notifications with SweetAlert instead of alert
+	const showNotification = (message, type = 'success') => {
+		const Toast = Swal.mixin({
+			toast: true,
+			position: 'top-end',
+			showConfirmButton: false,
+			timer: 3000,
+			timerProgressBar: true,
+			didOpen: (toast) => {
+				toast.addEventListener('mouseenter', Swal.stopTimer);
+				toast.addEventListener('mouseleave', Swal.resumeTimer);
+			},
+			customClass: {
+				popup: `colored-toast swal2-icon-${type}`,
+			},
+		});
+
+		Toast.fire({
+			icon: type,
+			title: message,
+		});
+	};
+
+	// Function to format date string for display
+	const formatPublishDate = (dateString) => {
+		if (!dateString) return '';
+		try {
+			const date = new Date(dateString);
+			return date.toLocaleDateString('vi-VN', {
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+			});
+		} catch (error) {
+			console.error('Error formatting date:', error);
+			return dateString;
+		}
+	};
+
+	// Add a new detailed table measurement function for print time
+	const performDetailedTableMeasurements = () => {
+		console.log('🔍 PERFORMING DETAILED TABLE MEASUREMENTS FOR PRINT');
+
+		// First debug the table rows in the DOM
+		debugTableRows(true);
+
+		// Measure table row heights with detailed logging
+		measureTableRowHeights(true);
+
+		// Extract table dimensions with detailed logging
+		extractTableDimensions(true);
+
+		// Additional table header measurement - detailed logging of thead element
+		if (contentRef.current && window.tinymce) {
+			const contentEditor = window.tinymce.get(contentRef.current?.id);
+			if (contentEditor) {
+				const tableHeader = contentEditor.getBody().querySelector('table thead');
+				if (tableHeader) {
+					const headerComputedStyle = window.getComputedStyle(tableHeader);
+					console.log('📏 TABLE HEADER <thead> MEASUREMENTS:', {
+						element: 'thead',
+						height: headerComputedStyle.height,
+						padding: {
+							top: headerComputedStyle.paddingTop,
+							right: headerComputedStyle.paddingRight,
+							bottom: headerComputedStyle.paddingBottom,
+							left: headerComputedStyle.paddingLeft,
+						},
+						border: {
+							top: headerComputedStyle.borderTopWidth,
+							right: headerComputedStyle.borderRightWidth,
+							bottom: headerComputedStyle.borderBottomWidth,
+							left: headerComputedStyle.borderLeftWidth,
+						},
+						boxSizing: headerComputedStyle.boxSizing,
+						display: headerComputedStyle.display,
+					});
+
+					// Also measure the tr within thead
+					const headerRow = tableHeader.querySelector('tr');
+					if (headerRow) {
+						const headerRowStyle = window.getComputedStyle(headerRow);
+						console.log('📏 TABLE HEADER ROW <thead tr> MEASUREMENTS:', {
+							element: 'thead > tr',
+							height: headerRowStyle.height,
+							padding: {
+								top: headerRowStyle.paddingTop,
+								right: headerRowStyle.paddingRight,
+								bottom: headerRowStyle.paddingBottom,
+								left: headerRowStyle.paddingLeft,
+							},
+							border: {
+								top: headerRowStyle.borderTopWidth,
+								right: headerRowStyle.borderRightWidth,
+								bottom: headerRowStyle.borderBottomWidth,
+								left: headerRowStyle.borderLeftWidth,
+							},
+							boxSizing: headerRowStyle.boxSizing,
+							display: headerRowStyle.display,
+						});
+					}
+				}
+			}
+		}
+
+		// Log the final data
+		console.log('📊 DETAILED MEASUREMENTS COMPLETE - READY FOR PRINT');
+	};
+
 	return (
-		<div className="p-4 bg-gray-100 min-h-screen">
-			<div className="mb-4 flex flex-col gap-4 items-end">
+		<div className="p-4 bg-gray-100 min-h-screen relative mt-1">
+			<div className="mb-4 flex flex-col gap-4 items-end min-w-[800px]">
 				<div className="flex justify-between items-center w-full">
 					<select
-						className="px-4 py-1.5 focus:outline-none border-2 border-gray-500 rounded-lg bg-white"
+						className="px-4 py-1.5 focus:outline-none border-2 border-gray-500 rounded-lg bg-white w-96"
 						value={pptUid}
 						onChange={handleReportSelectionChange}
 					>
 						<option value="">Phát hành mới</option>
 						{pptList &&
 							pptList.map((item, index) => (
-								<option key={index} value={item}>
-									{item}
+								<option key={index} value={item.ppt_uid} className="flex justify-between">
+									{item.ppt_uid} - {formatPublishDate(item.publish_date)}
 								</option>
 							))}
 					</select>
 					<div>
 						{loading && <span className="px-4 py-2 bg-yellow-500 text-white rounded">Đang tải dữ liệu mẫu...</span>}
 						{error && <span className="px-4 py-2 bg-red-500 text-white rounded">Lỗi: {error}</span>}
+
+						<button
+							onClick={handleSaveReport}
+							className={`px-4 py-1 focus:outline-none border-2 border-gray-500 rounded-lg ml-2 active:bg-blue-700 ${
+								isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+							}`}
+							disabled={isReadOnly}
+						>
+							SAVE
+						</button>
+
 						<button
 							onClick={handlePublishNewReport}
 							className={`px-4 py-1 focus:outline-none border-2 border-gray-500 rounded-lg ml-2 active:bg-blue-700 ${
@@ -2642,8 +3368,9 @@ export default function MultiPageEditor() {
 							}`}
 							disabled={isReadOnly}
 						>
-							{pptList.length > 0 ? 'Phát hành lại' : 'Phát hành mới'}
+							PUBLISH
 						</button>
+
 						<button
 							onClick={handlePrint}
 							className="px-4 py-1 focus:outline-none border-2 border-gray-500 rounded-lg ml-2 active:bg-blue-700"
@@ -2696,41 +3423,69 @@ export default function MultiPageEditor() {
 						>
 							REFERENCE
 						</button>
+						{/* Simple arrow using a div instead of pseudo-element */}
+						<div className="absolute -left-2 top-5 w-0 h-0 border-t-8 border-b-8 border-r-8 border-transparent border-r-green-50"></div>
 					</div>
 				</div>
 			</div>
+
+			{/* </div>
+			</div>
+ft chat bubble for Ghi chú/Note */}
+			{receiptNote && (
+				<div className="fixed right-4 text-start top-20 w-56 max-h-60 overflow-y-auto overflow-x-hidden bg-blue-50 rounded-lg border border-blue-200 shadow-md p-3 z-10">
+					<div className="font-bold text-gray-700 text-sm mb-2">Ghi chú / Note:</div>
+					<div className="text-gray-600 text-sm whitespace-pre-wrap">{receiptNote}</div>
+					{/* Simple arrow using a div instead of pseudo-element */}
+					<div className="absolute -right-2 top-5 w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-blue-50"></div>
+				</div>
+			)}
+
+			{/* Right chat bubble for Yêu cầu/Requirements */}
+			{additionalRequest && (
+				<div className="fixed right-4 text-start top-96 w-56 max-h-60 overflow-y-auto bg-green-50 rounded-lg border border-green-200 shadow-md p-3 z-10">
+					<div className="font-bold text-blue-700 text-sm mb-2">Yêu cầu / Requirements:</div>
+					<div className="text-blue-600 text-sm whitespace-pre-wrap">{additionalRequest}</div>
+					{/* Simple arrow using a div instead of pseudo-element */}
+					<div className="absolute -left-2 top-5 w-0 h-0 border-t-8 border-b-8 border-r-8 border-transparent border-r-green-50"></div>
+				</div>
+			)}
+
 			<div className="flex flex-col gap-4 overflow-x-auto p-4 bg-white shadow-lg rounded-lg">
-				<div
-					className="bg-white flex flex-col "
-					style={{
-						fontFamily: 'Gilroy, sans-serif',
-						width: '710px', // Exact width: 210mm - 2*10mm margins at 96 DPI
-						margin: '0 auto',
-					}}
-				>
+				<div className="flex justify-center">
+					{/* Main editor content */}
 					<div
-						id="header-edit"
-						className={`header-editable editable text-center font-bold text-lg border-b px-0 pt-8 pb-4 ${
-							isReadOnly ? 'read-only' : ''
-						}`}
-						style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
-						dangerouslySetInnerHTML={{
-							__html: header.replace(/SƠ BỘ \/ DRAFT/g, pptUid || 'SƠ BỘ / DRAFT'),
+						className="bg-white flex flex-col"
+						style={{
+							fontFamily: 'Gilroy, sans-serif',
+							width: '718px',
+							margin: '0 auto',
 						}}
-					/>
-					<div
-						id="content-edit"
-						ref={contentRef}
-						className={`content-editable editable border-0 px-0 py-2 text-base my-4 ${isReadOnly ? 'read-only' : ''}`}
-						style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
-						dangerouslySetInnerHTML={{ __html: content }}
-					/>
-					<div
-						id="footer-edit"
-						className={`footer-editable editable px-0 pb-8 pt-4 ${isReadOnly ? 'read-only' : ''}`}
-						style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
-						dangerouslySetInnerHTML={{ __html: footer }}
-					/>
+					>
+						<div
+							id="header-edit"
+							className={`header-editable editable text-center font-bold text-lg border-b px-0 pt-8 pb-4 ${
+								isReadOnly ? 'read-only' : ''
+							}`}
+							style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
+							dangerouslySetInnerHTML={{
+								__html: header.replace(/SƠ BỘ \/ DRAFT/g, pptUid || 'SƠ BỘ / DRAFT'),
+							}}
+						/>
+						<div
+							id="content-edit"
+							ref={contentRef}
+							className={`content-editable editable border-0 px-0 py-2 text-base my-4 ${isReadOnly ? 'read-only' : ''}`}
+							style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
+							dangerouslySetInnerHTML={{ __html: content }}
+						/>
+						<div
+							id="footer-edit"
+							className={`footer-editable editable px-0 pb-8 pt-4 ${isReadOnly ? 'read-only' : ''}`}
+							style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
+							dangerouslySetInnerHTML={{ __html: footer }}
+						/>
+					</div>
 				</div>
 			</div>
 
@@ -2781,6 +3536,48 @@ export default function MultiPageEditor() {
 					}
 					.page-break {
 						page-break-after: always;
+					}
+				}
+
+				.colored-toast.swal2-icon-success {
+					background-color: #2bae66 !important;
+				}
+				.colored-toast.swal2-icon-error {
+					background-color: #f27474 !important;
+				}
+				.colored-toast.swal2-icon-warning {
+					background-color: #f8bb86 !important;
+				}
+				.colored-toast.swal2-icon-info {
+					background-color: #1976d2 !important;
+				}
+				.colored-toast.swal2-icon-question {
+					background-color: #87adbd !important;
+				}
+				.colored-toast .swal2-title {
+					color: white;
+					font-size: 0.85rem !important;
+				}
+				.colored-toast .swal2-close {
+					color: white;
+				}
+				.colored-toast .swal2-html-container {
+					color: white;
+				}
+
+				/* Make bubbles responsive in small screens */
+				@media (max-width: 1200px) {
+					.fixed.left-4,
+					.fixed.right-4 {
+						position: static !important;
+						width: 100% !important;
+						max-width: none !important;
+						margin-bottom: 10px !important;
+					}
+
+					.fixed.left-4 > div:last-child,
+					.fixed.right-4 > div:last-child {
+						display: none !important;
 					}
 				}
 			`}</style>

@@ -7,10 +7,10 @@ import FilterBar from './FilterBar';
 import TinyMceInput from './Input';
 import { toast, ToastContainer } from 'react-toastify';
 import { MdOutlineViewList, MdViewModule } from 'react-icons/md';
-import { FaCheck, FaSave, FaUndo } from 'react-icons/fa';
+import { FaCheck, FaSave, FaUndo, FaStickyNote, FaCopy } from 'react-icons/fa';
 
 const ProcessingSample = () => {
-	const { setCurrentTitlePage, formatDate, status, currentUser, technicians } = useContext(GlobalContext);
+	const { setCurrentTitlePage, status, currentUser, technicians, formatDate } = useContext(GlobalContext);
 	const [viewMode, setViewMode] = useState('v1');
 	const [processingSample, setProcessingSample] = useState(null);
 	const [originalProcessingSample, setOriginalProcessingSample] = useState(null); // Add original list
@@ -28,28 +28,50 @@ const ProcessingSample = () => {
 	const location = useLocation();
 	let isFetch = false;
 
-	const fetchData = async (vm = viewMode) => {
+	// Custom date formatter that doesn't add timezone offset (since we handle it separately)
+	const formatDateLocal = (dateString) => {
+		if (!dateString) return '';
+		const date = new Date(dateString);
+		if (isNaN(date.getTime())) return '';
+
+		const day = date.getDate().toString().padStart(2, '0');
+		const month = (date.getMonth() + 1).toString().padStart(2, '0');
+		const year = date.getFullYear();
+		const hours = date.getHours().toString().padStart(2, '0');
+		const minutes = date.getMinutes().toString().padStart(2, '0');
+
+		return `${day}/${month}/${year} ${hours}:${minutes}`;
+	};
+
+	const fetchData = async (vm = viewMode, searchTerm = null) => {
 		try {
-			if (vm === 'v1') {
-				const response = await apiGet('https://black.irdop.org/to82oe92i/db/get/processing_sample/v1');
+			if (!isFilter) {
+				let apiUrl = '';
+
+				// Determine which API endpoint to use based on the view mode
+				if (vm === 'v1') {
+					apiUrl = 'https://black.irdop.org/to82oe92i/db/get/processing_sample/v1';
+				} else if (vm === 'v2') {
+					apiUrl = 'https://black.irdop.org/to82oe92i/db/get/processing_sample/v2';
+				} else {
+					console.error('Invalid view mode:', vm);
+					return; // Exit if invalid mode
+				}
+
+				// Add search parameter if provided
+				if (searchTerm) {
+					apiUrl += `?search=${encodeURIComponent(searchTerm)}`;
+				}
+
+				const response = await apiGet(apiUrl);
 				// Ensure data is an array before setting state
 				const data = Array.isArray(response?.data) ? response.data : [];
+
 				// Store original data
 				setOriginalProcessingSample(data);
+
 				// If no filter is active, update the displayed data as well
-				if (!isFilter) {
-					setProcessingSample(data);
-				}
-			} else {
-				const response = await apiGet('https://black.irdop.org/to82oe92i/db/get/processing_sample/v2');
-				// Ensure data is an array before setting state
-				const data = Array.isArray(response?.data) ? response.data : [];
-				// Store original data
-				setOriginalProcessingSample(data);
-				// If no filter is active, update the displayed data as well
-				if (!isFilter) {
-					setProcessingSample(data);
-				}
+				setProcessingSample(data);
 			}
 		} catch (error) {
 			console.error('Error fetching processing samples:', error);
@@ -65,33 +87,54 @@ const ProcessingSample = () => {
 		if (!isFetch) {
 			setCurrentTitlePage('Mẫu đang xử lý');
 
-			// Get view mode from URL query parameter
+			// Get view mode and search parameter from URL
 			const queryParams = new URLSearchParams(location.search);
 			const modeFromQuery = queryParams.get('mode');
+			const searchQuery = queryParams.get('search');
 
 			// Set view mode based on query parameter or default to 'v1'
 			const initialViewMode = modeFromQuery === 'v1' || modeFromQuery === 'v2' ? modeFromQuery : 'v1';
 			setViewMode(initialViewMode);
 
-			fetchData(initialViewMode);
+			// If we have a search query, set isFilter to true to prevent overriding filtered results
+			if (searchQuery) {
+				setIsFilter(true);
+			}
+
+			// Fetch data with the initial view mode and search query if available
+			fetchData(initialViewMode, searchQuery);
 			isFetch = true;
 		}
 	}, [location.search]);
 
+	// Update the interval to pass any search param from URL when refreshing
 	useEffect(() => {
 		const interval = setInterval(() => {
+			// Get search parameter from URL for periodic refresh
+			const queryParams = new URLSearchParams(location.search);
+			const searchQuery = queryParams.get('search');
+
 			// Always fetch data to update the original list
-			fetchData(viewMode);
+			fetchData(viewMode, searchQuery);
 		}, 60000);
 
 		return () => clearInterval(interval);
-	}, [viewMode, isFilter]); // Re-run effect when viewMode or isFilter changes
+	}, [viewMode, isFilter, location.search]); // Include location.search in dependencies
 
+	// Update handleViewModeChange to preserve search parameter when changing modes
 	const handleViewModeChange = async (mode) => {
+		// Get current search parameter from URL
+		const queryParams = new URLSearchParams(location.search);
+		const searchQuery = queryParams.get('search');
+
 		setViewMode(mode);
-		// Update URL with the new view mode
-		navigate(`?mode=${mode}`, { replace: true });
-		await fetchData(mode);
+
+		// Update URL with the new view mode, preserving search if it exists
+		const newUrl = searchQuery ? `?mode=${mode}&search=${searchQuery}` : `?mode=${mode}`;
+		navigate(newUrl, { replace: true });
+
+		// Fetch data with new mode and existing search term if any
+		await fetchData(mode, searchQuery);
 	};
 
 	const toggleTableVisibility = (id) => {
@@ -108,10 +151,16 @@ const ProcessingSample = () => {
 
 	const saveAnalysis = async () => {
 		try {
+			// Add GMT+7 date and submitter info
+			const now = new Date();
+			// now.setHours(now.getHours() + 7); // Adjust to GMT+7
+
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 				analysis: {
 					...selectedAnalysis,
 					modified_by_uid: currentUser.identity_uid,
+					submit_result_by: currentUser.identity_name,
+					submit_result_at: now.toISOString(),
 				},
 			});
 
@@ -121,8 +170,19 @@ const ProcessingSample = () => {
 				const parameter = updatedSample.find((p) => p.analyses.some((a) => a.id === selectedAnalysis.id));
 				if (parameter) {
 					const analysisIndex = parameter.analyses.findIndex((a) => a.id === selectedAnalysis.id);
-					parameter.analyses[analysisIndex] = selectedAnalysis;
+					parameter.analyses[analysisIndex] = {
+						...selectedAnalysis,
+						submit_result_by: currentUser.identity_name,
+						submit_result_at: now.toISOString(),
+					};
 					setProcessingSample(updatedSample);
+
+					// Also update the selected analysis for proper display in modal
+					setSelectedAnalysis({
+						...selectedAnalysis,
+						submit_result_by: currentUser.identity_name,
+						submit_result_at: now.toISOString(),
+					});
 				}
 				toast.success('Cập nhật thành công');
 			} else {
@@ -146,6 +206,13 @@ const ProcessingSample = () => {
 		const parameter = updatedSample.find((p) => p.id === editableCell.parameterId);
 		const analysisIndex = parameter.analyses.findIndex((a) => a.id === editableCell.analysisId);
 		parameter.analyses[analysisIndex][column] = content;
+
+		// Add GMT+7 date and submitter info
+		const now = new Date();
+		now.setHours(now.getHours() + 7); // Adjust to GMT+7
+		parameter.analyses[analysisIndex].submit_result_by = currentUser.identity_name;
+		parameter.analyses[analysisIndex].submit_result_at = now.toISOString();
+
 		setProcessingSample(updatedSample);
 
 		try {
@@ -153,6 +220,8 @@ const ProcessingSample = () => {
 				analysis: {
 					...parameter.analyses[analysisIndex],
 					modified_by_uid: currentUser.identity_uid,
+					submit_result_by: currentUser.identity_name,
+					submit_result_at: now.toISOString(),
 				},
 			});
 			if (response.status === 200) {
@@ -291,11 +360,19 @@ const ProcessingSample = () => {
 
 		updatedSamples[sampleIndex].analysis[analysisIndex][column] = content;
 
+		// Add GMT+7 date and submitter info
+		const now = new Date();
+		now.setHours(now.getHours() + 7); // Adjust to GMT+7
+		updatedSamples[sampleIndex].analysis[analysisIndex].submit_result_by = currentUser.identity_name;
+		updatedSamples[sampleIndex].analysis[analysisIndex].submit_result_at = now.toISOString();
+
 		try {
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 				analysis: {
 					...updatedSamples[sampleIndex].analysis[analysisIndex],
 					modified_by_uid: currentUser?.identity_uid || '',
+					submit_result_by: currentUser.identity_name,
+					submit_result_at: now.toISOString(),
 				},
 			});
 			if (response?.status == 200) toast.success('Cập nhật kết quả thành công');
@@ -580,7 +657,19 @@ const ProcessingSample = () => {
 
 	// Add a function to handle navigation to sample in v2 mode
 	const navigateToSampleInV2 = (sampleUid) => {
-		window.open(`/processing?mode=v2&search=${sampleUid}`, '_blank');
+		// Force the view mode to v2 when navigating
+		const url = `/processing?mode=v2&search=${sampleUid}`;
+
+		// Using window.open with _blank to open in a new tab
+		window.open(url, '_blank');
+	};
+
+	// Add function to copy sample_uid to clipboard
+	const copySampleUid = (text) => {
+		navigator.clipboard
+			.writeText(text)
+			.then(() => toast.info('Đã sao chép mã mẫu'))
+			.catch((err) => toast.error('Không thể sao chép: ' + err));
 	};
 
 	return (
@@ -639,11 +728,21 @@ const ProcessingSample = () => {
 						className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-10"
 						onClick={closeForm}
 					>
-						<div className="bg-white p-4 rounded-lg shadow-lg w-96" onClick={(e) => e.stopPropagation()}>
-							<h2 className="text-lg font-medium mb-4">Kết quả {selectedAnalysis.parameterName || ''}</h2>
-							<div className="mb-2 flex items-center h-10">
-								<label className="text-start block text-sm font-medium w-24">Mã mẫu</label>
-								<div className="w-full relative">
+						<div className="bg-white p-4 rounded-lg shadow-lg max-w-[400px]" onClick={(e) => e.stopPropagation()}>
+							<h2 className="text-lg font-medium mb-4">{selectedAnalysis.parameterName || ''}</h2>
+							{/* Mã mẫu */}
+							<div className="mb-2 flex items-start h-10">
+								<label className="text-start block text-sm font-medium w-24 text-gray-500">Mã mẫu</label>
+								<div className="w-full relative flex items-center">
+									<div
+										className="absolute right-2 flex items-center justify-center cursor-pointer"
+										onClick={(e) => {
+											e.stopPropagation();
+											copySampleUid(selectedAnalysis.sample_uid);
+										}}
+									>
+										<FaCopy className="text-gray-600 hover:text-gray-900" />
+									</div>
 									<input
 										type="text"
 										value={selectedAnalysis.sample_uid}
@@ -656,9 +755,76 @@ const ProcessingSample = () => {
 									/>
 								</div>
 							</div>
-							<div className="mb-2 flex items-center ">
-								<label className="text-start block text-sm font-medium w-24">Kết quả</label>
-								<div className="w-full h-10" onClick={() => handleFormCellClick('result_value')}>
+							{/* Hạn trả */}
+							<div className="mb-2 flex items-start">
+								<label className="text-start block text-sm font-medium w-24 text-gray-500">Hạn trả</label>
+								<input
+									type="text"
+									value={selectedAnalysis.deadline ? formatDate(selectedAnalysis.deadline) : ''}
+									className="w-full p-2 border rounded-lg bg-white"
+									readOnly
+								/>
+							</div>
+							{/* Yêu cầu */}
+							<div className="mb-2 flex items-start">
+								<label className="text-start block text-sm font-medium w-24 text-gray-500 ">
+									Ghi chú
+									<br />
+									(KH)
+								</label>
+								<div className="w-full">
+									<textarea
+										value={selectedAnalysis.additional_request || ''}
+										onChange={(e) => handleFormSaveContent(e.target.value, 'additional_request')}
+										className="w-full p-2 py-0.5 border rounded-lg bg-white text-gray-700 min-h-[36px] resize-none"
+										rows={1}
+										readOnly
+									/>
+								</div>
+							</div>
+							{/* Ghi chú */}
+							<div className="mb-1 flex items-start">
+								<label className="text-start block text-sm font-medium w-24 text-gray-500">
+									Ghi chú <br />
+									(Nội bộ)
+								</label>
+								<div className="w-full">
+									<textarea
+										value={selectedAnalysis.note || ''}
+										onChange={(e) => handleFormSaveContent(e.target.value, 'note')}
+										className="w-full p-2 py-0.5 border rounded-lg bg-white text-gray-700 min-h-[60px]"
+									/>
+								</div>
+							</div>
+							{/* Divider line */}
+							<hr className="my-2 border-gray-200" />
+							{/* Phương pháp */}
+							<div className="mb-2 flex items-start h-10">
+								<label className="text-start block text-sm font-medium w-24 text-gray-500">Phương pháp</label>
+								<div className="w-full flex gap-2">
+									<select
+										value={selectedAnalysis.protocol_source || ''}
+										onChange={(e) => handleFormSaveContent(e.target.value, 'protocol_source')}
+										className="p-2 px-0 border rounded-lg bg-white w-24"
+									>
+										<option value="IRDOP">IRDOP</option>
+										<option value="IRDOP VS">IRDOP VS</option>
+										<option value="EX">EX</option>
+										<option value="">----</option>
+									</select>
+									<input
+										type="text"
+										value={selectedAnalysis.protocol_code || ''}
+										onChange={(e) => handleFormSaveContent(e.target.value, 'protocol_code')}
+										className="p-2 border rounded-lg bg-white flex-1"
+										placeholder="Mã phương pháp"
+									/>
+								</div>
+							</div>
+							{/* Kết quả */}
+							<div className="mb-2 flex items-start">
+								<label className="text-start block text-sm font-medium w-24 text-gray-500">Kết quả</label>
+								<div className="w-full h-auto" onClick={() => handleFormCellClick('result_value')}>
 									{editableCell.column === 'result_value' ? (
 										<TinyMceInput
 											value={inputValue}
@@ -668,13 +834,14 @@ const ProcessingSample = () => {
 									) : (
 										<div
 											dangerouslySetInnerHTML={{ __html: `${selectedAnalysis.result_value || '--'}` }}
-											className="p-2 text-start border rounded-lg bg-white cursor-pointer"
+											className="p-2 text-start border rounded-lg bg-white cursor-pointer min-h-10 overflow-visible"
 										/>
 									)}
 								</div>
 							</div>
-							<div className="mb-2 flex items-center z-10">
-								<label className="text-start block text-sm font-medium w-24">Đơn vị</label>
+							{/* Đơn vị */}
+							<div className="mb-2 flex items-start z-10">
+								<label className="text-start block text-sm font-medium w-24 text-gray-500">Đơn vị</label>
 								<div className="w-full h-10" onClick={() => handleFormCellClick('result_unit')}>
 									{editableCell.column === 'result_unit' ? (
 										<TinyMceInput
@@ -690,8 +857,9 @@ const ProcessingSample = () => {
 									)}
 								</div>
 							</div>
-							<div className="mb-2 flex items-center">
-								<label className="text-start block text-sm font-medium w-24">LOD/LOQ</label>
+							{/* LOD/LOQ */}
+							<div className="mb-2 flex items-start">
+								<label className="text-start block text-sm font-medium w-24 text-gray-500">LOD/LOQ</label>
 								<div className="w-full h-10" onClick={() => handleFormCellClick('lodq')}>
 									{editableCell.column === 'lodq' ? (
 										<TinyMceInput
@@ -707,14 +875,21 @@ const ProcessingSample = () => {
 									)}
 								</div>
 							</div>
-							<div className="mb-2 flex items-center">
-								<label className="text-start block text-sm font-medium w-24">Hạn trả</label>
-								<input
-									type="text"
-									value={selectedAnalysis.deadline ? formatDate(selectedAnalysis.deadline) : ''}
-									className="w-full p-2 border rounded-lg bg-white"
-									readOnly
-								/>
+							{/* Thông tin người nhập kết quả */}
+							<div className="mb-4 mt-3 text-sm text-gray-600 italic">
+								{selectedAnalysis.submit_result_by ? (
+									<div>
+										Người nhập kết quả: <span className="font-medium">{selectedAnalysis.submit_result_by}</span>
+										{selectedAnalysis.submit_result_at && (
+											<> vào {formatDateLocal(selectedAnalysis.submit_result_at)}</>
+										)}
+									</div>
+								) : (
+									<div>
+										Người nhập kết quả: <span className="font-medium mr-1">{currentUser.identity_name}</span>
+										vào ...
+									</div>
+								)}
 							</div>
 							<div className="flex justify-end">
 								<button
@@ -806,16 +981,22 @@ const ProcessingSample = () => {
 																									: analysis?.deadline && new Date(analysis.deadline) < new Date()
 																									? 'border-red-500'
 																									: 'border-gray-500'
-																							}`}
+																							} relative`}
 																							draggable
 																							onDragStart={(e) => handleDragStart(e, parameter?.id, analysis?.id)}
 																							onClick={() => handleAnalysisClick(analysis, parameter?.parameter_name)}
 																						>
-																							<span className="cursor-pointer text-primary">
+																							<span className="cursor-pointer text-black">
 																								{analysis?.sample_uid || 'N/A'}
 																							</span>
 																							<br />
-																							{getTechnicianName(analysis?.technician_uid)}
+																							<span
+																								className="text-xs truncate block"
+																								title={analysis?.submit_result_by || ''}
+																							>
+																								{analysis?.submit_result_by ||
+																									getTechnicianName(analysis?.technician_uid)}
+																							</span>
 																						</button>
 																					),
 																			)}
@@ -845,14 +1026,20 @@ const ProcessingSample = () => {
 																									: new Date(analysis.deadline) < new Date()
 																									? 'border-red-500'
 																									: 'border-gray-500'
-																							}`}
+																							} relative`}
 																							draggable
 																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
 																							onClick={() => handleAnalysisClick(analysis, parameter.parameter_name)}
 																						>
-																							<span className="cursor-pointer text-primary">{analysis.sample_uid}</span>
+																							<span className="cursor-pointer text-black">{analysis.sample_uid}</span>
 																							<br />
-																							{getTechnicianName(analysis.technician_uid)}
+																							<span
+																								className="text-xs truncate block"
+																								title={analysis?.submit_result_by || ''}
+																							>
+																								{analysis?.submit_result_by ||
+																									getTechnicianName(analysis?.technician_uid)}
+																							</span>
 																						</button>
 																					),
 																			)}
@@ -880,14 +1067,20 @@ const ProcessingSample = () => {
 																									: new Date(analysis.deadline) < new Date()
 																									? 'border-red-500'
 																									: 'border-gray-500'
-																							}`}
+																							} relative`}
 																							draggable
 																							onDragStart={(e) => handleDragStart(e, parameter.id, analysis.id)}
 																							onClick={() => handleAnalysisClick(analysis, parameter.parameter_name)}
 																						>
-																							<span className="cursor-pointer text-primary">{analysis.sample_uid}</span>
+																							<span className="cursor-pointer text-black">{analysis.sample_uid}</span>
 																							<br />
-																							{getTechnicianName(analysis.technician_uid)}
+																							<span
+																								className="text-xs truncate block"
+																								title={analysis?.submit_result_by || ''}
+																							>
+																								{analysis?.submit_result_by ||
+																									getTechnicianName(analysis?.technician_uid)}
+																							</span>
 																						</button>
 																					),
 																			)}
@@ -938,7 +1131,7 @@ const ProcessingSample = () => {
 																						) : (
 																							<div
 																								dangerouslySetInnerHTML={{ __html: `${analysis.result_value || '--'}` }}
-																								className="p-1"
+																								className="p-1 min-h-[40px] overflow-visible"
 																							/>
 																						)}
 																					</div>
@@ -1133,7 +1326,7 @@ const ProcessingSample = () => {
 																					) : (
 																						<div
 																							dangerouslySetInnerHTML={{ __html: `${item.result_value || '--'}` }}
-																							className="line-clamp-5 overflow-hidden"
+																							className="min-h-[40px] overflow-visible max-h-[300px] overflow-y-auto"
 																						/>
 																					)}
 																				</div>
