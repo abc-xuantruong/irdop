@@ -1219,10 +1219,13 @@ const ProcessingSample = () => {
 													key={sample?.sample_uid || `sample-${Math.random()}`}
 													className="p-2 border rounded-lg mb-4 flex items-start lg:w-[49.5%] w-full lg:overflow-hidden overflow-auto"
 												>
-													<div className="text-start">
+													<div className="text-start max-w-32">
 														<button className="bg-slate-50 border-2 border-sky-500 p-1 px-0.5 max-h-fit rounded-md min-w-32 text-start">
 															{sample?.sample_uid || 'N/A'}
 														</button>
+														<p className="text-gray-600 italic text- mt-0.5">
+															{sample?.sample_name || 'Chưa có tên mẫu'}
+														</p>
 														<p className="text-primary font-medium line-clamp-2">{sample?.matrix || ''}</p>
 														<p className={`${sample?.status === 1 ? 'text-red-500 font-semibold' : ''} `}>
 															{status[sample?.status] || 'Không xác định'}

@@ -236,18 +236,15 @@ const SampleInfor = () => {
 	const handleFieldKeyDown = (e, field, value) => {
 		if (e.key === 'Enter') {
 			e.preventDefault();
-			handleSaveField(field, value);
-			// Remove focus from the element
+			// Just blur the field - the blur handler will save the data
 			e.target.blur();
 		}
 	};
 
-	// New handler for field blur events
+	// Modified to always save on blur, without checking if value changed
 	const handleFieldBlur = (field, value, originalValue) => {
-		// Only save if value has changed
-		if (value !== originalValue) {
-			handleSaveField(field, value);
-		}
+		// Remove the condition that checks if value !== originalValue
+		handleSaveField(field, value);
 	};
 
 	// Modified status change handler
@@ -338,15 +335,25 @@ const SampleInfor = () => {
 
 	const handleSampleSelectFromDropdown = async (sampleUid) => {
 		let analyses = receiptFull.samples.find((sample) => sample.sample_uid === sampleUid).analysis;
-		analyses = analyses.map((analysis) => analysis.parameter_id);
-		try {
-			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/get/bulk/parameter', { ids: analyses });
-			setSelectedParameters(response.data);
+		analyses = analyses.map((analysis) => {
+			delete analysis.id;
+			delete analysis.result_value;
+			delete analysis.reviewed_by;
+			return analysis;
+		});
+		// analyses = analyses.map((analysis) => analysis.parameter_id);
+		console.log(analyses);
+		setSelectedParameters(analyses);
+		setIsDropdownVisible(false);
 
-			setIsDropdownVisible(false);
-		} catch (error) {
-			console.error('Error fetching parameters:', error);
-		}
+		// try {
+		// 	const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/get/bulk/parameter', { ids: analyses });
+		// 	setSelectedParameters(response.data);
+
+		// 	setIsDropdownVisible(false);
+		// } catch (error) {
+		// 	console.error('Error fetching parameters:', error);
+		// }
 	};
 
 	const handleSearchKeyDown = (e) => {
@@ -389,6 +396,7 @@ const SampleInfor = () => {
 
 	const handleConfirmAddParameter = async () => {
 		try {
+			console.log(selectedParameters);
 			const parameters = selectedParameters.map((parameter) => ({
 				receipt_id: currentSample.receipt_id,
 				sample_id: currentSample.id,
@@ -398,7 +406,9 @@ const SampleInfor = () => {
 				accrenditation: parameter.accrenditation,
 				protocol_id: parameter.protocol_id,
 				technician_uid: parameter.technician_uid,
-				deadline: new Date(Date.now() + parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0),
+				deadline: parameter.deadline
+					? parameter.deadline
+					: new Date(Date.now() + parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0),
 				protocol_code: parameter.protocol_code,
 				result_unit: parameter.default_unit,
 				protocol_source: parameter.protocol_source,
@@ -503,17 +513,17 @@ const SampleInfor = () => {
 
 				// Update the parameter_id in the analysis object
 				if (parameterResponse.status === 200) {
-					// Create minimal update object with only required fields
+					// Create minimal update object with required fields
 					const updateData = {
 						id: analysis.id,
 						sample_id: analysis.sample_id,
 						receipt_id: analysis.receipt_id,
 						parameter_id: parameterResponse.data.id,
+						parameter_name: analysis.parameter_name, // Ensure parameter_name is included
 						modified_by_uid: currentUser.identity_uid,
 					};
 
 					// Add fields that were updated
-					if (analysis.parameter_name) updateData.parameter_name = analysis.parameter_name;
 					if (analysis.matrix) updateData.matrix = analysis.matrix;
 					if (analysis.protocol_code) updateData.protocol_code = analysis.protocol_code;
 					if (analysis.protocol_source) updateData.protocol_source = analysis.protocol_source;
@@ -547,6 +557,7 @@ const SampleInfor = () => {
 				const changedFields = {};
 
 				// Identify which fields need to be updated
+				if (analysis.parameter_name !== undefined) changedFields.parameter_name = analysis.parameter_name;
 				if (analysis.result_value !== undefined) changedFields.result_value = analysis.result_value;
 				if (analysis.result_unit !== undefined) changedFields.result_unit = analysis.result_unit;
 				if (analysis.protocol_code !== undefined) changedFields.protocol_code = analysis.protocol_code;
@@ -601,6 +612,7 @@ const SampleInfor = () => {
 				const fieldBeingUpdated = {};
 
 				// Check each field that might have been updated
+				if (analysis.parameter_name !== undefined) fieldBeingUpdated.parameter_name = analysis.parameter_name;
 				if (analysis.result_value !== undefined) fieldBeingUpdated.result_value = analysis.result_value;
 				if (analysis.result_unit !== undefined) fieldBeingUpdated.result_unit = analysis.result_unit;
 				if (analysis.protocol_code !== undefined) fieldBeingUpdated.protocol_code = analysis.protocol_code;
@@ -1060,9 +1072,9 @@ const SampleInfor = () => {
 			} else if (editingField.startsWith('technician_uid')) {
 				updateData.technician_uid = newValue;
 			}
-			
+
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-				analysis: updateData
+				analysis: updateData,
 			});
 
 			if (response.status === 200) {
@@ -1088,15 +1100,9 @@ const SampleInfor = () => {
 	const handleKeyDown = async (e, newValue) => {
 		key = e.key;
 		if (key === 'Enter') {
-			e.preventDefault(); // Prevent default to avoid potential form submissions
-			setInputValue(newValue);
-			setIsEditorVisible(false);
-			setEditingField(null);
-
-			// Just blur the element without updating
-			if (document.activeElement) {
-				document.activeElement.blur();
-			}
+			e.preventDefault();
+			// Call handleSaveContent directly instead of just closing the editor
+			handleSaveContent(newValue);
 		}
 	};
 
@@ -1394,6 +1400,11 @@ const SampleInfor = () => {
 	// Add a helper function to check if user is a technician
 	const isTechnician = () => {
 		return currentUser?.role?.staff_technician;
+	};
+
+	// Add a helper function to check if user is an admin
+	const isAdmin = () => {
+		return currentUser?.role?.staff_admin;
 	};
 
 	const renderNewReport = () => {
@@ -1884,14 +1895,16 @@ const SampleInfor = () => {
 	const handleParameterKeyDown = async (e, index) => {
 		if (e.key === 'Enter') {
 			e.preventDefault();
-			await handleParameterBlur(index);
+			// Just blur the element to trigger the blur handler
+			e.target.blur();
 		}
 	};
 
 	const handleMatrixKeyDown = async (e, index) => {
 		if (e.key === 'Enter') {
 			e.preventDefault();
-			await handleMatrixBlur(index);
+			// Just blur the element to trigger the blur handler
+			e.target.blur();
 		}
 	};
 
@@ -1928,7 +1941,8 @@ const SampleInfor = () => {
 	const handleProtocolKeyDown = async (e, index) => {
 		if (e.key === 'Enter') {
 			e.preventDefault();
-			await handleProtocolBlur(index);
+			// Just blur the element to trigger the blur handler
+			e.target.blur();
 		}
 	};
 
@@ -2801,17 +2815,29 @@ const SampleInfor = () => {
 								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
 							</button>
 
-							{/* Add the new review button here */}
-							<button
-								className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
-									selectedAnalytes.length > 0 ? 'bg-green-500' : 'bg-gray-300 cursor-not-allowed'
-								} mr-2`}
-								onClick={selectedAnalytes.length > 0 ? handleReviewAnalyses : undefined}
-								title="Duyệt kết quả"
-							>
-								<FaCheck className="mr-1" />
-								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
-							</button>
+							{/* Modify the review button to check for admin role */}
+							{isAdmin() && (
+								<button
+									className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+										selectedAnalytes.length > 0 ? 'bg-green-500' : 'bg-gray-300 cursor-not-allowed'
+									} mr-2`}
+									onClick={selectedAnalytes.length > 0 ? handleReviewAnalyses : undefined}
+									title="Duyệt kết quả"
+								>
+									<FaCheck className="mr-1" />
+									{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
+								</button>
+							)}
+
+							{/* If not admin, show disabled review button with tooltip */}
+							{!isAdmin() && (
+								<button
+									className="text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center bg-gray-300 cursor-not-allowed mr-2"
+									title="Chỉ admin mới có quyền duyệt kết quả"
+								>
+									<FaCheck className="mr-1" />0
+								</button>
+							)}
 
 							<button
 								className={`border-gray-400 text-sm rounded-lg p-1.5 mr-2 flex-shrink-0 flex items-center ${

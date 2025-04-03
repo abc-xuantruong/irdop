@@ -9,11 +9,14 @@ import Cookies from 'js-cookie';
 const Header = () => {
 	const { currentUser, setCurrentUser, fetchUser } = useContext(GlobalContext);
 	const [dropdownOpen, setDropdownOpen] = useState(false);
+	const [notifications, setNotifications] = useState([]);
+	const [notificationOpen, setNotificationOpen] = useState(false);
 	const navigate = useNavigate();
 	const currentPath = window.location.pathname;
 
 	const dropdownRef = React.useRef(null);
 	const dropdownButtonRef = React.useRef(null);
+	const notificationRef = React.useRef(null);
 
 	// Check for auth cookie and fetch user info on mount and when auth cookie changes
 	useEffect(() => {
@@ -26,6 +29,47 @@ const Header = () => {
 			fetchUser();
 		}
 	}, [navigate, setCurrentUser, fetchUser, currentUser]);
+
+	// Fetch notifications when on dashboard or home page
+	useEffect(() => {
+		const fetchNotifications = async () => {
+			try {
+				const response = await fetch('https://black.irdop.org/khsi19me/get/noti/payment');
+				if (response.ok) {
+					const data = await response.json();
+					setNotifications(data);
+				}
+			} catch (error) {
+				console.error('Failed to fetch notifications:', error);
+			}
+		};
+
+		// Check if we're on the dashboard or home page
+		if (currentPath === '/' || currentPath.includes('/dashboard')) {
+			// Fetch immediately
+			fetchNotifications();
+
+			// Set up interval to fetch every 30 minutes
+			const intervalId = setInterval(fetchNotifications, 5 * 60 * 1000);
+
+			// Clear interval on cleanup
+			return () => clearInterval(intervalId);
+		}
+	}, []);
+
+	// Close notification panel when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+				setNotificationOpen(false);
+			}
+		};
+
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside);
+		};
+	}, [notificationRef]);
 
 	// Add new useEffect to redirect technicians to /processing when user data is loaded
 	useEffect(() => {
@@ -138,13 +182,55 @@ const Header = () => {
 							<p className="text-primary  cursor-pointer text-end ml-4 text-lg font-semibold">Tài khoản</p>
 						) : (
 							<>
-								<p
-									ref={dropdownButtonRef}
-									className="text-primary cursor-pointer text-end ml-8 text-md mb-0.5 font-semibold"
-									onClick={() => setDropdownOpen(!dropdownOpen)}
-								>
-									{displayName}
-								</p>
+								<div className="relative flex items-center">
+									<p
+										ref={dropdownButtonRef}
+										className="text-primary cursor-pointer text-end ml-8 text-md mb-0.5 font-semibold"
+										onClick={() => setDropdownOpen(!dropdownOpen)}
+									>
+										{displayName}
+									</p>
+
+									{notifications.length > 0 && (
+										<span
+											className="ml-1 text-amber-500 cursor-pointer"
+											onClick={(e) => {
+												e.stopPropagation();
+												setNotificationOpen(!notificationOpen);
+												setDropdownOpen(false);
+											}}
+										>
+											🔔
+										</span>
+									)}
+									{notificationOpen && (
+										<div
+											ref={notificationRef}
+											className="absolute right-0 top-full mt-3 w-72 bg-white border rounded shadow-lg z-20"
+										>
+											<div className="p-2 border-b bg-gray-50 flex justify-between items-center">
+												<p className="text-base font-medium">Thông báo</p>
+												<button
+													onClick={() => setNotificationOpen(false)}
+													className="text-gray-500 hover:text-gray-700"
+												>
+													✕
+												</button>
+											</div>
+											<div className="max-h-60 overflow-y-auto">
+												{notifications.length > 0 ? (
+													notifications.map((noti) => (
+														<div key={noti.id} className="p-2 border-b hover:bg-gray-50 text-start">
+															<p className="text-sm">{noti.message}</p>
+														</div>
+													))
+												) : (
+													<p className="p-4 text-center text-gray-500">Không có thông báo</p>
+												)}
+											</div>
+										</div>
+									)}
+								</div>
 								{dropdownOpen && (
 									<div
 										ref={dropdownRef}
@@ -175,12 +261,26 @@ const Header = () => {
 						<p className="text-primary cursor-pointer text-end text-lg font-semibold">Tài khoản</p>
 					) : (
 						<>
-							<p
-								className="text-primary cursor-pointer text-end text-lg font-semibold"
-								onClick={() => setDropdownOpen(!dropdownOpen)}
-							>
-								{displayName}
-							</p>
+							<div className="relative flex items-center">
+								<p
+									className="text-primary cursor-pointer text-end text-lg font-semibold"
+									onClick={() => setDropdownOpen(!dropdownOpen)}
+								>
+									{displayName}
+								</p>
+								{notifications.length > 0 && (
+									<span
+										className="ml-1 text-amber-500 cursor-pointer"
+										onClick={(e) => {
+											e.stopPropagation();
+											setNotificationOpen(!notificationOpen);
+											setDropdownOpen(false);
+										}}
+									>
+										🔔
+									</span>
+								)}
+							</div>
 							<div
 								className={`fixed top-0 right-0 h-full w-60 bg-white border-l shadow-lg z-50 transition-transform duration-300 ease-in-out transform ${
 									dropdownOpen ? 'translate-x-0' : 'translate-x-full'
@@ -190,7 +290,7 @@ const Header = () => {
 									<div className="p-2 pl-3 border-b-2 bg-gray-50 flex justify-between items-center">
 										<p className="text-base font-medium truncate w-full text-start">{displayName}</p>
 										<button onClick={() => setDropdownOpen(false)} className="text-gray-500 hover:text-gray-700 p-2">
-													✕
+											✕
 										</button>
 									</div>
 									<div className="flex flex-col w-full">
@@ -226,6 +326,31 @@ const Header = () => {
 							{/* Semi-transparent overlay when menu is open */}
 							{dropdownOpen && (
 								<div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setDropdownOpen(false)}></div>
+							)}
+
+							{/* Mobile Notifications Panel */}
+							{notificationOpen && (
+								<>
+									<div
+										className="fixed top-0 left-0 h-full w-full bg-black bg-opacity-50 z-50"
+										onClick={() => setNotificationOpen(false)}
+									></div>
+									<div className="fixed top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/4 w-5/6 max-w-md bg-white rounded-lg shadow-lg z-50">
+										<div className="p-3 border-b bg-gray-50 flex justify-between items-center">
+											<p className="text-base font-medium">Thông báo</p>
+											<button onClick={() => setNotificationOpen(false)} className="text-gray-500 hover:text-gray-700">
+												✕
+											</button>
+										</div>
+										<div className="max-h-60 overflow-y-auto">
+											{notifications.map((noti) => (
+												<div key={noti.id} className="p-3 border-b">
+													<p className="text-sm">{noti.message}</p>
+												</div>
+											))}
+										</div>
+									</div>
+								</>
 							)}
 						</>
 					)}

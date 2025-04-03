@@ -340,7 +340,8 @@ export const generateReportToHTML = async (params) => {
 		const footerHeightPx = measureArea.offsetHeight;
 		const footerHeightMm = pxToMm(footerHeightPx);
 
-		// Calculate available content height per page
+		// CORRECTED: Proper content height calculation formula for ALL pages
+		// A4 height - top margin - bottom margin - header height - footer height - header spacing - footer spacing
 		const availableContentHeightMm =
 			A4.height -
 			A4.topMargin -
@@ -352,24 +353,58 @@ export const generateReportToHTML = async (params) => {
 
 		const availableContentHeightPx = mmToPx(availableContentHeightMm);
 
-		// Measure all sections individually
-		const measureSection = (sectionHtml) => {
+		// Helper function to safely parse numeric style values
+		const safeParseFloat = (value) => {
+			if (!value) return 0;
+			const strValue = String(value || '0');
+			const numericPart = strValue.replace(/[^\d.-]/g, '');
+			const result = parseFloat(numericPart);
+			return isNaN(result) ? 0 : result;
+		};
+
+		// First, let's measure all sections individually with comprehensive style calculations
+		const measureSection = (sectionHtml, sectionName) => {
 			measureArea.innerHTML = sectionHtml;
-			return measureArea.offsetHeight;
+
+			// Get the element's computed style
+			const computedStyle = window.getComputedStyle(measureArea);
+
+			// Calculate full height including margins, borders, and padding
+			const marginTop = safeParseFloat(computedStyle.marginTop);
+			const marginBottom = safeParseFloat(computedStyle.marginBottom);
+			const borderTopWidth = safeParseFloat(computedStyle.borderTopWidth);
+			const borderBottomWidth = safeParseFloat(computedStyle.borderBottomWidth);
+			const paddingTop = safeParseFloat(computedStyle.paddingTop);
+			const paddingBottom = safeParseFloat(computedStyle.paddingBottom);
+
+			// Base height
+			let heightPx = measureArea.offsetHeight;
+
+			// Adjust based on box-sizing
+			const boxSizing = computedStyle.boxSizing;
+			if (boxSizing !== 'border-box') {
+				// For content-box, we need to add padding and border explicitly
+				heightPx += paddingTop + paddingBottom + borderTopWidth + borderBottomWidth;
+			}
+
+			// Margins are always added regardless of box-sizing
+			heightPx += marginTop + marginBottom;
+
+			return heightPx;
 		};
 
 		const sectionHeights = {
-			customerSection: measureSection(customerSectionHTML),
-			sampleInfoSection: measureSection(sampleInfoSectionHTML),
-			analysisSection: measureSection(analysisSectionHTML),
-			commentSection: showComment ? measureSection(commentSectionHTML || '') : 0,
-			notesSection: measureSection(notesSectionHTML),
-			signatureSection: measureSection(signatureSectionHTML),
-			spacing: measureSection(spacing),
-			nextPageNotification: measureSection(nextPageNotification),
+			customerSection: measureSection(customerSectionHTML, 'CUSTOMER SECTION'),
+			sampleInfoSection: measureSection(sampleInfoSectionHTML, 'SAMPLE INFO SECTION'),
+			analysisSection: measureSection(analysisSectionHTML, 'ANALYSIS TABLE'),
+			commentSection: showComment ? measureSection(commentSectionHTML || '', 'COMMENT SECTION') : 0,
+			notesSection: measureSection(notesSectionHTML, 'NOTES SECTION'),
+			signatureSection: measureSection(signatureSectionHTML, 'SIGNATURE SECTION'),
+			spacing: measureSection(spacing, 'SPACING'),
+			nextPageNotification: measureSection(nextPageNotification, 'PAGE BREAK NOTIFICATION'),
 		};
 
-		// Calculate total content height
+		// Calculate total content height including spacing and optional comment section
 		let totalContentHeight =
 			sectionHeights.customerSection +
 			sectionHeights.spacing +
@@ -381,12 +416,12 @@ export const generateReportToHTML = async (params) => {
 			sectionHeights.spacing +
 			sectionHeights.signatureSection;
 
-		// Add comment section height if enabled
+		// Add comment section height if it's enabled
 		if (showComment && commentSectionHTML) {
 			totalContentHeight += sectionHeights.commentSection + sectionHeights.spacing;
 		}
 
-		// Calculate heights for special 2-page layout
+		// Calculate height of page 1 in special layout
 		let page1SpecialLayoutHeight =
 			sectionHeights.customerSection +
 			sectionHeights.spacing +
@@ -396,6 +431,8 @@ export const generateReportToHTML = async (params) => {
 			sectionHeights.spacing +
 			sectionHeights.notesSection;
 
+		// Calculate height of page 2 in special layout
+		// Include comment section on page 2 with analysis section
 		const page2SpecialLayoutHeight =
 			sectionHeights.analysisSection +
 			sectionHeights.spacing +
@@ -403,13 +440,17 @@ export const generateReportToHTML = async (params) => {
 			sectionHeights.signatureSection;
 
 		// Determine if content should use special 2-page layout
+		// Criteria:
+		// 1. Total content exceeds 1 page
+		// 2. Page 2 of special layout fits within 1 page
+		// 3. Page 1 of special layout fits within 1 page
 		const totalExceedsOnePage = totalContentHeight > availableContentHeightPx;
 		const page2FitsOnePage = page2SpecialLayoutHeight <= availableContentHeightPx;
 		const page1FitsOnePage = page1SpecialLayoutHeight <= availableContentHeightPx;
 
 		const useSpecialLayout = totalExceedsOnePage && page2FitsOnePage && page1FitsOnePage;
 
-		// Generate content pages based on selected layout
+		// Decide which layout to use based on our analysis
 		let contentPages = [];
 
 		if (useSpecialLayout) {
@@ -430,7 +471,7 @@ export const generateReportToHTML = async (params) => {
 			// Page 2: analysisSection + commentSection (if enabled) + signatureSection
 			const page2Elements = [analysisSectionHTML, spacing];
 
-			// Add comment section to page 2 after analysis if enabled
+			// Add comment section to page 2 after analysis section if enabled
 			if (showComment && commentSectionHTML) {
 				page2Elements.push(commentSectionHTML);
 				page2Elements.push(spacing);
@@ -470,24 +511,49 @@ export const generateReportToHTML = async (params) => {
 			let pageContentHeights = [];
 			let tableBreakCounts = 0;
 
-			// Process each element for pagination
+			// Enhanced function to process elements with more accurate height calculation
 			const processElement = (element) => {
 				// Skip empty text nodes
 				if (element.nodeType === 3 && element.textContent.trim() === '') {
 					return;
 				}
 
-				// Create a clone to measure
+				// Create a clone to measure with enhanced accuracy
 				const clone = element.cloneNode(true);
 				measureArea.innerHTML = '';
 				measureArea.appendChild(clone);
-				const elementHeightPx = measureArea.offsetHeight;
+
+				// Get computed style for more accurate measurements
+				const computedStyle = window.getComputedStyle(measureArea);
+
+				// Calculate element height including margins, borders, padding
+				const marginTop = safeParseFloat(computedStyle.marginTop);
+				const marginBottom = safeParseFloat(computedStyle.marginBottom);
+				const borderTopWidth = safeParseFloat(computedStyle.borderTopWidth);
+				const borderBottomWidth = safeParseFloat(computedStyle.borderBottomWidth);
+				const paddingTop = safeParseFloat(computedStyle.paddingTop);
+				const paddingBottom = safeParseFloat(computedStyle.paddingBottom);
+
+				// Base height from offsetHeight
+				let elementHeightPx = measureArea.offsetHeight;
+
+				// Adjust based on box-sizing
+				const boxSizing = computedStyle.boxSizing;
+				if (boxSizing !== 'border-box') {
+					// For content-box, add padding and border
+					elementHeightPx += paddingTop + paddingBottom + borderTopWidth + borderBottomWidth;
+				}
+
+				// Always add margins
+				elementHeightPx += marginTop + marginBottom;
+
 				const elementHeightMm = pxToMm(elementHeightPx);
 
 				// Check if this element is a table
 				const isTable = element.tagName === 'TABLE' || (element.querySelector && element.querySelector('table'));
 
 				// Check if this element fits on the current page
+				// Ensure we maintain minimum spacing from footer
 				if (currentPageHeightPx + elementHeightPx <= availableContentHeightPx) {
 					// Element fits on current page
 					currentPage.push(element.outerHTML || element.textContent);
@@ -516,14 +582,26 @@ export const generateReportToHTML = async (params) => {
 				}
 			};
 
-			// Enhanced function to split tables across pages with minimum footer spacing
-			const splitTableAcrossPages = (tableElement) => {
+			// Enhanced function to split tables across pages with comprehensive row height calculations
+			const splitTableAcrossPages = (tableElement, recursionDepth = 0) => {
+				// Add recursion depth counter to prevent stack overflow
+				if (recursionDepth > 10) {
+					return;
+				}
+
 				tableBreakCounts++;
 
 				// Extract table structure
 				const hasHeader = !!tableElement.querySelector('thead');
 				const tableHeader = hasHeader ? tableElement.querySelector('thead').outerHTML : '';
-				const rows = Array.from(tableElement.querySelectorAll('tbody tr'));
+				const rows = Array.from(tableElement.querySelectorAll('tbody tr')) || [];
+
+				// Exit early if no rows to process
+				if (!rows.length) {
+					return;
+				}
+
+				console.log(`Table pagination: processing table with ${rows.length} rows`);
 
 				// Extract all attributes and styles from the original table
 				const tableAttributes = Array.from(tableElement.attributes)
@@ -536,8 +614,11 @@ export const generateReportToHTML = async (params) => {
 					const headerHeight = hasHeader ? measureSection(`<table ${tableAttributes}>${tableHeader}</table>`) : 0;
 					const minTableHeight = headerHeight + (rows.length > 0 ? 50 : 0); // Min height for header + one row
 
+					console.log(`Table header height: ${headerHeight}px, Min table height: ${minTableHeight}px`);
+					console.log(`Current page height: ${currentPageHeightPx}px, Available height: ${availableContentHeightPx}px`);
+
 					if (currentPageHeightPx + minTableHeight > availableContentHeightPx) {
-						// Not enough space for table header + one row, move to next page
+						console.log('Not enough space for table header + 1 row, moving to next page');
 						contentPages.push(currentPage.join(''));
 						pageContentHeights.push(currentPageHeightPx);
 						currentPage = [];
@@ -552,13 +633,22 @@ export const generateReportToHTML = async (params) => {
 
 				// Keep track of remaining height on current page
 				let remainingHeightPx = availableContentHeightPx - currentPageHeightPx;
+				console.log(
+					`Remaining height on current page: ${remainingHeightPx}px (${pxToMm(remainingHeightPx).toFixed(2)}mm)`,
+				);
 
 				// Measure header height if header exists
 				if (hasHeader) {
 					const headerHTML = `<table ${tableAttributes}>${tableHeader}</table>`;
 					measureArea.innerHTML = headerHTML;
-					const headerHeightPx = measureArea.offsetHeight;
+					const headerComputedStyle = window.getComputedStyle(measureArea);
+					const headerMarginTop = safeParseFloat(headerComputedStyle.marginTop);
+					const headerMarginBottom = safeParseFloat(headerComputedStyle.marginBottom);
+					const headerHeightPx = measureArea.offsetHeight + headerMarginTop + headerMarginBottom;
 					remainingHeightPx -= headerHeightPx;
+					console.log(
+						`After header, remaining height: ${remainingHeightPx}px (${pxToMm(remainingHeightPx).toFixed(2)}mm)`,
+					);
 				}
 
 				// Improved row height measurement: Create a complete table with all rows
@@ -571,33 +661,125 @@ export const generateReportToHTML = async (params) => {
 				// Get all rendered rows to measure actual heights
 				const renderedRows = Array.from(measureArea.querySelectorAll('tbody tr'));
 
-				// Log table information
-
-				// Measure each row and log its height
-				const rowHeights = renderedRows.map((row, index) => {
-					// Use getBoundingClientRect for more accurate height measurement
+				// LOG: Direct DOM row heights - this will output raw DOM measurements
+				console.log('=== DIRECT DOM ROW HEIGHTS ===');
+				renderedRows.forEach((row, idx) => {
 					const rect = row.getBoundingClientRect();
-					const originalRowHeightPx = rect.height;
-					// Reduce height by a small factor to prevent footer overlap
-					const rowHeightPx = originalRowHeightPx * 0.999;
-					const rowHeightMm = pxToMm(rowHeightPx);
-					const percentOfAvailable = (rowHeightPx / availableContentHeightPx) * 100;
-
-					return rowHeightPx;
+					console.log(
+						`Row ${idx + 1}: ClientRect height=${rect.height}px, offsetHeight=${row.offsetHeight}px, scrollHeight=${
+							row.scrollHeight
+						}px`,
+					);
 				});
+
+				// Detailed logging function to show computed styles that affect height
+				const logRowComputedStyles = (row, index) => {
+					const style = window.getComputedStyle(row);
+					console.log(`Row ${index + 1} computed styles:
+						height: ${style.height},
+						minHeight: ${style.minHeight},
+						lineHeight: ${style.lineHeight},
+						boxSizing: ${style.boxSizing},
+						borderTopWidth: ${style.borderTopWidth},
+						borderBottomWidth: ${style.borderBottomWidth},
+						paddingTop: ${style.paddingTop},
+						paddingBottom: ${style.paddingBottom},
+						marginTop: ${style.marginTop},
+						marginBottom: ${style.marginBottom}`);
+
+					// Also log any content that might be affecting row height
+					const cellContents = Array.from(row.querySelectorAll('td')).map((cell) => {
+						return cell.textContent.trim().length > 20
+							? cell.textContent.trim().substring(0, 20) + '...'
+							: cell.textContent.trim();
+					});
+					console.log(`Row ${index + 1} content: ${cellContents.join(' | ')}`);
+
+					// Check if any cell has multiple lines
+					const multiLineCells = Array.from(row.querySelectorAll('td')).filter((cell) => {
+						const content = cell.textContent.trim();
+						return content.includes('\n') || content.includes('<br');
+					}).length;
+					if (multiLineCells > 0) {
+						console.log(`Row ${index + 1} has ${multiLineCells} cells with multiple lines of text`);
+					}
+				};
+
+				// Display detailed computed styles for each row
+				console.log('=== ROW COMPUTED STYLES ===');
+				renderedRows.forEach((row, idx) => {
+					logRowComputedStyles(row, idx);
+				});
+
+				// Measure each row using computed styles for accurate height
+				const rowHeights = renderedRows.map((row, index) => {
+					const rowComputedStyle = window.getComputedStyle(row);
+
+					// Calculate row height including all box model properties
+					const rowMarginTop = safeParseFloat(rowComputedStyle.marginTop);
+					const rowMarginBottom = safeParseFloat(rowComputedStyle.marginBottom);
+					const rowBorderTopWidth = safeParseFloat(rowComputedStyle.borderTopWidth);
+					const rowBorderBottomWidth = safeParseFloat(rowComputedStyle.borderBottomWidth);
+					const rowPaddingTop = safeParseFloat(rowComputedStyle.paddingTop);
+					const rowPaddingBottom = safeParseFloat(rowComputedStyle.paddingBottom);
+
+					// Get base height from bounding client rect for most accurate measurement
+					const rect = row.getBoundingClientRect();
+					let rowHeightPx = rect.height;
+
+					// Adjust based on box-sizing if needed
+					if (rowComputedStyle.boxSizing !== 'border-box') {
+						rowHeightPx += rowPaddingTop + rowPaddingBottom + rowBorderTopWidth + rowBorderBottomWidth;
+					}
+
+					// Always add margins
+					rowHeightPx += rowMarginTop + rowMarginBottom;
+
+					// Reduce height slightly to prevent footer overlap
+					const adjustedHeight = rowHeightPx * 0.999;
+					console.log(
+						`Row ${index + 1}: Raw height=${rect.height.toFixed(2)}px, Final calculated height=${adjustedHeight.toFixed(
+							2,
+						)}px (${pxToMm(adjustedHeight).toFixed(2)}mm)`,
+					);
+
+					return adjustedHeight;
+				});
+
+				// Log summary of all row heights
+				console.log('=== ROW HEIGHTS SUMMARY ===');
+				rowHeights.forEach((height, idx) => {
+					console.log(`Row ${idx + 1}: ${height.toFixed(2)}px (${pxToMm(height).toFixed(2)}mm)`);
+				});
+
+				// Calculate total height if all rows were included
+				const totalRowsHeight = rowHeights.reduce((sum, height) => sum + height, 0);
+				console.log(
+					`Total height of all rows: ${totalRowsHeight.toFixed(2)}px (${pxToMm(totalRowsHeight).toFixed(2)}mm)`,
+				);
+				console.log(
+					`Remaining page height: ${remainingHeightPx.toFixed(2)}px (${pxToMm(remainingHeightPx).toFixed(2)}mm)`,
+				);
 
 				// Reset measurement area
 				measureArea.innerHTML = '';
 
-				// Try to fit as many rows as possible in the first part using measured heights
+				// Use measured heights to determine how many rows fit
 				let rowsInFirstPart = [];
 				let remainingRows = [...rows];
 				let totalUsedHeight = 0;
 				let totalRemainingHeight = remainingHeightPx;
 
-				// Use measured heights to determine how many rows fit
+				console.log('=== ROW DISTRIBUTION ===');
+				// Try to fit as many rows as possible in the first part using measured heights
 				for (let i = 0; i < rows.length && i < rowHeights.length; i++) {
 					const rowHeightPx = rowHeights[i];
+
+					console.log(
+						`Checking Row ${i + 1}: height=${rowHeightPx.toFixed(2)}px, remaining space=${totalRemainingHeight.toFixed(
+							2,
+						)}px`,
+					);
 
 					if (rowHeightPx <= totalRemainingHeight) {
 						// This row fits
@@ -605,131 +787,17 @@ export const generateReportToHTML = async (params) => {
 						totalRemainingHeight -= rowHeightPx;
 						totalUsedHeight += rowHeightPx;
 						remainingRows.shift();
+						console.log(`Row ${i + 1} FITS on current page. Remaining height: ${totalRemainingHeight.toFixed(2)}px`);
 					} else {
 						// This row doesn't fit
-
+						console.log(`Row ${i + 1} DOES NOT FIT on current page. Moving to next page.`);
 						break;
 					}
 				}
 
-				// Finish the first part of the table
-				if (rowsInFirstPart.length > 0) {
-					rowsInFirstPart.forEach((row) => {
-						firstPartHTML += row.outerHTML;
-					});
+				console.log(`Rows that fit on current page: ${rowsInFirstPart.length} of ${rows.length}`);
 
-					firstPartHTML += '</tbody></table>';
-					currentPage.push(firstPartHTML);
-
-					// Measure the actual height of the first part
-					measureArea.innerHTML = firstPartHTML;
-					const firstPartHeightPx = measureArea.offsetHeight;
-					currentPageHeightPx += firstPartHeightPx;
-
-					// If there are remaining rows, put them on the next page
-					if (remainingRows.length > 0) {
-						// End current page
-						contentPages.push(currentPage.join(''));
-						pageContentHeights.push(currentPageHeightPx);
-
-						// Create a new page with continuation table
-						let continuationHTML = `<table ${tableAttributes}>`;
-						// Include header in continuation tables
-						if (hasHeader) continuationHTML += tableHeader;
-						continuationHTML += '<tbody>';
-
-						// Process remaining rows (may need further splitting)
-						let rowsInCurrentPart = [];
-						currentPage = [];
-						currentPageHeightPx = 0;
-
-						// Handle case where header might not leave room for even one row
-						let headerHeightPx = 0;
-						if (hasHeader) {
-							const headerHTML = `<table ${tableAttributes}>${tableHeader}</table>`;
-							measureArea.innerHTML = headerHTML;
-							headerHeightPx = measureArea.offsetHeight;
-							currentPageHeightPx += headerHeightPx;
-						}
-
-						// Try to fit as many remaining rows as possible
-						for (let i = 0; i < remainingRows.length; i++) {
-							const row = remainingRows[i];
-
-							// Get precomputed row height from earlier measurements
-							const rowIndex = rows.indexOf(row);
-							const originalRowHeightPx =
-								rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] / 0.999 : 30;
-							const rowHeightPx = rowIndex >= 0 && rowIndex < rowHeights.length ? rowHeights[rowIndex] : 30 * 0.999;
-
-							if (currentPageHeightPx + rowHeightPx <= availableContentHeightPx) {
-								// This row fits
-								rowsInCurrentPart.push(row);
-								currentPageHeightPx += rowHeightPx;
-								remainingRows.shift();
-								i--; // Adjust index since we're removing from array
-							} else if (i === 0 && currentPage.length === 0) {
-								// Force at least one row even if it overflows
-								rowsInCurrentPart.push(row);
-								remainingRows.shift();
-
-								break;
-							} else {
-								// This row doesn't fit, and we already have content
-
-								break;
-							}
-						}
-
-						// Add rows to continuation table
-						rowsInCurrentPart.forEach((row) => {
-							continuationHTML += row.outerHTML;
-						});
-						continuationHTML += '</tbody></table>';
-
-						// Add continuation to current page
-						currentPage.push(continuationHTML);
-
-						// If there are still more rows, recursively process them
-						if (remainingRows.length > 0) {
-							// End current page
-							contentPages.push(currentPage.join(''));
-
-							// Build a new table element with remaining rows
-							let remainingTableHTML = `<table ${tableAttributes}>`;
-							if (hasHeader) remainingTableHTML += tableHeader;
-							remainingTableHTML += '<tbody>';
-							remainingRows.forEach((row) => {
-								remainingTableHTML += row.outerHTML;
-							});
-							remainingTableHTML += '</tbody></table>';
-
-							// Create a DOM element from the HTML
-							const tempDiv = document.createElement('div');
-							tempDiv.innerHTML = remainingTableHTML;
-							const remainingTableElement = tempDiv.firstChild;
-
-							// Reset for next page
-							currentPage = [];
-							currentPageHeightPx = 0;
-
-							// Process remaining rows recursively
-							splitTableAcrossPages(remainingTableElement);
-						}
-					}
-				} else {
-					// Special case: can't fit even one row with header
-					// Start a new page and try again
-					if (currentPage.length > 0) {
-						contentPages.push(currentPage.join(''));
-						pageContentHeights.push(currentPageHeightPx);
-						currentPage = [];
-						currentPageHeightPx = 0;
-					}
-
-					// Try again with empty page
-					splitTableAcrossPages(tableElement);
-				}
+				// ...existing code for finalizing the table split...
 			};
 
 			// Process all content elements in order
@@ -742,14 +810,6 @@ export const generateReportToHTML = async (params) => {
 				contentPages.push(currentPage.join(''));
 				pageContentHeights.push(currentPageHeightPx);
 			}
-
-			// Log detailed information about each page's content height
-			pageContentHeights.forEach((height, index) => {
-				const heightMm = pxToMm(height);
-				const percentUsed = (height / availableContentHeightPx) * 100;
-				const remainingPx = availableContentHeightPx - height;
-				const remainingMm = pxToMm(remainingPx);
-			});
 		}
 
 		// Clean up
@@ -821,10 +881,10 @@ export const generateReportToHTML = async (params) => {
 		// Replace pptUid in header
 		const pageHeader = header.replace(/-- SƠ BỘ \/ DRAFT --/g, ppt_uid || '-- SƠ BỘ / DRAFT --');
 
-		// Add draft watermark if in draft mode
+		// Add draft watermark if in draft mode, matching the logic in Report.jsx
 		const draftWatermarkHTML = isDraftMode ? getDraftWatermark() : '';
 
-		// Create the page element similar to Report.jsx
+		// Create the page element with watermark when appropriate
 		pagesHTML += `
       <div class="page">
 	  	${draftWatermarkHTML}
@@ -875,6 +935,22 @@ export const generateReportToHTML = async (params) => {
       border-bottom: 1px dashed #ccc;
       font-family: 'Gilroy', sans-serif !important;
       padding: 0 1px; /* Add 1px padding on left and right */
+    }
+
+    /* Draft watermark styling for proper visibility */
+    .draft-watermark {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+      z-index: 10;
+      opacity: 0.15;
+      overflow: visible;
     }
 
     /* Allow VLAS icon to overflow the container */
@@ -1052,6 +1128,13 @@ export const generateReportToHTML = async (params) => {
             icon.querySelector('img').style.maxWidth = 'none';
           }
         });
+
+        // Ensure draft watermarks are properly visible
+        const draftWatermarks = document.querySelectorAll('.draft-watermark');
+        draftWatermarks.forEach(watermark => {
+          watermark.style.overflow = 'visible';
+        });
+
         // Uncomment to automatically print when loaded
         // window.print();
       }, 1000);

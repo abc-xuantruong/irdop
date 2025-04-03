@@ -47,6 +47,9 @@ export default function MultiPageEditor() {
 	// Create ref array for table rows
 	const tableRowRefs = useRef([]);
 
+	// Add state to track if we're changing samples
+	const [isChangingSample, setIsChangingSample] = useState(false);
+
 	// Add utility function for pixel to millimeter conversion at component level
 	const getDPI = () => {
 		const div = document.createElement('div');
@@ -86,27 +89,82 @@ export default function MultiPageEditor() {
 		const fetchPptList = async () => {
 			if (sample_uid) {
 				try {
+					setLoading(true);
 					const response = await apiGet(`https://black.irdop.org/to82oe92i/db/sample/get/ppt_uid/${sample_uid}`);
 
 					if (response.status !== 200) {
 						throw new Error(`PPT list API request failed with status ${response.status}`);
 					}
 
-					setPptList(response.data); // Now data structure is [{ppt_uid, publish_date},...]
+					const pptData = response.data || [];
+					setPptList(pptData);
 
-					// Check if a specific ppt_uid was requested in URL
-					if (selected_ppt_uid) {
-						setPptUid(selected_ppt_uid);
-						await loadPublishedReport(selected_ppt_uid);
+					// If there are reports available
+					if (pptData.length > 0) {
+						if (isChangingSample) {
+							// When changing samples, automatically select the most recent report
+							// Sort by publish_date to find the most recent
+							const sortedPpts = [...pptData].sort((a, b) => {
+								return new Date(b.publish_date) - new Date(a.publish_date);
+							});
+
+							if (sortedPpts.length > 0) {
+								const mostRecentPptUid = sortedPpts[0].ppt_uid;
+								setPptUid(mostRecentPptUid);
+
+								// Update URL with the most recent ppt_uid
+								setSearchParams((params) => {
+									params.set('ppt_uid', mostRecentPptUid);
+									return params;
+								});
+
+								// Load the most recent published report
+								await loadPublishedReport(mostRecentPptUid);
+								setIsChangingSample(false);
+							}
+						}
+						// If a specific ppt_uid was requested in URL
+						else if (selected_ppt_uid) {
+							setPptUid(selected_ppt_uid);
+							await loadPublishedReport(selected_ppt_uid);
+						}
+					} else {
+						// If no reports exist for this sample
+						if (isChangingSample) {
+							// Reset to default state when changing to a sample with no reports
+							setPptUid('');
+							setSearchParams((params) => {
+								params.delete('ppt_uid');
+								return params;
+							});
+
+							// Load the sample data for a new report
+							await fetchSampleData();
+							setIsChangingSample(false);
+						} else if (!selected_ppt_uid) {
+							// If no ppt_uid was specified and not changing samples, load sample data
+							await fetchSampleData();
+						}
 					}
+
+					setLoading(false);
 				} catch (err) {
-					// Continue with sample data even if PPT list fails
+					console.error('Error fetching PPT list:', err);
+					setLoading(false);
+
+					// Even if fetching PPT list fails, reset changing sample flag
+					if (isChangingSample) {
+						setIsChangingSample(false);
+
+						// Try to load the sample data as fallback
+						fetchSampleData();
+					}
 				}
 			}
 		};
 
 		fetchPptList();
-	}, []);
+	}, [sample_uid]); // This effect now depends on sample_uid changes
 
 	// Function to load a published report
 	const loadPublishedReport = async (reportId) => {
@@ -361,6 +419,9 @@ export default function MultiPageEditor() {
 	// Add a handler for sample selection
 	const handleSampleChange = (e) => {
 		const selectedSampleUid = e.target.value;
+		setIsChangingSample(true);
+
+		// Navigate to the new sample_uid - we'll load the most recent ppt_uid in the effect
 		navigate(`/report?sample_uid=${selectedSampleUid}`);
 	};
 
@@ -1630,7 +1691,11 @@ export default function MultiPageEditor() {
 			if (sampleInfoDiv) {
 				// Find the closest parent that wraps the entire sample info section
 				let sampleParent = sampleInfoDiv;
-				while (sampleParent.parentElement && sampleParent.parentElement !== tempContainer && !sampleParent.style.border) {
+				while (
+					sampleParent.parentElement &&
+					sampleParent.parentElement !== tempContainer &&
+					!sampleParent.style.border
+				) {
 					sampleParent = sampleParent.parentElement;
 					// If we reach a major section break, stop climbing
 					if (sampleParent === tempContainer) break;
@@ -1719,8 +1784,6 @@ export default function MultiPageEditor() {
 
 		// Pagination function with detailed logging and layout adjustment
 		const paginateContent = () => {
-
-			
 			// Create temporary measuring elements
 			const measureArea = document.createElement('div');
 			measureArea.style.position = 'absolute';
@@ -1742,11 +1805,7 @@ export default function MultiPageEditor() {
 			// CORRECTED: Proper content height calculation formula for ALL pages
 			// A4 height - top margin - bottom margin - header height - footer height - header spacing - footer spacing
 			const availableContentHeightMm =
-				A4.height -
-				A4.topMargin -
-				A4.bottomMargin -
-				headerHeightMm -
-				footerHeightMm -A4.footerSpacing;
+				A4.height - A4.topMargin - A4.bottomMargin - headerHeightMm - footerHeightMm - A4.footerSpacing;
 
 			const availableContentHeightPx = mmToPx(availableContentHeightMm);
 
@@ -1807,7 +1866,7 @@ export default function MultiPageEditor() {
 
 			// Log heights for special layout
 			console.group('🧩 SPECIAL LAYOUT PAGE HEIGHTS');
-			
+
 			console.groupEnd();
 
 			// Determine if content should use special 2-page layout
@@ -2238,49 +2297,73 @@ export default function MultiPageEditor() {
 					// Create a temporary div to parse sections
 					const tempDiv = document.createElement('div');
 					tempDiv.innerHTML = pageContent;
-					
+
 					// Check if this page contains specific sections and measure them
 					console.group('SECTIONS ON THIS PAGE:');
-					
+
 					// Helper function to check if section is on this page
 					const hasSection = (sectionHtml) => {
 						return pageContent.includes(sectionHtml.substring(0, 100));
 					};
-					
+
 					if (hasSection(extractedSections.customerSection)) {
-						console.log(`- Customer section: ${sectionHeights.customerSection.toFixed(1)}px (${pxToMm(sectionHeights.customerSection).toFixed(2)}mm)`);
+						console.log(
+							`- Customer section: ${sectionHeights.customerSection.toFixed(1)}px (${pxToMm(
+								sectionHeights.customerSection,
+							).toFixed(2)}mm)`,
+						);
 					}
-					
+
 					if (hasSection(extractedSections.sampleInfoSection)) {
-						console.log(`- Sample info section: ${sectionHeights.sampleInfoSection.toFixed(1)}px (${pxToMm(sectionHeights.sampleInfoSection).toFixed(2)}mm)`);
+						console.log(
+							`- Sample info section: ${sectionHeights.sampleInfoSection.toFixed(1)}px (${pxToMm(
+								sectionHeights.sampleInfoSection,
+							).toFixed(2)}mm)`,
+						);
 					}
-					
+
 					// Check if analysis table is on this page and count visible rows
 					if (hasSection(extractedSections.analysisSection)) {
 						// Check if we have a complete or partial analysis table
 						const tableRows = tempDiv.querySelectorAll('table tbody tr');
-						console.log(`- Analysis table: ${sectionHeights.analysisSection.toFixed(1)}px (${pxToMm(sectionHeights.analysisSection).toFixed(2)}mm), ${tableRows.length} rows visible`);
+						console.log(
+							`- Analysis table: ${sectionHeights.analysisSection.toFixed(1)}px (${pxToMm(
+								sectionHeights.analysisSection,
+							).toFixed(2)}mm), ${tableRows.length} rows visible`,
+						);
 					}
-					
+
 					if (showComment && hasSection(extractedSections.commentSection)) {
-						console.log(`- Comment section: ${sectionHeights.commentSection.toFixed(1)}px (${pxToMm(sectionHeights.commentSection).toFixed(2)}mm)`);
+						console.log(
+							`- Comment section: ${sectionHeights.commentSection.toFixed(1)}px (${pxToMm(
+								sectionHeights.commentSection,
+							).toFixed(2)}mm)`,
+						);
 					}
-					
+
 					if (hasSection(extractedSections.notesSection)) {
-						console.log(`- Notes section: ${sectionHeights.notesSection.toFixed(1)}px (${pxToMm(sectionHeights.notesSection).toFixed(2)}mm)`);
+						console.log(
+							`- Notes section: ${sectionHeights.notesSection.toFixed(1)}px (${pxToMm(
+								sectionHeights.notesSection,
+							).toFixed(2)}mm)`,
+						);
 					}
-					
+
 					if (hasSection(extractedSections.signatureSection)) {
-						console.log(`- Signature section: ${sectionHeights.signatureSection.toFixed(1)}px (${pxToMm(sectionHeights.signatureSection).toFixed(2)}mm)`);
+						console.log(
+							`- Signature section: ${sectionHeights.signatureSection.toFixed(1)}px (${pxToMm(
+								sectionHeights.signatureSection,
+							).toFixed(2)}mm)`,
+						);
 					}
-					
+
 					console.groupEnd(); // SECTIONS ON THIS PAGE
 				}
-				
+
 				console.groupEnd(); // PAGE X
 			});
 			console.groupEnd(); // PAGE DETAILS
-			
+
 			console.groupEnd(); // DETAILED PAGE SECTION HEIGHTS
 
 			return {
@@ -2289,8 +2372,8 @@ export default function MultiPageEditor() {
 				headerHeightMm,
 				footerHeightPx,
 				footerHeightMm,
-				availableContentHeightPx,  // This value is now correctly calculated
-				availableContentHeightMm,  // This value is now correctly calculated
+				availableContentHeightPx, // This value is now correctly calculated
+				availableContentHeightMm, // This value is now correctly calculated
 				contentTopPx: headerHeightPx + mmToPx(A4.headerSpacing),
 				contentTopMm: headerHeightMm + A4.headerSpacing,
 				is2PageLayout: useSpecialLayout,
@@ -2299,7 +2382,7 @@ export default function MultiPageEditor() {
 
 		// Get paginated content
 		const paginationResult = paginateContent();
-		
+
 		// Prepare custom font support for print window
 		const fontFaces = `
 				@font-face {
@@ -2617,11 +2700,16 @@ export default function MultiPageEditor() {
 
 			document.body.removeChild(tempMeasureDiv);
 
+			// Check if ppt_uid contains DRAFT to add watermark
+			const isDraft = pptUid && pptUid.includes('DRAFT');
+			const watermark = isDraft ? getDraftWatermark() : '';
+
 			page.innerHTML = `
-					<div class="header">${currentHeader}</div>
-					<div class="content">${pageContentHTML}</div>
-					<div class="footer">${pageFooter}</div>
-				`;
+				${watermark}
+				<div class="header">${currentHeader}</div>
+				<div class="content">${pageContentHTML}</div>
+				<div class="footer">${pageFooter}</div>
+			`;
 
 			printContainer.appendChild(page);
 		});
@@ -2817,7 +2905,6 @@ export default function MultiPageEditor() {
 
 			// Cell analysis - find the tallest cell
 			if (row.cells && row.cells.length > 0) {
-
 				let maxCellHeight = 0;
 				let tallestCellIndex = 0;
 				let tallestCellStyle = null;
@@ -2826,28 +2913,23 @@ export default function MultiPageEditor() {
 					const cellComputedStyle = window.getComputedStyle(cell);
 					const cellHeight = cell.getBoundingClientRect().height;
 
-				
-
 					if (cellHeight > maxCellHeight) {
 						maxCellHeight = cellHeight;
 						tallestCellIndex = cellIndex;
 						tallestCellStyle = computedStyleToObject(cellComputedStyle);
 					}
 				});
-
 			}
 
 			// Calculate and log remaining space
 			const rowHeight = row.getBoundingClientRect().height;
 			remainingHeight -= rowHeight;
-
 		});
 
 		// Also verify we can access rows by ID
 		for (let i = 0; i < rows.length; i++) {
 			const rowId = `analysis-row-${i}`;
 			const rowById = document.getElementById(rowId);
-			
 		}
 	};
 
@@ -3379,6 +3461,34 @@ export default function MultiPageEditor() {
 		}
 	};
 
+	// Add function to generate draft watermark
+	const getDraftWatermark = () => {
+		return `
+		<div class="draft-watermark" style="
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			pointer-events: none;
+			z-index: 10;
+			opacity: 0.15;
+			transform: rotate(-45deg);
+			font-family: 'Gilroy', sans-serif;
+		">
+			<div style="
+				font-size: 90px;
+				font-weight: bold;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 8px;
+			">SƠ BỘ-DRAFT</div>
+		</div>`;
+	};
+
 	return (
 		<div className="p-4 bg-gray-100 min-h-screen relative mt-1">
 			<div className="flex flex-col w-fit mb-2">
@@ -3479,7 +3589,6 @@ export default function MultiPageEditor() {
 						<button
 							onClick={() => {
 								if (!isReadOnly) {
-									
 									const prevShowRef = showReference;
 									setShowReference(!prevShowRef);
 								}
@@ -3493,7 +3602,7 @@ export default function MultiPageEditor() {
 						>
 							REFERENCE
 						</button>
-						
+
 						<div className="absolute -left-2 top-5 w-0 h-0 border-t-8 border-b-8 border-r-8 border-transparent border-r-green-50"></div>
 					</div>
 				</div>
@@ -3506,24 +3615,22 @@ ft chat bubble for Ghi chú/Note */}
 				<div className="fixed right-4 text-start top-20 w-56 max-h-60 overflow-y-auto overflow-x-hidden bg-blue-50 rounded-lg border border-blue-200 shadow-md p-3 z-10">
 					<div className="font-bold text-gray-700 text-sm mb-2">Ghi chú / Note:</div>
 					<div className="text-gray-600 text-sm whitespace-pre-wrap">{receiptNote}</div>
-					
+
 					<div className="absolute -right-2 top-5 w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-blue-50"></div>
 				</div>
 			)}
 
-			
 			{additionalRequest && (
 				<div className="fixed right-4 text-start top-96 w-56 max-h-60 overflow-y-auto bg-green-50 rounded-lg border border-green-200 shadow-md p-3 z-10">
 					<div className="font-bold text-blue-700 text-sm mb-2">Yêu cầu / Requirements:</div>
 					<div className="text-blue-600 text-sm whitespace-pre-wrap">{additionalRequest}</div>
-					
+
 					<div className="absolute -left-2 top-5 w-0 h-0 border-t-8 border-b-8 border-r-8 border-transparent border-r-green-50"></div>
 				</div>
 			)}
 
 			<div className="flex flex-col gap-4 overflow-x-auto p-4 bg-white shadow-lg rounded-lg">
 				<div className="flex justify-center">
-					
 					<div
 						className="bg-white flex flex-col"
 						style={{

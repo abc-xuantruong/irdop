@@ -1564,11 +1564,58 @@ const ReceiptInfor = ({ receipt }) => {
 		}
 	};
 
+	// Add this function before the return statement
+	// Function to check if ALL client and contact information fields are filled
+	const hasAllClientAndContactFields = () => {
+		if (!currentReceipt) return false;
+
+		// Check if client information exists
+		if (!currentReceipt.client) return false;
+
+		// Check client information
+		const clientFields = ['client_name', 'client_address', 'legal_id', 'client_uid'];
+		for (const field of clientFields) {
+			if (!currentReceipt.client[field] || currentReceipt.client[field].trim() === '') {
+				return false; // Return false if ANY field is empty
+			}
+		}
+
+		// Check if contact information exists
+		if (!currentReceipt.contact) return false;
+
+		// Check contact information
+		const contactFields = ['name', 'phone', 'email'];
+		for (const field of contactFields) {
+			if (!currentReceipt.contact[field] || currentReceipt.contact[field].trim() === '') {
+				return false; // Return false if ANY field is empty
+			}
+		}
+
+		return true; // All fields have values
+	};
+
+	// Initialize customer details visibility state with default value of false
 	const [isCustomerDetailsVisible, setIsCustomerDetailsVisible] = useState(false);
+	// Add this ref to track if we've already set the visibility
+	const initialVisibilitySet = React.useRef(false);
 
 	const toggleCustomerDetails = () => {
 		setIsCustomerDetailsVisible(!isCustomerDetailsVisible);
 	};
+
+	// Replace the existing useEffect for visibility with this one
+	// that runs only once when data is first loaded
+	useEffect(() => {
+		if (currentReceipt && !initialVisibilitySet.current) {
+			// Set visibility based on whether all fields are filled
+			setIsCustomerDetailsVisible(!hasAllClientAndContactFields());
+			// Mark that we've set the initial visibility
+			initialVisibilitySet.current = true;
+		}
+	}, [currentReceipt]);
+
+	// Remove the existing useEffect with [currentReceipt] dependency that was
+	// causing the panel to auto-hide during form edits
 
 	// Handle field click to switch to edit mode
 	const handleFieldClick = (fieldName) => {
@@ -2136,34 +2183,6 @@ const ReceiptInfor = ({ receipt }) => {
 		);
 	};
 
-	// Add this function before the return statement
-	// Function to check if any client or contact information is empty or null
-	const hasEmptyClientOrContactFields = () => {
-		if (!currentReceipt) return false;
-
-		// Check client information
-		if (currentReceipt.client) {
-			const clientFields = ['client_name', 'client_address', 'legal_id', 'client_uid'];
-			for (const field of clientFields) {
-				if (!currentReceipt.client[field] || currentReceipt.client[field].trim() === '') {
-					return true;
-				}
-			}
-		}
-
-		// Check contact information
-		if (currentReceipt.contact) {
-			const contactFields = ['name', 'phone', 'email'];
-			for (const field of contactFields) {
-				if (!currentReceipt.contact[field] || currentReceipt.contact[field].trim() === '') {
-					return true;
-				}
-			}
-		}
-
-		return false;
-	};
-
 	return (
 		<div className="w-full">
 			{/* Add custom styling for SweetAlert toasts */}
@@ -2330,7 +2349,7 @@ const ReceiptInfor = ({ receipt }) => {
 										{currentReceipt?.client?.client_name || '--'}
 										<span
 											className={`text-xs ${
-												hasEmptyClientOrContactFields() ? 'text-red-600' : 'text-blue-600'
+												!hasAllClientAndContactFields() ? 'text-red-600' : 'text-blue-600'
 											} font-bold`}
 										>
 											{isCustomerDetailsVisible ? 'Ẩn' : ' Xem Chi tiết'}
