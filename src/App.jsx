@@ -16,6 +16,7 @@ import Footer from './components/Footer';
 import Event from './components/Event';
 import ProcessingSample from './components/ProcessingSample';
 import Report from './components/Report';
+import Result from './components/Analysis_result';
 
 const App = () => {
 	return (
@@ -31,6 +32,7 @@ const App = () => {
 						<Route path="/dashboard" element={<Dashboard />} />
 						<Route path="/" element={<Dashboard />} />
 						<Route path="/report" element={<Report />} />
+						<Route path="/result" element={<Result />} />
 						<Route path="/processing" element={<ProcessingSample />} />
 						<Route path="/dashboard/receipt" element={<ReceiptInfor />} />
 						<Route path="/dashboard/sample" element={<SampleInfor />} />

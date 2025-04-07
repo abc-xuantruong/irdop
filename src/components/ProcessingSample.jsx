@@ -1,5 +1,6 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { createPortal } from 'react-dom'; // Import createPortal
 import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
@@ -7,6 +8,8 @@ import FilterBar from './FilterBar';
 import TinyMceInput from './Input';
 import { toast, ToastContainer } from 'react-toastify';
 import { MdOutlineViewList, MdViewModule } from 'react-icons/md';
+import { GrDocumentText, GrPrint } from 'react-icons/gr';
+
 import { FaCheck, FaSave, FaUndo, FaStickyNote, FaCopy } from 'react-icons/fa';
 
 const ProcessingSample = () => {
@@ -21,9 +24,23 @@ const ProcessingSample = () => {
 	const [isFilter, setIsFilter] = useState(false); // Add state to track if filtering is active
 	const [selectedForReview, setSelectedForReview] = useState([]);
 	const [reviewAllChecked, setReviewAllChecked] = useState(false);
+	const [selectedCheckboxesV3, setSelectedCheckboxesV3] = useState([]); // New state for viewMode v3 checkboxes
+	const [selectedCheckboxesByReceipt, setSelectedCheckboxesByReceipt] = useState({}); // Track checkboxes by receipt ID
+	const [bulkEditCell, setBulkEditCell] = useState({ column: null, receiptId: null }); // Track which bulk edit cell is being edited
+	const [technicianDropdownVisible, setTechnicianDropdownVisible] = useState(null);
+	const [dropdownPosition, setDropdownPosition] = useState({
+		top: 0,
+		left: 0,
+	});
 	const [showReviewSaveButton, setShowReviewSaveButton] = useState(false);
 	const [isReviewConfirmVisible, setIsReviewConfirmVisible] = useState(false);
 	const [samplesWithPendingReviews, setSamplesWithPendingReviews] = useState({});
+	const [searchTerm, setSearchTerm] = useState('');
+	const [sampleSearchTerm, setSampleSearchTerm] = useState('');
+	const [parameterSearchTerm, setParameterSearchTerm] = useState('');
+	const [editingNote, setEditingNote] = useState(null);
+	const [noteInput, setNoteInput] = useState('');
+	const [bulkEditValues, setBulkEditValues] = useState({}); // Add state to track bulk edit values
 	const navigate = useNavigate();
 	const location = useLocation();
 	let isFetch = false;
@@ -43,6 +60,8 @@ const ProcessingSample = () => {
 		return `${day}/${month}/${year} ${hours}:${minutes}`;
 	};
 
+	console.log(selectedCheckboxesV3);
+	// Update fetchData to handle v3 query
 	const fetchData = async (vm = viewMode, searchTerm = null) => {
 		try {
 			if (!isFilter) {
@@ -53,6 +72,9 @@ const ProcessingSample = () => {
 					apiUrl = 'https://black.irdop.org/to82oe92i/db/get/processing_sample/v1';
 				} else if (vm === 'v2') {
 					apiUrl = 'https://black.irdop.org/to82oe92i/db/get/processing_sample/v2';
+				} else if (vm === 'v3') {
+					await fetchReceiptData();
+					return;
 				} else {
 					console.error('Invalid view mode:', vm);
 					return; // Exit if invalid mode
@@ -83,6 +105,19 @@ const ProcessingSample = () => {
 		}
 	};
 
+	// Add viewMode v3 functionality
+	const fetchReceiptData = async () => {
+		try {
+			const response = await apiGet('https://black.irdop.org/khsi19me/db/get/recent_receipt');
+			const data = Array.isArray(response?.data) ? response.data : [];
+			setProcessingSample(data);
+		} catch (error) {
+			console.error('Error fetching receipt data:', error);
+			setProcessingSample([]);
+		}
+	};
+
+	// Update useEffect to handle v3 query
 	useEffect(() => {
 		if (!isFetch) {
 			setCurrentTitlePage('Mẫu đang xử lý');
@@ -93,7 +128,8 @@ const ProcessingSample = () => {
 			const searchQuery = queryParams.get('search');
 
 			// Set view mode based on query parameter or default to 'v1'
-			const initialViewMode = modeFromQuery === 'v1' || modeFromQuery === 'v2' ? modeFromQuery : 'v1';
+			const initialViewMode =
+				modeFromQuery === 'v1' || modeFromQuery === 'v2' || modeFromQuery === 'v3' ? modeFromQuery : 'v1';
 			setViewMode(initialViewMode);
 
 			// If we have a search query, set isFilter to true to prevent overriding filtered results
@@ -121,20 +157,26 @@ const ProcessingSample = () => {
 		return () => clearInterval(interval);
 	}, [viewMode, isFilter, location.search]); // Include location.search in dependencies
 
-	// Update handleViewModeChange to preserve search parameter when changing modes
+	// Update handleViewModeChange to include v3
 	const handleViewModeChange = async (mode) => {
-		// Get current search parameter from URL
-		const queryParams = new URLSearchParams(location.search);
-		const searchQuery = queryParams.get('search');
-
 		setViewMode(mode);
 
-		// Update URL with the new view mode, preserving search if it exists
-		const newUrl = searchQuery ? `?mode=${mode}&search=${searchQuery}` : `?mode=${mode}`;
-		navigate(newUrl, { replace: true });
+		if (mode === 'v3') {
+			await fetchReceiptData();
+			// Update URL to reflect the view mode change to v3
+			navigate('?mode=v3', { replace: true });
+		} else {
+			// Get current search parameter from URL
+			const queryParams = new URLSearchParams(location.search);
+			const searchQuery = queryParams.get('search');
 
-		// Fetch data with new mode and existing search term if any
-		await fetchData(mode, searchQuery);
+			// Update URL with the new view mode, preserving search if it exists
+			const newUrl = searchQuery ? `?mode=${mode}&search=${searchQuery}` : `?mode=${mode}`;
+			navigate(newUrl, { replace: true });
+
+			// Fetch data with new mode and existing search term if any
+			await fetchData(mode, searchQuery);
+		}
 	};
 
 	const toggleTableVisibility = (id) => {
@@ -451,37 +493,14 @@ const ProcessingSample = () => {
 	}, [selectedForReview, processingSample]);
 
 	// Toggle review checkbox for a single analysis
-	const handleReviewSelect = (analysisId, isChecked, sampleUid) => {
-		// Get the item to check if it's already reviewed
-		const allAnalyses = [];
-		processingSample.forEach((sample) => {
-			if (sample?.analysis && Array.isArray(sample.analysis)) {
-				allAnalyses.push(...sample.analysis);
+	const handleReviewSelect = (analysisId, isChecked) => {
+		setSelectedForReview((prev) => {
+			if (isChecked) {
+				return [...prev, analysisId]; // Add the id if checked
+			} else {
+				return prev.filter((id) => id !== analysisId); // Remove the id if unchecked
 			}
 		});
-
-		const analysis = allAnalyses.find((a) => a.id === analysisId);
-
-		// If already reviewed, handle differently
-		if (analysis?.reviewed_by) {
-			// Add to selectedForReview with negative ID to mark for unreview
-			setSelectedForReview((prev) => {
-				// If already in the list for unreview, remove it
-				if (prev.includes(-analysisId)) {
-					return prev.filter((id) => id !== -analysisId);
-				}
-				// Otherwise add it as negative to mark for unreview
-				return [...prev, -analysisId];
-			});
-		} else {
-			setSelectedForReview((prev) => {
-				if (isChecked) {
-					return [...prev, analysisId];
-				} else {
-					return prev.filter((id) => id !== analysisId);
-				}
-			});
-		}
 	};
 
 	// Toggle all review checkboxes for a specific sample
@@ -672,6 +691,413 @@ const ProcessingSample = () => {
 			.catch((err) => toast.error('Không thể sao chép: ' + err));
 	};
 
+	const handleSearchChange = (e) => {
+		setSearchTerm(e.target.value);
+	};
+
+	const handleSampleSearchChange = (e) => {
+		setSampleSearchTerm(e.target.value);
+	};
+
+	const handleParameterSearchChange = (e) => {
+		setParameterSearchTerm(e.target.value);
+	};
+
+	const parseSearchTerms = (searchString) => {
+		return searchString
+			.split(',')
+			.map((term) => term.trim().toLowerCase())
+			.filter((term) => term.length > 0);
+	};
+
+	const filteredProcessingSample = processingSample
+		?.filter((receipt) => {
+			const matchesReceiptUid =
+				searchTerm.trim() === '' || receipt.receipt_uid?.toLowerCase().includes(searchTerm.toLowerCase());
+
+			if (!matchesReceiptUid) return false;
+
+			const sampleTerms = parseSearchTerms(sampleSearchTerm);
+			const parameterTerms = parseSearchTerms(parameterSearchTerm);
+
+			const filteredSamples = receipt.samples?.filter((sample) => {
+				const matchesSampleUid =
+					sampleTerms.length === 0 || sampleTerms.some((term) => sample.sample_uid?.toLowerCase().includes(term));
+
+				const filteredAnalyses = sample.analysis?.filter((analysis) => {
+					return (
+						parameterTerms.length === 0 ||
+						parameterTerms.some((term) => analysis.parameter_name?.toLowerCase().includes(term))
+					);
+				});
+
+				return matchesSampleUid && filteredAnalyses?.length > 0;
+			});
+
+			return filteredSamples?.length > 0;
+		})
+		.map((receipt) => {
+			const sampleTerms = parseSearchTerms(sampleSearchTerm);
+			const parameterTerms = parseSearchTerms(parameterSearchTerm);
+
+			const filteredSamples = receipt.samples
+				?.map((sample) => {
+					const filteredAnalyses = sample.analysis?.filter((analysis) => {
+						return (
+							parameterTerms.length === 0 ||
+							parameterTerms.some((term) => analysis.parameter_name?.toLowerCase().includes(term))
+						);
+					});
+
+					return {
+						...sample,
+						analysis: filteredAnalyses,
+					};
+				})
+				.filter((sample) => {
+					const matchesSampleUid =
+						sampleTerms.length === 0 || sampleTerms.some((term) => sample.sample_uid?.toLowerCase().includes(term));
+					return matchesSampleUid && sample.analysis?.length > 0;
+				});
+
+			return {
+				...receipt,
+				samples: filteredSamples,
+			};
+		});
+
+	const handleEditNote = (receipt) => {
+		setEditingNote(receipt.id);
+		setNoteInput(receipt.note || '');
+	};
+
+	const handleSaveNote = async (receipt) => {
+		try {
+			await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', {
+				id: receipt.id,
+				note: noteInput,
+			});
+			toast.success('Cập nhật ghi chú thành công');
+
+			// Update the local state with the new note
+			setProcessingSample((prev) => prev.map((r) => (r.id === receipt.id ? { ...r, note: noteInput } : r)));
+		} catch (error) {
+			toast.error('Lỗi khi cập nhật ghi chú');
+		} finally {
+			setEditingNote(null);
+		}
+	};
+
+	const handleSaveContentV3 = async (content, column, analysisId) => {
+		if (!editableCell.analysisId || editableCell.column !== column) {
+			return; // Prevent duplicate API calls
+		}
+
+		try {
+			const body = {
+				analysis: {
+					id: analysisId,
+					[column]: content,
+				},
+			};
+
+			if (column === 'result_value') {
+				body.analysis.submit_result_by = currentUser.identity_name;
+			}
+
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', body);
+
+			if (response?.status === 200) {
+				toast.success('Cập nhật thành công');
+				// Update the local state to reflect the changes
+				setProcessingSample((prev) => {
+					return prev.map((receipt) => {
+						return {
+							...receipt,
+							samples: receipt.samples.map((sample) => {
+								return {
+									...sample,
+									analysis: sample.analysis.map((analysis) => {
+										if (analysis.id === analysisId) {
+											return { ...analysis, [column]: content };
+										}
+										return analysis;
+									}),
+								};
+							}),
+						};
+					});
+				});
+			} else {
+				toast.error('Cập nhật thất bại');
+			}
+		} catch (error) {
+			console.error('Error updating analysis:', error);
+			toast.error('Lỗi khi cập nhật');
+		} finally {
+			setEditableCell({ analysisId: null, column: null }); // Reset editable cell to prevent duplicate calls
+		}
+	};
+
+	const handleCellClickV3 = (analysisId, column, currentValue) => {
+		setEditableCell({ analysisId, column });
+		setInputValue(currentValue || '');
+	};
+
+	const handleKeyDownV3 = (e) => {
+		if (e.key === 'Enter') {
+			// handleSaveContentV3(inputValue, editableCell.column, editableCell.analysisId);
+			setEditableCell({ analysisId: null, column: null });
+		}
+	};
+
+	const handleProtocolCodeChange = (analysisId, value) => {
+		setInputValue(value); // Update the input value state
+		setEditableCell({ analysisId, column: 'protocol_code' }); // Set the editable cell for protocol_code
+	};
+
+	const handleProtocolCodeKeyDown = (e, analysisId, value) => {
+		if (e.key === 'Enter') {
+			e.target.blur(); // Trigger blur event on Enter key
+		}
+	};
+
+	const handleProtocolCodeBlur = (analysisId, value) => {
+		if (value.trim() !== '') {
+			handleSaveContentV3(value, 'protocol_code', analysisId); // Trigger API update on blur
+		}
+	};
+
+	const handleProtocolSourceChange = async (analysisId, value) => {
+		try {
+			// Update the local state immediately for better UX
+			setProcessingSample((prev) => {
+				return prev.map((receipt) => {
+					return {
+						...receipt,
+						samples: receipt.samples.map((sample) => {
+							return {
+								...sample,
+								analysis: sample.analysis.map((analysis) => {
+									if (analysis.id === analysisId) {
+										return { ...analysis, protocol_source: value };
+									}
+									return analysis;
+								}),
+							};
+						}),
+					};
+				});
+			});
+
+			// Trigger API update
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				analysis: {
+					id: analysisId,
+					protocol_source: value,
+				},
+			});
+
+			if (response?.status !== 200) {
+				throw new Error('Failed to update protocol source');
+			}
+			toast.success('Cập nhật thành công');
+		} catch (error) {
+			console.error('Error updating protocol source:', error);
+			toast.error('Lỗi khi cập nhật');
+		}
+	};
+
+	// Update selectAllCheckboxes function to update both state variables
+	const handleSelectAllCheckboxes = (receiptId, isChecked) => {
+		// Update UI checkboxes
+		const checkboxes = document.querySelectorAll(`.row-checkbox[data-receipt-id="${receiptId}"]`);
+
+		// Get all analysis IDs for this receipt to update our state
+		const analysisIds = [];
+
+		checkboxes.forEach((checkbox) => {
+			checkbox.checked = isChecked;
+			const analysisId = parseInt(checkbox.getAttribute('data-analysis-id'));
+			if (!isNaN(analysisId)) {
+				analysisIds.push(analysisId);
+			}
+		});
+
+		// Update the selectedCheckboxesV3 state
+		if (isChecked) {
+			setSelectedCheckboxesV3((prev) => [...new Set([...prev, ...analysisIds])]);
+			// Also update selectedCheckboxesByReceipt to show the bulk edit row
+			setSelectedCheckboxesByReceipt((prev) => {
+				const updated = { ...prev };
+				if (!updated[receiptId]) {
+					updated[receiptId] = [];
+				}
+				updated[receiptId] = [...new Set([...(updated[receiptId] || []), ...analysisIds])];
+				return updated;
+			});
+		} else {
+			setSelectedCheckboxesV3((prev) => prev.filter((id) => !analysisIds.includes(id)));
+			// Also update selectedCheckboxesByReceipt to hide the bulk edit row
+			setSelectedCheckboxesByReceipt((prev) => {
+				const updated = { ...prev };
+				if (updated[receiptId]) {
+					delete updated[receiptId];
+				}
+				return updated;
+			});
+		}
+	};
+
+	// Add a function to handle bulk edit value changes
+	const handleBulkEditChange = (field, value) => {
+		setBulkEditValues((prev) => ({ ...prev, [field]: value }));
+	};
+
+	// Add a function to handle bulk update submission
+	const handleBulkUpdate = async (selectedRows) => {
+		try {
+			const updatePromises = selectedRows.map((rowId) => {
+				const body = {
+					analysis: {
+						id: rowId,
+						...bulkEditValues,
+					},
+				};
+				return apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', body);
+			});
+
+			await Promise.all(updatePromises);
+			toast.success('Cập nhật hàng loạt thành công');
+
+			// Update the local state to reflect changes
+			setProcessingSample((prev) => {
+				return prev.map((receipt) => {
+					return {
+						...receipt,
+						samples: receipt.samples?.map((sample) => {
+							return {
+								...sample,
+								analysis: sample.analysis?.map((analysis) => {
+									if (selectedRows.includes(analysis.id)) {
+										return { ...analysis, ...bulkEditValues };
+									}
+									return analysis;
+								}),
+							};
+						}),
+					};
+				});
+			});
+
+			// Clear all checkboxes after update
+			document.querySelectorAll('.row-checkbox').forEach((checkbox) => {
+				checkbox.checked = false;
+			});
+
+			// Clear selectedCheckboxesV3 and selectedCheckboxesByReceipt
+			setSelectedCheckboxesV3([]);
+			setSelectedCheckboxesByReceipt({});
+
+			// Reset bulk edit values
+			setBulkEditValues({});
+			setBulkEditCell({ column: null, receiptId: null });
+		} catch (error) {
+			console.error('Error during bulk update:', error);
+			toast.error('Lỗi khi cập nhật hàng loạt');
+		}
+	};
+
+	// Updated checkbox change handler for viewMode v3
+	const handleCheckboxChange = (analysisId, isChecked, receiptId) => {
+		if (isChecked) {
+			setSelectedCheckboxesV3((prev) => [...prev, analysisId]);
+			setSelectedCheckboxesByReceipt((prev) => {
+				const updated = { ...prev };
+				if (!updated[receiptId]) {
+					updated[receiptId] = [];
+				}
+				updated[receiptId] = [...updated[receiptId], analysisId];
+				return updated;
+			});
+		} else {
+			setSelectedCheckboxesV3((prev) => prev.filter((id) => id !== analysisId));
+			setSelectedCheckboxesByReceipt((prev) => {
+				const updated = { ...prev };
+				if (updated[receiptId]) {
+					updated[receiptId] = updated[receiptId].filter((id) => id !== analysisId);
+					if (updated[receiptId].length === 0) {
+						delete updated[receiptId];
+					}
+				}
+				return updated;
+			});
+		}
+	};
+
+	// Add a function to handle bulk edit cell clicking
+	const handleBulkEditCellClick = (column, receiptId) => {
+		setBulkEditCell({ column, receiptId });
+	};
+
+	// Add function to toggle technician dropdown
+	const toggleTechnicianDropdown = (index, event) => {
+		const buttonRect = event.target.getBoundingClientRect();
+
+		setDropdownPosition({
+			top: buttonRect.bottom + window.scrollY + 5,
+			left: buttonRect.left + window.scrollX,
+		});
+
+		setTechnicianDropdownVisible(technicianDropdownVisible === index ? null : index);
+	};
+
+	// Add function to handle technician selection
+	const handleTechnicianChange = async (analysisId, technicianUid) => {
+		try {
+			// Update the local state immediately for better UX
+			setProcessingSample((prev) => {
+				return prev.map((receipt) => {
+					return {
+						...receipt,
+						samples: receipt.samples.map((sample) => {
+							return {
+								...sample,
+								analysis: sample.analysis.map((analysis) => {
+									if (analysis.id === analysisId) {
+										return { ...analysis, technician_uid: technicianUid };
+									}
+									return analysis;
+								}),
+							};
+						}),
+					};
+				});
+			});
+
+			// Send update to the server
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				analysis: {
+					id: analysisId,
+					technician_uid: technicianUid,
+					modified_by_uid: currentUser.identity_uid,
+				},
+			});
+
+			if (response?.status === 200) {
+				toast.success('Cập nhật người thực hiện thành công');
+			} else {
+				throw new Error('Failed to update technician');
+			}
+		} catch (error) {
+			console.error('Error updating technician:', error);
+			toast.error('Lỗi khi cập nhật người thực hiện');
+		} finally {
+			// Close the dropdown
+			setTechnicianDropdownVisible(null);
+		}
+	};
+
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
@@ -695,17 +1121,45 @@ const ProcessingSample = () => {
 					>
 						Mẫu thử
 					</button>
-					{/* <button
+					<button
 						className={`w-40 p-1 ml-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
 							viewMode === 'v3' ? 'bg-teritary' : 'bg-gray-200'
 						}`}
 						onClick={() => handleViewModeChange('v3')}
 					>
 						Tiếp nhận
-					</button> */}
+					</button>
 				</div>
 			</div>
+
 			<div className="w-full h-full flex flex-col justify-center items-center bg-white rounded-lg p-4 shadow">
+				{/* Move the search inputs to only render in viewMode v3 */}
+				{viewMode === 'v3' && (
+					<div className="w-full flex flex-wrap justify-between items-center mb-4 gap-4">
+						<input
+							type="text"
+							placeholder="Tìm kiếm theo mã tnm..."
+							value={searchTerm}
+							onChange={handleSearchChange}
+							className="p-2 border rounded-lg w-1/4 bg-white"
+						/>
+						<input
+							type="text"
+							placeholder="Tìm kiếm theo mã mẫu..."
+							value={sampleSearchTerm}
+							onChange={handleSampleSearchChange}
+							className="p-2 border rounded-lg w-1/4 bg-white"
+						/>
+						<input
+							type="text"
+							placeholder="Tìm kiếm theo chỉ tiêu..."
+							value={parameterSearchTerm}
+							onChange={handleParameterSearchChange}
+							className="p-2 border rounded-lg w-1/4 bg-white"
+						/>
+					</div>
+				)}
+
 				{/* Add legend for color coding - only visible in v1 mode */}
 				{viewMode === 'v1' && (
 					<div className="w-full flex items-center gap-4 mb-1 mt-1 text-sm">
@@ -1230,6 +1684,19 @@ const ProcessingSample = () => {
 														<p className={`${sample?.status === 1 ? 'text-red-500 font-semibold' : ''} `}>
 															{status[sample?.status] || 'Không xác định'}
 														</p>
+														{sample?.additional_request && (
+															<p className="text-gray-600 italic text-xs mt-0.5 line-clamp-2">
+																{sample.additional_request}
+															</p>
+														)}
+														<button
+															className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-start active:bg-sky-100 focus:outline-none mr-2"
+															onClick={() => window.open(`/result?sample_uid=${sample?.sample_uid}`, '_blank')}
+														>
+															<div className="flex items-center justify-between">
+																{'PKQ'} <GrDocumentText size={15} className="ml-1.5" />
+															</div>
+														</button>
 													</div>
 													{sample?.analysis && Array.isArray(sample.analysis) && sample.analysis.length > 0 ? (
 														<table className="w-full border-collapse border border-gray-300 ml-1 text-sm min-w-[450px] md:min-w-[340px]">
@@ -1239,36 +1706,38 @@ const ProcessingSample = () => {
 																	<th className="border p-1 text-start">Phép thử</th>
 																	<th className="border p-1 text-start w-20">Đơn vị</th>
 																	<th className="border p-1 text-start w-24">Kết quả</th>
-																	<th className="border p-1 text-start w-24 relative">
-																		{samplesWithPendingReviews[sample.sample_uid] ? (
-																			<div className="flex justify-center items-center">
-																				<button
-																					className="mx-1 text-gray-600 hover:text-gray-800 p-1.5"
-																					onClick={() => handleResetReviewChanges(sample.sample_uid)}
-																					title="Hủy thay đổi"
-																				>
-																					<FaUndo size={12} />
-																				</button>
-																				<button
-																					className="mx-1 text-green-600 hover:text-green-800 p-1.5"
-																					onClick={() => handleReviewSave(sample.sample_uid)}
-																					title="Duyệt các mục đã chọn"
-																				>
-																					<FaSave size={12} />
-																				</button>
-																			</div>
-																		) : (
-																			<div className="items-center flex">
-																				Duyệt
-																				<input
-																					type="checkbox"
-																					className="w-4 h-4 ml-1"
-																					checked={areAllAnalysesSelectedInSample(sample.sample_uid)}
-																					onChange={() => handleReviewSelectAll(sample.sample_uid)}
-																				/>
-																			</div>
-																		)}
-																	</th>
+																	{currentUser?.role?.staff_admin && (
+																		<th className="border p-1 text-start w-24 relative">
+																			{samplesWithPendingReviews[sample.sample_uid] ? (
+																				<div className="flex justify-center items-center">
+																					<button
+																						className="mx-1 text-gray-600 hover:text-gray-800 p-1.5"
+																						onClick={() => handleResetReviewChanges(sample.sample_uid)}
+																						title="Hủy thay đổi"
+																					>
+																						<FaUndo size={12} />
+																					</button>
+																					<button
+																						className="mx-1 text-green-600 hover:text-green-800 p-1.5"
+																						onClick={() => handleReviewSave(sample.sample_uid)}
+																						title="Duyệt các mục đã chọn"
+																					>
+																						<FaSave size={12} />
+																					</button>
+																				</div>
+																			) : (
+																				<div className="items-center flex">
+																					Duyệt
+																					<input
+																						type="checkbox"
+																						className="w-4 h-4 ml-1"
+																						checked={areAllAnalysesSelectedInSample(sample.sample_uid)}
+																						onChange={() => handleReviewSelectAll(sample.sample_uid)}
+																					/>
+																				</div>
+																			)}
+																		</th>
+																	)}
 																</tr>
 															</thead>
 															<tbody>
@@ -1334,25 +1803,30 @@ const ProcessingSample = () => {
 																					)}
 																				</div>
 																			</td>
-																			<td className="border p-1 text-center">
-																				<input
-																					type="checkbox"
-																					className="w-6 h-6"
-																					checked={
-																						selectedForReview.includes(item.id) ||
-																						(item.reviewed_by && !selectedForReview.includes(-item.id)) ||
-																						false
-																					}
-																					onChange={(e) =>
-																						handleReviewSelect(item.id, e.target.checked, sample.sample_uid)
-																					}
-																				/>
-																				{item.reviewed_by && !selectedForReview.includes(-item.id) && (
-																					<span className="ml-1 text-green-600" title="Đã được duyệt">
-																						<FaCheck size={12} />
-																					</span>
-																				)}
-																			</td>
+																			{currentUser?.role?.staff_admin && (
+																				<td className="border p-1 text-center">
+																					<input
+																						type="checkbox"
+																						className="w-6 h-6"
+																						checked={selectedForReview.includes(item.id)}
+																						onChange={(e) => {
+																							const isChecked = e.target.checked;
+																							setSelectedForReview((prev) => {
+																								if (isChecked) {
+																									return [...prev, item.id]; // Add the id if checked
+																								} else {
+																									return prev.filter((id) => id !== item.id); // Remove the id if unchecked
+																								}
+																							});
+																						}}
+																					/>
+																					{item.reviewed_by && !selectedForReview.includes(-item.id) && (
+																						<span className="ml-1 text-green-600" title="Đã được duyệt">
+																							<FaCheck size={12} />
+																						</span>
+																					)}
+																				</td>
+																			)}
 																		</tr>
 																	);
 																})}
@@ -1370,6 +1844,325 @@ const ProcessingSample = () => {
 								</div>
 							</>
 						)
+					)}
+					{viewMode === 'v3' && (
+						<div className="w-full min-h-20 flex flex-col mt-1 ">
+							{Array.isArray(filteredProcessingSample) && filteredProcessingSample.length > 0 ? (
+								filteredProcessingSample.map((receipt) => {
+									const allAnalyses = receipt.samples?.flatMap(
+										(sample) =>
+											sample.analysis?.map((analysis) => ({ ...analysis, sample_uid: sample.sample_uid })) || [],
+									);
+
+									return (
+										<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto">
+											<div className="text-start mb-2">
+												<p className="text-primary font-semibold">{receipt.receipt_uid || 'N/A'}</p>
+												{editingNote === receipt.id ? (
+													<div className="flex items-center gap-2">
+														<textarea
+															value={noteInput}
+															onChange={(e) => setNoteInput(e.target.value)}
+															className="p-2 border rounded-lg w-full bg-white"
+															rows={3}
+														/>
+														<div className="flex flex-col gap-2">
+															<button
+																onClick={() => handleSaveNote(receipt)}
+																className="bg-blue-500 text-white px-2 py-1 rounded-lg w-24"
+															>
+																Xác nhận
+															</button>
+															<button
+																onClick={() => setEditingNote(null)}
+																className="bg-gray-500 text-white px-2 py-1 rounded-lg w-24"
+															>
+																Hủy bỏ
+															</button>
+														</div>
+													</div>
+												) : (
+													<p
+														className="text-gray-600 italic cursor-pointer hover:underline w-fit"
+														onClick={() => handleEditNote(receipt)}
+													>
+														Ghi chú: {receipt.note || 'Không có ghi chú'}
+													</p>
+												)}
+											</div>
+											{allAnalyses && allAnalyses.length > 0 ? (
+												<table className="w-full border-collapse border border-gray-300 mt-2">
+													<thead>
+														<tr className="bg-gray-100">
+															<th className="border p-1 text-start w-32 min-w-32">Mã mẫu</th>
+															<th className="border p-1 text-start min-w-60">Chỉ tiêu</th>
+															<th className="border p-1 text-start min-w-60">Phương pháp</th>
+															<th className="border p-1 text-start min-w-40">Kết quả</th>
+															<th className="border p-1 text-start min-w-32">Đơn vị</th>
+															<th className="border p-1 text-start w-28 min-w-28">Hạn trả</th>
+															<th className="border p-1 text-start w-36 min-w-36">Người thực hiện</th>
+															<th className="border p-1 text-center w-12">
+																<input
+																	type="checkbox"
+																	className="w-4 h-4"
+																	onChange={(e) => handleSelectAllCheckboxes(receipt.id, e.target.checked)}
+																	data-receipt-id={receipt.id}
+																/>
+															</th>
+														</tr>
+														{/* Add the bulk edit row right after the header when checkboxes for this receipt are selected */}
+
+														{viewMode === 'v3' &&
+															selectedCheckboxesByReceipt[receipt.id] &&
+															selectedCheckboxesByReceipt[receipt.id].length > 0 && (
+																<tr className="bg-gray-100">
+																	<td colSpan={2} className="border p-1 text-center font-semibold">
+																		Chỉnh sửa hàng loạt
+																	</td>
+																	<td className="border p-1 text-start">
+																		<div className="flex items-center gap-0.5">
+																			<select
+																				className={`min-w-24 p-1 py-[5px] font-semibold text-slate-500 bg-white border rounded text-sm focus:outline-none text-left ${
+																					bulkEditValues.protocol_source ? 'border-blue-500' : 'border-gray-300'
+																				}`}
+																				value={bulkEditValues.protocol_source || ''}
+																				onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
+																			>
+																				<option value="IRDOP">IRDOP</option>
+																				<option value="IRDOP VS">IRDOP VS</option>
+																				<option value="EX">EX</option>
+																			</select>
+																			<input
+																				type="text"
+																				className={`w-full bg-white border rounded p-1 text-left ${
+																					bulkEditValues.protocol_code ? 'border-blue-500' : 'border-gray-300'
+																				}`}
+																				placeholder="Mã phương pháp"
+																				value={bulkEditValues.protocol_code || ''}
+																				onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
+																			/>
+																		</div>
+																	</td>
+																	<td className="border p-1 text-start">
+																		<div
+																			className={`hover:border-purple-500 border rounded cursor-pointer ${
+																				bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === receipt.id
+																					? 'border-purple-500'
+																					: bulkEditValues.result_value
+																					? 'border-blue-500'
+																					: 'border-white'
+																			}`}
+																			onClick={() => handleBulkEditCellClick('result_value', receipt.id)}
+																		>
+																			{bulkEditCell.column === 'result_value' &&
+																			bulkEditCell.receiptId === receipt.id ? (
+																				<TinyMceInput
+																					value={bulkEditValues.result_value || ''}
+																					onUpdate={(content) => handleBulkEditChange('result_value', content)}
+																				/>
+																			) : (
+																				<div
+																					dangerouslySetInnerHTML={{ __html: `${bulkEditValues.result_value || '--'}` }}
+																					className="p-1 min-h-[40px] overflow-visible"
+																				/>
+																			)}
+																		</div>
+																	</td>
+																	<td className="border p-1 text-start">
+																		<div
+																			className={`hover:border-purple-500 border rounded cursor-pointer ${
+																				bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === receipt.id
+																					? 'border-purple-500'
+																					: bulkEditValues.result_unit
+																					? 'border-blue-500'
+																					: 'border-white'
+																			}`}
+																			onClick={() => handleBulkEditCellClick('result_unit', receipt.id)}
+																		>
+																			{bulkEditCell.column === 'result_unit' &&
+																			bulkEditCell.receiptId === receipt.id ? (
+																				<TinyMceInput
+																					value={bulkEditValues.result_unit || ''}
+																					onUpdate={(content) => handleBulkEditChange('result_unit', content)}
+																				/>
+																			) : (
+																				<div
+																					dangerouslySetInnerHTML={{ __html: `${bulkEditValues.result_unit || '--'}` }}
+																					className="p-1 min-h-[40px] overflow-visible"
+																				/>
+																			)}
+																		</div>
+																	</td>
+																	<td className="border p-1 text-start">
+																		<input
+																			type="date"
+																			className={`w-full bg-white border rounded p-1 ${
+																				bulkEditValues.deadline ? 'border-blue-500' : 'border-gray-300'
+																			}`}
+																			value={bulkEditValues.deadline || ''}
+																			onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
+																		/>
+																	</td>
+																	<td className="border p-1 text-start">
+																		<div className="relative">
+																			<select
+																				className={`w-full p-1 py-[5px] font-semibold text-slate-500 bg-white border rounded text-sm focus:outline-none text-left ${
+																					bulkEditValues.technician_uid ? 'border-blue-500' : 'border-gray-300'
+																				}`}
+																				value={bulkEditValues.technician_uid || ''}
+																				onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
+																			>
+																				<option value="">--Chọn KTV--</option>
+																				{technicians.map((tech) => (
+																					<option key={tech.identity_uid} value={tech.identity_uid}>
+																						{tech.alias || ''} - {tech.identity_name || ''}
+																					</option>
+																				))}
+																			</select>
+																		</div>
+																	</td>
+																	<td className="border p-1 text-center">
+																		<button
+																			className="bg-blue-500 text-white p-1 rounded-lg"
+																			onClick={() => handleBulkUpdate(selectedCheckboxesByReceipt[receipt.id])}
+																		>
+																			<FaSave size={16} />
+																		</button>
+																	</td>
+																</tr>
+															)}
+													</thead>
+													<tbody>
+														{allAnalyses.map((item) => (
+															<tr
+																key={item.id}
+																className={`${
+																	selectedCheckboxesV3.includes(item.id) ? 'bg-gray-100' : ''
+																} hover:bg-gray-50`}
+															>
+																<td className="border p-1 text-start">{item.sample_uid || 'N/A'}</td>
+																<td className="border p-1 text-start">{item.parameter_name || 'N/A'}</td>
+																<td className="border p-1 text-start ">
+																	<div className="flex items-center gap-0.5">
+																		<select
+																			className="min-w-24 max-w-fit p-1 py-[5px] max-h-fit font-semibold text-slate-500 bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
+																			onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
+																			value={item.protocol_source || ''}
+																		>
+																			<option value="IRDOP">IRDOP</option>
+																			<option value="IRDOP VS">IRDOP VS</option>
+																			<option value="EX">EX</option>
+																		</select>
+																		<input
+																			type="text"
+																			className="w-full bg-white border border-white hover:border-purple-500 rounded p-1 text-left"
+																			placeholder="Mã phương pháp"
+																			value={
+																				editableCell.analysisId === item.id && editableCell.column === 'protocol_code'
+																					? inputValue
+																					: item.protocol_code || ''
+																			}
+																			onChange={(e) => handleProtocolCodeChange(item.id, e.target.value)}
+																			onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value)}
+																			onKeyDown={(e) => handleProtocolCodeKeyDown(e, item.id, e.target.value)}
+																		/>
+																	</div>
+																</td>
+																<td
+																	className="border p-1 text-start"
+																	onClick={() => handleCellClickV3(item.id, 'result_value', item.result_value)}
+																>
+																	<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
+																		{editableCell.analysisId === item.id && editableCell.column === 'result_value' ? (
+																			<TinyMceInput
+																				value={inputValue}
+																				onUpdate={(content) => handleSaveContentV3(content, 'result_value', item.id)}
+																				onKey={handleKeyDownV3}
+																			/>
+																		) : (
+																			<div dangerouslySetInnerHTML={{ __html: `${item.result_value || '--'}` }} />
+																		)}
+																	</div>
+																</td>
+																<td
+																	className="border p-1 text-start"
+																	onClick={() => handleCellClickV3(item.id, 'result_unit', item.result_unit)}
+																>
+																	<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
+																		{editableCell.analysisId === item.id && editableCell.column === 'result_unit' ? (
+																			<TinyMceInput
+																				value={inputValue}
+																				onUpdate={(content) => handleSaveContentV3(content, 'result_unit', item.id)}
+																				onKey={handleKeyDownV3}
+																			/>
+																		) : (
+																			<div dangerouslySetInnerHTML={{ __html: `${item.result_unit || '--'}` }} />
+																		)}
+																	</div>
+																</td>
+																<td className="border p-1 text-start">
+																	{item.deadline ? formatDate(item.deadline) : 'N/A'}
+																</td>
+																<td className="border p-1 text-start">
+																	<div className="relative">
+																		<button
+																			className="text-primary hover:underline p-1 w-full dropdown-button"
+																			onClick={(e) => toggleTechnicianDropdown(item.id, e)}
+																		>
+																			{getTechnicianName(item.technician_uid)}
+																		</button>
+																		{technicianDropdownVisible === item.id &&
+																			createPortal(
+																				<ul
+																					className="fixed bg-white border rounded shadow-lg z-[99]"
+																					style={{
+																						top: dropdownPosition.top + 'px',
+																						left: dropdownPosition.left + 'px',
+																						position: 'absolute',
+																						maxHeight: '200px',
+																						overflowY: 'auto',
+																						minWidth: '200px',
+																					}}
+																				>
+																					{technicians.map((identity) => (
+																						<li
+																							key={identity.identity_uid}
+																							className="p-1 cursor-pointer hover:bg-gray-200 dropdown-item"
+																							onClick={() => handleTechnicianChange(item.id, identity.identity_uid)}
+																						>
+																							<p className="font-bold text-primary text-sm">{identity.alias || ''}</p>
+																							<p>{identity.identity_name || ''}</p>
+																						</li>
+																					))}
+																				</ul>,
+																				document.body,
+																			)}
+																	</div>
+																</td>
+																<td className="border p-1 text-center">
+																	<input
+																		type="checkbox"
+																		className="w-4 h-4 row-checkbox"
+																		data-receipt-id={receipt.id}
+																		data-analysis-id={item.id}
+																		checked={selectedCheckboxesV3.includes(item.id)}
+																		onChange={(e) => handleCheckboxChange(item.id, e.target.checked, receipt.id)}
+																	/>
+																</td>
+															</tr>
+														))}
+													</tbody>
+												</table>
+											) : (
+												<p className="text-gray-500">Không có dữ liệu phân tích</p>
+											)}
+										</div>
+									);
+								})
+							) : (
+								<div className="w-full text-center py-4 text-gray-500">Không có dữ liệu phiếu tiếp nhận</div>
+							)}
+						</div>
 					)}
 				</div>
 			</div>

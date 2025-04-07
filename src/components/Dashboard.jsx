@@ -58,9 +58,6 @@ const Dashboard = () => {
 	const [userInfo, setUserInfo] = useState({});
 
 	const [showRelativeTime, setShowRelativeTime] = useState(true); // Toggle between date format and relative time
-	// Add new states for draft and PPT send date format toggles
-	const [showRelativeDraftTime, setShowRelativeDraftTime] = useState(true);
-	const [showRelativePptTime, setShowRelativePptTime] = useState(true);
 	const receiptsPerPage = 50;
 	const [hoveredReceiptId, setHoveredReceiptId] = useState(null);
 	const [hoveredSampleId, setHoveredSampleId] = useState(null);
@@ -431,7 +428,7 @@ const Dashboard = () => {
 				receipt: {
 					id: receiptId,
 					draft_send_at: formattedDate,
-					ppt_send_by: currentUser?.identity_uid, // Add this line to include the sender
+					ppt_send_by: currentUser?.identity_uid, // Add current user as the sender
 					modified_by_uid: currentUser?.identity_uid,
 				},
 			};
@@ -736,124 +733,6 @@ const Dashboard = () => {
 	// Toggle between date format and relative time
 	const toggleDeadlineFormat = () => {
 		setShowRelativeTime(!showRelativeTime);
-	};
-
-	// Toggle between date format and relative time for draft send
-	const toggleDraftFormat = () => {
-		setShowRelativeDraftTime(!showRelativeDraftTime);
-	};
-
-	// Toggle between date format and relative time for PPT send
-	const togglePptFormat = () => {
-		setShowRelativePptTime(!showRelativePptTime);
-	};
-
-	// Format draft send date as relative time
-	const formatDraftSendAsRelative = (sendDate) => {
-		if (!sendDate) return <span className="text-start block">--</span>;
-
-		const sendDateTime = new Date(sendDate);
-		const today = new Date();
-
-		// Reset time part for date comparison
-		const sendDay = new Date(sendDateTime.getFullYear(), sendDateTime.getMonth(), sendDateTime.getDate());
-		const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-		// Calculate difference in days
-		const diffTime = todayDay - sendDay;
-		const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-		// For same day
-		if (diffDays === 0) {
-			return <span className="text-green-600">Hôm nay</span>;
-		}
-		// For yesterday
-		else if (diffDays === 1) {
-			return <span className="text-blue-600">Hôm qua</span>;
-		}
-		// For days (2-6 days)
-		else if (diffDays > 1 && diffDays < 7) {
-			return <span className="text-blue-600">{diffDays} ngày trước</span>;
-		}
-		// For weeks (7-30 days)
-		else if (diffDays >= 7 && diffDays < 30) {
-			const weeks = Math.floor(diffDays / 7);
-			return <span className="text-blue-600">{weeks} tuần trước</span>;
-		}
-		// For months (30+ days)
-		else if (diffDays >= 30) {
-			const months = Math.floor(diffDays / 30);
-			return <span className="text-blue-600">{months} tháng trước</span>;
-		}
-		// For future dates
-		else if (diffDays < 0) {
-			const absDiff = Math.abs(diffDays);
-			if (absDiff === 1) {
-				return <span className="text-orange-500">Ngày mai</span>;
-			} else if (absDiff < 7) {
-				return <span className="text-orange-500">{absDiff} ngày sau</span>;
-			} else if (absDiff < 30) {
-				const weeks = Math.floor(absDiff / 7);
-				return <span className="text-orange-500">{weeks} tuần sau</span>;
-			} else {
-				const months = Math.floor(absDiff / 30);
-				return <span className="text-orange-500">{months} tháng sau</span>;
-			}
-		}
-	};
-
-	// Format PPT send date as relative time - similar logic as draft send
-	const formatPptSendAsRelative = (sendDate) => {
-		if (!sendDate) return <span className="text-start block">--</span>;
-
-		const sendDateTime = new Date(sendDate);
-		const today = new Date();
-
-		// Reset time part for date comparison
-		const sendDay = new Date(sendDateTime.getFullYear(), sendDateTime.getMonth(), sendDateTime.getDate());
-		const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-		// Calculate difference in days
-		const diffTime = todayDay - sendDay;
-		const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-		// For same day
-		if (diffDays === 0) {
-			return <span className="text-green-600">Hôm nay</span>;
-		}
-		// For yesterday
-		else if (diffDays === 1) {
-			return <span className="text-blue-600">Hôm qua</span>;
-		}
-		// For days (2-6 days)
-		else if (diffDays > 1 && diffDays < 7) {
-			return <span className="text-blue-600">{diffDays} ngày trước</span>;
-		}
-		// For weeks (7-30 days)
-		else if (diffDays >= 7 && diffDays < 30) {
-			const weeks = Math.floor(diffDays / 7);
-			return <span className="text-blue-600">{weeks} tuần trước</span>;
-		}
-		// For months (30+ days)
-		else if (diffDays >= 30) {
-			const months = Math.floor(diffDays / 30);
-			return <span className="text-blue-600">{months} tháng trước</span>;
-		}
-		// For future dates
-		else if (diffDays < 0) {
-			const absDiff = Math.abs(diffDays);
-			if (absDiff === 1) {
-				return <span className="text-orange-500">Ngày mai</span>;
-			} else if (absDiff < 7) {
-				return <span className="text-orange-500">{absDiff} ngày sau</span>;
-			} else if (absDiff < 30) {
-				const weeks = Math.floor(absDiff / 7);
-				return <span className="text-orange-500">{weeks} tuần sau</span>;
-			} else {
-				const months = Math.floor(absDiff / 30);
-				return <span className="text-orange-500">{months} tháng sau</span>;
-			}
-		}
 	};
 
 	// Updated togglePreliminaryView function to preserve deadline filter state
@@ -1945,6 +1824,9 @@ const Dashboard = () => {
 				.colored-toast.swal2-icon-info {
 					background-color: #1976d2 !important; /* Darker blue background for better contrast */
 				}
+				.colored-toast.swal2-icon-question {
+					background-color: #87adbd !important;
+				}
 				.colored-toast .swal2-title {
 					color: white;
 					font-size: 0.85rem !important;
@@ -2175,22 +2057,12 @@ const Dashboard = () => {
 								>
 									Hạn trả KQ
 								</th>
-
+								
 								{/* New columns for Preliminary view to be added right after Hạn trả KQ */}
 								{isPreliminaryActive && (
 									<>
-										<th
-											className="p-1 border-b text-start max-w-28 min-w-[100px] cursor-pointer hover:text-[#103667] underline text-blue-700"
-											onClick={toggleDraftFormat}
-										>
-											Gửi sơ bộ
-										</th>
-										<th
-											className="p-1 border-b text-start max-w-28 min-w-[100px] cursor-pointer hover:text-[#103667] underline text-blue-700"
-											onClick={togglePptFormat}
-										>
-											Gửi PPT
-										</th>
+										<th className="p-1 border-b text-start max-w-28 min-w-[100px]">Gửi sơ bộ</th>
+										<th className="p-1 border-b text-start max-w-28 min-w-[100px]">Gửi PPT</th>
 										<th className="p-1 border-b text-start min-w-[110px]">Người gửi</th>
 									</>
 								)}
@@ -2459,11 +2331,12 @@ const Dashboard = () => {
 												<td className="p-1 text-start">
 													{receipt.deadline ? formatDeadlineWithStyle(receipt.deadline, receipt) : '--'}
 												</td>
-
+												
+												
 												{/* Add the new columns for Preliminary view for empty receipts */}
 												{isPreliminaryActive && (
 													<>
-														<td
+														<td 
 															className="p-1 text-start cursor-pointer"
 															onClick={() => handleFieldClick(receipt.id, null, 'draft_send_at')}
 														>
@@ -2497,17 +2370,11 @@ const Dashboard = () => {
 																		}}
 																	/>
 																</div>
-															) : receipt.draft_send_at ? (
-																showRelativeDraftTime ? (
-																	formatDraftSendAsRelative(receipt.draft_send_at)
-																) : (
-																	formatDate(receipt.draft_send_at)
-																)
 															) : (
-																'--'
+																receipt.draft_send_at ? formatDate(receipt.draft_send_at) : '--'
 															)}
 														</td>
-														<td
+														<td 
 															className="p-1 text-start cursor-pointer"
 															onClick={() => handleFieldClick(receipt.id, null, 'ppt_send_at')}
 														>
@@ -2541,14 +2408,8 @@ const Dashboard = () => {
 																		}}
 																	/>
 																</div>
-															) : receipt.ppt_send_at ? (
-																showRelativePptTime ? (
-																	formatPptSendAsRelative(receipt.ppt_send_at)
-																) : (
-																	formatDate(receipt.ppt_send_at)
-																)
 															) : (
-																'--'
+																receipt.ppt_send_at ? formatDate(receipt.ppt_send_at) : '--'
 															)}
 														</td>
 														<td className="p-1 text-start">
@@ -2556,7 +2417,7 @@ const Dashboard = () => {
 														</td>
 													</>
 												)}
-
+												
 												{/* Additional empty columns for payment view */}
 												{isPaymentActive && (
 													<>
@@ -2564,7 +2425,7 @@ const Dashboard = () => {
 														<td className="p-1 text-center text-gray-500">{receipt.record_code || '--'}</td>
 													</>
 												)}
-
+												
 												<td
 													colSpan={isPreliminaryActive ? '5' : isPaymentActive ? '7' : '6'}
 													className="p-1 text-center text-gray-500"
@@ -2699,7 +2560,8 @@ const Dashboard = () => {
 																		</div>
 																	)}
 																</td>
-
+																
+																
 																{/* Add the new columns for receipts with samples in Preliminary view */}
 																{isPreliminaryActive && (
 																	<>
@@ -2742,11 +2604,7 @@ const Dashboard = () => {
 																				</div>
 																			) : (
 																				<div className="w-full h-full p-1 py-0 rounded cursor-pointer hover:bg-gray-100">
-																					{receipt.draft_send_at
-																						? showRelativeDraftTime
-																							? formatDraftSendAsRelative(receipt.draft_send_at)
-																							: formatDate(receipt.draft_send_at)
-																						: '--'}
+																					{receipt.draft_send_at ? formatDate(receipt.draft_send_at) : '--'}
 																				</div>
 																			)}
 																		</td>
@@ -2789,11 +2647,7 @@ const Dashboard = () => {
 																				</div>
 																			) : (
 																				<div className="w-full h-full p-1 py-0 rounded cursor-pointer hover:bg-gray-100">
-																					{receipt.ppt_send_at
-																						? showRelativePptTime
-																							? formatPptSendAsRelative(receipt.ppt_send_at)
-																							: formatDate(receipt.ppt_send_at)
-																						: '--'}
+																					{receipt.ppt_send_at ? formatDate(receipt.ppt_send_at) : '--'}
 																				</div>
 																			)}
 																		</td>
@@ -2807,7 +2661,7 @@ const Dashboard = () => {
 																		</td>
 																	</>
 																)}
-
+																
 																{/* Payment view specific columns - SYC & HSL moved up */}
 																{isPaymentActive && (
 																	<>
@@ -2828,9 +2682,7 @@ const Dashboard = () => {
 																					onKeyDown={(e) =>
 																						handleReceiptInputKeyDown(e, receipt.id, 'request_number', e.target.value)
 																					}
-																					onBlur={() =>
-																						setEditingField({ receiptId: null, sampleId: null, field: null })
-																					}
+																					onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
 																					className="p-1 border rounded-md w-full text-sm bg-white"
 																					autoFocus
 																				/>
@@ -2857,9 +2709,7 @@ const Dashboard = () => {
 																					onKeyDown={(e) =>
 																						handleReceiptInputKeyDown(e, receipt.id, 'record_code', e.target.value)
 																					}
-																					onBlur={() =>
-																						setEditingField({ receiptId: null, sampleId: null, field: null })
-																					}
+																					onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
 																					className="p-1 border rounded-md w-full text-sm bg-white"
 																					autoFocus
 																				/>
@@ -2964,7 +2814,7 @@ const Dashboard = () => {
 																					{statusName}
 																				</option>
 																			))}
-																		</select>
+																			</select>
 																	) : (
 																		<div className="w-full h-full rounded">
 																			{status[sample.status] ? (
@@ -3111,8 +2961,8 @@ const Dashboard = () => {
 																</td>
 																<td
 																	className={`p-1 text-start align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
+																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																		}`}
 																	rowSpan={samplesToShow.length}
 																	onClick={() => handleFieldClick(receipt.id, null, 'sale_recorder')}
 																>

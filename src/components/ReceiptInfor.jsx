@@ -685,6 +685,10 @@ const ReceiptInfor = ({ receipt }) => {
 			receipt_id: currentReceipt.id,
 			...newSample,
 			sample_information: JSON.stringify([
+				{
+					fname: 'Tên mẫu thử / name.',
+					fvalue: newSample?.sample_name || '',
+				},
 				...sampleInformation,
 				{
 					fname: 'Ngày tiếp nhận / receipt date.',

@@ -281,6 +281,12 @@ const SampleInfor = () => {
 		}
 	};
 
+	// Add new function to navigate to result page
+	const openPKQWindow = () => {
+		// Navigate to the result page with the current sample_uid
+		navigate(`/result?sample_uid=${sample_uid}`);
+	};
+
 	const fetchReceiptFull = async () => {
 		try {
 			const response = await apiGet(`https://black.irdop.org/khsi19me/db/get/receipt_full/${receipt_uid}`);
@@ -341,7 +347,6 @@ const SampleInfor = () => {
 			delete analysis.reviewed_by;
 			return analysis;
 		});
-		// analyses = analyses.map((analysis) => analysis.parameter_id);
 		console.log(analyses);
 		setSelectedParameters(analyses);
 		setIsDropdownVisible(false);
@@ -1700,11 +1705,45 @@ const SampleInfor = () => {
 		}
 	};
 
+	const handleDateInputChange = (id, e) => {
+		const value = e.target.value;
+		if (value) {
+			const parts = value.split('/');
+			if (parts.length === 3) {
+				const day = parseInt(parts[0], 10);
+				const month = parseInt(parts[1], 10) - 1;
+				const year = parseInt(parts[2], 10);
+				if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+					const date = new Date(year, month, day);
+					if (date.getDate() === day && date.getMonth() === month && date.getFullYear() === year) {
+						setSelectedDate(date);
+					}
+				}
+			}
+		}
+	};
+
+	const handleDeadlineFocus = (id, deadline) => {
+		if (deadline) {
+			setSelectedDate(new Date(deadline));
+		} else {
+			setSelectedDate(new Date());
+		}
+	};
+
+	const handleDeadlineKeyDown = (e, id) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			saveDeadlineToAPI(id, selectedDate);
+		}
+	};
+
+	// Update the toggle function to properly position the dropdown
 	const toggleDeadlineDropdown = (index, event) => {
 		const buttonRect = event.target.getBoundingClientRect();
 
 		setDropdownPosition({
-			top: buttonRect.top + window.scrollY - 264,
+			top: buttonRect.bottom + window.scrollY + 5,
 			left: buttonRect.left + window.scrollX,
 		});
 
@@ -1720,33 +1759,35 @@ const SampleInfor = () => {
 		}
 	};
 
-	const handleDeadlineChange = async (index, date) => {
+	// Update handleDeadlineChange to only update UI without API call
+	const handleDeadlineChange = (index, date) => {
 		// Update the selected date
 		setSelectedDate(date);
 
-		// Convert date to ISO string for API
-		const newDeadline = date.toISOString();
-
-		// Create a copy of the analytes with the updated deadline
+		// Update UI only - we'll make the API call separately
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
-				return { ...item, deadline: newDeadline };
+				return { ...item, deadline: date.toISOString() };
 			}
 			return item;
 		});
 
 		// Update the state
 		setListAnalytes(updatedAnalytes);
+	};
 
-		// Close the dropdown after a small delay to ensure the change is processed
-		setTimeout(() => {
-			setDeadlineDropdownVisible(null);
-		}, 50);
-
-		// Find the updated analysis item
-		const analysis = updatedAnalytes.find((item) => item.id === index);
-
+	// New function to send API update for deadline
+	const saveDeadlineToAPI = async (index, date) => {
 		try {
+			// Close the dropdown
+			setDeadlineDropdownVisible(null);
+
+			// Convert date to ISO string for API
+			const newDeadline = date.toISOString();
+
+			// Find the analysis item
+			const analysis = listAnalytes.find((item) => item.id === index);
+
 			// Create minimal update object with only required fields
 			const updateData = {
 				id: analysis.id,
@@ -1757,9 +1798,19 @@ const SampleInfor = () => {
 			};
 
 			// Send the update to the server
-			await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 				analysis: updateData,
 			});
+
+			if (response.status === 200) {
+				showToast('Đã cập nhật hạn trả thành công!');
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi cập nhật hạn trả',
+				});
+			}
 		} catch (error) {
 			console.error('Error updating deadline:', error);
 			Swal.fire({
@@ -1768,6 +1819,17 @@ const SampleInfor = () => {
 				text: error.message || 'Có lỗi xảy ra khi cập nhật hạn trả',
 			});
 		}
+	};
+
+	// Update the date selection handler to trigger API update
+	const handleDateSelect = (index, date) => {
+		handleDeadlineChange(index, date);
+		saveDeadlineToAPI(index, date);
+	};
+
+	// Add a handler for when the input loses focus
+	const handleDeadlineBlur = (id) => {
+		saveDeadlineToAPI(id, selectedDate);
 	};
 
 	// Modified handleClickOutside function to use requestAnimationFrame for delayed closing
@@ -2453,6 +2515,28 @@ const SampleInfor = () => {
 		</div>
 	);
 
+	// Modify the DatePicker styling to ensure it appears above all content
+	useEffect(() => {
+		// Add a global style to ensure DatePicker appears above all elements
+		const style = document.createElement('style');
+		style.innerHTML = `
+		.react-datepicker-popper {
+			z-index: 99999 !important;
+		}
+		.react-datepicker-wrapper {
+			width: 100%;
+		}
+		.react-datepicker__input-container {
+			width: 100%;
+		}
+		`;
+		document.head.appendChild(style);
+
+		return () => {
+			document.head.removeChild(style);
+		};
+	}, []);
+
 	if (!sample) {
 		return <div>Loading...</div>;
 	}
@@ -2511,6 +2595,14 @@ const SampleInfor = () => {
 				sample_uids={listSampleByReceipt.map((sample) => sample.sample_uid)}
 			/>
 			<div className="flex justify-end mb-1">
+				<button
+					className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-start active:bg-sky-100 focus:outline-none mr-2"
+					onClick={openPKQWindow}
+				>
+					<div className="flex items-center justify-between">
+						{'PKQ'} <GrDocumentText size={15} className="ml-1.5" />
+					</div>
+				</button>
 				<button
 					className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-start active:bg-sky-100 focus:outline-none mr-2"
 					onClick={openPPTWindow}
@@ -3107,33 +3199,52 @@ const SampleInfor = () => {
 									</td>
 									<td className="p-1 border relative">
 										<div className="relative">
-											<button
-												className={`w-full dropdown-button font-normal ${
-													deadlineDropdownVisible === order.id && 'border border-slate-200'
-												} p-1 rounded bg-white text-left h-fit`}
-												onClick={(event) => toggleDeadlineDropdown(order.id, event)}
-											>
-												{formatDate(order.deadline) || 'Chọn hạn trả'}
-											</button>
-										</div>
-										{deadlineDropdownVisible === order.id &&
-											createPortal(
-												<div
-													className="fixed bg-white border rounded shadow-lg z-[9999] p-2"
-													style={{
-														top: dropdownPosition.top + 'px',
-														left: dropdownPosition.left + 'px',
-														position: 'absolute',
-													}}
-												>
+											{deadlineDropdownVisible === order.id ? (
+												<div className="relative">
 													<DatePicker
 														selected={selectedDate}
-														onChange={(date) => handleDeadlineChange(order.id, date)}
-														inline
+														onChange={(date) => handleDateSelect(order.id, date)}
+														onFocus={() => handleDeadlineFocus(order.id, order.deadline)}
+														onChangeRaw={(e) => handleDateInputChange(order.id, e)}
+														onBlur={() => handleDeadlineBlur(order.id)}
+														onKeyDown={(e) => handleDeadlineKeyDown(e, order.id)}
+														dateFormat="dd/MM/yyyy"
+														className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
+														calendarClassName="text-black"
+														placeholderText="Chọn hạn trả"
+														autoFocus
+														shouldCloseOnSelect={true}
+														popperContainer={({ children }) => createPortal(children, document.body)}
+														popperProps={{
+															positionFixed: true,
+														}}
+														popperModifiers={{
+															preventOverflow: {
+																enabled: true,
+																escapeWithReference: true,
+																boundariesElement: 'viewport',
+															},
+															hide: {
+																enabled: false,
+															},
+															zIndex: {
+																enabled: true,
+																value: 99999,
+															},
+														}}
 													/>
-												</div>,
-												document.body,
+												</div>
+											) : (
+												<button
+													className={`w-full dropdown-button font-normal ${
+														deadlineDropdownVisible === order.id && 'border border-slate-200'
+													} p-1 rounded bg-white text-left h-fit`}
+													onClick={(event) => toggleDeadlineDropdown(order.id, event)}
+												>
+													{formatDate(order.deadline) || 'Chọn hạn trả'}
+												</button>
 											)}
+										</div>
 									</td>
 									{/* <td className="p-1 border relative ">
 										<div className="relative">
