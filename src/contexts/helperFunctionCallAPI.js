@@ -12,10 +12,10 @@ const redirectToLogin = (message) => {
 		icon: 'warning',
 		title: 'Thông báo',
 		text: message,
-		timer: 1500, // Tự đóng sau 1.5 giây
+		timer: 2000, // Tự đóng sau 1.5 giây
 		showConfirmButton: false,
 	}).then(() => {
-		window.location.href = `${window.location.origin}/login`;
+		window.location.href = `${window.location.href.split('/').slice(0, -1).join('/')}/login`;
 	});
 };
 

@@ -14,9 +14,10 @@ import Login from './components/Login';
 import ClientInfor from './components/ClientInfor';
 import Footer from './components/Footer';
 import Event from './components/Event';
-import ProcessingSample from './components/ProcessingSample';
+import ProcessingSample from './components/ProcessingSampleV3';
 import Report from './components/Report';
 import Result from './components/Analysis_result';
+import PrintSampleTag from './components/PrintSampleTag';
 
 const App = () => {
 	return (
@@ -35,6 +36,7 @@ const App = () => {
 						<Route path="/result" element={<Result />} />
 						<Route path="/processing" element={<ProcessingSample />} />
 						<Route path="/dashboard/receipt" element={<ReceiptInfor />} />
+						<Route path="/dashboard/receipt/print_sp" element={<PrintSampleTag />} />
 						<Route path="/dashboard/sample" element={<SampleInfor />} />
 						<Route path="/login" element={<Login />} />
 						<Route path="library/client" element={<ClientInfor />} />

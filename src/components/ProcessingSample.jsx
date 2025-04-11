@@ -9,8 +9,8 @@ import TinyMceInput from './Input';
 import { toast, ToastContainer } from 'react-toastify';
 import { MdOutlineViewList, MdViewModule } from 'react-icons/md';
 import { GrDocumentText, GrPrint } from 'react-icons/gr';
-
-import { FaCheck, FaSave, FaUndo, FaStickyNote, FaCopy } from 'react-icons/fa';
+import { FaCheck, FaSave, FaUndo, FaStickyNote, FaCopy, FaEdit } from 'react-icons/fa';
+import { FaAngleLeft, FaAngleRight } from 'react-icons/fa'; // Import icons for pagination
 
 const ProcessingSample = () => {
 	const { setCurrentTitlePage, status, currentUser, technicians, formatDate } = useContext(GlobalContext);
@@ -41,6 +41,10 @@ const ProcessingSample = () => {
 	const [editingNote, setEditingNote] = useState(null);
 	const [noteInput, setNoteInput] = useState('');
 	const [bulkEditValues, setBulkEditValues] = useState({}); // Add state to track bulk edit values
+	const [showBulkEditForm, setShowBulkEditForm] = useState(null); // Add state to track which receipt's bulk edit form is visible
+	const [filterUrgent, setFilterUrgent] = useState(false); // Add state for urgent filter
+	const [filterNoResults, setFilterNoResults] = useState(false); // Add state for no results filter
+
 	const navigate = useNavigate();
 	const location = useLocation();
 	let isFetch = false;
@@ -60,7 +64,6 @@ const ProcessingSample = () => {
 		return `${day}/${month}/${year} ${hours}:${minutes}`;
 	};
 
-	console.log(selectedCheckboxesV3);
 	// Update fetchData to handle v3 query
 	const fetchData = async (vm = viewMode, searchTerm = null) => {
 		try {
@@ -434,9 +437,9 @@ const ProcessingSample = () => {
 	};
 
 	const getTechnicianName = (technician_uid) => {
-		if (!technician_uid) return '----';
+		if (!technician_uid) return '--';
 		const technician = technicians?.find((tech) => tech.identity_uid === technician_uid);
-		return technician ? technician.identity_name : '----';
+		return technician ? technician.identity_name : '--';
 	};
 
 	// Function to categorize samples based on deadline
@@ -710,6 +713,7 @@ const ProcessingSample = () => {
 			.filter((term) => term.length > 0);
 	};
 
+	// Update filtered data to remove pagination
 	const filteredProcessingSample = processingSample
 		?.filter((receipt) => {
 			const matchesReceiptUid =
@@ -908,44 +912,119 @@ const ProcessingSample = () => {
 		}
 	};
 
-	// Update selectAllCheckboxes function to update both state variables
-	const handleSelectAllCheckboxes = (receiptId, isChecked) => {
-		// Update UI checkboxes
-		const checkboxes = document.querySelectorAll(`.row-checkbox[data-receipt-id="${receiptId}"]`);
-
-		// Get all analysis IDs for this receipt to update our state
+	// Handle checkbox selection for analyses in v3 view
+	const handleSelectAllCheckboxes = (sampleId, isChecked) => {
+		// Only get checkboxes for rows that are actually visible in the viewport
+		const visibleCheckboxes = [];
 		const analysisIds = [];
 
+		// Get all checkboxes for this sampleId
+		const checkboxes = document.querySelectorAll(`.row-checkbox[data-sample-id="${sampleId}"]`);
+
 		checkboxes.forEach((checkbox) => {
-			checkbox.checked = isChecked;
-			const analysisId = parseInt(checkbox.getAttribute('data-analysis-id'));
-			if (!isNaN(analysisId)) {
-				analysisIds.push(analysisId);
+			// Find the row for this checkbox
+			const row = checkbox.closest('tr');
+
+			// Check if the row actually exists and is visible (not hidden by display:none)
+			if (row && window.getComputedStyle(row).display !== 'none') {
+				// Set the checkbox state
+				checkbox.checked = isChecked;
+				visibleCheckboxes.push(checkbox);
+
+				// Get the analysis ID for this checkbox
+				const analysisId = parseInt(checkbox.getAttribute('data-analysis-id'));
+				if (!isNaN(analysisId)) {
+					analysisIds.push(analysisId);
+				}
+			}
+		});
+
+		// Update the selectedCheckboxesV3 state with only the visible analyses
+		if (isChecked) {
+			setSelectedCheckboxesV3((prev) => [...new Set([...prev, ...analysisIds])]);
+			// Also update selectedCheckboxesByReceipt
+			setSelectedCheckboxesByReceipt((prev) => {
+				const updated = { ...prev };
+				if (!updated[sampleId]) {
+					updated[sampleId] = [];
+				}
+				updated[sampleId] = [...new Set([...(updated[sampleId] || []), ...analysisIds])];
+				return updated;
+			});
+		} else {
+			setSelectedCheckboxesV3((prev) => prev.filter((id) => !analysisIds.includes(id)));
+			// Also update selectedCheckboxesByReceipt
+			setSelectedCheckboxesByReceipt((prev) => {
+				const updated = { ...prev };
+				if (updated[sampleId]) {
+					updated[sampleId] = updated[sampleId].filter((id) => !analysisIds.includes(id));
+					if (updated[sampleId].length === 0) {
+						delete updated[sampleId];
+					}
+				}
+				return updated;
+			});
+		}
+	};
+
+	// Replace handleSelectSampleCheckboxes with the improved approach
+	const handleSelectSampleCheckboxes = (sampleId, isChecked) => {
+		// Find all analyses in this sample
+		const sample = processingSample.flatMap((receipt) => receipt.samples).find((s) => s.id === sampleId);
+
+		if (!sample || !sample.analysis) return;
+
+		// Get only the visible analyses
+		const visibleAnalysisIds = [];
+
+		sample.analysis.forEach((analysis) => {
+			// Find the checkbox for this analysis
+			const checkbox = document.querySelector(`.row-checkbox[data-analysis-id="${analysis.id}"]`);
+			if (checkbox) {
+				const row = checkbox.closest('tr');
+				// Only include if row is visible
+				if (row && window.getComputedStyle(row).display !== 'none') {
+					visibleAnalysisIds.push(analysis.id);
+					checkbox.checked = isChecked;
+				}
 			}
 		});
 
 		// Update the selectedCheckboxesV3 state
 		if (isChecked) {
-			setSelectedCheckboxesV3((prev) => [...new Set([...prev, ...analysisIds])]);
-			// Also update selectedCheckboxesByReceipt to show the bulk edit row
-			setSelectedCheckboxesByReceipt((prev) => {
-				const updated = { ...prev };
-				if (!updated[receiptId]) {
-					updated[receiptId] = [];
-				}
-				updated[receiptId] = [...new Set([...(updated[receiptId] || []), ...analysisIds])];
-				return updated;
-			});
+			setSelectedCheckboxesV3((prev) => [...new Set([...prev, ...visibleAnalysisIds])]);
+
+			// Also update selectedCheckboxesByReceipt
+			const receiptId = processingSample.find((r) => r.samples.some((s) => s.id === sampleId))?.id;
+
+			if (receiptId) {
+				setSelectedCheckboxesByReceipt((prev) => {
+					const updated = { ...prev };
+					if (!updated[receiptId]) {
+						updated[receiptId] = [];
+					}
+					updated[receiptId] = [...new Set([...(updated[receiptId] || []), ...visibleAnalysisIds])];
+					return updated;
+				});
+			}
 		} else {
-			setSelectedCheckboxesV3((prev) => prev.filter((id) => !analysisIds.includes(id)));
-			// Also update selectedCheckboxesByReceipt to hide the bulk edit row
-			setSelectedCheckboxesByReceipt((prev) => {
-				const updated = { ...prev };
-				if (updated[receiptId]) {
-					delete updated[receiptId];
-				}
-				return updated;
-			});
+			setSelectedCheckboxesV3((prev) => prev.filter((id) => !visibleAnalysisIds.includes(id)));
+
+			// Also update selectedCheckboxesByReceipt
+			const receiptId = processingSample.find((r) => r.samples.some((s) => s.id === sampleId))?.id;
+
+			if (receiptId) {
+				setSelectedCheckboxesByReceipt((prev) => {
+					const updated = { ...prev };
+					if (updated[receiptId]) {
+						updated[receiptId] = updated[receiptId].filter((id) => !visibleAnalysisIds.includes(id));
+						if (updated[receiptId].length === 0) {
+							delete updated[receiptId];
+						}
+					}
+					return updated;
+				});
+			}
 		}
 	};
 
@@ -1098,6 +1177,26 @@ const ProcessingSample = () => {
 		}
 	};
 
+	function smoothScrollToTop() {
+		const scrollStep = -window.scrollY / (1000 / 15); // 500ms là thời gian cuộn
+		const scrollInterval = setInterval(() => {
+			if (window.scrollY !== 0) {
+				window.scrollBy(0, scrollStep);
+			} else {
+				clearInterval(scrollInterval);
+			}
+		}, 15); // 15ms là khoảng thời gian giữa các bước
+	}
+
+	// Add functions to toggle filters
+	const toggleUrgentFilter = () => {
+		setFilterUrgent((prev) => !prev);
+	};
+
+	const toggleNoResultsFilter = () => {
+		setFilterNoResults((prev) => !prev);
+	};
+
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
@@ -1127,7 +1226,7 @@ const ProcessingSample = () => {
 						}`}
 						onClick={() => handleViewModeChange('v3')}
 					>
-						Tiếp nhận
+						Bàn giao
 					</button>
 				</div>
 			</div>
@@ -1135,28 +1234,52 @@ const ProcessingSample = () => {
 			<div className="w-full h-full flex flex-col justify-center items-center bg-white rounded-lg p-4 shadow">
 				{/* Move the search inputs to only render in viewMode v3 */}
 				{viewMode === 'v3' && (
-					<div className="w-full flex flex-wrap justify-between items-center mb-4 gap-4">
-						<input
-							type="text"
-							placeholder="Tìm kiếm theo mã tnm..."
-							value={searchTerm}
-							onChange={handleSearchChange}
-							className="p-2 border rounded-lg w-1/4 bg-white"
-						/>
-						<input
-							type="text"
-							placeholder="Tìm kiếm theo mã mẫu..."
-							value={sampleSearchTerm}
-							onChange={handleSampleSearchChange}
-							className="p-2 border rounded-lg w-1/4 bg-white"
-						/>
-						<input
-							type="text"
-							placeholder="Tìm kiếm theo chỉ tiêu..."
-							value={parameterSearchTerm}
-							onChange={handleParameterSearchChange}
-							className="p-2 border rounded-lg w-1/4 bg-white"
-						/>
+					<div className="w-full flex flex-col mb-4 gap-2">
+						<div className="flex flex-wrap justify-between items-center gap-4">
+							<input
+								type="text"
+								placeholder="Tìm kiếm theo mã TNM..."
+								value={searchTerm}
+								onChange={handleSearchChange}
+								className="p-2 border rounded-lg w-1/4 bg-white"
+							/>
+							<input
+								type="text"
+								placeholder="Tìm kiếm theo mã mẫu..."
+								value={sampleSearchTerm}
+								onChange={handleSampleSearchChange}
+								className="p-2 border rounded-lg w-1/4 bg-white"
+							/>
+							<input
+								type="text"
+								placeholder="Tìm kiếm theo chỉ tiêu..."
+								value={parameterSearchTerm}
+								onChange={handleParameterSearchChange}
+								className="p-2 border rounded-lg w-1/4 bg-white"
+							/>
+						</div>
+
+						{/* Add filter buttons */}
+						<div className="flex flex-wrap gap-2">
+							<button
+								className={`px-3 py-1 text-sm rounded-lg border ${
+									filterUrgent ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
+								}`}
+								onClick={toggleUrgentFilter}
+								title="Hiển thị mẫu khẩn"
+							>
+								Mẫu khẩn
+							</button>
+							<button
+								className={`px-3 py-1 text-sm rounded-lg border ${
+									filterNoResults ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
+								}`}
+								onClick={toggleNoResultsFilter}
+								title="Hiển thị chỉ tiêu chưa có kết quả"
+							>
+								Chưa có KQ
+							</button>
+						</div>
 					</div>
 				)}
 
@@ -1848,15 +1971,10 @@ const ProcessingSample = () => {
 					{viewMode === 'v3' && (
 						<div className="w-full min-h-20 flex flex-col mt-1 ">
 							{Array.isArray(filteredProcessingSample) && filteredProcessingSample.length > 0 ? (
-								filteredProcessingSample.map((receipt) => {
-									const allAnalyses = receipt.samples?.flatMap(
-										(sample) =>
-											sample.analysis?.map((analysis) => ({ ...analysis, sample_uid: sample.sample_uid })) || [],
-									);
-
-									return (
-										<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto">
-											<div className="text-start mb-2">
+								filteredProcessingSample.map((receipt) => (
+									<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto relative">
+										<div className="text-start mb-2 flex justify-between items-center">
+											<div>
 												<p className="text-primary font-semibold">{receipt.receipt_uid || 'N/A'}</p>
 												{editingNote === receipt.id ? (
 													<div className="flex items-center gap-2">
@@ -1890,277 +2008,588 @@ const ProcessingSample = () => {
 													</p>
 												)}
 											</div>
-											{allAnalyses && allAnalyses.length > 0 ? (
-												<table className="w-full border-collapse border border-gray-300 mt-2">
-													<thead>
-														<tr className="bg-gray-100">
-															<th className="border p-1 text-start w-32 min-w-32">Mã mẫu</th>
-															<th className="border p-1 text-start min-w-60">Chỉ tiêu</th>
-															<th className="border p-1 text-start min-w-60">Phương pháp</th>
-															<th className="border p-1 text-start min-w-40">Kết quả</th>
-															<th className="border p-1 text-start min-w-32">Đơn vị</th>
-															<th className="border p-1 text-start w-28 min-w-28">Hạn trả</th>
-															<th className="border p-1 text-start w-36 min-w-36">Người thực hiện</th>
-															<th className="border p-1 text-center w-12">
-																<input
-																	type="checkbox"
-																	className="w-4 h-4"
-																	onChange={(e) => handleSelectAllCheckboxes(receipt.id, e.target.checked)}
-																	data-receipt-id={receipt.id}
-																/>
-															</th>
-														</tr>
-														{/* Add the bulk edit row right after the header when checkboxes for this receipt are selected */}
 
-														{viewMode === 'v3' &&
-															selectedCheckboxesByReceipt[receipt.id] &&
-															selectedCheckboxesByReceipt[receipt.id].length > 0 && (
+											<div className="flex items-center gap-3">
+												{/* Move checkbox to the right side */}
+												<div className="flex items-center">
+													<span className="mr-2 text-sm">Chọn tất cả</span>
+													<input
+														type="checkbox"
+														className="w-5 h-5 receipt-checkbox"
+														title="Chọn tất cả các mẫu hiển thị trong đơn này"
+														onChange={(e) => {
+															const isChecked = e.target.checked;
+															// Get all visible checkboxes for this receipt
+															const visibleAnalysisIds = [];
+
+															receipt.samples.forEach((sample) => {
+																sample.analysis.forEach((analysis) => {
+																	// Find the checkbox for this analysis
+																	const checkbox = document.querySelector(
+																		`.row-checkbox[data-analysis-id="${analysis.id}"]`,
+																	);
+																	if (checkbox) {
+																		const row = checkbox.closest('tr');
+																		// Only include if row is visible
+																		if (row && window.getComputedStyle(row).display !== 'none') {
+																			visibleAnalysisIds.push(analysis.id);
+																			checkbox.checked = isChecked;
+																		}
+																	}
+																});
+															});
+
+															// Update the selectedCheckboxesV3 state
+															if (isChecked) {
+																setSelectedCheckboxesV3((prev) => [...new Set([...prev, ...visibleAnalysisIds])]);
+																setSelectedCheckboxesByReceipt((prev) => {
+																	const updated = { ...prev };
+																	if (!updated[receipt.id]) {
+																		updated[receipt.id] = [];
+																	}
+																	updated[receipt.id] = [
+																		...new Set([...(updated[receipt.id] || []), ...visibleAnalysisIds]),
+																	];
+																	return updated;
+																});
+															} else {
+																setSelectedCheckboxesV3((prev) =>
+																	prev.filter((id) => !visibleAnalysisIds.includes(id)),
+																);
+																setSelectedCheckboxesByReceipt((prev) => {
+																	const updated = { ...prev };
+																	if (updated[receipt.id]) {
+																		updated[receipt.id] = updated[receipt.id].filter(
+																			(id) => !visibleAnalysisIds.includes(id),
+																		);
+																		if (updated[receipt.id].length === 0) {
+																			delete updated[receipt.id];
+																		}
+																	}
+																	return updated;
+																});
+															}
+														}}
+														checked={receipt.samples
+															.flatMap((sample) => sample.analysis.map((a) => a.id))
+															.every((id) =>
+																// Only consider visible rows when determining if "all" are checked
+																document.querySelector(`.row-checkbox[data-analysis-id="${id}"]`)
+																	? document.querySelector(`.row-checkbox[data-analysis-id="${id}"]`).closest('tr') &&
+																	  window.getComputedStyle(
+																			document.querySelector(`.row-checkbox[data-analysis-id="${id}"]`).closest('tr'),
+																	  ).display !== 'none'
+																		? selectedCheckboxesV3.includes(id)
+																		: false
+																	: false,
+															)}
+													/>
+												</div>
+
+												{/* Add bulk edit button if analyses are selected */}
+												{selectedCheckboxesByReceipt[receipt.id] &&
+													selectedCheckboxesByReceipt[receipt.id].length > 0 && (
+														<button
+															className="border-2 border-gray-600  p-1 rounded-lg hover:bg-blue-300 flex items-center h-10"
+															onClick={() => toggleBulkEditForm(receipt.id)}
+														>
+															<FaEdit className="mr-2" /> Chỉnh sửa hàng loạt
+														</button>
+													)}
+											</div>
+										</div>
+
+										{/* Bulk Edit Form */}
+										{showBulkEditForm === receipt.id && (
+											<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+												<div className="bg-white p-6 rounded-lg shadow-lg min-w-[400px] w-5/6">
+													<h2 className="text-xl font-bold mb-4 flex justify-between items-center">
+														<span>Chỉnh sửa hàng loạt</span>
+														<span className="text-sm font-normal text-gray-600">
+															({selectedCheckboxesByReceipt[receipt.id]?.length || 0} chỉ tiêu được chọn)
+														</span>
+													</h2>
+
+													{/* Form with labels on top */}
+													<div className="grid grid-cols-3 gap-4 mb-6">
+														<div>
+															<label className="block mb-1 font-medium">Mã phương pháp</label>
+															<div className="flex items-center gap-2 h-10">
+																<select
+																	className="p-2 border rounded bg-white w-28 h-10"
+																	value={bulkEditValues.protocol_source || ''}
+																	onChange={(e) => {
+																		handleBulkEditChange('protocol_source', e.target.value);
+																		// Update preview
+																		document.querySelectorAll('.preview-protocol-source').forEach((el) => {
+																			el.innerHTML = e.target.value || '--';
+																		});
+																	}}
+																>
+																	<option value="">-- Nguồn --</option>
+																	<option value="IRDOP">IRDOP</option>
+																	<option value="IRDOP VS">IRDOP VS</option>
+																	<option value="EX">EX</option>
+																</select>
+																<input
+																	type="text"
+																	className="p-2 border rounded bg-white flex-1 h-10"
+																	placeholder="Mã phương pháp"
+																	value={bulkEditValues.protocol_code || ''}
+																	onChange={(e) => {
+																		handleBulkEditChange('protocol_code', e.target.value);
+																		// Update preview
+																		document.querySelectorAll('.preview-protocol-code').forEach((el) => {
+																			el.innerHTML = e.target.value || '--';
+																		});
+																	}}
+																/>
+															</div>
+														</div>
+														<div>
+															<label className="block mb-1 font-medium">Hạn trả</label>
+															<input
+																type="date"
+																className="p-2 border rounded w-full bg-white h-10"
+																value={bulkEditValues.deadline || ''}
+																onChange={(e) => {
+																	handleBulkEditChange('deadline', e.target.value);
+																	// Update preview
+																	document.querySelectorAll('.preview-deadline').forEach((el) => {
+																		el.innerHTML = e.target.value ? formatDate(e.target.value) : '--';
+																	});
+																}}
+															/>
+														</div>
+														<div>
+															<label className="block mb-1 font-medium">Người thực hiện</label>
+															<select
+																className="p-2 border rounded w-full bg-white h-10"
+																value={bulkEditValues.technician_uid || ''}
+																onChange={(e) => {
+																	handleBulkEditChange('technician_uid', e.target.value);
+																	// Update preview
+																	document.querySelectorAll('.preview-technician').forEach((el) => {
+																		el.innerHTML = getTechnicianName(e.target.value);
+																	});
+																}}
+															>
+																<option value="">--Chọn KTV--</option>
+																{technicians.map((tech) => (
+																	<option key={tech.identity_uid} value={tech.identity_uid}>
+																		{tech.alias || ''} - {tech.identity_name || ''}
+																	</option>
+																))}
+															</select>
+														</div>
+														<div>
+															<label className="block mb-1 font-medium">Kết quả</label>
+															<div
+																className="border rounded p-2 py-1 bg-white hover:border-purple-500 cursor-text h-10 flex items-center overflow-hidden"
+																onClick={() => handleBulkEditCellClick('result_value', receipt.id)}
+															>
+																{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === receipt.id ? (
+																	<TinyMceInput
+																		value={bulkEditValues.result_value || ''}
+																		onUpdate={(content) => {
+																			handleBulkEditChange('result_value', content);
+																			// Update preview
+																			document.querySelectorAll('.preview-result-value').forEach((el) => {
+																				el.innerHTML = content || '--';
+																			});
+																		}}
+																	/>
+																) : (
+																	<div
+																		dangerouslySetInnerHTML={{
+																			__html: `${bulkEditValues.result_value || 'Nhấp để chỉnh sửa...'}`,
+																		}}
+																		className="overflow-hidden text-ellipsis whitespace-nowrap"
+																	/>
+																)}
+															</div>
+														</div>
+														<div>
+															<label className="block mb-1 font-medium">Đơn vị</label>
+															<div
+																className="border rounded p-2 py-1 bg-white hover:border-purple-500 cursor-text h-10 flex items-center overflow-hidden"
+																onClick={() => handleBulkEditCellClick('result_unit', receipt.id)}
+															>
+																{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === receipt.id ? (
+																	<TinyMceInput
+																		value={bulkEditValues.result_unit || ''}
+																		onUpdate={(content) => {
+																			handleBulkEditChange('result_unit', content);
+																			// Update preview
+																			document.querySelectorAll('.preview-result-unit').forEach((el) => {
+																				el.innerHTML = content || '--';
+																			});
+																		}}
+																	/>
+																) : (
+																	<div
+																		dangerouslySetInnerHTML={{
+																			__html: `${bulkEditValues.result_unit || 'Nhấp để chỉnh sửa...'}`,
+																		}}
+																		className="overflow-hidden text-ellipsis whitespace-nowrap"
+																	/>
+																)}
+															</div>
+														</div>
+														<div>
+															<label className="block mb-1 font-medium">Tham chiếu</label>
+															<input
+																type="text"
+																className="p-2 border rounded w-full bg-white h-10"
+																placeholder="Tham chiếu"
+																value={bulkEditValues.reference || ''}
+																onChange={(e) => {
+																	handleBulkEditChange('reference', e.target.value);
+																	// Update preview
+																	document.querySelectorAll('.preview-reference').forEach((el) => {
+																		el.innerHTML = e.target.value || '--';
+																	});
+																}}
+															/>
+														</div>
+													</div>
+
+													{/* Table of selected analyses with preview */}
+													<div className="mb-6 max-h-[300px] overflow-auto">
+														<h3 className="text-md font-semibold mb-2">Xem trước thay đổi</h3>
+														<table className="w-full border-collapse border border-gray-300">
+															<thead className="bg-gray-100">
+																<tr>
+																	<th className="border p-1 text-start w-32 min-w-32">Mã mẫu</th>
+																	<th className="border p-1 text-start w-1/5 min-w-40">Chỉ tiêu</th>
+																	<th className="border p-1 text-start w-1/5 min-w-40">Phương pháp</th>
+																	<th className="border p-1 text-start w-[10%] min-w-32">Kết quả</th>
+																	<th className="border p-1 text-start  w-[10%] min-w-28">Đơn vị</th>
+																	<th className="border p-1 text-stat w-24 min-w-24">Hạn trả</th>
+																	<th className="border p-1 text-start w-32 min-w-32">KTV</th>
+																	<th className="border p-1 text-start w-32 min-w-32">Tham chiếu</th>
+																</tr>
+															</thead>
+															<tbody>
+																{selectedCheckboxesByReceipt[receipt.id]?.map((analysisId) => {
+																	// Find the analysis in the receipt data
+																	let foundAnalysis = null;
+																	let foundSample = null;
+
+																	// Search through all samples to find the analysis
+																	receipt.samples?.forEach((sample) => {
+																		const analysis = sample.analysis?.find((a) => a.id === analysisId);
+																		if (analysis) {
+																			foundAnalysis = analysis;
+																			foundSample = sample;
+																		}
+																	});
+
+																	return foundAnalysis ? (
+																		<tr key={analysisId} className="hover:bg-gray-50">
+																			<td className="border p-1 text-start">{foundSample?.sample_uid}</td>
+																			<td className="border p-1 text-start">{foundAnalysis.parameter_name}</td>
+																			<td className="border p-1 text-start">
+																				<span className="preview-protocol-source">
+																					{bulkEditValues.protocol_source || foundAnalysis.protocol_source || '--'}
+																				</span>
+																				&nbsp;
+																				<span className="preview-protocol-code">
+																					{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
+																				</span>
+																			</td>
+																			<td className="border p-1 text-start">
+																				<div
+																					className="preview-result-value"
+																					dangerouslySetInnerHTML={{
+																						__html: bulkEditValues.result_value || foundAnalysis.result_value || '--',
+																					}}
+																				/>
+																			</td>
+																			<td className="border p-1 text-start">
+																				<div
+																					className="preview-result-unit"
+																					dangerouslySetInnerHTML={{
+																						__html: bulkEditValues.result_unit || foundAnalysis.result_unit || '--',
+																					}}
+																				/>
+																			</td>
+																			<td className="border p-1 text-start preview-deadline">
+																				{bulkEditValues.deadline
+																					? formatDate(bulkEditValues.deadline)
+																					: foundAnalysis.deadline
+																					? formatDate(foundAnalysis.deadline)
+																					: '--'}
+																			</td>
+																			<td className="border p-1 text-start preview-technician">
+																				{bulkEditValues.technician_uid
+																					? getTechnicianName(bulkEditValues.technician_uid)
+																					: getTechnicianName(foundAnalysis.technician_uid)}
+																			</td>
+																			<td className="border p-1 text-start preview-reference">
+																				{bulkEditValues.reference || foundAnalysis.reference || '--'}
+																			</td>
+																		</tr>
+																	) : null;
+																})}
+															</tbody>
+														</table>
+													</div>
+
+													<div className="flex justify-end gap-3">
+														<button
+															className="px-2 py-1 border-2 border-gray-600 text-gray-600 rounded hover:bg-gray-400 w-fit"
+															onClick={closeBulkEditForm}
+														>
+															Hủy bỏ
+														</button>
+														<button
+															className="px-2 py-1 border-2 border-gray-600  rounded hover:bg-blue-600 flex items-center w-fit "
+															onClick={() => {
+																handleBulkUpdate(selectedCheckboxesByReceipt[receipt.id]);
+																closeBulkEditForm();
+															}}
+														>
+															Xác nhận
+														</button>
+													</div>
+												</div>
+											</div>
+										)}
+
+										{/* Organize by samples */}
+										{receipt.samples && receipt.samples.length > 0 ? (
+											receipt.samples.map((sample) => (
+												<div key={sample.id} className="mb-4 border-l-2 border-teritary px-1 overflow-auto">
+													<div className="  mb-2 flex justify-between items-center">
+														<div className="flex flex-col gap-2">
+															<div className="min-w-40">
+																<span className="font-semibold">Mã mẫu:</span> {sample.sample_uid}
+															</div>
+															<div className="min-w-40">
+																<span className="font-semibold">Tên mẫu:</span> {sample.sample_name || 'N/A'}
+															</div>
+															<div className="min-w-40">
+																<span className="font-semibold">Nền mẫu:</span> {sample.matrix || 'N/A'}
+															</div>
+
+															{sample.additional_request && (
+																<div className="mt-1 mb-2">
+																	<span className="font-semibold">Yêu cầu khách hàng:</span> {sample.additional_request}
+																</div>
+															)}
+														</div>
+														{/* Add PKQ button in the opposite corner */}
+														<button
+															className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-end active:bg-sky-100 focus:outline-none"
+															onClick={() => window.open(`/result?sample_uid=${sample?.sample_uid}`, '_blank')}
+														>
+															<div className="flex items-center justify-between">
+																{'PKQ'} <GrDocumentText size={15} className="ml-1.5" />
+															</div>
+														</button>
+													</div>
+
+													{/* Analysis table for this sample */}
+													{sample.analysis && sample.analysis.length > 0 ? (
+														<table className="w-full border-collapse border border-gray-300">
+															<thead>
 																<tr className="bg-gray-100">
-																	<td colSpan={2} className="border p-1 text-center font-semibold">
-																		Chỉnh sửa hàng loạt
-																	</td>
-																	<td className="border p-1 text-start">
-																		<div className="flex items-center gap-0.5">
-																			<select
-																				className={`min-w-24 p-1 py-[5px] font-semibold text-slate-500 bg-white border rounded text-sm focus:outline-none text-left ${
-																					bulkEditValues.protocol_source ? 'border-blue-500' : 'border-gray-300'
-																				}`}
-																				value={bulkEditValues.protocol_source || ''}
-																				onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
-																			>
-																				<option value="IRDOP">IRDOP</option>
-																				<option value="IRDOP VS">IRDOP VS</option>
-																				<option value="EX">EX</option>
-																			</select>
+																	<th className="border p-1 text-start min-w-60 w-1/4">Chỉ tiêu</th>
+																	<th className="border p-1 text-start min-w-60 w-1/4">Phương pháp</th>
+																	<th className="border p-1 text-start min-w-40">Kết quả</th>
+																	<th className="border p-1 text-start min-w-32">Đơn vị</th>
+																	<th className="border p-1 text-start w-28 min-w-28">Hạn trả</th>
+																	<th className="border p-1 text-start w-36 min-w-40">Người thực hiện</th>
+																	<th className="border p-1 text-start min-w-32 w-36">Tham chiếu</th>
+																	<th className="border p-1 text-center w-12 min-w-12">
+																		<input
+																			type="checkbox"
+																			className="w-4 h-4"
+																			onChange={(e) => {
+																				// Use handleSelectSampleCheckboxes for individual sample selection
+																				handleSelectSampleCheckboxes(sample.id, e.target.checked);
+																			}}
+																			checked={
+																				sample.analysis.length > 0 &&
+																				sample.analysis.every((analysis) => selectedCheckboxesV3.includes(analysis.id))
+																			}
+																		/>
+																	</th>
+																</tr>
+															</thead>
+															<tbody>
+																{sample.analysis.map((item) => (
+																	<tr
+																		key={item.id}
+																		className={`${
+																			selectedCheckboxesV3.includes(item.id) ? 'bg-gray-100' : ''
+																		} hover:bg-gray-50`}
+																	>
+																		<td className="border p-1 text-start">{item.parameter_name || 'N/A'}</td>
+																		<td className="border p-1 text-start ">
+																			<div className="flex items-center gap-0.5">
+																				<select
+																					className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold text-slate-500 bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
+																					onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
+																					value={item.protocol_source || ''}
+																				>
+																					<option value="IRDOP">IRDOP</option>
+																					<option value="IRDOP VS">IRDOP VS</option>
+																					<option value="EX">EX</option>
+																				</select>
+																				<input
+																					type="text"
+																					className="w-full bg-white border border-white hover:border-purple-500 rounded  p-1 py-0 text-left"
+																					placeholder="Mã phương pháp"
+																					value={
+																						editableCell.analysisId === item.id &&
+																						editableCell.column === 'protocol_code'
+																							? inputValue
+																							: item.protocol_code || ''
+																					}
+																					onChange={(e) => handleProtocolCodeChange(item.id, e.target.value)}
+																					onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value)}
+																					onKeyDown={(e) => handleProtocolCodeKeyDown(e, item.id, e.target.value)}
+																				/>
+																			</div>
+																		</td>
+																		<td
+																			className="border p-1 text-start"
+																			onClick={() => handleCellClickV3(item.id, 'result_value', item.result_value)}
+																		>
+																			<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
+																				{editableCell.analysisId === item.id &&
+																				editableCell.column === 'result_value' ? (
+																					<TinyMceInput
+																						value={inputValue}
+																						onUpdate={(content) =>
+																							handleSaveContentV3(content, 'result_value', item.id)
+																						}
+																						onKey={handleKeyDownV3}
+																					/>
+																				) : (
+																					<div dangerouslySetInnerHTML={{ __html: `${item.result_value || '--'}` }} />
+																				)}
+																			</div>
+																		</td>
+																		<td
+																			className="border p-1 text-start"
+																			onClick={() => handleCellClickV3(item.id, 'result_unit', item.result_unit)}
+																		>
+																			<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
+																				{editableCell.analysisId === item.id &&
+																				editableCell.column === 'result_unit' ? (
+																					<TinyMceInput
+																						value={inputValue}
+																						onUpdate={(content) => handleSaveContentV3(content, 'result_unit', item.id)}
+																						onKey={handleKeyDownV3}
+																					/>
+																				) : (
+																					<div dangerouslySetInnerHTML={{ __html: `${item.result_unit || '--'}` }} />
+																				)}
+																			</div>
+																		</td>
+																		<td className="border p-1 text-start">
+																			{item.deadline ? formatDate(item.deadline) : 'N/A'}
+																		</td>
+																		<td className="border p-1 text-start">
+																			<div className="relative">
+																				<button
+																					className="font-normal text-start p-1 py-0 w-full dropdown-button rounded"
+																					onClick={(e) => toggleTechnicianDropdown(item.id, e)}
+																				>
+																					{getTechnicianName(item.technician_uid)}
+																				</button>
+																				{technicianDropdownVisible === item.id &&
+																					createPortal(
+																						<ul
+																							className="fixed bg-white border rounded shadow-lg z-[99]"
+																							style={{
+																								top: dropdownPosition.top + 'px',
+																								left: dropdownPosition.left + 'px',
+																								position: 'absolute',
+																								maxHeight: '200px',
+																								overflowY: 'auto',
+																								minWidth: '200px',
+																							}}
+																						>
+																							{technicians.map((identity) => (
+																								<li
+																									key={identity.identity_uid}
+																									className="p-1 cursor-pointer hover:bg-gray-200 dropdown-item"
+																									onClick={() => handleTechnicianChange(item.id, identity.identity_uid)}
+																								>
+																									<p className="font-bold text-primary text-sm">
+																										{identity.alias || ''}
+																									</p>
+																									<p>{identity.identity_name || ''}</p>
+																								</li>
+																							))}
+																						</ul>,
+																						document.body,
+																					)}
+																			</div>
+																		</td>
+																		<td className="border p-1 text-start">
 																			<input
 																				type="text"
-																				className={`w-full bg-white border rounded p-1 text-left ${
-																					bulkEditValues.protocol_code ? 'border-blue-500' : 'border-gray-300'
-																				}`}
-																				placeholder="Mã phương pháp"
-																				value={bulkEditValues.protocol_code || ''}
-																				onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
+																				className=" bg-white w-full border border-none hover:border-purple-500 rounded p-1 py-0 text-left"
+																				value={item.reference || ''}
+																				onChange={(e) => {
+																					// Only update local state, not API
+																					setProcessingSample((prev) => {
+																						return prev.map((receipt) => {
+																							return {
+																								...receipt,
+																								samples: receipt.samples.map((sample) => {
+																									return {
+																										...sample,
+																										analysis: sample.analysis.map((analysis) => {
+																											if (analysis.id === item.id) {
+																												return { ...analysis, reference: e.target.value };
+																											}
+																											return analysis;
+																										}),
+																									};
+																								}),
+																							};
+																						});
+																					});
+																				}}
+																				onKeyDown={(e) => handleReferenceKeyDown(e, item.id, e.target.value)}
+																				onBlur={(e) => handleReferenceBlur(item.id, e.target.value)}
 																			/>
-																		</div>
-																	</td>
-																	<td className="border p-1 text-start">
-																		<div
-																			className={`hover:border-purple-500 border rounded cursor-pointer ${
-																				bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === receipt.id
-																					? 'border-purple-500'
-																					: bulkEditValues.result_value
-																					? 'border-blue-500'
-																					: 'border-white'
-																			}`}
-																			onClick={() => handleBulkEditCellClick('result_value', receipt.id)}
-																		>
-																			{bulkEditCell.column === 'result_value' &&
-																			bulkEditCell.receiptId === receipt.id ? (
-																				<TinyMceInput
-																					value={bulkEditValues.result_value || ''}
-																					onUpdate={(content) => handleBulkEditChange('result_value', content)}
-																				/>
-																			) : (
-																				<div
-																					dangerouslySetInnerHTML={{ __html: `${bulkEditValues.result_value || '--'}` }}
-																					className="p-1 min-h-[40px] overflow-visible"
-																				/>
-																			)}
-																		</div>
-																	</td>
-																	<td className="border p-1 text-start">
-																		<div
-																			className={`hover:border-purple-500 border rounded cursor-pointer ${
-																				bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === receipt.id
-																					? 'border-purple-500'
-																					: bulkEditValues.result_unit
-																					? 'border-blue-500'
-																					: 'border-white'
-																			}`}
-																			onClick={() => handleBulkEditCellClick('result_unit', receipt.id)}
-																		>
-																			{bulkEditCell.column === 'result_unit' &&
-																			bulkEditCell.receiptId === receipt.id ? (
-																				<TinyMceInput
-																					value={bulkEditValues.result_unit || ''}
-																					onUpdate={(content) => handleBulkEditChange('result_unit', content)}
-																				/>
-																			) : (
-																				<div
-																					dangerouslySetInnerHTML={{ __html: `${bulkEditValues.result_unit || '--'}` }}
-																					className="p-1 min-h-[40px] overflow-visible"
-																				/>
-																			)}
-																		</div>
-																	</td>
-																	<td className="border p-1 text-start">
-																		<input
-																			type="date"
-																			className={`w-full bg-white border rounded p-1 ${
-																				bulkEditValues.deadline ? 'border-blue-500' : 'border-gray-300'
-																			}`}
-																			value={bulkEditValues.deadline || ''}
-																			onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
-																		/>
-																	</td>
-																	<td className="border p-1 text-start">
-																		<div className="relative">
-																			<select
-																				className={`w-full p-1 py-[5px] font-semibold text-slate-500 bg-white border rounded text-sm focus:outline-none text-left ${
-																					bulkEditValues.technician_uid ? 'border-blue-500' : 'border-gray-300'
-																				}`}
-																				value={bulkEditValues.technician_uid || ''}
-																				onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
-																			>
-																				<option value="">--Chọn KTV--</option>
-																				{technicians.map((tech) => (
-																					<option key={tech.identity_uid} value={tech.identity_uid}>
-																						{tech.alias || ''} - {tech.identity_name || ''}
-																					</option>
-																				))}
-																			</select>
-																		</div>
-																	</td>
-																	<td className="border p-1 text-center">
-																		<button
-																			className="bg-blue-500 text-white p-1 rounded-lg"
-																			onClick={() => handleBulkUpdate(selectedCheckboxesByReceipt[receipt.id])}
-																		>
-																			<FaSave size={16} />
-																		</button>
-																	</td>
-																</tr>
-															)}
-													</thead>
-													<tbody>
-														{allAnalyses.map((item) => (
-															<tr
-																key={item.id}
-																className={`${
-																	selectedCheckboxesV3.includes(item.id) ? 'bg-gray-100' : ''
-																} hover:bg-gray-50`}
-															>
-																<td className="border p-1 text-start">{item.sample_uid || 'N/A'}</td>
-																<td className="border p-1 text-start">{item.parameter_name || 'N/A'}</td>
-																<td className="border p-1 text-start ">
-																	<div className="flex items-center gap-0.5">
-																		<select
-																			className="min-w-24 max-w-fit p-1 py-[5px] max-h-fit font-semibold text-slate-500 bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
-																			onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
-																			value={item.protocol_source || ''}
-																		>
-																			<option value="IRDOP">IRDOP</option>
-																			<option value="IRDOP VS">IRDOP VS</option>
-																			<option value="EX">EX</option>
-																		</select>
-																		<input
-																			type="text"
-																			className="w-full bg-white border border-white hover:border-purple-500 rounded p-1 text-left"
-																			placeholder="Mã phương pháp"
-																			value={
-																				editableCell.analysisId === item.id && editableCell.column === 'protocol_code'
-																					? inputValue
-																					: item.protocol_code || ''
-																			}
-																			onChange={(e) => handleProtocolCodeChange(item.id, e.target.value)}
-																			onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value)}
-																			onKeyDown={(e) => handleProtocolCodeKeyDown(e, item.id, e.target.value)}
-																		/>
-																	</div>
-																</td>
-																<td
-																	className="border p-1 text-start"
-																	onClick={() => handleCellClickV3(item.id, 'result_value', item.result_value)}
-																>
-																	<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
-																		{editableCell.analysisId === item.id && editableCell.column === 'result_value' ? (
-																			<TinyMceInput
-																				value={inputValue}
-																				onUpdate={(content) => handleSaveContentV3(content, 'result_value', item.id)}
-																				onKey={handleKeyDownV3}
+																		</td>
+																		<td className="border p-1 text-center">
+																			<input
+																				type="checkbox"
+																				className="w-4 h-4 row-checkbox"
+																				data-receipt-id={receipt.id}
+																				data-analysis-id={item.id}
+																				data-sample-id={sample.id}
+																				checked={selectedCheckboxesV3.includes(item.id)}
+																				onChange={(e) =>
+																					handleCheckboxChange(item.id, e.target.checked, receipt.id, sample.id)
+																				}
 																			/>
-																		) : (
-																			<div dangerouslySetInnerHTML={{ __html: `${item.result_value || '--'}` }} />
-																		)}
-																	</div>
-																</td>
-																<td
-																	className="border p-1 text-start"
-																	onClick={() => handleCellClickV3(item.id, 'result_unit', item.result_unit)}
-																>
-																	<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
-																		{editableCell.analysisId === item.id && editableCell.column === 'result_unit' ? (
-																			<TinyMceInput
-																				value={inputValue}
-																				onUpdate={(content) => handleSaveContentV3(content, 'result_unit', item.id)}
-																				onKey={handleKeyDownV3}
-																			/>
-																		) : (
-																			<div dangerouslySetInnerHTML={{ __html: `${item.result_unit || '--'}` }} />
-																		)}
-																	</div>
-																</td>
-																<td className="border p-1 text-start">
-																	{item.deadline ? formatDate(item.deadline) : 'N/A'}
-																</td>
-																<td className="border p-1 text-start">
-																	<div className="relative">
-																		<button
-																			className="text-primary hover:underline p-1 w-full dropdown-button"
-																			onClick={(e) => toggleTechnicianDropdown(item.id, e)}
-																		>
-																			{getTechnicianName(item.technician_uid)}
-																		</button>
-																		{technicianDropdownVisible === item.id &&
-																			createPortal(
-																				<ul
-																					className="fixed bg-white border rounded shadow-lg z-[99]"
-																					style={{
-																						top: dropdownPosition.top + 'px',
-																						left: dropdownPosition.left + 'px',
-																						position: 'absolute',
-																						maxHeight: '200px',
-																						overflowY: 'auto',
-																						minWidth: '200px',
-																					}}
-																				>
-																					{technicians.map((identity) => (
-																						<li
-																							key={identity.identity_uid}
-																							className="p-1 cursor-pointer hover:bg-gray-200 dropdown-item"
-																							onClick={() => handleTechnicianChange(item.id, identity.identity_uid)}
-																						>
-																							<p className="font-bold text-primary text-sm">{identity.alias || ''}</p>
-																							<p>{identity.identity_name || ''}</p>
-																						</li>
-																					))}
-																				</ul>,
-																				document.body,
-																			)}
-																	</div>
-																</td>
-																<td className="border p-1 text-center">
-																	<input
-																		type="checkbox"
-																		className="w-4 h-4 row-checkbox"
-																		data-receipt-id={receipt.id}
-																		data-analysis-id={item.id}
-																		checked={selectedCheckboxesV3.includes(item.id)}
-																		onChange={(e) => handleCheckboxChange(item.id, e.target.checked, receipt.id)}
-																	/>
-																</td>
-															</tr>
-														))}
-													</tbody>
-												</table>
-											) : (
-												<p className="text-gray-500">Không có dữ liệu phân tích</p>
-											)}
-										</div>
-									);
-								})
+																		</td>
+																	</tr>
+																))}
+															</tbody>
+														</table>
+													) : (
+														<p className="text-gray-500">Không có dữ liệu phân tích cho mẫu này</p>
+													)}
+												</div>
+											))
+										) : (
+											<p className="text-gray-500">Không có dữ liệu mẫu</p>
+										)}
+									</div>
+								))
 							) : (
-								<div className="w-full text-center py-4 text-gray-500">Không có dữ liệu phiếu tiếp nhận</div>
+								<div className="w-full text-center py-4 text-gray-500">Không có dữ liệu tiếp nhận mẫu</div>
 							)}
 						</div>
 					)}

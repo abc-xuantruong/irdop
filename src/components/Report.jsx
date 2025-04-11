@@ -226,6 +226,32 @@ export default function MultiPageEditor() {
 				setAdditionalRequest(reportData.additional_request);
 			}
 
+				// If we don't have receipt note or additional request in the report data,
+			// fetch sample data to get these notes
+			if ((!reportData.receipt_note || !reportData.additional_request) && sample_uid) {
+				try {
+					// Fetch sample data to get receipt note and additional request
+					const sampleResponse = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
+					
+					if (sampleResponse.status === 200) {
+						const sampleData = sampleResponse.data;
+						
+						// Set receipt note if not already set from report data
+						if (!reportData.receipt_note && sampleData.receipt && sampleData.receipt.note) {
+							setReceiptNote(sampleData.receipt.note);
+						}
+						
+						// Set additional request if not already set from report data
+						if (!reportData.additional_request && sampleData.additional_request) {
+							setAdditionalRequest(sampleData.additional_request);
+						}
+					}
+				} catch (err) {
+					console.error("Error fetching sample data for notes:", err);
+					// Continue with report data even if this fails
+				}
+			}
+
 			// Update the editor content
 			const combinedContent = generateCombinedContent(
 				reportData.customer_section || '',
@@ -2636,27 +2662,34 @@ export default function MultiPageEditor() {
 								padding: 4px 8px !important;
 								border-width: 1px !important;
 							}
+
+							
 						}
 					</style>
 				</head>
 				<body>
 					<div class="print-container"></div>
 					<script>
-						// Ensure fonts are loaded before printing
-						document.fonts.ready.then(function() {
-							setTimeout(function() {
-								// Fix for VLAS icon positioning in print view
-								const vlasIcons = document.querySelectorAll('.vlas_icon');
-								vlasIcons.forEach(icon => {
-									icon.style.overflow = 'visible';
-									if (icon.querySelector('img')) {
-										icon.querySelector('img').style.maxWidth = 'none';
-									}
-								});
-								window.print(); // Uncommented to enable printing
-							}, 1000);
+					document.fonts.ready.then(function() {
+						// Clean any undefined text that might have slipped through
+						document.querySelectorAll('*').forEach(function(el) {
+							if (el.textContent === 'undefined' || el.innerHTML === 'undefined') {
+								el.innerHTML = '';
+							}
 						});
-					</script>
+						
+						setTimeout(function() {
+							window.print();
+						}, 1000);
+					});
+
+					// Add event listener to close window after printing
+					window.addEventListener('afterprint', function() {
+						setTimeout(function() {
+							window.close();
+						}, 500);
+					});
+				</script>
 				</body>
 				</html>
 			`);

@@ -9,7 +9,7 @@ import { PiDownloadSimpleBold } from 'react-icons/pi';
 import { CgFileDocument } from 'react-icons/cg';
 import { TiBusinessCard } from 'react-icons/ti';
 import { MdOutlineContactPhone } from 'react-icons/md';
-import { FaTrashAlt, FaEdit, FaCheck, FaMoneyBillWave, FaFilePdf } from 'react-icons/fa';
+import { FaTrashAlt, FaEdit, FaCheck, FaMoneyBillWave, FaFilePdf, FaTag } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import CreateReceipt from './CreateReceipt';
@@ -996,9 +996,11 @@ const ReceiptInfor = ({ receipt }) => {
 							: sampleToCopy.sample_information;
 
 					// Filter out entries we're already copying elsewhere using case-insensitive check
+					// Also exclude "Tên mẫu thử / name." as requested
 					const filteredInfo = parsedInfo.filter(
 						(item) =>
-							!item.fname.toLowerCase().includes('tên mẫu / name') &&
+							!item.fname.toLowerCase().includes('tên mẫu') &&
+							!item.fname.toLowerCase().includes('name.') &&
 							!item.fname.toLowerCase().includes('ngày tiếp nhận / receipt date') &&
 							!item.fname.toLowerCase().includes('mô tả / desc'),
 					);
@@ -2092,6 +2094,18 @@ const ReceiptInfor = ({ receipt }) => {
 										{allAnalysesReviewed(sample) === true && (
 											<span className="absolute top-1 right-2 text-yellow-500 font-bold">*</span>
 										)}
+										<span
+											className="absolute top-1 right-1 text-blue-500 cursor-pointer"
+											onClick={(e) => {
+												e.stopPropagation();
+												window.open(
+													`/dashboard/receipt/print_sp?receipt_uid=${currentReceipt?.receipt_uid}&sample_uid=${sample.sample_uid}`,
+													'_blank',
+												);
+											}}
+										>
+											<FaTag size={14} />
+										</span>
 									</td>
 									<td className="p-2 border text-start">
 										{/* Show completed/pending/total analysis counts */}
@@ -2240,6 +2254,17 @@ const ReceiptInfor = ({ receipt }) => {
 								{'Excel'} <PiDownloadSimpleBold size={20} className="ml-1" />
 							</div>
 						</button>
+						<button
+							className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20 ml-2"
+							onClick={() =>
+								window.open(`/dashboard/receipt/print_sp?receipt_uid=${currentReceipt?.receipt_uid}`, '_blank')
+							}
+						>
+							<div className="flex items-center ">
+								{'PRINT'} <FaTag size={20} className="ml-1" />
+							</div>
+						</button>
+
 						<CreateReceipt receipt={currentReceipt} setUpdatedReceipt={setCurrentReceipt} />
 						<button
 							className="bg-background border-gray-300 text-red-500 font-medium py-0 px-2 rounded-lg w-20"
@@ -2651,7 +2676,7 @@ const ReceiptInfor = ({ receipt }) => {
 
 										return (
 											<tr key={sample.id}>
-												<td className="p-2 border text-start text-text-secondary relative">
+												<td className="p-2 px-1 border text-start text-text-secondary relative">
 													<NavLink
 														to={`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`}
 														className="text-primary font-semibold hover:text-[#103667]"
@@ -2661,6 +2686,18 @@ const ReceiptInfor = ({ receipt }) => {
 													{allAnalysesReviewed(sample) && (
 														<span className="absolute top-1 right-2 text-yellow-500 font-bold">*</span>
 													)}
+													<span
+														className="absolute top-1 right-1 text-blue-500 cursor-pointer"
+														onClick={(e) => {
+															e.stopPropagation();
+															window.open(
+																`/dashboard/receipt/print_sp?receipt_uid=${currentReceipt?.receipt_uid}&sample_uid=${sample.sample_uid}`,
+																'_blank',
+															);
+														}}
+													>
+														<FaTag size={14} />
+													</span>
 												</td>
 												<td className="p-2 border text-start">
 													{isEditMode ? (

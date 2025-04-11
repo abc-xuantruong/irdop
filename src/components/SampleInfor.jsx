@@ -340,25 +340,29 @@ const SampleInfor = () => {
 	};
 
 	const handleSampleSelectFromDropdown = async (sampleUid) => {
+		// Find the sample in receiptFull with the matching sample_uid
 		let analyses = receiptFull.samples.find((sample) => sample.sample_uid === sampleUid).analysis;
+	
+		// Create a clone of the analyses without result values and review info
 		analyses = analyses.map((analysis) => {
-			delete analysis.id;
-			delete analysis.result_value;
-			delete analysis.reviewed_by;
-			return analysis;
+			// Create a new object without the specific fields we want to exclude
+			const { id, result_value, reviewed_by, ...cleanAnalysis } = analysis;
+			// Return the cleaned analysis with a temporary id for UI rendering
+			return {
+				...cleanAnalysis,
+				temp_id: Math.random().toString(36).substr(2, 9),
+			};
 		});
-		console.log(analyses);
-		setSelectedParameters(analyses);
+	
+		// Check for duplicate parameters that already exist in the current sample
+		const existingParameterNames = listAnalytes.map(a => a.parameter_name.toLowerCase().trim());
+		const filteredAnalyses = analyses.filter(analysis => 
+			!existingParameterNames.includes(analysis.parameter_name.toLowerCase().trim())
+		);
+	
+		console.log(`Filtered out ${analyses.length - filteredAnalyses.length} duplicate parameters`);
+		setSelectedParameters(filteredAnalyses);
 		setIsDropdownVisible(false);
-
-		// try {
-		// 	const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/get/bulk/parameter', { ids: analyses });
-		// 	setSelectedParameters(response.data);
-
-		// 	setIsDropdownVisible(false);
-		// } catch (error) {
-		// 	console.error('Error fetching parameters:', error);
-		// }
 	};
 
 	const handleSearchKeyDown = (e) => {
@@ -401,11 +405,29 @@ const SampleInfor = () => {
 
 	const handleConfirmAddParameter = async () => {
 		try {
+			if (selectedParameters.length === 0) {
+				showToast('Không có chỉ tiêu nào được chọn', 'warning');
+				return;
+			}
+		
 			console.log(selectedParameters);
-			const parameters = selectedParameters.map((parameter) => ({
+			// Filter out any parameters that have the same name as existing ones
+			const existingParameterNames = listAnalytes.map(a => a.parameter_name.toLowerCase().trim());
+			const filteredParameters = selectedParameters.filter(param => 
+				!existingParameterNames.includes(param.parameter_name.toLowerCase().trim())
+			);
+		
+			if (filteredParameters.length === 0) {
+				showToast('Tất cả chỉ tiêu đã tồn tại trong mẫu này', 'warning');
+				setIsAddingParameter(false);
+				setSelectedParameters([]);
+				return;
+			}
+		
+			const parameters = filteredParameters.map((parameter) => ({
 				receipt_id: currentSample.receipt_id,
 				sample_id: currentSample.id,
-				parameter_id: parameter.id,
+				parameter_id: parameter.parameter_id || 0,
 				parameter_name: parameter.parameter_name,
 				parameter_uid: parameter.parameter_uid || '', // Ensure parameter_uid is included
 				accrenditation: parameter.accrenditation,
@@ -415,21 +437,25 @@ const SampleInfor = () => {
 					? parameter.deadline
 					: new Date(Date.now() + parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0),
 				protocol_code: parameter.protocol_code,
-				result_unit: parameter.default_unit,
+				result_unit: parameter.default_unit || parameter.result_unit,
 				protocol_source: parameter.protocol_source,
 				created_by_uid: currentUser.identity_uid,
 				modified_by_uid: currentUser.identity_uid,
 			}));
-
+		
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/insert/bulk/analysis', {
 				analyses: parameters,
 			});
-
+		
 			if (response.status === 200) {
-				showToast('Parameters added successfully!');
+				showToast(`${response.data.length} chỉ tiêu được thêm thành công!`);
 				setIsAddingParameter(false);
 				setSelectedParameters([]);
-				setListAnalytes([...currentSample.analysis, ...response.data]);
+				
+				// Update listAnalytes with the new analyses from the API response
+				setListAnalytes([...listAnalytes, ...response.data]);
+				
+				// Also update currentSample to maintain consistency
 				setCurrentSample({
 					...currentSample,
 					analysis: [...currentSample.analysis, ...response.data],

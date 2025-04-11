@@ -23,7 +23,6 @@ const Header = () => {
 		const authCookie = Cookies.get('auth');
 		if (!authCookie) {
 			setCurrentUser(null);
-			navigate(`/login`);
 		} else if (fetchUser && (!currentUser || !currentUser.identity_name)) {
 			// Fetch user information if we have an auth cookie but no user info
 			fetchUser();
@@ -199,9 +198,7 @@ const Header = () => {
 												setNotificationOpen(!notificationOpen);
 												setDropdownOpen(false);
 											}}
-										>
-											🔔
-										</span>
+										></span>
 									)}
 									{notificationOpen && (
 										<div
@@ -213,9 +210,7 @@ const Header = () => {
 												<button
 													onClick={() => setNotificationOpen(false)}
 													className="text-gray-500 hover:text-gray-700"
-												>
-													✕
-												</button>
+												></button>
 											</div>
 											<div className="max-h-60 overflow-y-auto">
 												{notifications.length > 0 ? (
@@ -276,9 +271,7 @@ const Header = () => {
 											setNotificationOpen(!notificationOpen);
 											setDropdownOpen(false);
 										}}
-									>
-										🔔
-									</span>
+									></span>
 								)}
 							</div>
 							<div
@@ -289,9 +282,10 @@ const Header = () => {
 								<div className="flex flex-col w-full h-full">
 									<div className="p-2 pl-3 border-b-2 bg-gray-50 flex justify-between items-center">
 										<p className="text-base font-medium truncate w-full text-start">{displayName}</p>
-										<button onClick={() => setDropdownOpen(false)} className="text-gray-500 hover:text-gray-700 p-2">
-											✕
-										</button>
+										<button
+											onClick={() => setDropdownOpen(false)}
+											className="text-gray-500 hover:text-gray-700 p-2"
+										></button>
 									</div>
 									<div className="flex flex-col w-full">
 										<button
@@ -338,9 +332,10 @@ const Header = () => {
 									<div className="fixed top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/4 w-5/6 max-w-md bg-white rounded-lg shadow-lg z-50">
 										<div className="p-3 border-b bg-gray-50 flex justify-between items-center">
 											<p className="text-base font-medium">Thông báo</p>
-											<button onClick={() => setNotificationOpen(false)} className="text-gray-500 hover:text-gray-700">
-												✕
-											</button>
+											<button
+												onClick={() => setNotificationOpen(false)}
+												className="text-gray-500 hover:text-gray-700"
+											></button>
 										</div>
 										<div className="max-h-60 overflow-y-auto">
 											{notifications.map((noti) => (
