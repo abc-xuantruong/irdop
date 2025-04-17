@@ -23,6 +23,12 @@ const ProcessingSample = () => {
 		top: 0,
 		left: 0,
 	});
+
+	// Add the missing handleBulkEditCellClick function
+	const handleBulkEditCellClick = (column, receiptId) => {
+		setBulkEditCell({ column, receiptId });
+	};
+
 	const [searchTerm, setSearchTerm] = useState('');
 	const [sampleSearchTerm, setSampleSearchTerm] = useState('');
 	const [parameterSearchTerm, setParameterSearchTerm] = useState('');
@@ -32,6 +38,7 @@ const ProcessingSample = () => {
 	const [showBulkEditForm, setShowBulkEditForm] = useState(null); // Add state to track which receipt's bulk edit form is visible
 	const [filterUrgent, setFilterUrgent] = useState(false); // Add state for urgent filter
 	const [filterNoResults, setFilterNoResults] = useState(false); // Add state for no results filter
+	const [filterOverdue, setFilterOverdue] = useState(false); // Add state for overdue filter
 	const [editableCell, setEditableCell] = useState({ analysisId: null, column: null }); // Track editable cell for v3
 	const [inputValue, setInputValue] = useState('');
 	const location = useLocation();
@@ -107,6 +114,18 @@ const ProcessingSample = () => {
 				apiUrl = 'https://black.irdop.org/to82oe92i/db/filter/result/processing_sample/v3';
 				setFilterNoResults(true);
 				setFilterUrgent(false);
+				console.log(`Fetching data from: ${apiUrl}`);
+				const response = await apiGet(apiUrl);
+				const data = Array.isArray(response?.data) ? response.data : [];
+				console.log(`Received ${data.length} items from API`);
+
+				// Update the main data source
+				setProcessingSample(data);
+			}
+			// If the overdue parameter exists, use overdue API
+			else if (queryParams.has('overdue')) {
+				apiUrl = 'https://black.irdop.org/to82oe92i/db/filter/overdue/processing_sample/v3';
+				setFilterOverdue(true);
 				console.log(`Fetching data from: ${apiUrl}`);
 				const response = await apiGet(apiUrl);
 				const data = Array.isArray(response?.data) ? response.data : [];
@@ -613,11 +632,6 @@ const ProcessingSample = () => {
 		}
 	};
 
-	// Add a function to handle bulk edit cell clicking
-	const handleBulkEditCellClick = (column, receiptId) => {
-		setBulkEditCell({ column, receiptId });
-	};
-
 	// Add function to toggle technician dropdown
 	const toggleTechnicianDropdown = (index, event) => {
 		const buttonRect = event.target.getBoundingClientRect();
@@ -696,13 +710,14 @@ const ProcessingSample = () => {
 
 		// Check if urgent filter is already active in the URL
 		const hasUrgentParam = searchParams.has('urgent');
-		
+
 		// Clear all existing filters first
 		searchParams.delete('deadline_start');
 		searchParams.delete('deadline_end');
 		searchParams.delete('no_results');
 		searchParams.delete('urgent');
-		
+		searchParams.delete('overdue');
+
 		// Reset filter info
 		setFilterInfo({
 			isFilterActive: false,
@@ -710,7 +725,7 @@ const ProcessingSample = () => {
 			startDate: null,
 			endDate: null,
 		});
-		
+
 		// Reset UI state for datepicker
 		setShowTodayDeadlines(false);
 
@@ -737,13 +752,14 @@ const ProcessingSample = () => {
 
 		// Check if no_results filter is already active in the URL
 		const hasNoResultsParam = searchParams.has('no_results');
-		
+
 		// Clear all existing filters first
 		searchParams.delete('deadline_start');
 		searchParams.delete('deadline_end');
 		searchParams.delete('no_results');
 		searchParams.delete('urgent');
-		
+		searchParams.delete('overdue');
+
 		// Reset filter info
 		setFilterInfo({
 			isFilterActive: false,
@@ -751,7 +767,7 @@ const ProcessingSample = () => {
 			startDate: null,
 			endDate: null,
 		});
-		
+
 		// Reset UI state for datepicker
 		setShowTodayDeadlines(false);
 
@@ -834,12 +850,15 @@ const ProcessingSample = () => {
 			const searchParams = new URLSearchParams(location.search);
 			searchParams.delete('deadline_start');
 			searchParams.delete('deadline_end');
-			
+
 			// Update URL without reloading the page
-			navigate({
-				pathname: location.pathname,
-				search: searchParams.toString(),
-			}, { replace: true });
+			navigate(
+				{
+					pathname: location.pathname,
+					search: searchParams.toString(),
+				},
+				{ replace: true },
+			);
 
 			// Reset filter info
 			setFilterInfo({
@@ -848,7 +867,7 @@ const ProcessingSample = () => {
 				startDate: null,
 				endDate: null,
 			});
-			
+
 			toast.info('Đã tắt bộ lọc ngày trả kết quả');
 
 			return;
@@ -908,7 +927,8 @@ const ProcessingSample = () => {
 			searchParams.delete('deadline_end');
 			searchParams.delete('no_results');
 			searchParams.delete('urgent');
-			
+			searchParams.delete('overdue');
+
 			// Then set the new deadline parameters
 			searchParams.set('deadline_start', formattedStartDate);
 			searchParams.set('deadline_end', formattedEndDate);
@@ -931,7 +951,7 @@ const ProcessingSample = () => {
 				startDate: start,
 				endDate: end,
 			});
-			
+
 			// Show toast notification
 			const startDateStr = formatDateLocalSimple(start);
 			const endDateStr = formatDateLocalSimple(end);
@@ -982,12 +1002,15 @@ const ProcessingSample = () => {
 		const searchParams = new URLSearchParams(location.search);
 		searchParams.delete('deadline_start');
 		searchParams.delete('deadline_end');
-		
+
 		// Update URL without reloading the page
-		navigate({
-			pathname: location.pathname,
-			search: searchParams.toString(),
-		}, { replace: true });
+		navigate(
+			{
+				pathname: location.pathname,
+				search: searchParams.toString(),
+			},
+			{ replace: true },
+		);
 
 		// Show toast notification
 		toast.info('Đã tắt bộ lọc ngày trả kết quả');
@@ -1059,6 +1082,53 @@ const ProcessingSample = () => {
 						>
 							Chưa có KQ
 						</button>
+						<button
+							className={`px-3 py-1 text-sm rounded-lg border ${
+								filterOverdue ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
+							}`}
+							onClick={() => {
+								// Get current URL search params
+								const searchParams = new URLSearchParams(location.search);
+
+								// Clear all existing filters first
+								searchParams.delete('deadline_start');
+								searchParams.delete('deadline_end');
+								searchParams.delete('no_results');
+								searchParams.delete('urgent');
+								searchParams.delete('overdue');
+
+								// Reset filter info
+								setFilterInfo({
+									isFilterActive: false,
+									count: 0,
+									startDate: null,
+									endDate: null,
+								});
+
+								// Reset UI state for datepicker
+								setShowTodayDeadlines(false);
+
+								if (!filterOverdue) {
+									// Add the parameter if it doesn't exist
+									searchParams.set('overdue', 'true');
+									setFilterOverdue(true);
+									toast.info('Đã bật bộ lọc mẫu quá hạn');
+								} else {
+									// If already active, turn it off
+									setFilterOverdue(false);
+									toast.info('Đã tắt bộ lọc mẫu quá hạn');
+								}
+
+								// Update the URL without reloading the page
+								navigate({
+									pathname: location.pathname,
+									search: searchParams.toString(),
+								});
+							}}
+							title="Hiển thị mẫu quá hạn"
+						>
+							Quá hạn
+						</button>
 						{/* Add deadline filter button */}
 						<div className="relative">
 							<button
@@ -1109,12 +1179,15 @@ const ProcessingSample = () => {
 												const searchParams = new URLSearchParams(location.search);
 												searchParams.delete('deadline_start');
 												searchParams.delete('deadline_end');
-												
+
 												// Update URL without reloading the page
-												navigate({
-													pathname: location.pathname,
-													search: searchParams.toString(),
-												}, { replace: true });
+												navigate(
+													{
+														pathname: location.pathname,
+														search: searchParams.toString(),
+													},
+													{ replace: true },
+												);
 
 												// Reset filter info
 												setFilterInfo({
@@ -1123,7 +1196,7 @@ const ProcessingSample = () => {
 													startDate: null,
 													endDate: null,
 												});
-												
+
 												// Show toast notification
 												toast.info('Đã tắt bộ lọc ngày trả kết quả');
 											}}
@@ -1218,31 +1291,28 @@ const ProcessingSample = () => {
 
 												{/* Form with labels on top */}
 												<div className="grid grid-cols-3 gap-4 mb-6">
-													{/* Protocol source field */}
+													{/* Combined Protocol source and code fields */}
 													<div className="flex flex-col">
-														<label className="mb-1 font-medium text-sm">Nguồn phương pháp</label>
-														<select
-															className="p-2 border rounded-lg bg-white"
-															value={bulkEditValues.protocol_source || ''}
-															onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
-														>
-															<option value="">-- Không thay đổi --</option>
-															<option value="IRDOP">IRDOP</option>
-															<option value="IRDOP VS">IRDOP VS</option>
-															<option value="EX">EX</option>
-														</select>
-													</div>
-
-													{/* Protocol code field */}
-													<div className="flex flex-col">
-														<label className="mb-1 font-medium text-sm">Mã phương pháp</label>
-														<input
-															type="text"
-															className="p-2 border rounded-lg bg-white"
-															placeholder="Nhập mã phương pháp"
-															value={bulkEditValues.protocol_code || ''}
-															onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
-														/>
+														<label className="mb-1 font-medium text-sm">Phương pháp thử</label>
+														<div className="flex gap-1">
+															<select
+																className="p-2 border rounded-lg bg-white w-1/3"
+																value={bulkEditValues.protocol_source || ''}
+																onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
+															>
+																<option value="">--</option>
+																<option value="IRDOP">IRDOP</option>
+																<option value="IRDOP VS">IRDOP VS</option>
+																<option value="EX">EX</option>
+															</select>
+															<input
+																type="text"
+																className="p-2 border rounded-lg bg-white w-2/3"
+																placeholder="Nhập mã phương pháp"
+																value={bulkEditValues.protocol_code || ''}
+																onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
+															/>
+														</div>
 													</div>
 
 													{/* Reference field */}
@@ -1257,24 +1327,6 @@ const ProcessingSample = () => {
 														/>
 													</div>
 
-													{/* Result value field */}
-													<div className="flex flex-col">
-														<label className="mb-1 font-medium text-sm">Kết quả</label>
-														<TinyMceInput
-															value={bulkEditValues.result_value || ''}
-															onUpdate={(content) => handleBulkEditChange('result_value', content)}
-														/>
-													</div>
-
-													{/* Result unit field */}
-													<div className="flex flex-col">
-														<label className="mb-1 font-medium text-sm">Đơn vị</label>
-														<TinyMceInput
-															value={bulkEditValues.result_unit || ''}
-															onUpdate={(content) => handleBulkEditChange('result_unit', content)}
-														/>
-													</div>
-
 													{/* Deadline field */}
 													<div className="flex flex-col">
 														<label className="mb-1 font-medium text-sm">Hạn trả</label>
@@ -1284,6 +1336,55 @@ const ProcessingSample = () => {
 															value={bulkEditValues.deadline || ''}
 															onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
 														/>
+													</div>
+
+													{/* Result value field */}
+													<div className="flex flex-col">
+														<label className="mb-1 font-medium text-sm">Kết quả</label>
+														<div
+															className="h-10 flex items-center  border rounded-lg bg-white hover:border-purple-500 cursor-text"
+															onClick={() => handleBulkEditCellClick('result_value', receipt.id)}
+															onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+														>
+															{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === receipt.id ? (
+																<TinyMceInput
+																	value={bulkEditValues.result_value || ''}
+																	onUpdate={(content) => handleBulkEditChange('result_value', content)}
+																/>
+															) : (
+																<div
+																	dangerouslySetInnerHTML={{
+																		__html: bulkEditValues.result_value || 'Nhấp để chỉnh sửa...',
+																	}}
+																	className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
+																/>
+															)}
+														</div>
+													</div>
+
+													{/* Result unit field */}
+													<div className="flex flex-col">
+														<label className="mb-1 font-medium text-sm">Đơn vị</label>
+														<div
+															className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text"
+															onClick={() => handleBulkEditCellClick('result_unit', receipt.id)}
+															onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+														>
+															{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === receipt.id ? (
+																<TinyMceInput
+																	value={bulkEditValues.result_unit || ''}
+																	onUpdate={(content) => handleBulkEditChange('result_unit', content)}
+																	onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+																/>
+															) : (
+																<div
+																	dangerouslySetInnerHTML={{
+																		__html: bulkEditValues.result_unit || 'Nhấp để chỉnh sửa...',
+																	}}
+																	className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
+																/>
+															)}
+														</div>
 													</div>
 
 													{/* Technician field */}
@@ -1575,7 +1676,7 @@ const ProcessingSample = () => {
 																	<td className="border p-1 text-start">
 																		<input
 																			type="text"
-																			className=" bg-white w-full border border-none hover:border-purple-500 rounded p-1 py-0 text-left"
+																			className=" bg-white w-full border hover:border-purple-500 rounded p-1 py-0 text-left"
 																			value={item.reference || ''}
 																			onChange={(e) => handleReferenceChange(item.id, e.target.value)}
 																			onKeyDown={(e) => handleReferenceKeyDown(e, item.id, e.target.value)}

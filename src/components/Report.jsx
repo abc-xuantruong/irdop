@@ -190,7 +190,7 @@ export default function MultiPageEditor() {
 				// Replace any draft text variations with the actual ppt_uid
 				processedHeader = processedHeader
 					.replace(
-						/<p[^>]*class="[^"]*ref_code[^"]*"[^>]*>.*?<\/p>/i,
+						/<p[^>]*class="[^"]*ref_code[^>]*>.*?<\/p>/i,
 						`<p class="ref_code" style="min-width:5pt; margin: 0; margin-right: 2mm;">${reportData.ppt_uid}</p>`,
 					)
 					.replace(/SƠ BỘ \/ DRAFT/g, reportData.ppt_uid)
@@ -226,28 +226,28 @@ export default function MultiPageEditor() {
 				setAdditionalRequest(reportData.additional_request);
 			}
 
-				// If we don't have receipt note or additional request in the report data,
+			// If we don't have receipt note or additional request in the report data,
 			// fetch sample data to get these notes
 			if ((!reportData.receipt_note || !reportData.additional_request) && sample_uid) {
 				try {
 					// Fetch sample data to get receipt note and additional request
 					const sampleResponse = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
-					
+
 					if (sampleResponse.status === 200) {
 						const sampleData = sampleResponse.data;
-						
+
 						// Set receipt note if not already set from report data
 						if (!reportData.receipt_note && sampleData.receipt && sampleData.receipt.note) {
 							setReceiptNote(sampleData.receipt.note);
 						}
-						
+
 						// Set additional request if not already set from report data
 						if (!reportData.additional_request && sampleData.additional_request) {
 							setAdditionalRequest(sampleData.additional_request);
 						}
 					}
 				} catch (err) {
-					console.error("Error fetching sample data for notes:", err);
+					console.error('Error fetching sample data for notes:', err);
 					// Continue with report data even if this fails
 				}
 			}
@@ -2508,25 +2508,27 @@ export default function MultiPageEditor() {
 							page-break-inside: avoid; /* Try to avoid breaking rows across pages */
 						}
 						
+						/* Standardized font sizes for all table elements */
 						table td, table th {
 							padding: 4px 8px !important; /* Keep 8px padding for print mode */
 							border: 1px solid black;
 							vertical-align: middle; /* Better alignment for multi-line content */
 							height: auto !important; /* Allow cells to grow with content */
-							line-height: 1.2; /* Ensure consistent line height */
+							line-height: 1.2 !important; /* Ensure consistent line height */
 							box-sizing: border-box !important; /* Ensure padding is included in height */
+							font-size: 12px !important; /* Standard font size for all table cells */
 						}
 						
 						/* Fix paragraph styling in table cells */
 						table td p, table th p {
-							margin: 0;
-							padding: 0;
-							line-height: 1.2;
+							margin: 0 !important;
+							padding: 0 !important;
+							line-height: 1.2 !important;
 							font-family: 'Gilroy', sans-serif !important;
-							font-size: 12px;
+							font-size: 12px !important;
 						}
 						
-						/* Fixed positioning for header - always at top of page */
+						/* Standardized typography for header/footer sections */
 						.header {
 							position: absolute;
 							top: ${A4.topMargin * 3.78}px;
@@ -2537,6 +2539,23 @@ export default function MultiPageEditor() {
 							padding-bottom: ${A4.headerSpacing * 3.78}px !important;
 							font-family: 'Gilroy', sans-serif !important;
 							overflow: visible !important; /* Allow header content to overflow */
+						}
+						
+						/* Font sizes for header elements */
+						.header .content-header-title {
+							font-size: 24pt !important;
+							font-weight: 700 !important;
+						}
+						
+						.header .content-header-title_eng {
+							font-size: 21pt !important;
+							font-weight: 700 !important;
+						}
+						
+						.header .std_ref-title, 
+						.header .ref_code, 
+						.header .published_date {
+							font-size: 12px !important;
 						}
 						
 						.header > div:last-child {
@@ -2558,12 +2577,70 @@ export default function MultiPageEditor() {
 							/* Height is automatically calculated based on content */
 						}
 						
-						.content > * {
+						/* Font sizes for different sections */
+						.content > div {
 							padding-top: 0 !important;
 							padding-bottom: 0 !important;
 							margin-top: 0 !important;
 							margin-bottom: 0 !important;
 							font-family: 'Gilroy', sans-serif !important;
+						}
+						
+						/* Customer section typography */
+						.content [class*="Customer information"] p {
+							font-size: 11px !important;
+							line-height: 1.2 !important;
+						}
+						
+						.content [class*="Customer information"] p:first-of-type {
+							font-size: 16px !important;
+							font-weight: bold !important;
+						}
+						
+						.content [class*="Customer information"] p:last-of-type {
+							font-size: 12px !important;
+						}
+						
+						/* Sample information section */
+						.content [class*="Sample information"] p {
+							font-size: 12px !important;
+							line-height: 1.2 !important;
+						}
+						
+						.content [class*="Sample information"] div > div:first-child p {
+							font-size: 11px !important;
+						}
+						
+						/* Comment section */
+						.comment-content {
+							font-size: 12px !important;
+							line-height: 1.2 !important;
+						}
+						
+						/* Notes section */
+						.test_note_title {
+							font-size: 11px !important;
+							font-weight: bold !important;
+							line-height: 1.0 !important;
+						}
+						
+						.test_note_detail {
+							font-size: 11px !important;
+							line-height: 1.2 !important;
+						}
+						
+						/* Signature section */
+						.signature.signer_second_title,
+						.signature.signer_fist_title {
+							font-size: 12px !important;
+							line-height: 1.2 !important;
+							font-weight: bold !important;
+						}
+						
+						.signature.signer_second_name,
+						.signature.signer_first_name {
+							font-size: 12px !important;
+							line-height: 1.4 !important;
 						}
 						
 						/* Fixed positioning for footer - always at bottom of page */
@@ -2578,9 +2655,24 @@ export default function MultiPageEditor() {
 							font-family: 'Gilroy', sans-serif !important;
 						}
 						
+						/* Footer typography */
+						.footer p {
+							font-size: 12px !important;
+							line-height: 1 !important;
+						}
+						
+						.footer p:last-of-type {
+							font-size: 11px !important;
+							opacity: 0.5;
+						}
+						
 						.footer > div:first-child {
 							padding-top: 0 !important;
 							margin-top: 0 !important;
+						}
+						
+						.footer div > div span {
+							font-size: 11px !important;
 						}
 						
 						p, div, span, td, th {
@@ -2649,6 +2741,13 @@ export default function MultiPageEditor() {
 								margin: 0 !important;
 								padding: 0 !important;
 								line-height: 1.2 !important;
+								font-size: 12px !important;
+							}
+							
+							/* Ensure all text in tables has consistent size */
+							table td, table th {
+								font-size: 12px !important;
+								line-height: 1.2 !important;
 							}
 							
 							/* Critical: ensure box-sizing is consistent in print mode */
@@ -2662,8 +2761,6 @@ export default function MultiPageEditor() {
 								padding: 4px 8px !important;
 								border-width: 1px !important;
 							}
-
-							
 						}
 					</style>
 				</head>
@@ -3339,6 +3436,11 @@ export default function MultiPageEditor() {
 					font-display: swap;
 				}
 				
+				p {
+					overflow-wrap: break-word !important;
+					word-wrap: break-word !important;
+				}
+				
 				.content-editable p, .content-editable div, .content-editable span,
 					.content-editable td, .content-editable th, .content-editable li,
 				.header-editable p, .header-editable div, .header-editable span,
@@ -3347,6 +3449,8 @@ export default function MultiPageEditor() {
 					margin-top: 0;
 					margin-bottom: 0;
 					font-family: 'Gilroy', sans-serif !important;
+					overflow-wrap: break-word !important;
+					word-wrap: break-word !important;
 				}
 				
 				/* Table styling in editor */
@@ -3362,6 +3466,8 @@ export default function MultiPageEditor() {
 					padding: 0 !important;
 					line-height: 1.2 !important;
 					font-size: 12px;
+					overflow-wrap: break-word !important;
+					word-wrap: break-word !important;
 				}
 
 				.editable, .header-editable, .content-editable, .footer-editable {

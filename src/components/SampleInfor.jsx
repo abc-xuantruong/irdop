@@ -342,7 +342,7 @@ const SampleInfor = () => {
 	const handleSampleSelectFromDropdown = async (sampleUid) => {
 		// Find the sample in receiptFull with the matching sample_uid
 		let analyses = receiptFull.samples.find((sample) => sample.sample_uid === sampleUid).analysis;
-	
+
 		// Create a clone of the analyses without result values and review info
 		analyses = analyses.map((analysis) => {
 			// Create a new object without the specific fields we want to exclude
@@ -353,13 +353,13 @@ const SampleInfor = () => {
 				temp_id: Math.random().toString(36).substr(2, 9),
 			};
 		});
-	
+
 		// Check for duplicate parameters that already exist in the current sample
-		const existingParameterNames = listAnalytes.map(a => a.parameter_name.toLowerCase().trim());
-		const filteredAnalyses = analyses.filter(analysis => 
-			!existingParameterNames.includes(analysis.parameter_name.toLowerCase().trim())
+		const existingParameterNames = listAnalytes.map((a) => a.parameter_name.toLowerCase().trim());
+		const filteredAnalyses = analyses.filter(
+			(analysis) => !existingParameterNames.includes(analysis.parameter_name.toLowerCase().trim()),
 		);
-	
+
 		console.log(`Filtered out ${analyses.length - filteredAnalyses.length} duplicate parameters`);
 		setSelectedParameters(filteredAnalyses);
 		setIsDropdownVisible(false);
@@ -409,21 +409,21 @@ const SampleInfor = () => {
 				showToast('Không có chỉ tiêu nào được chọn', 'warning');
 				return;
 			}
-		
+
 			console.log(selectedParameters);
 			// Filter out any parameters that have the same name as existing ones
-			const existingParameterNames = listAnalytes.map(a => a.parameter_name.toLowerCase().trim());
-			const filteredParameters = selectedParameters.filter(param => 
-				!existingParameterNames.includes(param.parameter_name.toLowerCase().trim())
+			const existingParameterNames = listAnalytes.map((a) => a.parameter_name.toLowerCase().trim());
+			const filteredParameters = selectedParameters.filter(
+				(param) => !existingParameterNames.includes(param.parameter_name.toLowerCase().trim()),
 			);
-		
+
 			if (filteredParameters.length === 0) {
 				showToast('Tất cả chỉ tiêu đã tồn tại trong mẫu này', 'warning');
 				setIsAddingParameter(false);
 				setSelectedParameters([]);
 				return;
 			}
-		
+
 			const parameters = filteredParameters.map((parameter) => ({
 				receipt_id: currentSample.receipt_id,
 				sample_id: currentSample.id,
@@ -442,19 +442,19 @@ const SampleInfor = () => {
 				created_by_uid: currentUser.identity_uid,
 				modified_by_uid: currentUser.identity_uid,
 			}));
-		
+
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/insert/bulk/analysis', {
 				analyses: parameters,
 			});
-		
+
 			if (response.status === 200) {
 				showToast(`${response.data.length} chỉ tiêu được thêm thành công!`);
 				setIsAddingParameter(false);
 				setSelectedParameters([]);
-				
+
 				// Update listAnalytes with the new analyses from the API response
 				setListAnalytes([...listAnalytes, ...response.data]);
-				
+
 				// Also update currentSample to maintain consistency
 				setCurrentSample({
 					...currentSample,
@@ -1025,11 +1025,38 @@ const SampleInfor = () => {
 
 				// Split sample_information into customer and receipt info
 				if (response.data.sample_information && response.data.sample_information.length > 0) {
-					// The last two items are receipt info, the rest are customer info
+					// Fix: Properly separate receipt and customer info
 					const sampleInfo = response.data.sample_information || [];
-					const index = sampleInfo.findIndex((item) => item.fname.includes('Ngày tiếp nhận'));
-					const receiptInfoItems = sampleInfo.slice(index, sampleInfo.length);
-					const customerInfoItems = sampleInfo.slice(0, index);
+
+					// Look for receipt info markers in the fname field
+					const receiptInfoItems = sampleInfo.filter(
+						(item) =>
+							item.fname.includes('Ngày tiếp nhận') ||
+							item.fname.includes('receipt date') ||
+							item.fname.includes('Mô tả') ||
+							item.fname.includes('desc') ||
+							item.fname.includes('Mã tiếp nhận') ||
+							item.fname.includes('receipt code') ||
+							item.fname.includes('Ngày hoàn thành') ||
+							item.fname.includes('deadline') ||
+							item.fname.includes('Nền mẫu') ||
+							item.fname.includes('matrix'),
+					);
+
+					// All other items are customer info
+					const customerInfoItems = sampleInfo.filter(
+						(item) =>
+							!item.fname.includes('Ngày tiếp nhận') &&
+							!item.fname.includes('receipt date') &&
+							!item.fname.includes('Mô tả') &&
+							!item.fname.includes('desc') &&
+							!item.fname.includes('Mã tiếp nhận') &&
+							!item.fname.includes('receipt code') &&
+							!item.fname.includes('Ngày hoàn thành') &&
+							!item.fname.includes('deadline') &&
+							!item.fname.includes('Nền mẫu') &&
+							!item.fname.includes('matrix'),
+					);
 
 					setCustomerInfo(customerInfoItems);
 					setReceiptInfo(receiptInfoItems);
@@ -1607,13 +1634,36 @@ const SampleInfor = () => {
 								// Reset to original values from current sample
 								if (currentSample && currentSample.sample_information) {
 									const sampleInfo = currentSample.sample_information || [];
+
+									// Fix: Properly separate receipt and customer info
+									// Look for receipt info markers in the fname field
 									const receiptInfoItems = sampleInfo.filter(
 										(item) =>
-											item.fname === 'Ngày tiếp nhận / Receipt date.' || item.fname === 'Mã phiếu / Receipt code.',
+											item.fname.includes('Ngày tiếp nhận') ||
+											item.fname.includes('receipt date') ||
+											item.fname.includes('Mô tả') ||
+											item.fname.includes('desc') ||
+											item.fname.includes('Mã tiếp nhận') ||
+											item.fname.includes('receipt code') ||
+											item.fname.includes('Ngày hoàn thành') ||
+											item.fname.includes('deadline') ||
+											item.fname.includes('Nền mẫu') ||
+											item.fname.includes('matrix'),
 									);
+
+									// All other items are customer info
 									const customerInfoItems = sampleInfo.filter(
 										(item) =>
-											item.fname !== 'Ngày tiếp nhận / Receipt date.' && item.fname !== 'Mã phiếu / Receipt code.',
+											!item.fname.includes('Ngày tiếp nhận') &&
+											!item.fname.includes('receipt date') &&
+											!item.fname.includes('Mô tả') &&
+											!item.fname.includes('desc') &&
+											!item.fname.includes('Mã tiếp nhận') &&
+											!item.fname.includes('receipt code') &&
+											!item.fname.includes('Ngày hoàn thành') &&
+											!item.fname.includes('deadline') &&
+											!item.fname.includes('Nền mẫu') &&
+											!item.fname.includes('matrix'),
 									);
 
 									setCustomerInfo(customerInfoItems);

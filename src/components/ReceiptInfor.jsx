@@ -77,7 +77,9 @@ const ReceiptInfor = ({ receipt }) => {
 	const [editingGeneralField, setEditingGeneralField] = useState(null);
 
 	// State to track report generation progress
-	const [isGeneratingReports, setIsGeneratingReports] = useState(false);
+	const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+	const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+	const [isGeneratingPublish, setIsGeneratingPublish] = useState(false);
 	const [generationProgress, setGenerationProgress] = useState(0);
 
 	// Function to format date strings entered manually
@@ -918,56 +920,6 @@ const ReceiptInfor = ({ receipt }) => {
 		}
 	};
 
-	// const handleInputChange = (e) => {
-	//     const { name, value } = e.target;
-	//     const keys = name.split(".");
-	//     if (keys.length > 1) {
-	//         setCurrentReceipt((prev) => {
-	//             const updatedReceipt = { ...prev };
-	//             let nestedObject = updatedReceipt;
-	//             for (let i = 0; i < keys.length - 1; i++) {
-	//                 nestedObject = nestedObject[keys[i]];
-	//             }
-	//             nestedObject[keys[keys.length - 1]] = value;
-	//             return updatedReceipt;
-	//         });
-	//     } else {
-	//         setCurrentReceipt((prev) => ({
-	//             ...prev,
-	//             [name]: value,
-	//         }));
-	//     }
-	// };
-
-	// const handleCustomerSearch = (e) => {
-	//     const { value } = e.target;
-	//     setCurrentReceipt((prev) => ({
-	//         ...prev,
-	//         client: {
-	//             ...prev.client,
-	//             client_uid: value,
-	//         },
-	//     }));
-
-	//     if (value.length >= 5) {
-	//         // Implement search logic here
-	//     }
-	// };
-
-	// const handleContactSearch = (e) => {
-	//     const { value } = e.target;
-	//     setCurrentReceipt((prev) => ({
-	//         ...prev,
-	//         contact: {
-	//             name: value,
-	//         },
-	//     }));
-
-	//     if (value.length >= 5) {
-	//         // Implement search logic here
-	//     }
-	// };
-
 	// Add this new handler function before renderAddSampleForm
 	const handleCopySample = (sampleUid) => {
 		// If default option ("Sao chép") is selected, do nothing
@@ -1806,129 +1758,269 @@ const ReceiptInfor = ({ receipt }) => {
 		});
 	};
 
-	// Function to export selected PPTs to PDF - updated to generate HTML for each report
-	const handleExportPPT = async () => {
+	// Function to handle generating draft reports for selected samples
+	const handleGenerateDraftReports = async () => {
+		// Get all checked samples
 		const selectedItems = [];
 
 		// Find all samples with checked reports
 		currentReceipt?.samples.forEach((sample) => {
 			const value = selectedReports[sample.id];
 			if (value?.isChecked) {
-				// Determine the report ID
-				let reportId = null;
+				// Get the sample_uid
+				const sampleUid = sample.sample_uid;
+				// Get ppt_uid if available, otherwise empty string
+				let pptUid = '';
 
 				if (typeof value === 'string') {
-					reportId = value;
+					pptUid = value;
 				} else if (value.ppt_uid) {
-					reportId = value.ppt_uid;
-				} else {
-					const selectedReportId =
-						typeof selectedReports[sample.id] === 'string'
-							? selectedReports[sample.id]
-							: selectedReports[sample.id]?.ppt_uid;
-
-					if (selectedReportId) {
-						reportId = selectedReportId;
-					} else {
-						const newestReport = getNewestReport(sample.report || []);
-						if (newestReport) {
-							reportId = newestReport.ppt_uid;
-						}
-					}
+					pptUid = value.ppt_uid;
 				}
 
-				if (reportId) {
-					selectedItems.push({
-						ppt_uid: reportId,
-						sample_uid: sample.sample_uid,
-					});
-				}
+				// Add to selected items
+				selectedItems.push({
+					sample_uid: sampleUid,
+					ppt_uid: pptUid,
+				});
 			}
 		});
 
-		// Check if we have any selected reports
+		// Check if we have any selected samples
 		if (selectedItems.length === 0) {
 			Swal.fire({
 				icon: 'warning',
-				title: 'Không có phiếu nào được chọn',
-				text: 'Vui lòng chọn ít nhất một phiếu để xuất PPT.',
+				title: 'Không có mẫu nào được chọn',
+				text: 'Vui lòng chọn ít nhất một mẫu để tạo báo cáo sơ bộ.',
 			});
 			return;
 		}
 
+		setIsGeneratingDraft(true);
+		setGenerationProgress(0);
+
 		try {
 			// Show loading toast
-			showToast('Đang xuất PPT...', 'info');
+			showToast(`Đang tạo báo cáo sơ bộ cho ${selectedItems.length} mẫu...`, 'info');
 
-			// Array to store HTML content for each report
-			const htmls = [];
+			// Prepare the request body
+			const requestBody = {
+				list_uids: selectedItems,
+				is_save: true,
+				is_publish: false,
+			};
 
-			// Generate HTML for each selected report
-			for (const item of selectedItems) {
-				try {
-					// Call generateReportToHTML with returnHtml option
-					const htmlContent = await generateReportToHTML({
-						sample_uid: item.sample_uid,
-						ppt_uid: item.ppt_uid,
-						showVlas: false,
-						showComment: false,
-						showReference: false,
-						currentUser: currentUser,
-						returnHtml: true, // Request HTML content instead of opening in a new window
-					});
-
-					// Add the HTML content to our array
-					htmls.push({
-						ppt_uid: item.ppt_uid,
-						html: htmlContent,
-					});
-				} catch (error) {
-					console.error(`Error generating HTML for report ${item.ppt_uid}:`, error);
-				}
-			}
-
-			// Send the array of HTML content to the API using axios
-			const response = await axios.post(
-				'https://black.irdop.org/khsi19me/html_to_pdf',
-				{
-					htmls: htmls,
+			// Call the API
+			const response = await axios.post('https://black.irdop.orgorg/khsi19me/html_to_pdf', requestBody, {
+				headers: {
+					'Content-Type': 'application/json',
+					Accept: '*/*',
 				},
-				{
-					responseType: 'blob', // For binary data response
-					headers: {
-						'Content-Type': 'application/json',
-						Accept: '*/*',
-					},
-				},
-			);
+			});
 
-			// Generate a filename based on receipt UID and date
-			const date = new Date();
-			const dateStr = `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
-			const fileName = `PPT_${receipt_uid}_${dateStr}.zip`;
+			// Process response - assuming it's HTML content
+			const htmlContent = response.data;
 
-			// Create a URL for the blob
-			const url = window.URL.createObjectURL(new Blob([response.data]));
+			// Open the HTML content in a new tab
+			const newTab = window.open();
+			newTab.document.write(htmlContent);
+			// newTab.document.close();
 
-			// Create an anchor element and trigger download
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = fileName;
-			document.body.appendChild(a);
-			a.click();
+			// Fetch updated data to refresh the report list
+			await fetchReceipt();
 
-			// Clean up
-			window.URL.revokeObjectURL(url);
-			document.body.removeChild(a);
-
-			showToast('Xuất PPT thành công!', 'success');
+			showToast(`Đã tạo báo cáo sơ bộ cho ${selectedItems.length} mẫu thành công!`, 'success');
 		} catch (error) {
-			console.error('Error exporting PPT:', error);
+			console.error('Error generating draft reports:', error);
 			Swal.fire({
 				icon: 'error',
 				title: 'Lỗi',
-				text: `Không thể xuất PPT: ${error.message || 'Lỗi không xác định'}`,
+				text: `Không thể tạo báo cáo sơ bộ: ${error.message || 'Lỗi không xác định'}`,
 			});
+		} finally {
+			setIsGeneratingDraft(false);
+			setGenerationProgress(0);
+		}
+	};
+
+	// Function to handle publishing reports for selected samples
+	const handlePublishReports = async () => {
+		// Get all checked samples
+		const selectedItems = [];
+
+		// Find all samples with checked reports
+		currentReceipt?.samples.forEach((sample) => {
+			const value = selectedReports[sample.id];
+			if (value?.isChecked) {
+				// Get the sample_uid
+				const sampleUid = sample.sample_uid;
+				// Get ppt_uid if available, otherwise empty string
+				let pptUid = '';
+
+				if (typeof value === 'string') {
+					pptUid = value;
+				} else if (value.ppt_uid) {
+					pptUid = value.ppt_uid;
+				}
+
+				// Add to selected items
+				selectedItems.push({
+					sample_uid: sampleUid,
+					ppt_uid: pptUid,
+				});
+			}
+		});
+
+		// Check if we have any selected samples
+		if (selectedItems.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Không có mẫu nào được chọn',
+				text: 'Vui lòng chọn ít nhất một mẫu để phát hành báo cáo.',
+			});
+			return;
+		}
+
+		setIsGeneratingPublish(true);
+
+		try {
+			// Show loading toast
+			showToast(`Đang phát hành báo cáo cho ${selectedItems.length} mẫu...`, 'info');
+
+			// Prepare the request body
+			const requestBody = {
+				list_uids: selectedItems,
+				is_save: false,
+				is_publish: true,
+			};
+
+			// Call the API
+			const response = await axios.post('http://127.0.0.1:1880/html_to_pdf', requestBody, {
+				headers: {
+					'Content-Type': 'application/json',
+					Accept: '*/*',
+				},
+			});
+
+			// Process response - assuming it's HTML content
+			const htmlContent = response.data;
+
+			// Open the HTML content in a new tab
+			const newTab = window.open();
+			newTab.document.write(htmlContent);
+			newTab.document.close();
+
+			// Fetch updated data to refresh the report list
+			await fetchReceipt();
+
+			showToast(`Đã phát hành báo cáo cho ${selectedItems.length} mẫu thành công!`, 'success');
+		} catch (error) {
+			console.error('Error publishing reports:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: `Không thể phát hành báo cáo: ${error.message || 'Lỗi không xác định'}`,
+			});
+		} finally {
+			setIsGeneratingPublish(false);
+		}
+	};
+
+	// Function to handle previewing reports for selected samples
+	const handlePreviewReports = async () => {
+		// Get all checked samples
+		const selectedItems = [];
+
+		// Find all samples with checked reports
+		currentReceipt?.samples.forEach((sample) => {
+			const value = selectedReports[sample.id];
+			if (value?.isChecked) {
+				// Get the sample_uid
+				const sampleUid = sample.sample_uid;
+				// Get ppt_uid if available, otherwise empty string
+				let pptUid = '';
+
+				if (typeof value === 'string') {
+					pptUid = value;
+				} else if (value.ppt_uid) {
+					pptUid = value.ppt_uid;
+				}
+
+				// Add to selected items
+				selectedItems.push({
+					sample_uid: sampleUid,
+					ppt_uid: pptUid,
+				});
+			}
+		});
+
+		// Check if we have any selected samples
+		if (selectedItems.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Không có mẫu nào được chọn',
+				text: 'Vui lòng chọn ít nhất một mẫu để xem trước báo cáo.',
+			});
+			return;
+		}
+
+		setIsGeneratingPreview(true);
+
+		try {
+			// Show loading toast
+			showToast(`Đang xem trước báo cáo cho ${selectedItems.length} mẫu...`, 'info');
+
+			// Prepare the request body
+			const requestBody = {
+				list_uids: selectedItems,
+				is_save: false,
+				is_publish: false,
+			};
+
+			// Use apiPost instead of axios directly or form submission
+			const response = await axios.post('http://127.0.0.1:1880/html_to_pdf', requestBody, {
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				responseType: 'text', // Ensure we get the HTML as text
+			});
+
+			// Get the HTML content from the response
+			const htmlContent = response.data;
+
+			// Create a new blob with the HTML content
+			const blob = new Blob([htmlContent], { type: 'text/html' });
+			const url = URL.createObjectURL(blob);
+
+			// Open in a new window
+			const newWindow = window.open();
+			if (newWindow) {
+				// If window opened successfully
+				newWindow.document.write(htmlContent);
+				newWindow.document.close();
+			} else {
+				// If popup was blocked, provide a direct link
+				Swal.fire({
+					icon: 'info',
+					title: 'Popup bị chặn',
+					text: 'Trình duyệt đã chặn popup. Nhấn vào liên kết dưới đây để mở báo cáo.',
+					footer: `<a href="${url}" target="_blank" class="text-blue-500 underline">Nhấn vào đây để xem báo cáo</a>`,
+				});
+			}
+
+			// Fetch updated data to refresh the report list
+			await fetchReceipt();
+
+			showToast(`Đã mở xem trước báo cáo cho ${selectedItems.length} mẫu!`, 'success');
+		} catch (error) {
+			console.error('Error previewing reports:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: `Không thể xem trước báo cáo: ${error.message || 'Lỗi không xác định'}`,
+			});
+		} finally {
+			setIsGeneratingPreview(false);
 		}
 	};
 
@@ -1943,86 +2035,6 @@ const ReceiptInfor = ({ receipt }) => {
 	const getNewestReport = (reports) => {
 		const allReports = getAllReports(reports);
 		return allReports.length > 0 ? allReports[0] : null;
-	};
-
-	// Function to handle generating draft reports for selected samples
-	const handleGenerateDraftReports = async () => {
-		// Get all checked samples
-		const selectedSampleIds = Object.entries(selectedReports)
-			.filter(([_, value]) => value?.isChecked)
-			.map(([sampleId, _]) => parseInt(sampleId));
-
-		if (selectedSampleIds.length === 0) {
-			Swal.fire({
-				icon: 'warning',
-				title: 'Không có mẫu nào được chọn',
-				text: 'Vui lòng chọn ít nhất một mẫu để tạo báo cáo sơ bộ.',
-			});
-			return;
-		}
-
-		setIsGeneratingReports(true);
-		setGenerationProgress(0);
-
-		showToast(`Đang tạo báo cáo sơ bộ cho ${selectedSampleIds.length} mẫu...`, 'info');
-
-		// Process each selected sample
-		for (let i = 0; i < selectedSampleIds.length; i++) {
-			const sampleId = selectedSampleIds[i];
-			// Find the sample object from the current receipt
-			const sample = currentReceipt.samples.find((s) => s.id === sampleId);
-			if (!sample) continue;
-
-			try {
-				// Update progress
-				setGenerationProgress(Math.floor((i / selectedSampleIds.length) * 100));
-
-				// Call generateReportToHTML with the sample_uid
-				await generateReportToHTML({
-					sample_uid: sample.sample_uid,
-					showVlas: false, // Default settings
-					showComment: false,
-					showReference: false,
-					currentUser: currentUser,
-				});
-
-				// No need to open a new window anymore
-			} catch (error) {
-				console.error(`Error generating report for sample ${sample.sample_uid}:`, error);
-				Swal.fire({
-					icon: 'error',
-					title: 'Lỗi',
-					text: `Không thể tạo báo cáo cho mẫu ${sample.sample_uid}: ${error.message || 'Lỗi không xác định'}`,
-				});
-			}
-		}
-
-		setGenerationProgress(100);
-
-		// Fetch updated data to refresh the report list
-		await fetchReceipt();
-
-		// Update selectedReports to select newest ppt_uid for each processed sample
-		const updatedSelections = { ...selectedReports };
-
-		selectedSampleIds.forEach((sampleId) => {
-			const sample = currentReceipt.samples.find((s) => s.id === sampleId);
-			if (sample && sample.report && sample.report.length > 0) {
-				const newestReport = getNewestReport(sample.report);
-				if (newestReport) {
-					updatedSelections[sampleId] = newestReport.ppt_uid;
-				}
-			}
-		});
-
-		setSelectedReports(updatedSelections);
-
-		setTimeout(() => {
-			setIsGeneratingReports(false);
-			setGenerationProgress(0);
-		}, 1000);
-
-		showToast(`Đã tạo báo cáo sơ bộ cho ${selectedSampleIds.length} mẫu thành công!`, 'success');
 	};
 
 	// Helper function to check if all analyses in a sample have been reviewed
@@ -2511,13 +2523,13 @@ const ReceiptInfor = ({ receipt }) => {
 								<>
 									<button
 										className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
-										onClick={handleGenerateDraftReports}
-										disabled={isGeneratingReports}
+										onClick={handlePreviewReports}
+										disabled={isGeneratingPreview}
 									>
-										{isGeneratingReports ? (
-											<span className="flex items-center">
+										{isGeneratingPreview ? (
+											<span className="flex items-center justify-center">
 												<svg
-													className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+													className="animate-spin h-5 w-5 text-primary"
 													xmlns="http://www.w3.org/2000/svg"
 													fill="none"
 													viewBox="0 0 24 24"
@@ -2536,23 +2548,80 @@ const ReceiptInfor = ({ receipt }) => {
 														d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
 													></path>
 												</svg>
-												{generationProgress}%
 											</span>
 										) : (
-											<span className="flex items-center">
-												<div className="flex items-center justify-between ">
-													{'Tạo sơ bộ'} <FaFilePdf size={20} className="ml-1" />
-												</div>
-											</span>
+											<div className="flex items-center justify-between">
+												{'Xem trước'} <FaFilePdf size={20} className="ml-1" />
+											</div>
 										)}
 									</button>
 									<button
 										className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
-										onClick={handleExportPPT}
+										onClick={handleGenerateDraftReports}
+										disabled={isGeneratingDraft}
 									>
-										<div className="flex items-center justify-between ">
-											{'Tải PPT'} <PiDownloadSimpleBold size={20} className="ml-1" />
-										</div>
+										{isGeneratingDraft ? (
+											<span className="flex items-center justify-center">
+												<svg
+													className="animate-spin h-5 w-5 text-primary"
+													xmlns="http://www.w3.org/2000/svg"
+													fill="none"
+													viewBox="0 0 24 24"
+												>
+													<circle
+														className="opacity-25"
+														cx="12"
+														cy="12"
+														r="10"
+														stroke="currentColor"
+														strokeWidth="4"
+													></circle>
+													<path
+														className="opacity-75"
+														fill="currentColor"
+														d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+													></path>
+												</svg>
+											</span>
+										) : (
+											<div className="flex items-center justify-between">
+												{'Tạo sơ bộ'} <FaFilePdf size={20} className="ml-1" />
+											</div>
+										)}
+									</button>
+									<button
+										className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
+										onClick={handlePublishReports}
+										disabled={isGeneratingPublish}
+									>
+										{isGeneratingPublish ? (
+											<span className="flex items-center justify-center">
+												<svg
+													className="animate-spin h-5 w-5 text-primary"
+													xmlns="http://www.w3.org/2000/svg"
+													fill="none"
+													viewBox="0 0 24 24"
+												>
+													<circle
+														className="opacity-25"
+														cx="12"
+														cy="12"
+														r="10"
+														stroke="currentColor"
+														strokeWidth="4"
+													></circle>
+													<path
+														className="opacity-75"
+														fill="currentColor"
+														d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+													></path>
+												</svg>
+											</span>
+										) : (
+											<div className="flex items-center justify-between">
+												{'Phát hành'} <FaFilePdf size={20} className="ml-1" />
+											</div>
+										)}
 									</button>
 								</>
 							)}

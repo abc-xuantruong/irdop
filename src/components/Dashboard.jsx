@@ -71,6 +71,9 @@ const Dashboard = () => {
 	// Add new state to track today's deadline filter
 	const [showTodayDeadlines, setShowTodayDeadlines] = useState(false);
 
+	// Add new state to track overdue filter
+	const [showOverdueFilter, setShowOverdueFilter] = useState(false);
+
 	// Add state to track selected report IDs for each sample
 	const [selectedReportIds, setSelectedReportIds] = useState({});
 
@@ -294,6 +297,7 @@ const Dashboard = () => {
 		// Reset all filters and states
 		setIsFilter(false);
 		setShowTodayDeadlines(false);
+		setShowOverdueFilter(false);
 		setViewMode('normal');
 
 		// Always navigate to the clean path without query parameters
@@ -969,6 +973,66 @@ const Dashboard = () => {
 			setIsFilter(true);
 			setCurrentPage(1); // Reset to first page
 			showToast(`Hiển thị ${filteredReceipts.length} tiếp nhận có hạn trả là hôm nay`, 'info');
+		}
+	};
+
+	// Add function to fetch overdue receipts
+	const fetchOverdueReceipts = async () => {
+		try {
+			const response = await apiGet('https://black.irdop.org/khsi19me/db/get/receipt/overdue');
+
+			if (response.status === 200) {
+				if (response.data && Array.isArray(response.data)) {
+					// Update the current list with overdue data
+					setCurrentList(response.data);
+					setIsFilter(true);
+					setCurrentPage(1); // Reset to first page
+
+					// Reset search term
+					setSearchTerm('');
+
+					// Show toast with count
+					showToast(`Hiển thị ${response.data.length} tiếp nhận đã quá hạn`, 'info');
+				} else {
+					showToast('Không tìm thấy tiếp nhận nào quá hạn', 'info');
+				}
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi lấy danh sách tiếp nhận quá hạn',
+				});
+			}
+		} catch (error) {
+			console.error('Error fetching overdue receipts:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi lấy danh sách tiếp nhận quá hạn',
+			});
+		}
+	};
+
+	// Add function to toggle overdue filter
+	const toggleOverdueFilter = () => {
+		if (showOverdueFilter) {
+			// If currently showing overdue, reset to normal view
+			setShowOverdueFilter(false);
+			if (!searchTerm) {
+				setCurrentList(originalList);
+				setIsFilter(false);
+			}
+		} else {
+			// Turn on overdue filter
+			setShowOverdueFilter(true);
+			// Turn off deadline filter if active
+			if (showTodayDeadlines) {
+				setShowTodayDeadlines(false);
+				setShowDateRangePicker(false);
+				setIsCalendarOpen(false);
+			}
+			// Fetch overdue data
+			fetchOverdueReceipts();
 		}
 	};
 
@@ -1936,8 +2000,8 @@ const Dashboard = () => {
 						)}
 					</div>
 
-					{/* Right side - Deadline button */}
-					<div className="flex items-center">
+					{/* Right side - Deadline and Overdue buttons */}
+					<div className="flex items-center space-x-2">
 						<button
 							className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
 								showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black'
@@ -2008,6 +2072,18 @@ const Dashboard = () => {
 								</div>
 							)}
 						</button>
+
+						{/* Overdue button */}
+						<button
+							className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+								showOverdueFilter ? 'text-white bg-blue-600' : 'text-black'
+							}`}
+							onClick={toggleOverdueFilter}
+							title={showOverdueFilter ? 'Hiển thị danh sách bình thường' : 'Hiển thị danh sách quá hạn'}
+						>
+							<FaCalendarDay size={18} />
+							<span className="font-normal">Overdue</span>
+						</button>
 					</div>
 				</div>
 
@@ -2057,7 +2133,7 @@ const Dashboard = () => {
 								>
 									Hạn trả KQ
 								</th>
-								
+
 								{/* New columns for Preliminary view to be added right after Hạn trả KQ */}
 								{isPreliminaryActive && (
 									<>
@@ -2331,12 +2407,11 @@ const Dashboard = () => {
 												<td className="p-1 text-start">
 													{receipt.deadline ? formatDeadlineWithStyle(receipt.deadline, receipt) : '--'}
 												</td>
-												
-												
+
 												{/* Add the new columns for Preliminary view for empty receipts */}
 												{isPreliminaryActive && (
 													<>
-														<td 
+														<td
 															className="p-1 text-start cursor-pointer"
 															onClick={() => handleFieldClick(receipt.id, null, 'draft_send_at')}
 														>
@@ -2370,11 +2445,13 @@ const Dashboard = () => {
 																		}}
 																	/>
 																</div>
+															) : receipt.draft_send_at ? (
+																formatDate(receipt.draft_send_at)
 															) : (
-																receipt.draft_send_at ? formatDate(receipt.draft_send_at) : '--'
+																'--'
 															)}
 														</td>
-														<td 
+														<td
 															className="p-1 text-start cursor-pointer"
 															onClick={() => handleFieldClick(receipt.id, null, 'ppt_send_at')}
 														>
@@ -2408,8 +2485,10 @@ const Dashboard = () => {
 																		}}
 																	/>
 																</div>
+															) : receipt.ppt_send_at ? (
+																formatDate(receipt.ppt_send_at)
 															) : (
-																receipt.ppt_send_at ? formatDate(receipt.ppt_send_at) : '--'
+																'--'
 															)}
 														</td>
 														<td className="p-1 text-start">
@@ -2417,7 +2496,7 @@ const Dashboard = () => {
 														</td>
 													</>
 												)}
-												
+
 												{/* Additional empty columns for payment view */}
 												{isPaymentActive && (
 													<>
@@ -2425,7 +2504,7 @@ const Dashboard = () => {
 														<td className="p-1 text-center text-gray-500">{receipt.record_code || '--'}</td>
 													</>
 												)}
-												
+
 												<td
 													colSpan={isPreliminaryActive ? '5' : isPaymentActive ? '7' : '6'}
 													className="p-1 text-center text-gray-500"
@@ -2560,8 +2639,7 @@ const Dashboard = () => {
 																		</div>
 																	)}
 																</td>
-																
-																
+
 																{/* Add the new columns for receipts with samples in Preliminary view */}
 																{isPreliminaryActive && (
 																	<>
@@ -2661,7 +2739,7 @@ const Dashboard = () => {
 																		</td>
 																	</>
 																)}
-																
+
 																{/* Payment view specific columns - SYC & HSL moved up */}
 																{isPaymentActive && (
 																	<>
@@ -2682,7 +2760,9 @@ const Dashboard = () => {
 																					onKeyDown={(e) =>
 																						handleReceiptInputKeyDown(e, receipt.id, 'request_number', e.target.value)
 																					}
-																					onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																					onBlur={() =>
+																						setEditingField({ receiptId: null, sampleId: null, field: null })
+																					}
 																					className="p-1 border rounded-md w-full text-sm bg-white"
 																					autoFocus
 																				/>
@@ -2709,7 +2789,9 @@ const Dashboard = () => {
 																					onKeyDown={(e) =>
 																						handleReceiptInputKeyDown(e, receipt.id, 'record_code', e.target.value)
 																					}
-																					onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
+																					onBlur={() =>
+																						setEditingField({ receiptId: null, sampleId: null, field: null })
+																					}
 																					className="p-1 border rounded-md w-full text-sm bg-white"
 																					autoFocus
 																				/>
@@ -2814,7 +2896,7 @@ const Dashboard = () => {
 																					{statusName}
 																				</option>
 																			))}
-																			</select>
+																		</select>
 																	) : (
 																		<div className="w-full h-full rounded">
 																			{status[sample.status] ? (
@@ -2961,8 +3043,8 @@ const Dashboard = () => {
 																</td>
 																<td
 																	className={`p-1 text-start align-top ${
-																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																		}`}
+																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																	}`}
 																	rowSpan={samplesToShow.length}
 																	onClick={() => handleFieldClick(receipt.id, null, 'sale_recorder')}
 																>
