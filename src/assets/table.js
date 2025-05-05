@@ -1,741 +1,1662 @@
-const axios = global.get('axios');
-const table = global.get('table');
-
-function getDateFormatted(timestamp) {
-	const today = timestamp ? new Date(timestamp) : new Date();
-	const day = String(today.getDate()).padStart(2, '0');
-	const month = String(today.getMonth() + 1).padStart(2, '0'); // Tháng bắt đầu từ 0
-	const year = today.getFullYear();
-	return `${day}-${month}-${year}`;
-}
-
-async function getIdentityName(identity_uid) {
-	node.warn(identity_uid);
-	if (!identity_uid) return '';
-
+const { Pool } = global.get('pg');
+let pool;
+// CONNECTING TO LAB DB
+async function connect() {
 	try {
-		const response = await axios.post('https://pink.irdop.org/ab4dg2/get/iden', {
-			identity_uid: identity_uid,
-		});
+		pool = new Pool(JSON.parse(env.get('labDB')));
 
-		if (response && response.data && response.data.identity_name) {
-			return response.data.identity_name;
+		if (await testConnection()) {
+			node.warn('[ INFO ] LAB DB pool already connected');
 		} else {
-			return identity_uid || '';
+			await pool.connect();
+			node.warn('[ SUCCESS ] LAB DB pool connected');
 		}
+		global.set('labRepoClient', pool);
 	} catch (error) {
-		node.warn(`Error fetching identity for ${identity_uid}: ${error.message}`);
-		return identity_uid || '';
+		node.warn(`[ LAB REPO ERROR ] LABDB connection failed: ${error.stack}`);
+		node.warn(error.stack);
 	}
 }
 
-// New function to fetch technician data
-async function fetchTechnicians() {
+async function testConnection() {
 	try {
-		const response = await axios.get('https://pink.irdop.org/db/get/techinician');
-		if (response && response.data) {
-			return response.data;
-		}
-		return [];
+		const client = global.get('labRepoClient');
+		const result = await client.query('SELECT 1');
+		return true; // return true if connected
 	} catch (error) {
-		node.warn(`Error fetching technicians: ${error.message}`);
-		return [];
+		return false;
 	}
 }
 
-// New function to get technician name by identity_uid
-function getTechnicianName(technicians, identity_uid) {
-	if (!identity_uid) return '';
-
-	const technician = technicians.find((tech) => tech.identity_uid === identity_uid);
-	return technician ? technician.identity_name : '';
+async function disconnect() {
+	const client = global.get('labRepoClient');
+	await client.end();
+	global.set('labRepoClient', undefined);
+	node.warn('[ INFO ] LAB DB disconnected');
 }
 
-// Function to parse HTML content and extract text with formatting info
-function parseHtmlUnit(htmlContent) {
-	if (!htmlContent) return { text: '', formatting: [] };
+await connect();
+
+const repoClient = global.get('labRepoClient');
+
+/** CREATE */
+
+// Create Report
+async function createReport(report) {
+	const generateReportUID = () => {
+		let splitSampleUid = report.sample_uid.split('-'); // "SPxYYQMDDTT"
+		let date = splitSampleUid[0].slice(2); // "xYYQMDDTT" "XX"
+		const currentDate = new Date(Date.now() + 7 * 60 * 60 * 1000); // GMT +7
+		const year = currentDate.getFullYear().toString().slice(-1); // last current year's char
+		const month = (currentDate.getMonth() + 1).toString(16).toUpperCase(); // convert hex (months are 0-indexed)
+		const day = currentDate.getDate().toString(32); // convert base32 (use getDate() not getDay())
+		const secondsSinceMidnight =
+			currentDate.getHours() * 3600 + currentDate.getMinutes() * 60 + currentDate.getSeconds(); // get Seconds
+		let encodeSeconds = Math.floor(secondsSinceMidnight / 2.7)
+			.toString(32)
+			.padStart(3, '0')
+			.toUpperCase(); // 86400/2.7 = 32000 -> 3 chars base 32
+		let result = `PPT${date}${splitSampleUid[1]}-${day}${year}${month}${encodeSeconds}`; // 'PPT' + 'xYYQMDDTT' + 'XX'  + '-' + DYMSSS
+		return result;
+	};
 
 	try {
-		const $ = cheerio.load(htmlContent);
-		let result = { text: '', formatting: [] };
+		report.ppt_uid = generateReportUID();
 
-		// Process paragraph content
-		$('p').each(function (i, elem) {
-			// Clone the element to work with
-			const $elem = $(elem).clone();
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete report.created_at;
+		delete report.modified_at;
 
-			// Find and mark subscripts
-			$elem.find('sub').each(function (j, sub) {
-				const subText = $(sub).text();
-				const startPos = result.text.length + $elem.text().indexOf(subText);
-				result.formatting.push({
-					type: 'sub',
-					start: startPos,
-					end: startPos + subText.length,
-					text: subText,
-				});
-			});
-
-			// Find and mark superscripts
-			$elem.find('sup').each(function (j, sup) {
-				const supText = $(sup).text();
-				const startPos = result.text.length + $elem.text().indexOf(supText);
-				result.formatting.push({
-					type: 'sup',
-					start: startPos,
-					end: startPos + supText.length,
-					text: supText,
-				});
-			});
-
-			// Add the full text
-			result.text += $(elem).text() + ' ';
-		});
-
-		// If no paragraphs, process the entire content
-		if (result.text === '') {
-			result.text = $('body').text();
-
-			// Handle direct subscripts and superscripts
-			$('sub').each(function (j, sub) {
-				const subText = $(sub).text();
-				const startPos = result.text.indexOf(subText);
-				result.formatting.push({
-					type: 'sub',
-					start: startPos,
-					end: startPos + subText.length,
-					text: subText,
-				});
-			});
-
-			$('sup').each(function (j, sup) {
-				const supText = $(sup).text();
-				const startPos = result.text.indexOf(supText);
-				result.formatting.push({
-					type: 'sup',
-					start: startPos,
-					end: startPos + supText.length,
-					text: supText,
-				});
-			});
+		const validColumns = await matchValidColumns('report', Object.keys(report));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid report columns: ${Object.keys(report).join(', ')}`);
 		}
 
-		return result.text.trim();
+		// replace report.header_section : '-- NH&Aacute;P / DRAFT --' -> report.ppt_uid
+		report.header_section = report.header_section.replace('-- SƠ BỘ / DRAFT --', report.ppt_uid);
+
+		report.reference = JSON.stringify(report.reference);
+
+		const query = `INSERT INTO report (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *`;
+
+		const params = validColumns.map((column) => report[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
 	} catch (error) {
-		console.error('Error parsing HTML:', error);
-		return htmlContent; // Return original content if parsing fails
+		const enhancedError = new Error(`Failed to create report: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
-// Helper function to extract text content from parameter object if needed
-function extractParameterText(parameterData) {
-	if (!parameterData) return '';
-
-	// Check if parameter is an object with text property
-	if (typeof parameterData === 'object' && parameterData.text !== undefined) {
-		return parameterData.text || '';
-	}
-
-	// Otherwise return the parameter as is
-	return parameterData;
-}
-
-async function createAndWriteExcel() {
-	/**
-	 * Tạo file Excel, ghi dữ liệu và chèn hình ảnh vào một ô.
-	 *
-	 * @param {string} fileName - Tên file Excel sẽ được tạo (bao gồm đuôi .xlsx).
-	 * @param {Array<Array>} data - Dữ liệu cần ghi vào file Excel, mỗi phần tử là một hàng.
-	 * @param {string} imagePath - Đường dẫn đến hình ảnh cần chèn.
-	 */
+async function upsertDraftReport(report) {
 	try {
-		// Fetch technician data first
-		const technicians = await fetchTechnicians();
+		// Generate draft ppt_uid
+		let splitSampleUid = report.sample_uid.split("-"); // "SPxYYQMDDTT"
+		let date = splitSampleUid[0].slice(2); // "xYYQMDDTT" "XX"
+		report.ppt_uid = `PPT${date}${splitSampleUid[1]}-DRAFT`;
 
-		// Tạo một workbook mới
-		const workbook = new ExcelJS.Workbook();
-		// Sheet 1: Tiếp nhận mẫu
-		const worksheet = workbook.addWorksheet('Tiếp nhận mẫu');
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete report.created_at;
+		delete report.modified_at;
 
-		// Set page setup for worksheet (portrait mode)
-		worksheet.pageSetup = {
-			paperSize: 9, // 9 is the code for A4 paper
-			orientation: 'portrait',
-			fitToPage: true,
-			fitToWidth: 1, // Fit to 1 page wide
-			fitToHeight: 0, // Auto height
-			horizontalCentered: true,
-			margins: {
-				left: 0.5,
-				right: 0.5,
-				top: 0.25,
-				bottom: 0.5,
-				header: 0.3,
-				footer: 0.3,
-			},
-		};
-
-		// Điều chỉnh kích thước cột
-		worksheet.columns = [
-			{ width: 40 / 7.776 }, // Cột A
-			{ width: 160 / 7.776 }, // Cột B
-			{ width: 90 / 7.776 }, // Cột C
-			{ width: 150 / 7.776 }, // Cột D
-			{ width: 240 / 7.776 }, // Cột E
-			{ width: 260 / 7.776 }, // Cột F
-			{ width: 105 / 7.776 }, // Cột G
-		];
-
-		// // Dữ liệu ghi vào sheet
-		const uid = msg.req.params.receipt_uid;
-		const dataReceipt = await table.Receipt.getReceiptFull({ receipt_uid: uid });
-		dataReceipt.created_by_uid = await getIdentityName(dataReceipt.created_by_uid);
-		const data = dataReceipt?.samples;
-
-		// Hàng 1 : HEADER
-		worksheet.mergeCells('B1:C1');
-		worksheet.mergeCells('E1:G1');
-
-		worksheet.getCell('E1').alignment = {
-			horizontal: 'center',
-			vertical: 'middle',
-		};
-		worksheet.getCell('E1').value = `CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\nĐộc lập - Tự do - Hạnh phúc`;
-
-		// Tải hình ảnh từ URL dưới dạng buffer
-		const imageUrl = 'https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png';
-		const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-		const imageBuffer = Buffer.from(response.data, 'binary');
-
-		// Chèn hình ảnh vào ô C1
-		const imageId = workbook.addImage({
-			buffer: imageBuffer,
-			extension: 'png',
-		});
-
-		worksheet.addImage(imageId, {
-			tl: { col: 1, row: 0 }, // Vị trí góc trên bên trái (ô B1)
-			ext: { width: 196, height: 60 }, // Kích thước hình ảnh
-		});
-
-		worksheet.getRow(1).height = 45; // Chiều cao hàng 1
-
-		worksheet.getCell('A2').value = 'PHIẾU TIẾP NHẬN MẪU';
-		worksheet.mergeCells('A2:G2'); // Merge cell
-		worksheet.getCell('A2').alignment = {
-			horizontal: 'center',
-			vertical: 'middle',
-		}; // Alignment
-
-		worksheet.getRow(2).height = 60; // Chiều cao hàng 2 : Title
-
-		// Hàng 3 >>
-		worksheet.getCell('A3').value = '1.';
-		worksheet.getCell('B3').value = 'Số phiếu yêu cầu đến:';
-		worksheet.mergeCells('B3:C3');
-		worksheet.getCell('D3').font = { bold: true };
-		worksheet.getCell('D3').value = dataReceipt?.request_number || '';
-		worksheet.getCell('D3').alignment = {
-			horizontal: 'right',
-		};
-		worksheet.getCell('A3').font = { bold: true };
-		worksheet.getCell('B3').font = { bold: true };
-		const receipt_date = getDateFormatted(dataReceipt?.created_at).split('-'); // DD,MM,YY
-		worksheet.getCell('E3').value =
-			'    Ngày ' + receipt_date[0] + ' tháng ' + receipt_date[1] + ' năm ' + receipt_date[2];
-		worksheet.mergeCells('E3:G3');
-
-		worksheet.getCell('B4').value = 'Mã tiếp nhận mẫu: ';
-		worksheet.mergeCells('C4:D4');
-		worksheet.getCell('C4').value = dataReceipt?.receipt_uid || '';
-		worksheet.getCell('C4').font = { bold: true };
-		worksheet.getCell('C4').alignment = {
-			horizontal: 'right',
-		};
-
-		worksheet.getCell('E4').value =
-			'    Ngày tiếp nhận mẫu: ' + `${receipt_date[0]}/${receipt_date[1]}/${receipt_date[2]}`;
-		worksheet.mergeCells('E4:G4');
-		worksheet.getRow(4).height = 18.75;
-
-		worksheet.getCell('A6').value = '  1.1 Thông tin khách hàng:';
-		worksheet.mergeCells('A6:C6');
-		worksheet.getCell('A6').font = { italic: true };
-
-		worksheet.getCell('B7').value = 'Tên cơ sở, người yêu cầu thử nghiệm: ' + (dataReceipt?.client.client_name || '');
-		worksheet.mergeCells('B7:G7');
-
-		worksheet.getCell('B8').value = 'Địa chỉ: ' + (dataReceipt?.client.client_address || '');
-		worksheet.mergeCells('B8:G8');
-
-		worksheet.getCell('B9').value = 'MST/CCCD: ' + (dataReceipt?.client.legal_id || '');
-		worksheet.mergeCells('B9:G9');
-
-		worksheet.getCell('A11').value = '  1.2 Người gửi mẫu: ';
-		worksheet.mergeCells('A11:B11');
-		worksheet.getCell('C11').value = dataReceipt?.contact?.name || '';
-		worksheet.mergeCells('C11:G11');
-		worksheet.getCell('A11').font = { italic: true };
-		worksheet.getCell('C11').font = { italic: true };
-
-		worksheet.getCell('B12').value = 'SDT: ' + (dataReceipt?.contact?.phone || '');
-		worksheet.mergeCells('B12:E12');
-		worksheet.getCell('F12').value = 'Email*: ' + (dataReceipt?.contact?.email || '');
-		worksheet.mergeCells('F12:G12');
-		worksheet.getCell('B13').value = 'CCCD: ';
-		worksheet.mergeCells('B13:E13');
-		worksheet.getCell('F13').value = 'Ngày gửi mẫu: ';
-		worksheet.mergeCells('F13:G13');
-
-		worksheet.getCell('A15').value = '  1.3 Người nhận mẫu: ' + (dataReceipt?.created_by_uid || '');
-		worksheet.mergeCells('A15:G15');
-		worksheet.getCell('A15').font = { italic: true };
-
-		worksheet.getCell('B16').value = 'Tài liệu kèm theo: ';
-		worksheet.mergeCells('B16:G16');
-
-		worksheet.getCell('A18').value = '2.';
-		worksheet.getCell('B18').value = 'Ngày hẹn trả kết quả dự kiến:';
-		worksheet.mergeCells('B18:D18');
-		worksheet.getCell('A18').font = { bold: true };
-		worksheet.getCell('B18').font = { bold: true };
-		worksheet.getCell('E18').value = getDateFormatted(dataReceipt?.deadline) || '';
-		worksheet.mergeCells('E18:G18');
-
-		worksheet.getCell('A20').value = '3.';
-		worksheet.getCell('B20').value = 'Thông tin đăng ký thử nghiệm (mẫu):';
-		worksheet.mergeCells('B20:G20');
-		worksheet.getCell('A20').font = { bold: true };
-		worksheet.getCell('B20').font = { bold: true };
-		// A7:H7 Title
-		const titleCell = ['A22', 'B22', 'C22', 'D22', 'E22', 'F22', 'G22'];
-		const titleValue = [
-			'TT',
-			'Thông tin mẫu',
-			'Số lượng mẫu',
-			'Mô tả khi nhận',
-			'Chỉ tiêu yêu cầu kiểm nghiệm',
-			'Phương pháp thử',
-			'Ghi chú',
-		];
-		titleCell.forEach((cell, index) => {
-			worksheet.getCell(cell).value = titleValue[index];
-			worksheet.getCell(cell).font = { italic: true };
-			worksheet.getCell(cell).alignment = {
-				horizontal: 'center',
-				vertical: 'middle',
-			};
-			worksheet.getCell(cell).border = {
-				top: { style: 'thin' },
-				left: { style: 'thin' },
-				bottom: { style: 'thin' },
-				right: { style: 'thin' },
-			};
-		});
-
-		// Ghi dữ liệu vào sheet
-		let currentRow = 23;
-		if (data.length > 0) {
-			data.forEach((sample, index) => {
-				worksheet.getCell(`A${currentRow}`).value = index + 1;
-				worksheet.getCell(`B${currentRow}`).value = sample?.sample_name || '';
-				worksheet.getCell(`C${currentRow}`).value = sample?.sample_volume || '';
-				worksheet.getCell(`D${currentRow}`).value = sample?.sample_description || '';
-
-				// Kiểm tra nếu test_orders tồn tại và là một mảng
-				const testOrders = sample.analysis ?? [];
-				testOrders.forEach((test_order, testIndex) => {
-					// Extract parameter name correctly
-					const parameterName = extractParameterText(test_order?.parameter_name);
-					worksheet.getCell(`E${currentRow + testIndex}`).value = parameterName || '';
-					worksheet.getCell(`F${currentRow + testIndex}`).value = test_order?.protocol_code || '';
-					const dataCell = [`E${currentRow + testIndex}`, `F${currentRow + testIndex}`];
-					dataCell.forEach((cell) => {
-						worksheet.getCell(cell).border = {
-							top: { style: 'thin' },
-							left: { style: 'thin' },
-							bottom: { style: 'thin' },
-							right: { style: 'thin' },
-						};
-					});
-				});
-
-				// Gộp các ô nếu có test_orders
-				if (testOrders.length > 0) {
-					worksheet.mergeCells(`A${currentRow}:A${currentRow + testOrders.length - 1}`);
-					worksheet.mergeCells(`B${currentRow}:B${currentRow + testOrders.length - 1}`);
-					worksheet.mergeCells(`C${currentRow}:C${currentRow + testOrders.length - 1}`);
-					worksheet.mergeCells(`D${currentRow}:D${currentRow + testOrders.length - 1}`);
-					worksheet.mergeCells(`G${currentRow}:G${currentRow + testOrders.length - 1}`);
-				}
-
-				// Lấy các ô merge để căn lề
-				const cells = [`A${currentRow}`, `B${currentRow}`, `C${currentRow}`, `D${currentRow}`, `G${currentRow}`];
-				cells.forEach((cell) => {
-					worksheet.getCell(cell).alignment = {
-						horizontal: 'center',
-						vertical: 'middle',
-					};
-					worksheet.getCell(cell).border = {
-						top: { style: 'thin' },
-						left: { style: 'thin' },
-						bottom: { style: 'thin' },
-						right: { style: 'thin' },
-					};
-				});
-
-				// Tăng currentRow lên số lượng test_orders hoặc ít nhất là 1
-				currentRow += testOrders.length || 1;
-			});
+		const validColumns = await matchValidColumns(
+			"report",
+			Object.keys(report),
+		);
+		if (validColumns.length === 0) {
+			throw new Error(
+				`Invalid report columns: ${Object.keys(report).join(", ")}`,
+			);
 		}
 
-		// Ghi giá trị 5.
-		worksheet.getCell(`A${currentRow + 1}`).value = '4.';
-		worksheet.getCell(`B${currentRow + 1}`).value = 'Thông tin liên hệ: ';
-		worksheet.mergeCells(`B${currentRow + 1}:G${currentRow + 1}`);
-		worksheet.getCell(`A${currentRow + 1}`).font = { bold: true };
-		worksheet.getCell(`B${currentRow + 1}`).font = { bold: true };
+		// replace report.header_section : '-- NH&Aacute;P / DRAFT --' -> report.ppt_uid
+		report.header_section = report.header_section.replace(
+			"-- SƠ BỘ / DRAFT --",
+			report.ppt_uid,
+		);
 
-		worksheet.getCell(`B${currentRow + 2}`).value = 'SDT: 024 355 35 355';
-		worksheet.mergeCells(`B${currentRow + 2}:G${currentRow + 2}`);
+		report.reference = JSON.stringify(report.reference);
 
-		worksheet.getCell(`B${currentRow + 3}`).value = 'Email: kiemnghiem@irdop.org';
-		worksheet.mergeCells(`B${currentRow + 3}:G${currentRow + 3}`);
+		// Check if report with this ppt_uid already exists
+		const checkQuery = "SELECT id FROM report WHERE ppt_uid = $1";
+		const checkResult = await repoClient.query(checkQuery, [
+			report.ppt_uid,
+		]);
 
-		worksheet.getCell(`A${currentRow + 5}`).value = 'Phòng dịch vụ khách hàng';
-		worksheet.mergeCells(`A${currentRow + 5}:D${currentRow + 5}`);
-		worksheet.getCell(`A${currentRow + 5}`).font = { bold: true };
-		worksheet.getCell(`A${currentRow + 5}`).alignment = {
-			horizontal: 'center',
-		};
-		worksheet.getCell(`F${currentRow + 5}`).value = 'Đại diện gửi mẫu';
-		worksheet.mergeCells(`F${currentRow + 5}:G${currentRow + 5}`);
-		worksheet.getCell(`F${currentRow + 5}`).font = { bold: true };
-		worksheet.getCell(`F${currentRow + 5}`).alignment = {
-			horizontal: 'center',
-		};
+		let result;
 
-		worksheet.getCell(`A${currentRow + 6}`).value = '(Người nhận mẫu ký tên và ghi rõ họ tên)';
-		worksheet.mergeCells(`A${currentRow + 6}:D${currentRow + 6}`);
-		worksheet.getCell(`A${currentRow + 6}`).alignment = {
-			horizontal: 'center',
-		};
+		if (checkResult.rows.length > 0) {
+			// Update existing report
+			const reportId = checkResult.rows[0].id;
 
-		worksheet.getCell(`A${currentRow + 11}`).value = dataReceipt?.created_by_uid || '';
-		worksheet.mergeCells(`A${currentRow + 11}:D${currentRow + 11}`);
-		worksheet.getCell(`A${currentRow + 11}`).alignment = {
-			horizontal: 'center',
-		};
+			const query = `UPDATE report SET 
+                ${validColumns
+					.map((column, index) => `${column} = $${index + 2}`)
+					.join(", ")}, 
+                modified_at = NOW() 
+                WHERE id = $1 
+                RETURNING *`;
 
-		worksheet.getCell(`F${currentRow + 11}`).value = '(Theo phiếu yêu cầu đính kèm)';
-		worksheet.mergeCells(`F${currentRow + 11}:G${currentRow + 11}`);
-		worksheet.getCell(`F${currentRow + 11}`).alignment = {
-			horizontal: 'center',
-		};
+			const params = [
+				reportId,
+				...validColumns.map((column) => report[column]),
+			];
+			result = await repoClient.query(query, params);
+		} else {
+			// Insert new report
+			const query = `INSERT INTO report (${validColumns.join(
+				",",
+			)}, created_at, modified_at) 
+                VALUES (${validColumns
+					.map((_, index) => `$${index + 1}`)
+					.join(",")}, NOW(), NOW())
+                RETURNING *`;
 
-		// Áp dụng font Times New Roman và cỡ chữ 14 cho toàn bộ sheet
-		worksheet.eachRow({ includeEmpty: true }, (row) => {
-			row.eachCell({ includeEmpty: true }, (cell) => {
-				const currentFont = cell.font || {};
-				cell.font = {
-					...currentFont,
-					name: 'Times New Roman',
-					size: 14,
-				};
-				const currentAlignment = cell.alignment || {};
-				cell.alignment = {
-					...currentAlignment,
-					wrapText: true,
-					vertical: 'middle',
-				};
-			});
-		});
-		worksheet.getCell('E1').font = { bold: true, name: 'Times New Roman', size: 16 }; // Font chữ
-		worksheet.getCell('A2').font = { bold: true, name: 'Times New Roman', size: 20 }; // Font chữ
-
-		// Biên bản bàn giao
-		const sheet2 = workbook.addWorksheet('Biên bản bàn giao mẫu');
-
-		// Set page setup for sheet2 (landscape mode)
-		sheet2.pageSetup = {
-			paperSize: 9, // 9 is the code for A4 paper
-			orientation: 'landscape',
-			fitToPage: true,
-			fitToWidth: 1, // Fit to 1 page wide
-			fitToHeight: 0, // Auto height
-			horizontalCentered: true,
-			margins: {
-				left: 0.5,
-				right: 0.5,
-				top: 0.25,
-				bottom: 0.5,
-				header: 0.3,
-				footer: 0.3,
-			},
-		};
-
-		// Hàng 1 title
-		sheet2.getCell('E1').value = `VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN
-        176 Phùng Khoang, Trung Văn, Nam Từ Liêm, Hà Nội
-        Phòng phân tích - Kiểm nghiệm`;
-
-		// Merge cells C1:D1 and E1:H1 instead of D1:G1
-		sheet2.mergeCells('C1:D1');
-		sheet2.mergeCells('E1:H1');
-
-		sheet2.getCell('E1').alignment = {
-			wrapText: true,
-			horizontal: 'center',
-			vertical: 'middle',
-		};
-		sheet2.getCell('E1').font = { bold: true };
-
-		// Apply black borders to both merged cell ranges
-		['C1', 'E1'].forEach((cell) => {
-			sheet2.getCell(cell).border = {
-				top: { style: 'thick', color: { argb: '000000' } },
-				left: { style: 'thick', color: { argb: '000000' } },
-				bottom: { style: 'thick', color: { argb: '000000' } },
-				right: { style: 'thick', color: { argb: '000000' } },
-			};
-		});
-
-		// Tải hình ảnh từ URL dưới dạng buffer
-		const imageUrl2 = 'https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png';
-		const response2 = await axios.get(imageUrl2, { responseType: 'arraybuffer' });
-		const imageBuffer2 = Buffer.from(response2.data, 'binary');
-
-		// Chèn hình ảnh vào ô C1
-		const imageId2 = workbook.addImage({
-			buffer: imageBuffer,
-			extension: 'png',
-		});
-
-		sheet2.addImage(imageId2, {
-			tl: { col: 2.18, row: 0.283 }, // Vị trí góc trên bên trái (ô C1)
-			ext: { width: 229, height: 70 }, // Kích thước hình ảnh
-		});
-
-		sheet2.getRow(1).height = 60; // Chiều cao hàng 1
-
-		sheet2.getCell('A2').value = 'BIÊN BẢN BÀN GIAO MẪU THỬ NỘI BỘ';
-		sheet2.mergeCells('A2:H2'); // Merge cell
-		sheet2.getCell('A2').alignment = {
-			wrapText: true,
-			horizontal: 'center',
-			vertical: 'middle',
-		}; // Alignment
-
-		sheet2.getRow(2).height = 60; // Chiều cao hàng 2
-
-		sheet2.getCell('B3').value = 'Thông tin mẫu đến';
-		sheet2.getCell('D3').value = dataReceipt?.request_number || '';
-		sheet2.mergeCells('D3:E3');
-		sheet2.getCell('F3').value = 'Ngày bàn giao mẫu';
-		sheet2.getCell('G3').value = getDateFormatted(dataReceipt?.created_at) || '';
-		sheet2.mergeCells('G3:H3');
-		sheet2.getCell('B4').value = 'Người bàn giao mẫu thử ( thuộc p. Dịch vụ)';
-		sheet2.getCell('D4').value = dataReceipt?.created_by_uid || '';
-		sheet2.mergeCells('D4:E4');
-		sheet2.getCell('F4').value = 'Ngày bàn giao mẫu cho lab';
-		sheet2.getCell('G4').value = getDateFormatted(dataReceipt?.created_at) || '';
-
-		sheet2.getCell('A6').value = 'Danh mục bàn giao các mẫu giao: trong bảng sau';
-		sheet2.getCell('A6').font = { bold: true };
-
-		// Điều chỉnh kích thước cột
-		sheet2.columns = [
-			{ width: 40 / 7.776 }, // Cột A - TT
-			{ width: 150 / 7.776 }, // Cột B - Mã mẫu
-			{ width: 200 / 7.776 }, // Cột C - Tên mẫu
-			{ width: 100 / 7.776 }, // Cột D - Số lượng mẫu
-			{ width: 100 / 7.776 }, // Cột E - Yêu cầu (additional_request)
-			{ width: 260 / 7.776 }, // Cột F - Chỉ tiêu
-			{ width: 185 / 7.776 }, // Cột G - Phương pháp thử
-			{ width: 100 / 7.776 }, // Cột H - Đơn vị (result_unit)
-			{ width: 120 / 7.776 }, // Cột I - Ngày trả kết quả
-			{ width: 130 / 7.776 }, // Cột J - Người thực hiện chính
-		];
-
-		// A7:J7 Title
-		const titleCell2 = ['A7', 'B7', 'C7', 'D7', 'E7', 'F7', 'G7', 'H7', 'I7', 'J7'];
-		const titleValue2 = [
-			'TT',
-			'Mã mẫu',
-			'Tên mẫu',
-			'Số lượng mẫu',
-			'Yêu cầu',
-			'Chỉ tiêu',
-			'Phương pháp thử',
-			'Đơn vị',
-			'Ngày trả kết quả',
-			'Người thực hiện chính',
-		];
-		titleCell2.forEach((cell, index) => {
-			sheet2.getCell(cell).value = titleValue2[index];
-			sheet2.getCell(cell).font = { bold: true };
-			sheet2.getCell(cell).alignment = {
-				wrapText: true,
-				horizontal: 'center',
-				vertical: 'middle',
-			};
-			sheet2.getCell(cell).border = {
-				top: { style: 'thin' },
-				left: { style: 'thin' },
-				bottom: { style: 'thin' },
-				right: { style: 'thin' },
-			};
-		});
-
-		// Ghi dữ liệu vào sheet
-		let sheer2CurrentRow = 8;
-		if (data.length > 0) {
-			data.forEach((sample, index) => {
-				sheet2.getCell(`A${sheer2CurrentRow}`).value = index + 1;
-				sheet2.getCell(`B${sheer2CurrentRow}`).value = sample?.sample_uid || '';
-				sheet2.getCell(`C${sheer2CurrentRow}`).value = sample?.sample_name || '';
-				sheet2.getCell(`D${sheer2CurrentRow}`).value = sample?.sample_volume || '';
-				sheet2.getCell(`E${sheer2CurrentRow}`).value = sample?.additional_request || '';
-
-				// Kiểm tra nếu test_orders tồn tại và là một mảng
-				const testOrders = sample.analysis ?? [];
-				testOrders.forEach((test_order, testIndex) => {
-					// Extract parameter name correctly
-					const parameterName = extractParameterText(test_order?.parameter_name);
-					sheet2.getCell(`F${sheer2CurrentRow + testIndex}`).value = parameterName || '';
-					sheet2.getCell(`G${sheer2CurrentRow + testIndex}`).value = test_order?.protocol_code || '';
-
-					// Parse and format HTML unit content
-					const unitHtmlContent = test_order?.result_unit || '';
-					const parsedUnitText = parseHtmlUnit(unitHtmlContent);
-					sheet2.getCell(`H${sheer2CurrentRow + testIndex}`).value = parsedUnitText;
-
-					// Apply special character formatting for sub and superscripts if needed
-					// Note: ExcelJS has limited support for formatting parts of text
-					// This would require Rich Text functionality which is more complex
-
-					sheet2.getCell(`I${sheer2CurrentRow + testIndex}`).value = getDateFormatted(test_order?.deadline) || '';
-
-					// Use the technician name instead of just the ID
-					const technicianName = getTechnicianName(technicians, test_order?.technician_uid);
-					sheet2.getCell(`J${sheer2CurrentRow + testIndex}`).value = technicianName || test_order?.technician_uid || '';
-
-					const dataCell = [
-						`F${sheer2CurrentRow + testIndex}`,
-						`G${sheer2CurrentRow + testIndex}`,
-						`H${sheer2CurrentRow + testIndex}`,
-						`I${sheer2CurrentRow + testIndex}`,
-						`J${sheer2CurrentRow + testIndex}`,
-					];
-					dataCell.forEach((cell) => {
-						sheet2.getCell(cell).alignment = {
-							wrapText: true,
-							vertical: 'middle',
-						};
-						sheet2.getCell(cell).border = {
-							top: { style: 'thin' },
-							left: { style: 'thin' },
-							bottom: { style: 'thin' },
-							right: { style: 'thin' },
-						};
-					});
-				});
-
-				// Gộp các ô nếu có test_orders
-				if (testOrders.length > 0) {
-					sheet2.mergeCells(`A${sheer2CurrentRow}:A${sheer2CurrentRow + testOrders.length - 1}`);
-					sheet2.mergeCells(`B${sheer2CurrentRow}:B${sheer2CurrentRow + testOrders.length - 1}`);
-					sheet2.mergeCells(`C${sheer2CurrentRow}:C${sheer2CurrentRow + testOrders.length - 1}`);
-					sheet2.mergeCells(`D${sheer2CurrentRow}:D${sheer2CurrentRow + testOrders.length - 1}`);
-					sheet2.mergeCells(`E${sheer2CurrentRow}:E${sheer2CurrentRow + testOrders.length - 1}`);
-				}
-
-				const cells = [
-					`A${sheer2CurrentRow}`,
-					`B${sheer2CurrentRow}`,
-					`C${sheer2CurrentRow}`,
-					`D${sheer2CurrentRow}`,
-					`E${sheer2CurrentRow}`,
-				];
-				cells.forEach((cell) => {
-					sheet2.getCell(cell).alignment = {
-						wrapText: true,
-						horizontal: 'center',
-						vertical: 'middle',
-					};
-					sheet2.getCell(cell).border = {
-						top: { style: 'thin' },
-						left: { style: 'thin' },
-						bottom: { style: 'thin' },
-						right: { style: 'thin' },
-					};
-				});
-
-				// Tăng sheer2CurrentRow lên số lượng test_orders hoặc ít nhất là 1
-				sheer2CurrentRow += testOrders.length || 1;
-			});
+			const params = validColumns.map((column) => report[column]);
+			result = await repoClient.query(query, params);
 		}
 
-		// Ghi giá trị cho ô
-		sheet2.getCell(`B${sheer2CurrentRow + 2}`).value = 'Người bàn giao mẫu';
-		sheet2.getCell(`B${sheer2CurrentRow + 2}`).alignment = {
-			horizontal: 'center',
-			vertical: 'middle',
-		};
-		sheet2.getCell(`B${sheer2CurrentRow + 2}`).font = { bold: true };
-
-		sheet2.getCell(`B${sheer2CurrentRow + 6}`).value = '';
-		sheet2.getCell(`B${sheer2CurrentRow + 6}`).alignment = {
-			vertical: 'middle',
-			horizontal: 'center',
-		};
-		sheet2.mergeCells(`B${sheer2CurrentRow + 2}:D${sheer2CurrentRow + 2}`);
-
-		sheet2.getCell(`B${sheer2CurrentRow + 6}`).value = dataReceipt?.created_by_uid || '';
-		sheet2.mergeCells(`B${sheer2CurrentRow + 6}:D${sheer2CurrentRow + 6}`);
-
-		sheet2.getCell(`F${sheer2CurrentRow + 2}`).value = 'Người nhận bàn giao';
-		sheet2.getCell(`F${sheer2CurrentRow + 2}`).alignment = {
-			horizontal: 'center',
-			vertical: 'middle',
-		};
-		sheet2.getCell(`F${sheer2CurrentRow + 2}`).font = { bold: true };
-		sheet2.mergeCells(`F${sheer2CurrentRow + 2}:H${sheer2CurrentRow + 2}`);
-
-		// Áp dụng font Times New Roman và cỡ chữ 14 cho toàn bộ sheet
-		sheet2.eachRow({ includeEmpty: true }, (row) => {
-			row.eachCell({ includeEmpty: true }, (cell) => {
-				const currentFont = cell.font || {};
-				cell.font = {
-					...currentFont,
-					name: 'Times New Roman',
-					size: 14,
-				};
-			});
-		});
-		sheet2.getCell('A2').font = { bold: true, name: 'Times New Roman', size: 20 }; // Font chữ
-
-		// Tạo buffer chứa tệp Excel
-		const excelBuffer = await workbook.xlsx.writeBuffer();
-
-		// Đặt header và payload
-		msg.headers = {
-			'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			'Content-Disposition': `attachment; filename="${dataReceipt?.receipt_uid}.xlsx"`,
-		};
-		msg.payload = excelBuffer; // Gửi buffer thay vì stream
-
-		node.warn(`Export excel: ${dataReceipt?.receipt_uid}.xlsx`);
-
-		return msg;
+		return result.rows[0];
 	} catch (error) {
-		console.error('Error generating Excel file:', error);
+		const enhancedError = new Error(
+			`Failed to upsert draft report: ${error.message}`,
+		);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
 	}
 }
 
-try {
-	msg = await createAndWriteExcel();
-	return msg;
-} catch (error) {
-	node.warn(error);
+
+// Create protocol
+async function createProtocol(protocol) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete protocol.created_at;
+		delete protocol.modified_at;
+
+		const validColumns = await matchValidColumns('protocol', Object.keys(protocol));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid protocol columns: ${Object.keys(protocol).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO protocol (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *`;
+
+		const params = validColumns.map((column) => protocol[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create protocol: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
 }
+
+// Create parameter
+async function createParameter(parameter) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete parameter.created_at;
+		delete parameter.modified_at;
+
+		const validColumns = await matchValidColumns('parameter', Object.keys(parameter));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid parameter columns: ${Object.keys(parameter).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO parameter (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *`;
+
+		const params = validColumns.map((column) => parameter[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Create bulk parameters
+async function createBulkParameters(parameters) {
+	try {
+		if (!Array.isArray(parameters) || parameters.length === 0) {
+			throw new Error('Parameters must be a non-empty array');
+		}
+
+		// Remove timestamp fields from each parameter
+		parameters = parameters.map((param) => {
+			const newParam = { ...param };
+			delete newParam.created_at;
+			delete newParam.modified_at;
+			return newParam;
+		});
+
+		const validColumns = await matchValidColumns('parameter', Object.keys(parameters[0]));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid parameter columns: ${Object.keys(parameters[0]).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO parameter (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES ${parameters
+				.map((_, i) => `(${validColumns.map((_, j) => `$${i * validColumns.length + j + 1}`).join(',')}, NOW(), NOW())`)
+				.join(',')}
+			RETURNING *`;
+
+		const params = parameters.flatMap((parameter) => validColumns.map((column) => parameter[column]));
+		const result = await repoClient.query(query, params);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create bulk parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+//create client
+async function createClient(client) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete client.created_at;
+		delete client.modified_at;
+
+		const validColumns = await matchValidColumns('client', Object.keys(client));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid client columns: ${Object.keys(client).join(', ')}`);
+		}
+
+		client.contacts = JSON.stringify(client?.contacts || []);
+
+		const query = `
+			INSERT INTO client (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *`;
+
+		const params = validColumns.map((column) => client[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Create analysis
+async function createAnalysis(analysis) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete analysis.created_at;
+		delete analysis.modified_at;
+
+		const validColumns = await matchValidColumns('analysis', Object.keys(analysis));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid analysis columns: ${Object.keys(analysis).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO analysis (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			RETURNING *`;
+
+		const params = validColumns.map((column) => analysis[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create analysis: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function upsertParameterByUid(parameter) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete parameter.created_at;
+		delete parameter.modified_at;
+
+		// Chỉ lấy các key hợp lệ
+		const validColumns = ['parameter_uid', 'parameter_name', 'matrix', 'protocol_code', 'protocol_source'];
+		const filteredParam = validColumns.reduce((acc, key) => {
+			if (parameter[key] !== undefined) acc[key] = parameter[key];
+			return acc;
+		}, {});
+
+		// Nếu không có dữ liệu hợp lệ, báo lỗi
+		if (Object.keys(filteredParam).length === 0) {
+			throw new Error('No valid columns provided for upsert.');
+		}
+
+		const query = `
+			INSERT INTO parameter (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+			ON CONFLICT (parameter_uid) DO UPDATE 
+			SET ${validColumns
+				.slice(1)
+				.map((col, index) => `${col} = $${index + validColumns.length + 1}`)
+				.join(', ')}, modified_at = NOW()
+			RETURNING *`;
+
+		// Gộp giá trị cho INSERT và UPDATE
+		const params = [
+			...validColumns.map((col) => parameter[col]),
+			...validColumns.slice(1).map((col) => parameter[col]),
+		];
+
+		// Thực hiện truy vấn
+		const result = await repoClient.query(query, params);
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to upsert parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Create bulk analysis from parameters
+async function createBulkAnalysisFromParameters(analyses) {
+	try {
+		if (!Array.isArray(analyses) || analyses.length === 0) {
+			throw new Error('Analyses must be a non-empty array');
+		}
+
+		// Remove timestamp fields from each analysis
+		analyses = analyses.map((analysis) => {
+			const newAnalysis = { ...analysis };
+			delete newAnalysis.created_at;
+			delete newAnalysis.modified_at;
+			return newAnalysis;
+		});
+
+		const validColumns = await matchValidColumns('analysis', Object.keys(analyses[0]));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid analysis columns: ${Object.keys(analyses[0]).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO analysis (${validColumns.join(',')}, created_at, modified_at) 
+			VALUES ${analyses
+				.map((_, i) => `(${validColumns.map((_, j) => `$${i * validColumns.length + j + 1}`).join(',')}, NOW(), NOW())`)
+				.join(',')}
+			RETURNING *`;
+
+		const params = analyses.flatMap((analysis) => validColumns.map((column) => analysis[column]));
+		const result = await repoClient.query(query, params);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create bulk analyses: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function createReceipt(receipt) {
+	try {
+		delete receipt.created_at;
+		delete receipt.modified_at;
+
+		if (!receipt.receipt_date) {
+			receipt.receipt_date = new Date();
+		}
+
+		// Generate baseUid
+		const now = new Date();
+		const year = now.getFullYear().toString().slice(-2);
+		const day = String(now.getDate()).padStart(2, '0');
+
+		// Map month (1-12) to corresponding letter
+		const monthMap = {
+			1: 'a',
+			2: 'c',
+			3: 'e',
+			4: 'm',
+			5: 'n',
+			6: 'o',
+			7: 'r',
+			8: 's',
+			9: 'u',
+			10: 'v',
+			11: 'x',
+			12: 'z'
+		};
+		const monthLetter = monthMap[now.getMonth() + 1];
+
+		const baseUid = `TNM${year}${monthLetter}${day}`;
+
+		// Query to get the maximum value of the last two characters
+		let query = `
+		SELECT MAX(SUBSTRING(receipt_uid FROM LENGTH(receipt_uid) - 1 FOR 2)) AS max_suffix
+		FROM receipt
+		WHERE receipt_uid LIKE '${baseUid}%';
+	`;
+		let result = await repoClient.query(query);
+		let maxSuffix = result.rows[0].max_suffix;
+
+		// Determine the new suffix
+		let newSuffix;
+		if (maxSuffix) {
+			newSuffix = String(parseInt(maxSuffix, 10) + 1).padStart(2, '0');
+		} else {
+			newSuffix = '01';
+		}
+
+		// Create the new receipt_uid
+		receipt.receipt_uid = `${baseUid}${newSuffix}`;
+
+		// Assign values to record_code and request_number
+		receipt.record_code = receipt.receipt_uid.slice(-5); // Use last 5 characters receipt_uid
+		receipt.request_number = receipt.receipt_uid.slice(-5); // Same value for request_number
+
+
+		// Validate columns
+		const validColumns = await matchValidColumns('receipt', Object.keys(receipt));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid receipt columns: ${Object.keys(receipt).join(', ')}`);
+		}
+
+		// Insert the new receipt with timestamps
+		const insertQuery = `
+      INSERT INTO receipt (${validColumns.join(',')}, created_at, modified_at) 
+      VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+      RETURNING *;
+    `;
+
+		const params = validColumns.map((column) => receipt[column]);
+		const insertResult = await repoClient.query(insertQuery, params);
+
+		return insertResult.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function createSample(sample) {
+	try {
+		// Remove timestamp fields - let PostgreSQL handle them
+		delete sample.created_at;
+		delete sample.modified_at;
+
+		// Get the receipt for the sample
+		const receiptQuery = 'SELECT receipt_uid FROM receipt WHERE id = $1';
+		const receiptResult = await repoClient.query(receiptQuery, [sample.receipt_id]);
+		const receiptUid = receiptResult.rows[0].receipt_uid;
+
+		// Extract the base UID from the receipt UID
+		const baseUid = receiptUid.slice(3); // Remove 'TNM' prefix
+
+		// Get the highest sample UID for same receipt
+		const sampleQuery = `
+			SELECT MAX(SUBSTRING(sample_uid FROM LENGTH(sample_uid) - 1 FOR 2)) AS max_uid
+			FROM sample
+			WHERE receipt_id = $1;
+		`;
+		const sampleResult = await repoClient.query(sampleQuery, [sample.receipt_id]);
+		const maxUid = sampleResult.rows[0].max_uid;
+		const nextUid = maxUid ? parseInt(maxUid) + 1 : 1;
+		const newUidSuffix = nextUid < 10 ? `0${nextUid}` : String(nextUid);
+
+		// Generate the new sample UID
+		sample.sample_uid = `SP${baseUid}-${newUidSuffix}`;
+
+		// Add default sample_information if not provided
+		if (!sample.sample_information) {
+			sample.sample_information = JSON.stringify([
+				{ fname: 'Tên mẫu thử / name.', fvalue: sample?.sample_name || '' },
+				{ fname: 'Số lô / LOT no.', fvalue: '' },
+				{ fname: 'Ngày SX / mfg.', fvalue: '' },
+				{ fname: 'HSD / exp.', fvalue: '' },
+				{ fname: 'Nơi SX / mfr.', fvalue: '' },
+				{
+					fname: 'Ngày tiếp nhận / receipt date.',
+					fvalue: new Date().toLocaleDateString('vi-VN')
+				},
+				{ fname: 'Mô tả / desc.', fvalue: sample?.sample_description || '' },
+			]);
+		}
+
+		const validColumns = await matchValidColumns('sample', Object.keys(sample));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid sample columns: ${Object.keys(sample).join(', ')}`);
+		}
+
+		const query = `
+			INSERT INTO sample (${validColumns.join(',')}) 
+			VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')})
+			RETURNING *`;
+
+		const params = validColumns.map((column) => sample[column]);
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to create sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+/** READ */
+// Get report by sample UID (SELECT ppt_uid)
+async function getPptUidBySampleUid({ id, sample_uid }) {
+	try {
+		if (!id && !sample_uid) throw new Error('Sample id or sample_uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE sample_uid = $1';
+		const param = id ? [id] : [sample_uid];
+		const query = 'SELECT ppt_uid,created_at FROM report ' + conditional;
+
+		const result = await repoClient.query(query, param);
+		return result.rows.map((row) => {
+			const data = { ppt_uid: row.ppt_uid, publish_date: row.created_at }
+			return data;
+		});
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get PPT UID: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Get report by PPT UID
+async function getReport({ id, ppt_uid }) {
+	try {
+		if (!id && !ppt_uid) throw new Error('Report id or ppt_uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE ppt_uid = $1';
+		const param = id ? [id] : [ppt_uid];
+		const query = 'SELECT * FROM report ' + conditional;
+		const result = await repoClient.query(query, param);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get report: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Get protocol by ID
+async function getProtocolById(id) {
+	try {
+		const query = 'SELECT * FROM protocol WHERE id = $1';
+		const values = [id];
+		const result = await repoClient.query(query, values);
+
+		const protocol = result.rows[0];
+		if (protocol) {
+			const parameters = await getParametersByProtocolId(protocol.id);
+			return { ...protocol, parameters };
+		}
+		return protocol;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get protocol with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Get all protocols
+async function getAllProtocols() {
+	const client = await repoClient.connect();
+	try {
+		await client.query('BEGIN');
+		const query = 'SELECT * FROM protocol ORDER BY id DESC';
+		const result = await client.query(query);
+
+		const protocols = result.rows;
+		for (let protocol of protocols) {
+			const parameters = await getParametersByProtocolId(protocol.id);
+			protocol.parameters = parameters;
+		}
+
+		await client.query('COMMIT');
+		return protocols;
+	} catch (error) {
+		await client.query('ROLLBACK');
+		const enhancedError = new Error(`Failed to get all protocols: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	} finally {
+		client.release();
+	}
+}
+
+// Get parameter by ID
+async function getParameter({ id, uid }) {
+	try {
+		if (!id && !uid) throw new Error('Parameter id or uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE parameter_uid = $1';
+		const param = id ? [id] : [uid];
+		const query = 'SELECT * FROM parameter ' + conditional;
+
+		const result = await repoClient.query(query, param);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Get bulk parameters by IDs or UIDs
+async function getBulkParameter({ ids, uids }) {
+	const client = await repoClient.connect();
+	try {
+		await client.query('BEGIN');
+		let query, values;
+		if (ids) {
+			query = 'SELECT * FROM parameter WHERE id = ANY($1::int[])';
+			values = [Array.isArray(ids) ? ids : [ids]];
+		} else if (uids) {
+			query = 'SELECT * FROM parameter WHERE parameter_uid = ANY($1::text[])';
+			values = [Array.isArray(uids) ? uids : [uids]];
+		} else {
+			throw new Error('Either ids or uids must be provided');
+		}
+		const result = await client.query(query, values);
+		await client.query('COMMIT');
+		return result.rows;
+	} catch (error) {
+		await client.query('ROLLBACK');
+		const enhancedError = new Error(`Failed to get bulk parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	} finally {
+		client.release();
+	}
+}
+
+async function getAllParameters() {
+	try {
+		const query = 'SELECT * FROM parameter ORDER BY id DESC';
+		const result = await repoClient.query(query);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Get parameters by protocol ID
+async function getParametersByProtocolId(protocol_id) {
+	try {
+		const query = 'SELECT * FROM parameter WHERE protocol_id = $1 ORDER BY id DESC';
+		const values = [protocol_id];
+		const result = await repoClient.query(query, values);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get parameters for protocol ID ${protocol_id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAllReceipt() {
+	try {
+		const query = 'SELECT * FROM receipt ORDER BY id DESC';
+		const result = await repoClient.query(query);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getReceiptByDeadline({ start, end }) {
+	try {
+		const query = 'SELECT * FROM receipt WHERE deadline BETWEEN $1 AND $2 ORDER BY deadline ASC';
+		const values = [start, end];
+		const result = await repoClient.query(query, values);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getReceiptByCreatedAt({ start, end }) {
+	try {
+		const query = 'SELECT * FROM receipt WHERE created_at BETWEEN $1 AND $2 ORDER BY created_at ASC';
+		const values = [start, end];
+		const result = await repoClient.query(query, values);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getReceipt({ id, receipt_uid }) {
+	try {
+		if (!id && !receipt_uid) throw new Error('Receipt id or uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE receipt_uid = $1';
+		const param = id ? [id] : [receipt_uid];
+		const query = 'SELECT * FROM receipt ' + conditional;
+		const result = await repoClient.query(query, param);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAllSample() {
+	try {
+		const query = 'SELECT * FROM sample ORDER BY id DESC';
+		const result = await repoClient.query(query);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all samples: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getSample({ id, sample_uid }) {
+	try {
+		if (!id && !sample_uid) throw new Error('Sample id or uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE sample_uid = $1';
+		const param = id ? [id] : [sample_uid];
+		const query = 'SELECT * FROM sample ' + conditional;
+		const result = await repoClient.query(query, param);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getSampleByReceipt({ id, receipt_uid }) {
+	try {
+		if (!receipt_uid && !id) throw new Error('Receipt id or uid must be not null!');
+		else if (!id && receipt_uid) {
+			const query = 'SELECT * FROM receipt WHERE receipt_uid = $1';
+			const result = await repoClient.query(query, [receipt_uid]);
+			id = result.rows[0].id;
+		}
+
+		const query = 'SELECT * FROM sample WHERE receipt_id = $1 ORDER BY id ASC';
+		const result = await repoClient.query(query, [id]);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get samples by receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getSampleUidsBySampleUid({ sample_uid }) {
+	try {
+		// Kiểm tra đầu vào
+		if (!sample_uid || typeof sample_uid !== 'string') {
+			throw new Error('sample_uid must be a non-empty string');
+		}
+
+		// Bỏ 3 ký tự cuối của sample_uid
+		const baseSampleUid = sample_uid.slice(0, -3); // 'SP2513x2404-09' -> 'SP2513x2404'
+
+		const query = `
+      SELECT *
+      FROM sample
+      WHERE sample_uid ILIKE $1
+      ORDER BY id DESC
+    `;
+		const result = await repoClient.query(query, [`%${baseSampleUid}%`]);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get samples by sample_uid: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAllAnalysis() {
+	try {
+		const query = 'SELECT * FROM analysis ORDER BY id DESC';
+		const result = await repoClient.query(query);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all analyses: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAnalysis({ id }) {
+	try {
+		if (!id) throw new Error('Analysis id must be not null!');
+		const query = 'SELECT * FROM analysis WHERE id = $1';
+		const result = await repoClient.query(query, [id]);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get analysis with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAnalysisBySample({ id, sample_uid }) {
+	try {
+		if (!sample_uid && !id) throw new Error('Sample id or uid must be not null!');
+		else if (!id && sample_uid) {
+			const query = 'SELECT * FROM sample WHERE sample_uid = $1 ORDER BY id DESC';
+			const result = await repoClient.query(query, [sample_uid]);
+			id = result.rows[0].id;
+		}
+
+		const query = 'SELECT * FROM analysis WHERE sample_id = $1 ORDER BY id ASC';
+		const result = await repoClient.query(query, [id]);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get analyses by sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAnalysisByReceipt({ id, receipt_uid }) {
+	try {
+		if (!receipt_uid && !id) throw new Error('Receipt id or uid must be not null!');
+		else if (!id && receipt_uid) {
+			const query = 'SELECT * FROM receipt WHERE receipt_uid = $1';
+			const result = await repoClient.query(query, [receipt_uid]);
+			id = result.rows[0].id;
+		}
+
+		const query = 'SELECT * FROM analysis WHERE receipt_id = $1 ORDER BY id DESC';
+		const result = await repoClient.query(query, [id]);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get analyses by receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getAllClient() {
+	try {
+		const query = 'SELECT * FROM client ORDER BY id DESC';
+		const result = await repoClient.query(query);
+
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get all clients: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getClient({ id, client_uid }) {
+	try {
+		if (!id && !client_uid) throw new Error('Client id or uid must be not null!');
+		const conditional = id ? 'WHERE id = $1' : 'WHERE client_uid = $1';
+		const param = id ? [id] : [client_uid];
+		const query = 'SELECT * FROM client ' + conditional;
+		const result = await repoClient.query(query, param);
+
+		return result.rows[0];
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getTemporaryClient() {
+	try {
+		const query = `
+			SELECT client, contact, id
+			FROM receipt
+			WHERE client IS NOT NULL AND client_id IS NULL;
+		`;
+		const result = await repoClient.query(query);
+		return result.rows.map((row) => ({ receipt_id: row.id, ...row.client, contacts: [row.contact] }));
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get temporary client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getTemporaryContact() {
+	try {
+		const query = `
+			SELECT client, contact , client_id , id
+			FROM receipt
+			WHERE client_id IS NOT NULL AND (contact IS NOT NULL AND contact->>'index' IS NULL);
+		`;
+		const result = await repoClient.query(query);
+		return result.rows.map((row) => ({
+			receipt_id: row.id,
+			id: row.client_id,
+			...row.client,
+			contacts: [row.contact],
+		}));
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get temporary contact: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function getClientByReceipt({ id, receipt_uid }) {
+	// get receipt => get receipt.client
+	try {
+		if (!receipt_uid && !id) throw new Error('Receipt id or uid must be not null!');
+		else if (!id && receipt_uid) {
+			const query = 'SELECT * FROM receipt WHERE receipt_uid = $1';
+			const result = await repoClient.query(query, [receipt_uid]);
+			return result.rows[0].client;
+		} else {
+			const query = 'SELECT * FROM receipt WHERE id = $1';
+			const result = await repoClient.query(query, [id]);
+			return result.rows[0].client;
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get client by receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+/** UPDATE */
+// Update protocol
+async function updateProtocol(protocol) {
+	try {
+		if (typeof protocol === 'object' && protocol.id) {
+			// Remove timestamp fields
+			delete protocol.created_at;
+			delete protocol.modified_at;
+
+			const validColumns = await matchValidColumns('protocol', Object.keys(protocol));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid protocol columns: ${Object.keys(protocol).join(', ')}`);
+			}
+
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE protocol SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [protocol.id, ...validColumns.map((column) => protocol[column])];
+
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid protocol');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update protocol: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Update parameter
+async function matchParameter(parameter) {
+	try {
+		const query = `
+		SELECT *
+		FROM parameter
+		WHERE similarity(parameter_name, $1) > 0.8
+			AND (
+				similarity(matrix, $2) > 0.6
+				OR $2 ILIKE '%' || matrix || '%'
+			)
+		ORDER BY similarity(parameter_name, $1) DESC, 
+				 similarity(matrix, $2) DESC
+		LIMIT 1;  
+		`;
+
+		const params = [parameter.parameter_name, parameter.matrix];
+		const result = await repoClient.query(query, params);
+
+		return result.rows[0] || null; // Tránh lỗi undefined khi không có kết quả
+	} catch (error) {
+		console.error("Database query error:", error); // Ghi log lỗi
+		throw error; // Nên throw error thay vì chỉ console.warn
+	}
+}
+
+async function updateParameter(parameter) {
+	try {
+		if (typeof parameter === 'object' && parameter.id) {
+			// Remove timestamp fields
+			delete parameter.created_at;
+			delete parameter.modified_at;
+
+			const validColumns = await matchValidColumns('parameter', Object.keys(parameter));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid parameter columns: ${Object.keys(parameter).join(', ')}`);
+			}
+
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE parameter SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [parameter.id, ...validColumns.map((column) => parameter[column])];
+
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid parameter');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update parameter: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function updateReceipt(receipt) {
+	try {
+		if (typeof receipt === 'object' && receipt.id) {
+			// Remove timestamp fields
+			delete receipt.created_at;
+			delete receipt.modified_at;
+
+			const validColumns = await matchValidColumns('receipt', Object.keys(receipt));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid receipt columns: ${Object.keys(receipt).join(', ')}`);
+			}
+
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE receipt SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [receipt.id, ...validColumns.map((column) => receipt[column])];
+
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid receipt');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update receipt: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function updateSample(sample) {
+	try {
+		if (typeof sample === 'object' && sample.id) {
+			// Remove timestamp fields
+			delete sample.created_at;
+			delete sample.modified_at;
+
+			const validColumns = await matchValidColumns('sample', Object.keys(sample));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid sample columns: ${Object.keys(sample).join(', ')}`);
+			}
+			if (sample?.sample_information) {
+				sample.sample_information = JSON.stringify(sample.sample_information);
+			}
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE sample SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [sample.id, ...validColumns.map((column) => sample[column])];
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid sample');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update sample: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function updateAnalysis(analysis) {
+	try {
+		if (typeof analysis === 'object' && analysis.id) {
+			// Remove timestamp fields
+			delete analysis.created_at;
+			delete analysis.modified_at;
+
+			const validColumns = await matchValidColumns('analysis', Object.keys(analysis));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid analysis columns: ${Object.keys(analysis).join(', ')}`);
+			}
+
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE analysis SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [analysis.id, ...validColumns.map((column) => analysis[column])];
+
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid analysis');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update analysis: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function updateClient(client) {
+	try {
+		if (typeof client === 'object' && client.id) {
+			// Remove timestamp fields
+			delete client.created_at;
+			delete client.modified_at;
+
+			const validColumns = await matchValidColumns('client', Object.keys(client));
+			if (validColumns.length === 0) {
+				throw new Error(`Invalid client columns: ${Object.keys(client).join(', ')}`);
+			}
+			client.contacts = JSON.stringify(client.contacts || []);
+
+			// Include modified_at in the UPDATE statement directly
+			const query = `UPDATE client SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			const values = [client.id, ...validColumns.map((column) => client[column])];
+
+			const result = await repoClient.query(query, values);
+
+			return result.rows[0];
+		} else {
+			throw new Error('Invalid client');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function updateTemporaryClient(client) {
+	try {
+		if (typeof client !== 'object' || !client) {
+			throw new Error('Invalid client');
+		}
+
+		// Remove timestamp fields
+		delete client.created_at;
+		delete client.modified_at;
+
+		if (client.contacts && client.contacts === null) delete client.contact;
+
+		if (client.contacts && Array.isArray(client.contacts)) {
+			client.contacts = client.contacts.filter((contact) => contact !== null);
+		}
+
+		const validColumns = await matchValidColumns('client', Object.keys(client));
+		if (validColumns.length === 0) {
+			throw new Error(`Invalid client columns: ${Object.keys(client).join(', ')}`);
+		}
+
+		const queryCheckUid = await repoClient.query('SELECT id FROM client WHERE client_uid = $1', [client.client_uid]);
+		const client_id = queryCheckUid.rows.length > 0 ? queryCheckUid.rows[0].id : null;
+		if (client_id) client.id = client_id;
+
+		const contact = client.contacts?.[0] ? { ...client.contacts[0], index: 0 } : null;
+
+		// Process contacts
+		client.contacts = client.contacts?.length
+			? JSON.stringify(client.contacts.filter((c) => !c.index).map((c, i) => ({ ...c, index: i })))
+			: null;
+
+		let query, values;
+		if (client.id) {
+			query = `UPDATE client SET ${validColumns
+				.map((column, index) => `${column} = $${index + 2}`)
+				.join(', ')}, modified_at = NOW() WHERE id = $1 RETURNING *`;
+			values = [client.id, ...validColumns.map((column) => client[column])];
+		} else {
+			query = `INSERT INTO client (${validColumns.join(',')}, created_at, modified_at) 
+                     VALUES (${validColumns.map((_, index) => `$${index + 1}`).join(',')}, NOW(), NOW())
+                     RETURNING *`;
+			values = validColumns.map((column) => client[column]);
+		}
+
+		const result = await repoClient.query(query, values);
+		const updatedClient = result.rows[0];
+
+		// Update receipt
+		let receiptQuery, receiptValues;
+		if (client.id) {
+			receiptQuery = `UPDATE receipt SET client_id = $1, contact = $2 WHERE id = $3 RETURNING *`;
+			receiptValues = [updatedClient.id, JSON.stringify(contact), client.receipt_id];
+		} else {
+			receiptQuery = `UPDATE receipt SET client_id = $1, contact = $2 WHERE client->>'client_uid' = $3 RETURNING *`;
+			receiptValues = [updatedClient.id, JSON.stringify(contact), client.client_uid];
+		}
+		await repoClient.query(receiptQuery, receiptValues);
+
+		return updatedClient;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to update temporary client: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+/** DELETE */
+// Delete protocol
+async function deleteProtocol(id) {
+	try {
+		const query = 'DELETE FROM protocol WHERE id = $1';
+		const values = [id];
+		await repoClient.query(query, values);
+
+		return { message: 'Protocol deleted successfully' };
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete protocol with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Delete parameter
+async function deleteParameter(id) {
+	try {
+		const query = 'DELETE FROM parameter WHERE id = $1';
+		const values = [id];
+		await repoClient.query(query, values);
+
+		return { message: 'Parameter deleted successfully' };
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete parameter with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Delete analysis
+async function deleteAnalysis({ id, ids }) {
+	try {
+		// Case 1: Delete a single analysis by ID
+		if (id) {
+			const query = 'DELETE FROM analysis WHERE id = $1';
+			const values = [id];
+			await repoClient.query(query, values);
+			return { message: 'Analysis deleted successfully' };
+		}
+		// Case 2: Delete multiple analyses by IDs array
+		else if (ids && Array.isArray(ids) && ids.length > 0) {
+			const query = 'DELETE FROM analysis WHERE id = ANY($1::int[])';
+			const values = [ids];
+			await repoClient.query(query, values);
+			return { message: `${ids.length} analyses deleted successfully` };
+		} else {
+			throw new Error('No valid ID or IDs provided for deletion');
+		}
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete analysis: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Delete receipt
+async function deleteReceipt(id) {
+	try {
+		const query = 'DELETE FROM receipt WHERE id = $1';
+		const values = [id];
+		await repoClient.query(query, values);
+
+		return { message: 'Receipt deleted successfully' };
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete receipt with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Delete sample
+async function deleteSample(id) {
+	try {
+		const query = 'DELETE FROM sample WHERE id = $1';
+		const values = [id];
+		await repoClient.query(query, values);
+
+		return { message: 'Sample deleted successfully' };
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete sample with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Delete client
+async function deleteClient(id) {
+	try {
+		const query = 'DELETE FROM client WHERE id = $1';
+		const values = [id];
+		await repoClient.query(query, values);
+
+		return { message: 'Client deleted successfully' };
+	} catch (error) {
+		const enhancedError = new Error(`Failed to delete client with ID ${id}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+/** MATCH COLUMN */
+async function matchValidColumns(table_name, columns) {
+	try {
+		/** 1. Get table columns from server */
+		// Construct the SQL query to get the column names from the information schema
+		const validColumnsQuery = `SELECT column_name FROM information_schema.columns WHERE table_name = $1`;
+		const validColumnsParams = [table_name];
+
+		// Execute the SQL query
+		const validColumnsResult = await repoClient.query(validColumnsQuery, validColumnsParams);
+
+		// Extract the column names from the query result
+		const validColumns = validColumnsResult.rows.map((row) => row.column_name);
+
+		/** 2. Match columns */
+		// Filter the input columns to include only valid columns
+		const matchedColumns = columns.filter((column) => validColumns.includes(column));
+
+		// Return the matched columns
+		return matchedColumns; // if no match return []
+	} catch (error) {
+		const enhancedError = new Error(`Failed to match columns for table ${table_name}: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Lấy danh sách bảng
+const getTables = async () => {
+	try {
+		const result = await pool.query(`
+     SELECT column_name FROM information_schema.columns WHERE table_name = 'inventory';
+    `);
+
+		// In danh sách bảng
+		console.log('Danh sách cột:', result.rows);
+	} catch (err) {
+		const enhancedError = new Error(`Failed to get tables: ${err.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = err;
+		throw enhancedError;
+	} finally {
+		await pool.end();
+	}
+};
+
+/** SEARCH */
+
+// Search parameter
+async function searchParameter(searchText, matrixValue) {
+	try {
+		let sqlQuery = `
+        SELECT * 
+        FROM parameter
+        WHERE 
+            (parameter_name_unaccent ILIKE '%' || $1 || '%' 
+             OR parameter_name ILIKE '%' || $1 || '%' 
+             OR similarity(parameter_name_unaccent, $1) > 0.3)
+    `;
+
+		const params = [searchText];
+
+		if (matrixValue) {
+			sqlQuery += ` ORDER BY similarity(parameter_name_unaccent, $1) DESC, similarity(matrix, $2) DESC `;
+			params.push(matrixValue);
+		} else {
+			sqlQuery += ` ORDER BY similarity(parameter_name_unaccent, $1) DESC`;
+		}
+
+		const result = await pool.query(sqlQuery, params);
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to search parameters: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Search receipt
+async function searchReceipt(query) {
+	node.warn(query);
+	try {
+		const sqlQuery = `
+WITH ranked_receipts AS (
+    SELECT 
+        receipt.id, 
+        similarity(LOWER(unaccent(receipt.client->>'client_name')), LOWER(unaccent($1))) AS sim_client_name
+    FROM receipt
+    JOIN sample ON receipt.id = sample.receipt_id
+    WHERE 
+        similarity(LOWER(unaccent(sample.sample_name)), LOWER(unaccent($1))) > 0.3
+        OR receipt.receipt_uid ILIKE CONCAT('%', $1, '%')
+        OR receipt.client->>'client_uid' ILIKE CONCAT('%', $1, '%')
+        OR receipt.client->>'client_name' ILIKE CONCAT('%', $1, '%')
+        OR sample.sample_uid ILIKE CONCAT('%', $1, '%')
+        OR receipt.order_code ILIKE CONCAT('%', $1, '%')
+        OR receipt.quote_code ILIKE CONCAT('%', $1, '%')
+        OR receipt.record_code ILIKE CONCAT('%', $1, '%')
+        OR receipt.sale_recorder ILIKE CONCAT('%', $1, '%')
+        OR to_tsvector('simple', receipt.client->>'client_uid') @@ websearch_to_tsquery($1)
+        OR to_tsvector('simple', receipt.client->>'client_name') @@ websearch_to_tsquery($1)
+        OR to_tsvector('simple', sample.sample_name) @@ websearch_to_tsquery($1)
+)
+SELECT DISTINCT id, sim_client_name 
+FROM ranked_receipts
+ORDER BY id DESC
+LIMIT 60;
+		`;
+		const params = [query];
+		const result = await pool.query(sqlQuery, params);
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to search receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+// Search recent receipts
+async function recentReceipt() {
+	try {
+		const sqlQuery = `
+SELECT DISTINCT receipt.id
+FROM receipt
+LEFT JOIN sample ON receipt.id = sample.receipt_id
+WHERE 
+    (sample.status < 3 OR sample.id IS NULL)  -- 👈 Lấy cả receipt không có sample
+    AND receipt.created_at > NOW() - INTERVAL '40 days'
+ORDER BY id DESC
+		`;
+
+		const result = await pool.query(sqlQuery);
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get recent receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+async function overdueReceipt() {
+	try {
+		const sqlQuery = `
+        SELECT DISTINCT receipt.id
+        FROM receipt
+        LEFT JOIN analysis ON receipt.id = analysis.receipt_id
+        LEFT JOIN sample ON sample.receipt_id = receipt.id
+        WHERE 
+            receipt.created_at > NOW() - INTERVAL '50 days'
+            AND analysis.deadline < NOW()
+            AND (analysis.result_value IS NULL 
+                 OR analysis.result_value = '' 
+                 OR analysis.result_value = '<p></p>')
+            AND sample.status < 3
+        ORDER BY receipt.id ASC;
+        ;`
+
+		const result = await pool.query(sqlQuery)
+		return result.rows;
+	} catch (error) {
+		const enhancedError = new Error(`Failed to get recent receipts: ${error.message}`);
+		enhancedError.statusCode = 500;
+		enhancedError.originalError = error;
+		throw enhancedError;
+	}
+}
+
+const postgreSQL = {
+	getTables,
+	createProtocol,
+	getProtocolById,
+	getAllProtocols,
+	updateProtocol,
+	deleteProtocol,
+	getAllParameters,
+	getAllAnalysis,
+	getAllClient,
+	getAllReceipt,
+	getReceiptByDeadline,
+	getReceiptByCreatedAt,
+	getAllSample,
+	getReceipt,
+	getSample,
+	getSampleByReceipt,
+	getAnalysis,
+	getAnalysisBySample,
+	getAnalysisByReceipt,
+	updateReceipt,
+	updateSample,
+	updateAnalysis,
+	getClient,
+	createReceipt,
+	createSample,
+	createParameter,
+	getParameter,
+	updateParameter,
+	matchParameter,
+	deleteParameter,
+	getParametersByProtocolId,
+	createBulkParameters,
+	createAnalysis,
+	createBulkAnalysisFromParameters,
+	deleteAnalysis,
+	searchParameter,
+	getBulkParameter,
+	searchReceipt,
+	recentReceipt,
+	deleteReceipt,
+	deleteSample,
+	deleteClient,
+	getTemporaryClient,
+	getTemporaryContact,
+	updateClient,
+	createClient,
+	upsertParameterByUid,
+	updateTemporaryClient,
+	getClientByReceipt,
+	createReport,
+	getPptUidBySampleUid,
+	getReport,
+	upsertDraftReport,
+	getSampleUidsBySampleUid,
+	overdueReceipt
+};
+
+global.set('postgreSQL', postgreSQL);
+
+return msg;

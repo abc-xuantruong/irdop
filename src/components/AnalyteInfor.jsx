@@ -16,6 +16,7 @@ const AnalyteInfor = () => {
 	const [isAddingNew, setIsAddingNew] = useState(false);
 	const [newAnalyte, setNewAnalyte] = useState({
 		parameter_name: '',
+		field: 'Hóa lý',
 		matrix: 'Đất',
 		product_type: '',
 		tat_expected: '1 day',
@@ -25,20 +26,49 @@ const AnalyteInfor = () => {
 		protocol_code: '',
 		parameter_uid: '',
 		protocol_source: 'IRDOP',
+		threshold_limit: '',
+		price: '', // Added price field
 	});
-	const [protocols, setProtocols] = useState([]);
 	const [protocolSearch, setProtocolSearch] = useState('');
+
 	const [isProtocolDropdownVisible, setIsProtocolDropdownVisible] = useState(false);
 	const [originalAnalytes, setOriginalAnalytes] = useState([]);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [protocolPage, setProtocolPage] = useState(1);
 	const [listProtocol, setListProtocol] = useState([]);
+	const [protocols, setProtocols] = useState([]); // Added missing protocols state
 	const [technicianDropdownVisible, setTechnicianDropdownVisible] = useState(null);
 	const [expandedRow, setExpandedRow] = useState(null);
 	const [selectedAnalyteId, setSelectedAnalyteId] = useState(null);
+
+	// Add new state variables for unique lists and dropdowns
+	const [uniqueParameterNames, setUniqueParameterNames] = useState([]);
+	const [uniqueMatrices, setUniqueMatrices] = useState([]);
+	const [uniqueProtocolCodes, setUniqueProtocolCodes] = useState([]);
+	const [uniqueUnits, setUniqueUnits] = useState([]); // Added for default_unit
+	const [parameterNameInput, setParameterNameInput] = useState('');
+	const [matrixInput, setMatrixInput] = useState('');
+	const [protocolCodeInput, setProtocolCodeInput] = useState('');
+	const [unitInput, setUnitInput] = useState(''); // Added for default_unit
+	const [showParameterNameDropdown, setShowParameterNameDropdown] = useState(false);
+	const [showMatrixDropdown, setShowMatrixDropdown] = useState(false);
+	const [showProtocolCodeDropdown, setShowProtocolCodeDropdown] = useState(false);
+	const [showUnitDropdown, setShowUnitDropdown] = useState(false); // Added for default_unit
+	const [editingParameterName, setEditingParameterName] = useState(null);
+	const [editingMatrix, setEditingMatrix] = useState(null);
+	const [editingProtocolCode, setEditingProtocolCode] = useState(null);
+	const [editingUnit, setEditingUnit] = useState(null); // Added for default_unit
+
 	const protocolsPerPage = 5;
-	const analytesPerPage = 20;
+	const analytesPerPage = 100; // Changed to show 10 rows per page
 	let isFetch = false;
+
+	// Add new state variables for pagination in dropdowns
+	const [parameterNamePage, setParameterNamePage] = useState(1);
+	const [matrixPage, setMatrixPage] = useState(1);
+	const [protocolCodePage, setProtocolCodePage] = useState(1);
+	const [unitPage, setUnitPage] = useState(1); // Added for default_unit
+	const itemsPerPage = 10; // 10 items per page for all dropdowns
 
 	useEffect(() => {
 		setCurrentTitlePage('Chỉ tiêu');
@@ -62,9 +92,171 @@ const AnalyteInfor = () => {
 			}));
 			setAnalytes(data);
 			setOriginalAnalytes(data);
+
+			// Extract unique lists
+			extractUniqueLists(data);
 		} catch (error) {
 			console.error('Error fetching analytes:', error);
 		}
+	};
+
+	// Function to extract unique lists from data
+	const extractUniqueLists = (data) => {
+		const parameterNames = [...new Set(data.map((item) => item.parameter_name || '').filter(Boolean))];
+		const matrices = [...new Set(data.map((item) => item.matrix || '').filter(Boolean))];
+		const protocolCodes = [...new Set(data.map((item) => item.protocol_code || '').filter(Boolean))];
+		const units = [...new Set(data.map((item) => item.default_unit || '').filter(Boolean))]; // Extract unique units
+
+		setUniqueParameterNames(parameterNames);
+		setUniqueMatrices(matrices);
+		setUniqueProtocolCodes(protocolCodes);
+		setUniqueUnits(units);
+	};
+
+	// Modified filter functions with minimum character requirement
+	const filterParameterNames = (input) => {
+		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
+		return uniqueParameterNames.filter((name) => name && name.toLowerCase().includes((input || '').toLowerCase()));
+	};
+
+	const filterMatrices = (input) => {
+		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
+		return uniqueMatrices.filter((matrix) => matrix && matrix.toLowerCase().includes((input || '').toLowerCase()));
+	};
+
+	const filterProtocolCodes = (input) => {
+		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
+		return uniqueProtocolCodes.filter((code) => code && code.toLowerCase().includes((input || '').toLowerCase()));
+	};
+
+	// Filter for units - shows suggestions from first character but only when at least one character is entered
+	const filterUnits = (input) => {
+		if (!input || input.trim() === '') return []; // Only show suggestions if at least one character is typed
+		return uniqueUnits.filter((unit) => unit && unit.toLowerCase().includes((input || '').toLowerCase()));
+	};
+
+	// Get paginated results for dropdowns
+	const getPaginatedParameterNames = (input) => {
+		const filtered = filterParameterNames(input);
+		return filtered.slice((parameterNamePage - 1) * itemsPerPage, parameterNamePage * itemsPerPage);
+	};
+
+	const getPaginatedMatrices = (input) => {
+		const filtered = filterMatrices(input);
+		return filtered.slice((matrixPage - 1) * itemsPerPage, matrixPage * itemsPerPage);
+	};
+
+	const getPaginatedProtocolCodes = (input) => {
+		const filtered = filterProtocolCodes(input);
+		return filtered.slice((protocolCodePage - 1) * itemsPerPage, protocolCodePage * itemsPerPage);
+	};
+
+	const getPaginatedUnits = (input) => {
+		const filtered = filterUnits(input);
+		return filtered.slice((unitPage - 1) * itemsPerPage, unitPage * itemsPerPage);
+	};
+
+	// Pagination handlers for dropdowns
+	const handleParameterNamePageChange = (pageNumber) => {
+		setParameterNamePage(pageNumber);
+	};
+
+	const handleMatrixPageChange = (pageNumber) => {
+		setMatrixPage(pageNumber);
+	};
+
+	const handleProtocolCodePageChange = (pageNumber) => {
+		setProtocolCodePage(pageNumber);
+	};
+
+	const handleUnitPageChange = (pageNumber) => {
+		setUnitPage(pageNumber);
+	};
+
+	// Handle selection from dropdowns
+	const handleParameterNameSelect = (name) => {
+		if (editingRow !== null) {
+			handleInputChange(editingRow, 'parameter_name', name);
+		} else if (isAddingNew) {
+			handleNewAnalyteChange('parameter_name', name);
+		}
+		setShowParameterNameDropdown(false);
+	};
+
+	const handleMatrixSelect = (matrix) => {
+		if (editingRow !== null) {
+			handleInputChange(editingRow, 'matrix', matrix);
+		} else if (isAddingNew) {
+			handleNewAnalyteChange('matrix', matrix);
+		}
+		setShowMatrixDropdown(false);
+	};
+
+	const handleProtocolCodeSelect = (code) => {
+		if (editingRow !== null) {
+			handleInputChange(editingRow, 'protocol_code', code);
+		} else if (isAddingNew) {
+			handleNewAnalyteChange('protocol_code', code);
+		}
+		setShowProtocolCodeDropdown(false);
+	};
+
+	const handleUnitSelect = (unit) => {
+		if (editingRow !== null) {
+			handleInputChange(editingRow, 'default_unit', unit);
+		} else if (isAddingNew) {
+			handleNewAnalyteChange('default_unit', unit);
+		}
+		setShowUnitDropdown(false);
+	};
+
+	// Modified input change handlers
+	const handleParameterNameInput = (id, value) => {
+		setParameterNameInput(value);
+		setParameterNamePage(1); // Reset to first page when typing
+		if (editingRow !== null) {
+			handleInputChange(id, 'parameter_name', value);
+			setEditingParameterName(id);
+		} else {
+			handleNewAnalyteChange('parameter_name', value);
+		}
+		setShowParameterNameDropdown(true);
+	};
+
+	const handleMatrixInput = (id, value) => {
+		setMatrixInput(value);
+		setMatrixPage(1); // Reset to first page when typing
+		if (editingRow !== null) {
+			handleInputChange(id, 'matrix', value);
+			setEditingMatrix(id);
+		} else {
+			handleNewAnalyteChange('matrix', value);
+		}
+		setShowMatrixDropdown(true);
+	};
+
+	const handleProtocolCodeInputChange = (id, value) => {
+		setProtocolCodeInput(value);
+		setProtocolCodePage(1); // Reset to first page when typing
+		if (editingRow !== null) {
+			handleInputChange(id, 'protocol_code', value);
+			setEditingProtocolCode(id);
+		} else {
+			handleNewAnalyteChange('protocol_code', value);
+		}
+		setShowProtocolCodeDropdown(true);
+	};
+
+	const handleUnitInput = (id, value) => {
+		setUnitInput(value);
+		setUnitPage(1); // Reset to first page when typing
+		if (editingRow !== null) {
+			handleInputChange(id, 'default_unit', value);
+			setEditingUnit(id);
+		} else {
+			handleNewAnalyteChange('default_unit', value);
+		}
+		setShowUnitDropdown(true);
 	};
 
 	const technician = (param) => {
@@ -77,16 +269,23 @@ const AnalyteInfor = () => {
 		try {
 			if (listProtocol.length === 0) {
 				const response = await axios.get('https://black.irdop.org/el9k24zah/db/get/protocol');
-				setListProtocol(response.data);
+				setListProtocol(response.data || []);
 			}
-			const filteredProtocols = listProtocol.filter((protocol) => protocol.protocol_code?.includes(searchTerm));
-			setProtocols(filteredProtocols);
+			const filteredProtocols = listProtocol.filter(
+				(protocol) => protocol && protocol.protocol_code && protocol.protocol_code.includes(searchTerm || ''),
+			);
+			setProtocols(filteredProtocols || []);
 		} catch (error) {
 			console.error('Error fetching protocols:', error);
+			setProtocols([]);
 		}
 	};
 
 	const handleEditClick = (id) => {
+		// Cancel add new state if active
+		if (isAddingNew) {
+			handleCancelNewAnalyte();
+		}
 		setEditingRow(id);
 		setSelectedAnalyteId(id);
 	};
@@ -161,6 +360,10 @@ const AnalyteInfor = () => {
 	};
 
 	const handleAddNewClick = () => {
+		// Cancel editing state if active
+		if (editingRow !== null) {
+			handleCancelClick();
+		}
 		setIsAddingNew(true);
 	};
 
@@ -197,6 +400,7 @@ const AnalyteInfor = () => {
 				setIsAddingNew(false);
 				setNewAnalyte({
 					parameter_name: '',
+					field: 'Hóa lý',
 					matrix: 'Đất',
 					product_type: '',
 					tat_expected: '1 day',
@@ -206,6 +410,8 @@ const AnalyteInfor = () => {
 					protocol_code: '',
 					parameter_uid: '',
 					protocol_source: 'IRDOP',
+					threshold_limit: '',
+					price: '', // Added price field
 				});
 				await fetchAnalytes(); // Refresh data
 			} else {
@@ -221,6 +427,7 @@ const AnalyteInfor = () => {
 		setIsAddingNew(false);
 		setNewAnalyte({
 			parameter_name: '',
+			field: 'Hóa lý',
 			matrix: 'Đất',
 			product_type: '',
 			tat_expected: '1 day',
@@ -230,6 +437,8 @@ const AnalyteInfor = () => {
 			protocol_code: '',
 			parameter_uid: '',
 			protocol_source: 'IRDOP',
+			threshold_limit: '',
+			price: '', // Added price field
 		});
 	};
 
@@ -452,15 +661,13 @@ const AnalyteInfor = () => {
 							<tr>
 								<th className="py-2 text-start pl-2 min-w-24 w-24">UID</th>
 								<th className="py-2 text-start pl-2 min-w-48 w-1/5 ">Tên chỉ tiêu</th>
+								<th className="py-2 text-start pl-2 min-w-32 w-32">Lĩnh vực</th>
 								<th className="py-2 text-start pl-2 min-w-44 w-1/5 ">Nền mẫu</th>
-								<th className="py-2 text-start pl-2 min-w-40 w-40">Loại sản phẩm</th>
-								<th className="py-2 text-start pl-2 min-w-44 w-44">Code</th>
 								<th className="py-2 text-start pl-2 min-w-24 w-24">Nguồn </th>
-								<th className="py-2 text-start pl-2 min-w-16 w-20 ">TAT</th>
+								<th className="py-2 text-start pl-2 min-w-44 w-44">Code</th>
 								<th className="py-2 text-start pl-2 min-w-16 w-16">Đơn vị</th>
-								<th className="py-2 text-start pl-2 min-w-28 w-32">Công nhận</th>
-								<th className="py-2 text-start pl-3 min-w-36 w-40">KTV</th>
-								<th className="py-2 text-start pl-2 min-w-24 w-24">Thao tác</th>
+								<th className="py-2 text-start pl-2 min-w-40 w-40">Ngưỡng giới hạn</th>
+								<th className="py-2 text-start pl-2 min-w-32 w-32">Giá thành</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -469,37 +676,163 @@ const AnalyteInfor = () => {
 									<td className="p-1 text-start">
 										<p className="font-medium text-primary">{newAnalyte.parameter_uid}</p>
 									</td>
-									<td className="p-1 text-start">
+									<td className="p-1 text-start relative">
 										<textarea
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
 											value={newAnalyte.parameter_name}
-											onChange={(e) => handleNewAnalyteChange('parameter_name', e.target.value)}
+											onChange={(e) => handleParameterNameInput('new', e.target.value)}
 										/>
+										{showParameterNameDropdown && (
+											<div className="absolute w-full bg-white border rounded shadow-lg z-10">
+												{getPaginatedParameterNames(parameterNameInput).map((name, index) => (
+													<div
+														key={index}
+														className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+														onClick={() => handleParameterNameSelect(name)}
+													>
+														<p>{name}</p>
+													</div>
+												))}
+												{/* Pagination controls for parameter name */}
+												{filterParameterNames(parameterNameInput).length > itemsPerPage && (
+													<div className="flex justify-between p-2 bg-gray-100">
+														<button
+															className="px-2 py-1 border rounded disabled:opacity-50"
+															onClick={() => handleParameterNamePageChange(parameterNamePage - 1)}
+															disabled={parameterNamePage === 1}
+														>
+															Prev
+														</button>
+														<span>
+															{parameterNamePage}/
+															{Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)}
+														</span>
+														<button
+															className="px-2 py-1 border rounded disabled:opacity-50"
+															onClick={() => handleParameterNamePageChange(parameterNamePage + 1)}
+															disabled={
+																parameterNamePage >=
+																Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)
+															}
+														>
+															Next
+														</button>
+													</div>
+												)}
+											</div>
+										)}
 									</td>
 									<td className="p-1 text-start">
+										<select
+											className="w-full border p-2 rounded bg-white"
+											value={newAnalyte.field || 'Hóa lý'}
+											onChange={(e) => handleNewAnalyteChange('field', e.target.value)}
+										>
+											<option value="Hóa lý">Hóa lý</option>
+											<option value="Vi sinh">Vi sinh</option>
+										</select>
+									</td>
+									<td className="p-1 text-start relative">
 										<textarea
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
 											value={newAnalyte.matrix}
-											onChange={(e) => handleNewAnalyteChange('matrix', e.target.value)}
+											onChange={(e) => handleMatrixInput('new', e.target.value)}
 										/>
+										{showMatrixDropdown && (
+											<div className="absolute w-full bg-white border rounded shadow-lg z-10">
+												{getPaginatedMatrices(matrixInput).map((matrix, index) => (
+													<div
+														key={index}
+														className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+														onClick={() => handleMatrixSelect(matrix)}
+													>
+														<p>{matrix}</p>
+													</div>
+												))}
+												{/* Pagination controls for matrix */}
+												{filterMatrices(matrixInput).length > itemsPerPage && (
+													<div className="flex justify-between p-2 bg-gray-100">
+														<button
+															className="px-2 py-1 border rounded disabled:opacity-50"
+															onClick={() => handleMatrixPageChange(matrixPage - 1)}
+															disabled={matrixPage === 1}
+														>
+															Prev
+														</button>
+														<span>
+															{matrixPage}/{Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+														</span>
+														<button
+															className="px-2 py-1 border rounded disabled:opacity-50"
+															onClick={() => handleMatrixPageChange(matrixPage + 1)}
+															disabled={matrixPage >= Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+														>
+															Next
+														</button>
+													</div>
+												)}
+											</div>
+										)}
 									</td>
 									<td className="p-1 text-start">
-										<textarea
-											className="w-full border px-2 py-1 rounded bg-white resize-none"
-											rows={2}
-											value={newAnalyte.product_type || ''}
-											onChange={(e) => handleNewAnalyteChange('product_type', e.target.value)}
-										/>
+										<select
+											className="w-full border p-2 px-0.5 rounded bg-white"
+											value={newAnalyte.protocol_source}
+											onChange={(e) => handleNewProtocolSourceChange(e.target.value)}
+										>
+											<option value="IRDOP">IRDOP</option>
+											<option value="IRDOP VS">IRDOP VS</option>
+											<option value="EX">EX</option>
+										</select>
 									</td>
 									<td className="p-1 text-start relative">
 										<textarea
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
 											value={newAnalyte.protocol_code}
-											onChange={(e) => handleNewAnalyteChange('protocol_code', e.target.value)}
+											onChange={(e) => handleProtocolCodeInputChange('new', e.target.value)}
 										/>
+										{showProtocolCodeDropdown && (
+											<div className="absolute w-full bg-white border rounded shadow-lg z-10">
+												{getPaginatedProtocolCodes(protocolCodeInput).map((code, index) => (
+													<div
+														key={index}
+														className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+														onClick={() => handleProtocolCodeSelect(code)}
+													>
+														<p>{code}</p>
+													</div>
+												))}
+												{/* Pagination controls for protocol code */}
+												{filterProtocolCodes(protocolCodeInput).length > itemsPerPage && (
+													<div className="flex justify-between p-2 bg-gray-100">
+														<button
+															className="px-2 py-1 border rounded disabled:opacity-50"
+															onClick={() => handleProtocolCodePageChange(protocolCodePage - 1)}
+															disabled={protocolCodePage === 1}
+														>
+															Prev
+														</button>
+														<span>
+															{protocolCodePage}/
+															{Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)}
+														</span>
+														<button
+															className="px-2 py-1 border rounded disabled:opacity-50"
+															onClick={() => handleProtocolCodePageChange(protocolCodePage + 1)}
+															disabled={
+																protocolCodePage >=
+																Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)
+															}
+														>
+															Next
+														</button>
+													</div>
+												)}
+											</div>
+										)}
 										{isProtocolDropdownVisible && (
 											<div className="absolute w-80 bg-white border rounded shadow-lg z-10">
 												{paginatedProtocols.map((protocol, index) => (
@@ -540,91 +873,74 @@ const AnalyteInfor = () => {
 											</div>
 										)}
 									</td>
-									<td className="p-1 text-start">
-										<select
-											className="w-full border pb-1 rounded bg-white h-[50px] mb-1.5"
-											value={newAnalyte.protocol_source}
-											onChange={(e) => handleNewProtocolSourceChange(e.target.value)}
-										>
-											<option value="IRDOP">IRDOP</option>
-											<option value="IRDOP VS">IRDOP VS</option>
-										</select>
-									</td>
-									<td className="p-1 text-start">
-										<div className=" bg-white border p-1 rounded  flex items-center h-[50px] mb-1.5">
-											<input
-												type="number"
-												min="0"
-												className="w-10 border px-0.5 py-1 rounded bg-white"
-												value={newAnalyte.tat_expected}
-												onChange={(e) => handleNewAnalyteChange('tat_expected', e.target.value)}
-											/>
-											<span className="ml-2">Ngày</span>
-										</div>
-									</td>
-									<td className="p-1 text-center">
+									<td className="p-1 text-center relative">
 										<textarea
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
 											value={newAnalyte.default_unit || ''}
-											onChange={(e) => handleNewAnalyteChange('default_unit', e.target.value)}
+											onChange={(e) => handleUnitInput('new', e.target.value)}
 										/>
-									</td>
-									<td className="p-1 text-center flex flex-col items-start ">
-										<label className="mt-1 flex items-center">
-											<input
-												type="checkbox"
-												className="w-4 h-4"
-												checked={newAnalyte.accreditation?.includes('VILAS 997')}
-												onChange={() => handleNewAccreditationChange('VILAS 997')}
-											/>
-											<p className="ml-1">{'VILAS 997'}</p>
-										</label>
-
-										<label className="mt-1 flex items-center">
-											<input
-												type="checkbox"
-												className="w-4 h-4"
-												checked={newAnalyte.accreditation?.includes('107')}
-												onChange={() => handleNewAccreditationChange('107')}
-											/>
-											<p className="ml-1">{'107'}</p>
-										</label>
+										{showUnitDropdown && (
+											<div className="absolute w-full bg-white border rounded shadow-lg z-10">
+												{getPaginatedUnits(unitInput).map((unit, index) => (
+													<div
+														key={index}
+														className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+														onClick={() => handleUnitSelect(unit)}
+													>
+														<p>{unit}</p>
+													</div>
+												))}
+												{/* Pagination controls for unit */}
+												{filterUnits(unitInput).length > itemsPerPage && (
+													<div className="flex justify-between p-2 bg-gray-100">
+														<button
+															className="px-2 py-1 border rounded disabled:opacity-50"
+															onClick={() => handleUnitPageChange(unitPage - 1)}
+															disabled={unitPage === 1}
+														>
+															Prev
+														</button>
+														<span>
+															{unitPage}/{Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+														</span>
+														<button
+															className="px-2 py-1 border rounded disabled:opacity-50"
+															onClick={() => handleUnitPageChange(unitPage + 1)}
+															disabled={unitPage >= Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+														>
+															Next
+														</button>
+													</div>
+												)}
+											</div>
+										)}
 									</td>
 									<td className="p-1 text-start">
-										<div className="relative">
-											<button
-												className="w-full border border-slate-200 px-2 py-1 rounded bg-white text-left h-[50px] mb-1.5"
-												onClick={() => toggleTechnicianDropdown('new')}
-											>
-												{technician({ technician_uid: newAnalyte.technician_uid }) || 'Chọn KTV'}
-											</button>
-											{technicianDropdownVisible === 'new' && (
-												<ul className="absolute w-full bg-white border rounded shadow-lg z-10">
-													{technicians.map((identity) => (
-														<li
-															key={identity.alias}
-															className="p-1 text-md cursor-pointer hover:bg-gray-200"
-															onClick={() => handleNewAnalyteChange('technician_uid', identity.identity_uid)}
-														>
-															<p className="font-bold text-primary text-sm">{identity.alias}</p>
-															<p>{identity.identity_name}</p>
-														</li>
-													))}
-												</ul>
-											)}
-										</div>
+										<textarea
+											className="w-full border px-2 py-1 rounded bg-white resize-none"
+											rows={2}
+											value={newAnalyte.threshold_limit || ''}
+											onChange={(e) => handleNewAnalyteChange('threshold_limit', e.target.value)}
+										/>
 									</td>
-
-									<td className="p-1 text-center ">
+									<td className="p-1 text-start">
+										<textarea
+											className="w-full border px-2 py-1 rounded bg-white resize-none"
+											rows={2}
+											value={newAnalyte.price || ''}
+											onChange={(e) => handleNewAnalyteChange('price', e.target.value)}
+										/>
+									</td>
+									<td className="p-1 text-center  ">
 										<button
-											className="text-blue-500 px-2 py-1 mr-1 focus:outline-none focus:border-none"
+											className="text-blue-500 px-2 py-1 focus:outline-none focus:border-none mb-0.5"
 											onClick={handleSaveNewAnalyte}
 										>
 											<GiConfirmed size={20} />
 										</button>
 										<button
-											className="text-red-500 px-2 ml-1 py-1 focus:outline-none focus:border-none"
+											className="text-red-500 px-2 py-1 focus:outline-none focus:border-none"
 											onClick={handleCancelNewAnalyte}
 										>
 											<GiCancel size={20} />
@@ -648,14 +964,55 @@ const AnalyteInfor = () => {
 											{analyte.parameter_uid}
 										</span>
 									</td>
-									<td className="p-1 text-start">
+									<td className="p-1 text-start relative">
 										{editingRow === analyte.id ? (
-											<textarea
-												className="w-full border px-2 py-1 rounded bg-white resize-none"
-												rows={2}
-												value={analyte.parameter_name}
-												onChange={(e) => handleInputChange(analyte.id, 'parameter_name', e.target.value)}
-											/>
+											<>
+												<textarea
+													className="w-full border px-2 py-1 rounded bg-white resize-none"
+													rows={2}
+													value={analyte.parameter_name}
+													onChange={(e) => handleParameterNameInput(analyte.id, e.target.value)}
+												/>
+												{showParameterNameDropdown && editingParameterName === analyte.id && (
+													<div className="absolute w-full bg-white border rounded shadow-lg z-10">
+														{getPaginatedParameterNames(parameterNameInput).map((name, index) => (
+															<div
+																key={index}
+																className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																onClick={() => handleParameterNameSelect(name)}
+															>
+																<p>{name}</p>
+															</div>
+														))}
+														{/* Pagination controls for parameter name */}
+														{filterParameterNames(parameterNameInput).length > itemsPerPage && (
+															<div className="flex justify-between p-2 bg-gray-100">
+																<button
+																	className="px-2 py-1 border rounded disabled:opacity-50"
+																	onClick={() => handleParameterNamePageChange(parameterNamePage - 1)}
+																	disabled={parameterNamePage === 1}
+																>
+																	Prev
+																</button>
+																<span>
+																	{parameterNamePage}/
+																	{Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)}
+																</span>
+																<button
+																	className="px-2 py-1 border rounded disabled:opacity-50"
+																	onClick={() => handleParameterNamePageChange(parameterNamePage + 1)}
+																	disabled={
+																		parameterNamePage >=
+																		Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)
+																	}
+																>
+																	Next
+																</button>
+															</div>
+														)}
+													</div>
+												)}
+											</>
 										) : (
 											<span
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
@@ -667,12 +1024,68 @@ const AnalyteInfor = () => {
 									</td>
 									<td className="p-1 text-start">
 										{editingRow === analyte.id ? (
-											<textarea
-												className="w-full border px-2 py-1 rounded bg-white resize-none"
-												rows={2}
-												value={analyte.matrix}
-												onChange={(e) => handleInputChange(analyte.id, 'matrix', e.target.value)}
-											/>
+											<select
+												className="w-full border p-2 rounded bg-white"
+												value={analyte.field || 'Hóa lý'}
+												onChange={(e) => handleInputChange(analyte.id, 'field', e.target.value)}
+											>
+												<option value="Hóa lý">Hóa lý</option>
+												<option value="Vi sinh">Vi sinh</option>
+											</select>
+										) : (
+											<span
+												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
+												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+											>
+												{analyte.field || 'Hóa lý'}
+											</span>
+										)}
+									</td>
+									<td className="p-1 text-start relative">
+										{editingRow === analyte.id ? (
+											<>
+												<textarea
+													className="w-full border px-2 py-1 rounded bg-white resize-none"
+													rows={2}
+													value={analyte.matrix}
+													onChange={(e) => handleMatrixInput(analyte.id, e.target.value)}
+												/>
+												{showMatrixDropdown && editingMatrix === analyte.id && (
+													<div className="absolute w-full bg-white border rounded shadow-lg z-10">
+														{getPaginatedMatrices(matrixInput).map((matrix, index) => (
+															<div
+																key={index}
+																className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																onClick={() => handleMatrixSelect(matrix)}
+															>
+																<p>{matrix}</p>
+															</div>
+														))}
+														{/* Pagination controls for matrix */}
+														{filterMatrices(matrixInput).length > itemsPerPage && (
+															<div className="flex justify-between p-2 bg-gray-100">
+																<button
+																	className="px-2 py-1 border rounded disabled:opacity-50"
+																	onClick={() => handleMatrixPageChange(matrixPage - 1)}
+																	disabled={matrixPage === 1}
+																>
+																	Prev
+																</button>
+																<span>
+																	{matrixPage}/{Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+																</span>
+																<button
+																	className="px-2 py-1 border rounded disabled:opacity-50"
+																	onClick={() => handleMatrixPageChange(matrixPage + 1)}
+																	disabled={matrixPage >= Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+																>
+																	Next
+																</button>
+															</div>
+														)}
+													</div>
+												)}
+											</>
 										) : (
 											<span
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
@@ -684,29 +1097,74 @@ const AnalyteInfor = () => {
 									</td>
 									<td className="p-1 text-start">
 										{editingRow === analyte.id ? (
-											<textarea
-												className="w-full border px-2 py-1 rounded bg-white resize-none"
-												rows={2}
-												value={analyte.product_type || ''}
-												onChange={(e) => handleInputChange(analyte.id, 'product_type', e.target.value)}
-											/>
+											<select
+												className="w-full border p-2 px-0.5 rounded bg-white"
+												value={analyte.protocol_source || ''}
+												onChange={(e) => handleProtocolSourceChange(analyte.id, e.target.value)}
+											>
+												<option>Chọn</option>
+												<option value="IRDOP">IRDOP</option>
+												<option value="IRDOP VS">IRDOP VS</option>
+												<option value="EX">EX</option>
+											</select>
 										) : (
 											<span
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
 												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 											>
-												{analyte.product_type}
+												{analyte.protocol_source || ''}
 											</span>
 										)}
 									</td>
 									<td className="p-1 text-start relative">
 										{editingRow === analyte.id ? (
-											<textarea
-												className="w-full border px-2 py-1 rounded bg-white resize-none"
-												rows={2}
-												value={analyte.protocol_code}
-												onChange={(e) => handleProtocolSearchChange(analyte.id, e.target.value)}
-											/>
+											<>
+												<textarea
+													className="w-full border px-2 py-1 rounded bg-white resize-none"
+													rows={2}
+													value={analyte.protocol_code}
+													onChange={(e) => handleProtocolCodeInputChange(analyte.id, e.target.value)}
+												/>
+												{showProtocolCodeDropdown && editingProtocolCode === analyte.id && (
+													<div className="absolute w-full bg-white border rounded shadow-lg z-10">
+														{getPaginatedProtocolCodes(protocolCodeInput).map((code, index) => (
+															<div
+																key={index}
+																className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																onClick={() => handleProtocolCodeSelect(code)}
+															>
+																<p>{code}</p>
+															</div>
+														))}
+														{/* Pagination controls for protocol code */}
+														{filterProtocolCodes(protocolCodeInput).length > itemsPerPage && (
+															<div className="flex justify-between p-2 bg-gray-100">
+																<button
+																	className="px-2 py-1 border rounded disabled:opacity-50"
+																	onClick={() => handleProtocolCodePageChange(protocolCodePage - 1)}
+																	disabled={protocolCodePage === 1}
+																>
+																	Prev
+																</button>
+																<span>
+																	{protocolCodePage}/
+																	{Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)}
+																</span>
+																<button
+																	className="px-2 py-1 border rounded disabled:opacity-50"
+																	onClick={() => handleProtocolCodePageChange(protocolCodePage + 1)}
+																	disabled={
+																		protocolCodePage >=
+																		Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)
+																	}
+																>
+																	Next
+																</button>
+															</div>
+														)}
+													</div>
+												)}
+											</>
 										) : (
 											<span
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
@@ -755,55 +1213,51 @@ const AnalyteInfor = () => {
 											</div>
 										)}
 									</td>
-									<td className="p-1 text-start">
+									<td className="p-1 text-center relative">
 										{editingRow === analyte.id ? (
-											<select
-												className="w-full border pb-1 rounded bg-white h-[50px] mb-1.5"
-												value={analyte.protocol_source || ''}
-												onChange={(e) => handleProtocolSourceChange(analyte.id, e.target.value)}
-											>
-												<option>Chọn</option>
-												<option value="IRDOP">IRDOP</option>
-												<option value="IRDOP VS">IRDOP VS</option>
-											</select>
-										) : (
-											<span
-												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
-												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
-											>
-												{analyte.protocol_source || ''}
-											</span>
-										)}
-									</td>
-									<td className="p-1 text-start ">
-										{editingRow === analyte.id ? (
-											<div className=" bg-white border p-1 rounded  flex items-center h-[50px] mb-1.5">
-												<input
-													type="number"
-													min="0"
-													className="w-10 border px-0.5 py-1 rounded bg-white"
-													value={analyte.tat_expected}
-													onChange={(e) => handleTatExpectedChange(analyte.id, e.target.value)}
+											<>
+												<textarea
+													className="w-full border px-2 py-1 rounded bg-white resize-none"
+													rows={2}
+													value={analyte.default_unit || ''}
+													onChange={(e) => handleUnitInput(analyte.id, e.target.value)}
 												/>
-												<span className="ml-2">Ngày</span>
-											</div>
-										) : (
-											<span
-												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
-												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
-											>
-												{analyte.tat_expected && analyte.tat_expected.slice(' ')[0] + ' ngày'}
-											</span>
-										)}
-									</td>
-									<td className="p-1 text-center">
-										{editingRow === analyte.id ? (
-											<textarea
-												className="w-full border px-2 py-1 rounded bg-white resize-none"
-												rows={2}
-												value={analyte.default_unit || ''}
-												onChange={(e) => handleInputChange(analyte.id, 'default_unit', e.target.value)}
-											/>
+												{showUnitDropdown && editingUnit === analyte.id && (
+													<div className="absolute w-full bg-white border rounded shadow-lg z-10">
+														{getPaginatedUnits(unitInput).map((unit, index) => (
+															<div
+																key={index}
+																className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																onClick={() => handleUnitSelect(unit)}
+															>
+																<p>{unit}</p>
+															</div>
+														))}
+														{/* Pagination controls for unit */}
+														{filterUnits(unitInput).length > itemsPerPage && (
+															<div className="flex justify-between p-2 bg-gray-100">
+																<button
+																	className="px-2 py-1 border rounded disabled:opacity-50"
+																	onClick={() => handleUnitPageChange(unitPage - 1)}
+																	disabled={unitPage === 1}
+																>
+																	Prev
+																</button>
+																<span>
+																	{unitPage}/{Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+																</span>
+																<button
+																	className="px-2 py-1 border rounded disabled:opacity-50"
+																	onClick={() => handleUnitPageChange(unitPage + 1)}
+																	disabled={unitPage >= Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+																>
+																	Next
+																</button>
+															</div>
+														)}
+													</div>
+												)}
+											</>
 										) : (
 											<span
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
@@ -813,82 +1267,51 @@ const AnalyteInfor = () => {
 											</span>
 										)}
 									</td>
-									<td className="p-1 text-start flex flex-col items-start">
+									<td className="p-1 text-start">
 										{editingRow === analyte.id ? (
-											<>
-												<label className="mt-1 flex items-center">
-													<input
-														type="checkbox"
-														className="w-4 h-4"
-														checked={analyte.accreditation?.includes('VILAS 997')}
-														onChange={() => handleAccreditationChange(analyte.id, 'VILAS 997')}
-													/>
-													<p className="ml-1">{'VILAS 997'}</p>
-												</label>
-												<label className="mt-1 flex items-center">
-													<input
-														type="checkbox"
-														className="w-4 h-4"
-														checked={analyte.accreditation?.includes('107')}
-														onChange={() => handleAccreditationChange(analyte.id, '107')}
-													/>
-													<p className="ml-1">{'107'}</p>
-												</label>
-											</>
+											<textarea
+												className="w-full border px-2 py-1 rounded bg-white resize-none"
+												rows={2}
+												value={analyte.threshold_limit || ''}
+												onChange={(e) => handleInputChange(analyte.id, 'threshold_limit', e.target.value)}
+											/>
 										) : (
 											<span
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
 												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 											>
-												{analyte.accreditation}
+												{analyte.threshold_limit || ''}
 											</span>
 										)}
 									</td>
 									<td className="p-1 text-start">
 										{editingRow === analyte.id ? (
-											<div className="relative">
-												<button
-													className="w-full border border-slate-200 px-2 py-1 rounded bg-white text-left h-[50px] mb-1.5"
-													onClick={() => toggleTechnicianDropdown(analyte.id)}
-												>
-													{technician(analyte) || 'Chọn KTV'}
-												</button>
-												{technicianDropdownVisible === analyte.id && (
-													<ul className="absolute w-full bg-white border rounded shadow-lg z-10">
-														{technicians.map((identity) => (
-															<li
-																key={identity.alias}
-																className="p-1 text-md cursor-pointer hover:bg-gray-200"
-																onClick={() => handleTechnicianChange(analyte.id, identity.identity_uid)}
-															>
-																<p className="font-bold text-primary text-sm">{identity.alias}</p>
-																<p>{identity.identity_name}</p>
-															</li>
-														))}
-													</ul>
-												)}
-											</div>
+											<textarea
+												className="w-full border px-2 py-1 rounded bg-white resize-none"
+												rows={2}
+												value={analyte.price || ''}
+												onChange={(e) => handleInputChange(analyte.id, 'price', e.target.value)}
+											/>
 										) : (
 											<span
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
 												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 											>
-												{technician(analyte)}
+												{analyte.price || ''}
 											</span>
 										)}
 									</td>
-
 									<td className="p-1 text-center ">
 										{editingRow === analyte.id ? (
 											<>
 												<button
-													className="text-blue-500 px-2 py-1 mr-1 focus:outline-none focus:border-none"
+													className="text-blue-500 px-2 py-1 focus:outline-none focus:border-none mb-0.5"
 													onClick={() => handleSaveClick(analyte.id)}
 												>
 													<GiConfirmed size={20} />
 												</button>
 												<button
-													className="text-red-500 px-2 ml-1 py-1 focus:outline-none focus:border-none"
+													className="text-red-500 px-2 py-1 focus:outline-none focus:border-none"
 													onClick={handleCancelClick}
 												>
 													<GiCancel size={20} />

@@ -9,7 +9,8 @@ import { RiEdit2Line } from 'react-icons/ri';
 import { GiConfirmed, GiCancel, GiTrashCan, GiSave } from 'react-icons/gi';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { LiaInfoSolid } from 'react-icons/lia';
+import { FaUpload } from 'react-icons/fa'; // Added for file upload icon
+import { FaPlus, FaTrash } from 'react-icons/fa';
 import { is } from 'date-fns/locale';
 
 const ProtocolInfor = () => {
@@ -24,22 +25,39 @@ const ProtocolInfor = () => {
 	const [currentPage, setCurrentPage] = useState(1);
 	const [instance, setInstance] = useState(null);
 	const [isAddingNew, setIsAddingNew] = useState(false);
-	const [editTool, setEditTool] = useState(false);
+	const [editTool, setEditTool] = useState(true); // Changed to true by default to show edit/delete buttons
 	const [newProtocol, setNewProtocol] = useState({
 		protocol_name: '',
 		protocol_code: '',
 		protocol_description: '',
 		protocol_content: '',
-		author_name: '',
-		publisher: '',
-		parameters: [],
+		protocol_source: 'IRDOP',
+		equipment: '',
+		equipment_uid: '',
+		equipment_list: [],
+		protocol_file_id: '',
+		report_file_id: '',
 	});
 	const [technicianDropdownVisible, setTechnicianDropdownVisible] = useState(null);
 	const protocolsPerPage = 20;
 	const [isEditing, setIsEditing] = useState(false);
 	const [hoveredProtocolId, setHoveredProtocolId] = useState(null);
-	const [hoveredParameterId, setHoveredParameterId] = useState(null);
+	const [fileUploading, setFileUploading] = useState({ type: null, id: null }); // To track which file is being uploaded
 	let isFetch = false;
+
+	// Equipment options for select dropdown
+	const equipmentOptions = [
+		{ equipment: '', equipment_uid: '' },
+		{ equipment: 'Máy HPLC', equipment_uid: 'HPLC' },
+		{ equipment: 'Máy GC', equipment_uid: 'GC' },
+		{ equipment: 'Máy UV-VIS', equipment_uid: 'UV_VIS' },
+		{ equipment: 'Máy AAS', equipment_uid: 'AAS' },
+		{ equipment: 'Nồi Hấp', equipment_uid: 'NH' },
+		{ equipment: 'Kính hiển vi', equipment_uid: 'KHV' }
+	];
+
+	// Source options for select dropdown
+	const sourceOptions = ['IRDOP', 'IRDOP VS', 'EX'];
 
 	const technician = (param) => {
 		const iden = technicians.find((identity) => identity.identity_uid === param.technician_uid);
@@ -117,10 +135,32 @@ const ProtocolInfor = () => {
 	const fetchProtocols = async () => {
 		try {
 			const response = await apiGet('https://black.irdop.org/el9k24zah/db/get/protocol');
-			const data = response.data.map((protocol) => ({
-				...protocol,
-				parameters: protocol.parameters || [],
-			}));
+			const data = response.data.map((protocol) => {
+				// Parse equipment_list if it's a string
+				let equipmentList = [];
+				if (protocol.equipment_list) {
+					try {
+						if (typeof protocol.equipment_list === 'string') {
+							equipmentList = JSON.parse(protocol.equipment_list);
+						} else {
+							equipmentList = protocol.equipment_list;
+						}
+					} catch (e) {
+						console.error('Error parsing equipment_list:', e);
+					}
+				}
+				
+				return {
+					...protocol,
+					protocol_source: protocol.protocol_source || '',
+					equipment: protocol.equipment || '',
+					equipment_uid: protocol.equipment_uid || '',
+					equipment_list: equipmentList,
+					protocol_file_id: protocol.protocol_file_id || '',
+					report_file_id: protocol.report_file_id || '',
+					parameters: protocol.parameters || [],
+				};
+			});
 			console.log(data);
 			setProtocols(data);
 			setSource(data);
@@ -229,6 +269,62 @@ const ProtocolInfor = () => {
 		});
 		setProtocols(updatedProtocols);
 	};
+	
+	const handleEquipmentChange = (id, index, selectedEquipment) => {
+		const updatedProtocols = protocols.map((protocol) => {
+			if (protocol.id === id) {
+				const updatedEquipmentList = [...(protocol.equipment_list || [])];
+				if (selectedEquipment) {
+					const selectedOption = equipmentOptions.find(option => option.equipment === selectedEquipment);
+					if (selectedOption) {
+						if (index >= updatedEquipmentList.length) {
+							updatedEquipmentList.push({
+								equipment: selectedOption.equipment,
+								equipment_uid: selectedOption.equipment_uid
+							});
+						} else {
+							updatedEquipmentList[index] = {
+								equipment: selectedOption.equipment,
+								equipment_uid: selectedOption.equipment_uid
+							};
+						}
+					}
+				} else {
+					// If empty selection and not the last equipment row, remove this entry
+					if (index < updatedEquipmentList.length) {
+						updatedEquipmentList.splice(index, 1);
+					}
+				}
+				return { ...protocol, equipment_list: updatedEquipmentList };
+			}
+			return protocol;
+		});
+		setProtocols(updatedProtocols);
+	};
+	
+	const handleAddEquipment = (id) => {
+		const updatedProtocols = protocols.map((protocol) => {
+			if (protocol.id === id) {
+				const updatedEquipmentList = [...(protocol.equipment_list || [])];
+				updatedEquipmentList.push({ equipment: '', equipment_uid: '' });
+				return { ...protocol, equipment_list: updatedEquipmentList };
+			}
+			return protocol;
+		});
+		setProtocols(updatedProtocols);
+	};
+	
+	const handleRemoveEquipment = (id, index) => {
+		const updatedProtocols = protocols.map((protocol) => {
+			if (protocol.id === id) {
+				const updatedEquipmentList = [...(protocol.equipment_list || [])];
+				updatedEquipmentList.splice(index, 1);
+				return { ...protocol, equipment_list: updatedEquipmentList };
+			}
+			return protocol;
+		});
+		setProtocols(updatedProtocols);
+	};
 
 	const handleFileChange = (event) => {
 		const newFiles = Array.from(event.target.files);
@@ -251,19 +347,6 @@ const ProtocolInfor = () => {
 			toast.success('Data confirmed successfully');
 		}
 		setInstance(null);
-	};
-
-	const handleFileDrop = (event) => {
-		event.preventDefault();
-		const newFiles = Array.from(event.dataTransfer.files);
-		const validExtensions = ['doc', 'docx', 'pdf', 'csv', 'xls', 'xlsx'];
-		const invalidFiles = newFiles.filter((file) => !validExtensions.includes(file.name.split('.').pop().toLowerCase()));
-
-		if (invalidFiles.length > 0) {
-			alert('Chỉ chấp nhận các file có định dạng DOC, DOCX, PDF, CSV, hoặc EXCEL.');
-		} else {
-			setFiles((prevFiles) => [...prevFiles, ...newFiles]);
-		}
 	};
 
 	const handleFileDelete = (fileName) => {
@@ -462,10 +545,48 @@ const ProtocolInfor = () => {
 	const handleNewProtocolChange = (field, value) => {
 		setNewProtocol({ ...newProtocol, [field]: value });
 	};
+	
+	const handleNewProtocolEquipmentChange = (index, selectedEquipment) => {
+		const updatedEquipmentList = [...(newProtocol.equipment_list || [])];
+		if (selectedEquipment) {
+			const selectedOption = equipmentOptions.find(option => option.equipment === selectedEquipment);
+			if (selectedOption) {
+				if (index >= updatedEquipmentList.length) {
+					updatedEquipmentList.push({
+						equipment: selectedOption.equipment,
+						equipment_uid: selectedOption.equipment_uid
+					});
+				} else {
+					updatedEquipmentList[index] = {
+						equipment: selectedOption.equipment,
+						equipment_uid: selectedOption.equipment_uid
+					};
+				}
+			}
+		} else {
+			// If empty selection and not the last equipment row, remove this entry
+			if (index < updatedEquipmentList.length) {
+				updatedEquipmentList.splice(index, 1);
+			}
+		}
+		setNewProtocol({ ...newProtocol, equipment_list: updatedEquipmentList });
+	};
+	
+	const handleAddNewEquipment = () => {
+		const updatedEquipmentList = [...(newProtocol.equipment_list || [])];
+		updatedEquipmentList.push({ equipment: '', equipment_uid: '' });
+		setNewProtocol({ ...newProtocol, equipment_list: updatedEquipmentList });
+	};
+	
+	const handleRemoveNewEquipment = (index) => {
+		const updatedEquipmentList = [...(newProtocol.equipment_list || [])];
+		updatedEquipmentList.splice(index, 1);
+		setNewProtocol({ ...newProtocol, equipment_list: updatedEquipmentList });
+	};
 
 	const handleSaveNewProtocol = async () => {
-		if (!newProtocol.protocol_name || !newProtocol.protocol_code || !newProtocol.protocol_description) {
-			toast.error('Các trường Tên phương pháp, Mã phương pháp và Mô tả là bắt buộc');
+		if (!newProtocol.protocol_name || !newProtocol.protocol_code) {
+			toast.error('Các trường Tên phương pháp, Mã phương pháp là bắt buộc');
 			return;
 		}
 		try {
@@ -481,9 +602,12 @@ const ProtocolInfor = () => {
 					protocol_code: '',
 					protocol_description: '',
 					protocol_content: '',
-					author_name: '',
-					publisher: '',
-					parameters: [],
+					protocol_source: 'IRDOP',
+					equipment: '',
+					equipment_uid: '',
+					equipment_list: [],
+					protocol_file_id: '',
+					report_file_id: '',
 				});
 				fetchProtocols();
 			} else {
@@ -584,17 +708,10 @@ const ProtocolInfor = () => {
 
 	const handleMouseEnterProtocol = (protocolId) => {
 		setHoveredProtocolId(protocolId);
-		setHoveredParameterId(null);
-	};
-
-	const handleMouseEnterParameter = (protocolId, parameterId) => {
-		setHoveredProtocolId(protocolId);
-		setHoveredParameterId(parameterId);
 	};
 
 	const handleMouseLeave = () => {
 		setHoveredProtocolId(null);
-		setHoveredParameterId(null);
 	};
 
 	const renderProtocolDetails = (type) => {
@@ -609,37 +726,10 @@ const ProtocolInfor = () => {
 
 		const handleSaveClick = async () => {
 			const protocol = receivedData;
-			let parameters = receivedData.parameters;
-			delete protocol.parameters;
-
 			try {
 				const protocolResponse = protocol.id
 					? await apiPost('https://black.irdop.org/el9k24zah/db/update/protocol', { protocol: protocol })
 					: await apiPost('https://black.irdop.org/el9k24zah/db/insert/protocol', { protocol: protocol });
-
-				const updatedParameters = parameters.map((param) => {
-					if (Number.isNaN(parseInt(param.tat_expected))) {
-						delete param.tat_expected;
-					} else {
-						const days = parseInt(param.tat_expected);
-						param.tat_expected = `${days} ${days > 1 ? 'days' : 'day'}`;
-					}
-					return {
-						...param,
-						protocol_id: protocol.id || protocolResponse.data.id,
-						protocol_code: protocol.protocol_code,
-						matrix: param.matrix,
-					};
-				});
-
-				parameters = updatedParameters;
-				const parameterResponses = await Promise.all(
-					parameters.map((param) =>
-						param.id
-							? apiPost('https://black.irdop.org/ha8i0uw2/db/update/parameter', { parameter: param })
-							: apiPost('https://black.irdop.org/ha8i0uw2/db/insert/bulk/parameter', { parameters: [param] }),
-					),
-				);
 
 				const response = await apiGet('https://black.irdop.org/el9k24zah/db/get/protocol');
 				const data = response.data;
@@ -650,37 +740,13 @@ const ProtocolInfor = () => {
 				setFiles([]);
 				setIsLoading(false);
 
-				if (protocolResponse.status === 200 && parameterResponses.every((res) => res.status === 200)) {
+				if (protocolResponse.status === 200) {
 					toast.success('Cập nhật phương pháp thành công');
 				} else {
 					toast.error('Cập nhật phương pháp thất bại, vui lòng kiểm tra lại');
 				}
 			} catch (error) {
 				console.error('Error saving protocol:', error);
-			}
-		};
-
-		const handleDeleteParameter = async (index) => {
-			const param = receivedData.parameters[index];
-			if (param.id) {
-				const confirmed = window.confirm(`Bạn chắc chắn muốn xóa chỉ tiêu: ${param.parameter_name}?`);
-				if (confirmed) {
-					try {
-						const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/delete/parameter', { id: param.id });
-						if (response.status === 200 && response.data) {
-							toast.success('Parameter deleted successfully');
-							const updatedParameters = receivedData.parameters.filter((_, paramIndex) => paramIndex !== index);
-							setReceivedData({ ...receivedData, parameters: updatedParameters });
-						} else {
-							toast.error('Parameter deletion failed');
-						}
-					} catch (error) {
-						console.error('Error deleting parameter:', error);
-					}
-				}
-			} else {
-				const updatedParameters = receivedData.parameters.filter((_, paramIndex) => paramIndex !== index);
-				setReceivedData({ ...receivedData, parameters: updatedParameters });
 			}
 		};
 
@@ -730,6 +796,25 @@ const ProtocolInfor = () => {
 									</td>
 								</tr>
 								<tr className="border-b">
+									<td className="p-1 text-start font-semibold">Nguồn:</td>
+									<td className="p-1 text-start flex items-center">
+										<select
+											className={`w-full border px-2 py-1 rounded bg-white ${
+												isViewMode && !isEditing ? 'border-none' : ''
+											}`}
+											value={receivedData.protocol_source || 'IRDOP'}
+											onChange={(e) => setReceivedData({ ...receivedData, protocol_source: e.target.value })}
+											disabled={isViewMode && !isEditing}
+										>
+											{sourceOptions.map((option) => (
+												<option key={option} value={option}>
+													{option}
+												</option>
+											))}
+										</select>
+									</td>
+								</tr>
+								<tr className="border-b">
 									<td className="p-1 text-start font-semibold">Mô tả:</td>
 									<td className="p-1 text-start flex items-center">
 										<textarea
@@ -743,38 +828,84 @@ const ProtocolInfor = () => {
 									</td>
 								</tr>
 								<tr className="border-b">
-									<td className="p-1 text-start font-semibold">Nội dung:</td>
+									<td className="p-1 text-start font-semibold">Thiết bị:</td>
 									<td className="p-1 text-start flex items-center">
-										<div
-											className="max-h-32 overflow-hidden hover:overflow-y-auto"
-											dangerouslySetInnerHTML={{ __html: receivedData.protocol_content }}
-										/>
+										<div className="flex flex-col gap-2 w-full">
+											{(receivedData.equipment_list || []).map((item, idx) => (
+												<div key={idx} className="flex items-center gap-1">
+													<select
+														className={`w-full border px-2 py-1 rounded bg-white ${
+															isViewMode && !isEditing ? 'border-none' : ''
+														}`}
+														value={item.equipment}
+														onChange={(e) => {
+															const updatedEquipmentList = [...receivedData.equipment_list];
+															updatedEquipmentList[idx] = {
+																equipment: e.target.value,
+																equipment_uid: equipmentOptions.find(option => option.equipment === e.target.value)?.equipment_uid || ''
+															};
+															setReceivedData({ ...receivedData, equipment_list: updatedEquipmentList });
+														}}
+														disabled={isViewMode && !isEditing}
+													>
+														{equipmentOptions.map((option) => (
+															<option key={option.equipment} value={option.equipment}>
+																{option.equipment || 'Chọn thiết bị'}
+															</option>
+														))}
+													</select>
+													{!isViewMode && isEditing && (
+														<button 
+															className="text-red-500 p-1"
+															onClick={() => {
+																const updatedEquipmentList = [...receivedData.equipment_list];
+																updatedEquipmentList.splice(idx, 1);
+																setReceivedData({ ...receivedData, equipment_list: updatedEquipmentList });
+															}}
+														>
+															<FaTrash size={14} />
+														</button>
+													)}
+												</div>
+											))}
+											{!isViewMode && isEditing && (
+												<button
+													className="flex items-center justify-center bg-blue-100 border border-blue-300 px-2 py-1 rounded text-blue-600 text-sm"
+													onClick={() => {
+														const updatedEquipmentList = [...receivedData.equipment_list, { equipment: '', equipment_uid: '' }];
+														setReceivedData({ ...receivedData, equipment_list: updatedEquipmentList });
+													}}
+												>
+													<FaPlus size={12} className="mr-1" /> Thêm thiết bị
+												</button>
+											)}
+										</div>
 									</td>
 								</tr>
 								<tr className="border-b">
-									<td className="p-1 text-start font-semibold">Tác giả:</td>
+									<td className="p-1 text-start font-semibold">File phương pháp ID:</td>
 									<td className="p-1 text-start flex items-center">
 										<textarea
 											className={`w-full resize-none border px-2 py-1 rounded bg-white ${
 												isViewMode && !isEditing ? 'border-none' : ''
 											}`}
 											rows={1}
-											value={receivedData.author_name || ''}
-											onChange={(e) => setReceivedData({ ...receivedData, author_name: e.target.value })}
+											value={receivedData.protocol_file_id || ''}
+											onChange={(e) => setReceivedData({ ...receivedData, protocol_file_id: e.target.value })}
 											disabled={isViewMode && !isEditing}
 										/>
 									</td>
 								</tr>
 								<tr className="border-b">
-									<td className="p-1 text-start font-semibold">Người phát hành:</td>
+									<td className="p-1 text-start font-semibold">File biên bản ID:</td>
 									<td className="p-1 text-start flex items-center">
 										<textarea
 											className={`w-full resize-none border px-2 py-1 rounded bg-white ${
 												isViewMode && !isEditing ? 'border-none' : ''
 											}`}
 											rows={1}
-											value={receivedData.publisher || ''}
-											onChange={(e) => setReceivedData({ ...receivedData, publisher: e.target.value })}
+											value={receivedData.report_file_id || ''}
+											onChange={(e) => setReceivedData({ ...receivedData, report_file_id: e.target.value })}
 											disabled={isViewMode && !isEditing}
 										/>
 									</td>
@@ -782,146 +913,6 @@ const ProtocolInfor = () => {
 							</tbody>
 						</table>
 					</div>
-					<table className="min-w-full bg-white">
-						<thead className="border-b-2">
-							<tr>
-								<th className="py-2 text-start pl-3 w-1/3">Phép thử / chỉ tiêu</th>
-								<th className="py-2 text-start pl-3 w-1/4">Nền mẫu</th>
-								<th className="py-2 text-center min-w-44">Người thực hiện</th>
-								<th className="py-2 text-center min-w-16">Đơn vị</th>
-								<th className="py-2 text-center min-w-20">TAT</th>
-								<th className="py-2 text-center min-w-28">Chứng nhận</th>
-								<th className="py-2 text-center min-w-12">Xóa</th>
-							</tr>
-						</thead>
-						<tbody>
-							{receivedData.parameters &&
-								receivedData.parameters.map((param, index) => (
-									<tr key={index} className="border-b hover:bg-gray-100">
-										<td className="pt-2 px-1 text-start">
-											<textarea
-												className={`w-full resize-none font-medium border px-2 py-1 rounded bg-white ${
-													isViewMode && !isEditing ? 'border-none' : ''
-												}`}
-												value={param.parameter_name || ''}
-												onChange={(e) => handleParameterChange(index, 'parameter_name', e.target.value)}
-												disabled={isViewMode && !isEditing}
-												rows={2}
-											/>
-										</td>
-										<td className="pt-2 px-1 text-start">
-											{isEditing ? (
-												<textarea
-													className="w-full font-medium resize-none border px-2 py-1 rounded bg-white"
-													value={param.matrix || ''}
-													onChange={(e) => handleParameterChange(index, 'matrix', e.target.value)}
-												/>
-											) : (
-												<textarea
-													className="w-full font-medium resize-none px-2 py-1 rounded bg-white overflow-hidden hover:overflow-y-auto"
-													value={param.matrix || ''}
-													rows={2}
-													disabled
-												/>
-											)}
-										</td>
-										<td className="p-1 text-start">
-											{isViewMode && !isEditing ? (
-												<textarea
-													className="w-full resize-none px-2 py-1 rounded bg-white overflow-hidden border-none"
-													value={technician(param) || ''}
-													rows={2}
-													disabled
-												/>
-											) : (
-												<div className="relative">
-													<button
-														className="w-full border px-2 py-1 rounded bg-white text-left h-[58px] border-slate-200 mt-0.5"
-														onClick={() => toggleTechnicianDropdown(receivedData.id, index)}
-													>
-														{technician(param) || 'Chọn KTV'}
-													</button>
-													{technicianDropdownVisible &&
-														technicianDropdownVisible.protocolId === receivedData.id &&
-														technicianDropdownVisible.paramIndex === index && (
-															<ul className="absolute w-full bg-white border rounded shadow-lg z-10">
-																{technicians.map((identity) => (
-																	<li
-																		key={identity.alias}
-																		className="p-1 text-md cursor-pointer hover:bg-gray-200"
-																		onClick={() =>
-																			handleParameterChange(index, 'technician_uid', identity.identity_uid)
-																		}
-																	>
-																		<p className="font-bold text-primary text-sm">{identity.alias}</p>
-																		<p>{identity.identity_name}</p>
-																	</li>
-																))}
-															</ul>
-														)}
-												</div>
-											)}
-										</td>
-										<td className="pt-2 px-1 text-start ">
-											<textarea
-												className={`w-full resize-none border px-2 py-1 rounded bg-white ${
-													isViewMode && !isEditing ? 'border-none' : ''
-												}`}
-												value={param.default_unit || ''}
-												onChange={(e) => handleParameterChange(index, 'default_unit', e.target.value)}
-												disabled={isViewMode && !isEditing}
-												rows={2}
-											/>
-										</td>
-										<td className="pt-2 px-1 text-center">
-											<input
-												type="number"
-												min="0"
-												className={`w-14 mr-1 border p-1 rounded bg-white ${
-													isViewMode && !isEditing ? 'border-none' : ''
-												}`}
-												value={param?.tat_expected?.days}
-												onChange={(e) => handleParameterChange(index, 'tat_expected', e.target.value)}
-												disabled={isViewMode && !isEditing}
-											/>
-											<p className=" px-2 w-full text-start">{'ngày'}</p>
-										</td>
-										<td className="pt-3 px-1 text-center flex flex-col items-start">
-											<label>
-												<input
-													type="checkbox"
-													checked={param.accreditation?.includes('VILAS 997')}
-													onChange={() => handleAccreditationChange(index, 'VILAS 997')}
-													disabled={isViewMode && !isEditing}
-												/>
-												{' VILAS 997'}
-											</label>
-											<label className="">
-												<input
-													type="checkbox"
-													checked={param.accreditation?.includes('107')}
-													onChange={() => handleAccreditationChange(index, '107')}
-													disabled={isViewMode && !isEditing}
-												/>
-												{' 107'}
-											</label>
-										</td>
-										<td className="p-1 text-center">
-											{!isViewMode || isEditing ? (
-												<button
-													className="text-red-500 px-2 py-1 focus:outline-none focus:border-none"
-													onClick={() => handleDeleteParameter(index)}
-												>
-													X
-												</button>
-											) : (
-												<span>-</span>
-											)}
-										</td>
-									</tr>
-								))}
-						</tbody>
-					</table>
 					<div className="flex justify-between mt-4">
 						<button
 							className="bg-gray-500 text-white font-bold py-2 px-4 rounded"
@@ -943,9 +934,6 @@ const ProtocolInfor = () => {
 							</>
 						) : (
 							<>
-								<button className="bg-gray-500 text-white font-bold py-2 px-4 rounded" onClick={handleAddParameter}>
-									Thêm Chỉ tiêu
-								</button>
 								<button className="bg-gray-500 text-white font-bold py-2 px-4 rounded" onClick={handleCancelEditClick}>
 									Hủy bỏ
 								</button>
@@ -958,6 +946,101 @@ const ProtocolInfor = () => {
 				</div>
 			</div>
 		);
+	};
+
+	// Add new functions for file handling
+	const handleFileColumnClick = (protocol, fileType) => {
+		setFileUploading({ type: fileType, id: protocol.id });
+	};
+
+	const handleProtocolFileChange = async (event, protocol, fileType) => {
+		const file = event.target.files[0];
+		if (!file) return;
+
+		const fileExtension = file.name.split('.').pop().toLowerCase();
+		const validExtensions = ['pdf', 'xlsx', 'csv', 'docx', 'doc'];
+
+		if (!validExtensions.includes(fileExtension)) {
+			toast.error('Chỉ chấp nhận các file .pdf, .xlsx, .csv, .docx, .doc');
+			return;
+		}
+
+		// Read the file
+		const reader = new FileReader();
+		reader.onload = async (e) => {
+			try {
+				const fileBase64 = e.target.result.split(',')[1];
+				const media = {
+					file_name: file.name,
+					file_mime: file.type,
+					file_buffer: fileBase64,
+				};
+
+				// Upload the file
+				const response = await apiPost('https://black.irdop.org/upload_file', { media });
+
+				if (response.status === 200 && response.data) {
+					// Update the protocol with the file ID
+					const fileIdField = fileType === 'protocol' ? 'protocol_file_id' : 'report_file_id';
+					const updatedProtocol = { ...protocol, [fileIdField]: response.data.file_id };
+
+					// Save the updated protocol
+					const updateResponse = await apiPost('https://black.irdop.org/el9k24zah/db/update/protocol', {
+						protocol: updatedProtocol,
+					});
+
+					if (updateResponse.status === 200) {
+						toast.success(`File ${file.name} đã được tải lên thành công`);
+						fetchProtocols(); // Refresh data
+					} else {
+						toast.error('Có lỗi khi cập nhật thông tin file');
+					}
+				} else {
+					toast.error('Có lỗi khi tải file lên');
+				}
+			} catch (error) {
+				console.error('Error uploading file:', error);
+				toast.error('Có lỗi khi tải file lên');
+			} finally {
+				setFileUploading({ type: null, id: null });
+			}
+		};
+		reader.readAsDataURL(file);
+	};
+
+	const handleFileDrop = async (e, protocol, fileType) => {
+		e.preventDefault();
+		const file = e.dataTransfer.files[0];
+		if (!file) return;
+
+		const fileExtension = file.name.split('.').pop().toLowerCase();
+		const validExtensions = ['pdf', 'xlsx', 'csv', 'docx', 'doc'];
+
+		if (!validExtensions.includes(fileExtension)) {
+			toast.error('Chỉ chấp nhận các file .pdf, .xlsx, .csv, .docx, .doc');
+			return;
+		}
+
+		// Create a synthetic event object to pass to the existing handler
+		const syntheticEvent = {
+			target: {
+				files: [file],
+			},
+		};
+
+		handleProtocolFileChange(syntheticEvent, protocol, fileType);
+	};
+
+	// Format the equipment list for display
+	const formatEquipmentList = (equipmentList) => {
+		if (!equipmentList || !Array.isArray(equipmentList) || equipmentList.length === 0) {
+			return '';
+		}
+		
+		return equipmentList
+			.filter(item => item.equipment && item.equipment_uid)
+			.map(item => `${item.equipment_uid}_${item.equipment}`)
+			.join(', ');
 	};
 
 	return (
@@ -1028,20 +1111,12 @@ const ProtocolInfor = () => {
 								<tr>
 									<th className="py-2 text-start pl-1 min-w-36 w-36">Mã phương pháp</th>
 									<th className="py-2 text-start pl-1 min-w-48 w-[16%]">Phương pháp</th>
+									<th className="py-2 text-start pl-1 min-w-36 w-36">Nguồn</th>
 									<th className="py-2 text-start pl-1 min-w-56 w-[22%]">Mô tả</th>
-									<th className="py-2 text-start pl-1 min-w-44 w-[16%]">Chỉ tiêu</th>
-									<th className="py-2 text-start pl-1 min-w-40 w-[14%]">Nền mẫu</th>
-									<th className="py-2 text-start pl-1 min-w-36 w-36">Người thực hiện</th>
-									<th className="py-2 text-start pl-1 min-w-16 w-16">TAT</th>
-									<th className="py-2 text-center min-w-10 w-10"></th>
-									<th
-										className="py-2 text-center min-w-24 w-24 cursor-pointer font-bold text-primary"
-										onClick={() => {
-											setEditTool(!editTool);
-										}}
-									>
-										Thao tác
-									</th>
+									<th className="py-2 text-start pl-1 min-w-40 w-[14%]">Thiết bị</th>
+									<th className="py-2 text-start pl-1 min-w-36 w-36">File phương pháp</th>
+									<th className="py-2 text-start pl-1 min-w-36 w-36">File biên bản</th>
+									<th className="py-2 text-center min-w-24 w-24">Thao tác</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -1064,6 +1139,19 @@ const ProtocolInfor = () => {
 											/>
 										</td>
 										<td className="p-1 text-start">
+											<select
+												className="w-full border px-2 py-1 rounded bg-white"
+												value={newProtocol.protocol_source}
+												onChange={(e) => handleNewProtocolChange('protocol_source', e.target.value)}
+											>
+												{sourceOptions.map((option) => (
+													<option key={option} value={option}>
+														{option}
+													</option>
+												))}
+											</select>
+										</td>
+										<td className="p-1 text-start">
 											<textarea
 												className="w-full border px-2 py-1 rounded bg-white max-h-20 overflow-y-auto"
 												value={newProtocol.protocol_description}
@@ -1071,24 +1159,71 @@ const ProtocolInfor = () => {
 												onChange={(e) => handleNewProtocolChange('protocol_description', e.target.value)}
 											/>
 										</td>
-										<td className="p-1 text-start">{/* Empty cell for new protocol */}</td>
+										<td className="p-1 text-start">
+											<div className="flex flex-col gap-2">
+												{(newProtocol.equipment_list || []).map((item, idx) => (
+													<div key={idx} className="flex items-center gap-1">
+														<select
+															className="w-full border px-2 py-1 rounded bg-white"
+															value={item.equipment}
+															onChange={(e) => handleNewProtocolEquipmentChange(idx, e.target.value)}
+														>
+															{equipmentOptions.map((option) => (
+																<option key={option.equipment} value={option.equipment}>
+																	{option.equipment || 'Chọn thiết bị'}
+																</option>
+															))}
+														</select>
+														<button 
+															className="text-red-500 p-1"
+															onClick={() => handleRemoveNewEquipment(idx)}
+														>
+															<FaTrash size={14} />
+														</button>
+													</div>
+												))}
+												{/* Always show at least one equipment row */}
+												{(newProtocol.equipment_list || []).length === 0 && (
+													<select
+														className="w-full border px-2 py-1 rounded bg-white"
+														value=""
+														onChange={(e) => handleNewProtocolEquipmentChange(0, e.target.value)}
+													>
+														{equipmentOptions.map((option) => (
+															<option key={option.equipment} value={option.equipment}>
+																{option.equipment || 'Chọn thiết bị'}
+															</option>
+														))}
+													</select>
+												)}
+												{/* Show add button if the last equipment is not empty */}
+												{(newProtocol.equipment_list || []).length > 0 && 
+												  newProtocol.equipment_list[newProtocol.equipment_list.length-1].equipment && (
+													<button
+														className="flex items-center justify-center bg-blue-100 border border-blue-300 px-2 py-1 rounded text-blue-600 text-sm"
+														onClick={handleAddNewEquipment}
+													>
+														<FaPlus size={12} className="mr-1" /> Thêm thiết bị
+													</button>
+												)}
+											</div>
+										</td>
 										<td className="p-1 text-start">
 											<input
 												type="text"
 												className="w-full border px-2 py-1 rounded bg-white"
-												value={newProtocol.author_name}
-												onChange={(e) => handleNewProtocolChange('author_name', e.target.value)}
+												value={newProtocol.protocol_file_id}
+												onChange={(e) => handleNewProtocolChange('protocol_file_id', e.target.value)}
 											/>
 										</td>
 										<td className="p-1 text-start">
 											<input
 												type="text"
 												className="w-full border px-2 py-1 rounded bg-white"
-												value={newProtocol.publisher}
-												onChange={(e) => handleNewProtocolChange('publisher', e.target.value)}
+												value={newProtocol.report_file_id}
+												onChange={(e) => handleNewProtocolChange('report_file_id', e.target.value)}
 											/>
 										</td>
-
 										<td className="p-1 text-center">
 											<button
 												className="text-blue-500 px-2 py-1 mr-1 focus:outline-none focus:border-none"
@@ -1106,489 +1241,240 @@ const ProtocolInfor = () => {
 									</tr>
 								)}
 								{paginatedProtocols.map((protocol) => (
-									<React.Fragment key={protocol.id}>
-										<tr
-											className={`border-b relative ${hoveredProtocolId === protocol.id ? 'bg-gray-100' : ''}`}
-											onMouseEnter={() => handleMouseEnterProtocol(protocol.id)}
-											onMouseLeave={handleMouseLeave}
-										>
-											<td className="p-1 text-start" rowSpan={protocol.parameters.length || 1}>
-												{editingRow === protocol.id ? (
-													<textarea
-														className="w-full font-medium text-primary resize-none  border px-2 py-1 rounded bg-white"
-														value={protocol.protocol_code}
-														rows={protocol.parameters.length < 2 ? 3 : 3 + (protocol.parameters.length - 1) * 3}
-														onChange={(e) => handleInputChange(protocol.id, 'protocol_code', e.target.value)}
-													/>
-												) : (
-													<span
-														className="block overflow-hidden font-medium hover:font-bold hover:cursor-pointer text-primary hover:overflow-y-auto"
-														style={{
-															height:
-																protocol.parameters.length > 1
-																	? `calc(60px + 40px * ${protocol.parameters.length - 1})`
-																	: '60px',
-														}}
-														onDoubleClick={async () => {
-															try {
-																if (navigator.clipboard) {
-																	await navigator.clipboard.writeText(protocol.protocol_code);
-																} else {
-																	const textArea = document.createElement('textarea');
-																	textArea.value = protocol.protocol_code;
-																	document.body.appendChild(textArea);
-																	textArea.select();
-																	document.execCommand('copy');
-																	document.body.removeChild(textArea);
-																}
-																toast.success('✅ Đã copy mã phương pháp');
-															} catch (error) {
-																console.error('Clipboard Error:', error);
-																toast.error('❌ Copy mã phương pháp thất bại, kiểm tra lại!');
-															}
-														}}
-													>
-														{protocol.protocol_code}
-													</span>
-												)}
-											</td>
-											<td className="p-1 text-start" rowSpan={protocol.parameters.length || 1}>
-												{editingRow === protocol.id ? (
-													<textarea
-														className="w-full font-medium text-primary resize-none  border px-2 py-1 rounded bg-white"
-														value={protocol.protocol_name}
-														rows={protocol.parameters.length < 2 ? 3 : 3 + (protocol.parameters.length - 1) * 3}
-														onChange={(e) => handleInputChange(protocol.id, 'protocol_name', e.target.value)}
-													/>
-												) : (
-													<span
-														className="block overflow-hidden text-primary hover:overflow-y-auto"
-														style={{
-															height:
-																protocol.parameters.length > 1
-																	? `calc(60px + 40px * ${protocol.parameters.length - 1})`
-																	: '60px',
-														}}
-													>
-														{protocol.protocol_name}
-													</span>
-												)}
-											</td>
-
-											<td className="p-1 text-start" rowSpan={protocol.parameters.length || 1}>
-												{editingRow === protocol.id ? (
-													<textarea
-														className="w-full resize-none border px-2 py-1 rounded bg-white overflow-y-auto"
-														value={protocol.protocol_description}
-														rows={protocol.parameters.length < 2 ? 3 : 3 + (protocol.parameters.length - 1) * 3}
-														onChange={(e) => handleInputChange(protocol.id, 'protocol_description', e.target.value)}
-													/>
-												) : (
-													<span
-														className="block overflow-hidden hover:overflow-y-auto"
-														style={{
-															height:
-																protocol.parameters.length > 1
-																	? `calc(60px + 40px * ${protocol.parameters.length - 1})`
-																	: '60px',
-														}}
-													>
-														{protocol.protocol_description}
-													</span>
-												)}
-											</td>
-											{protocol.parameters.length > 0 ? (
-												<React.Fragment>
-													<td
-														className={`p-1 text-start ${
-															hoveredParameterId === protocol.parameters[0].id
-																? 'bg-gray-300'
-																: hoveredProtocolId === protocol.id
-																? 'bg-gray-100'
-																: ''
-														}`}
-														onMouseEnter={() => handleMouseEnterParameter(protocol.id, protocol.parameters[0].id)}
-														onMouseLeave={handleMouseLeave}
-													>
-														{editingRow === protocol.id ? (
-															<textarea
-																className="w-full font-medium text-text-secondary resize-none border px-2 py-1 rounded bg-white"
-																value={protocol.parameters[0].parameter_name}
-																onChange={(e) =>
-																	handleParameterInputChange(protocol.id, 0, 'parameter_name', e.target.value)
-																}
-															/>
-														) : (
-															<span
-																className="block font-medium overflow-hidden text-text-secondary hover:overflow-y-auto"
-																style={{
-																	height: '40px',
-																}}
-															>
-																{protocol.parameters[0].parameter_name}
-															</span>
-														)}
-													</td>
-													<td
-														className={`p-1 text-start ${
-															hoveredParameterId === protocol.parameters[0].id
-																? 'bg-gray-300'
-																: hoveredProtocolId === protocol.id
-																? 'bg-gray-100'
-																: ''
-														}`}
-														onMouseEnter={() => handleMouseEnterParameter(protocol.id, protocol.parameters[0].id)}
-														onMouseLeave={handleMouseLeave}
-													>
-														{editingRow === protocol.id ? (
-															<textarea
-																className="w-full font-medium text-text-secondary resize-none border px-2 py-1 rounded bg-white"
-																value={protocol.parameters[0].matrix}
-																onChange={(e) => handleParameterInputChange(protocol.id, 0, 'matrix', e.target.value)}
-															/>
-														) : (
-															<span
-																className="block overflow-hidden text-text-secondary hover:overflow-y-auto"
-																style={{
-																	height: '40px',
-																}}
-															>
-																{protocol.parameters[0].matrix}
-															</span>
-														)}
-													</td>
-													<td
-														className={`p-1 text-start ${
-															hoveredParameterId === protocol.parameters[0].id
-																? 'bg-gray-300'
-																: hoveredProtocolId === protocol.id
-																? 'bg-gray-100'
-																: ''
-														}`}
-														onMouseEnter={() => handleMouseEnterParameter(protocol.id, protocol.parameters[0].id)}
-														onMouseLeave={handleMouseLeave}
-													>
-														{editingRow === protocol.id ? (
-															<div className="relative">
-																<button
-																	className="w-full border px-2 py-1 rounded bg-white text-left"
-																	onClick={() => toggleTechnicianDropdown(protocol.id, 0)}
-																>
-																	{technician(protocol.parameters[0]) || 'Chọn KTV'}
-																</button>
-																{technicianDropdownVisible &&
-																	technicianDropdownVisible.protocolId === protocol.id &&
-																	technicianDropdownVisible.paramIndex === 0 && (
-																		<ul className="absolute w-full bg-white border rounded shadow-lg z-10">
-																			{technicians.map((identity) => (
-																				<li
-																					key={identity.alias}
-																					className="p-1 text-md cursor-pointer hover:bg-gray-200"
-																					onClick={() =>
-																						handleParameterInputChange(
-																							protocol.id,
-																							0,
-																							'technician_uid',
-																							identity.identity_uid,
-																						)
-																					}
-																				>
-																					<p className="font-bold text-primary text-sm">{identity.alias}</p>
-																					<p>{identity.identity_name}</p>
-																				</li>
-																			))}
-																		</ul>
-																	)}
-															</div>
-														) : (
-															<span
-																className="block overflow-hidden hover:overflow-y-auto"
-																style={{
-																	height: '40px',
-																}}
-															>
-																{technician(protocol.parameters[0]) || ''}
-															</span>
-														)}
-													</td>
-													<td
-														className={`p-1 text-start ${
-															hoveredParameterId === protocol.parameters[0].id
-																? 'bg-gray-300'
-																: hoveredProtocolId === protocol.id
-																? 'bg-gray-100'
-																: ''
-														}`}
-														onMouseEnter={() => handleMouseEnterParameter(protocol.id, protocol.parameters[0].id)}
-														onMouseLeave={handleMouseLeave}
-													>
-														{editingRow === protocol.id ? (
-															<React.Fragment>
-																<input
-																	type="number"
-																	min="0"
-																	className="w-14 border px-2 py-1 rounded bg-white"
-																	value={protocol.parameters[0]?.tat_expected?.days}
-																	onChange={(e) =>
-																		handleParameterInputChange(protocol.id, 0, 'tat_expected', e.target.value)
-																	}
-																/>
-																Ngày
-															</React.Fragment>
-														) : (
-															<span
-																className="block overflow-hidden hover:overflow-y-auto"
-																style={{
-																	height: '40px',
-																}}
-															>
-																{protocol.parameters[0]?.tat_expected?.days
-																	? protocol.parameters[0]?.tat_expected?.days + ' ngày'
-																	: ''}
-															</span>
-														)}
-													</td>
-													<td
-														className={`p-1 text-center ${
-															hoveredParameterId === protocol.parameters[0].id
-																? 'bg-gray-300'
-																: hoveredProtocolId === protocol.id
-																? 'bg-gray-100'
-																: ''
-														}`}
-														onMouseEnter={() => handleMouseEnterParameter(protocol.id, protocol.parameters[0].id)}
-														onMouseLeave={handleMouseLeave}
-													>
-														{editingRow === protocol.id ? (
-															<React.Fragment>
-																<button
-																	className="text-blue-500 px-2 py-1 mr-1 focus:outline-none focus:border-none"
-																	onClick={() => handleSaveParameterClick(protocol.id, 0)}
-																>
-																	<GiSave size={20} />
-																</button>
-																<button
-																	className="text-red-500 px-2 py-1 focus:outline-none focus:border-none"
-																	onClick={() => handleDeleteParameterClick(protocol.id, 0)}
-																>
-																	<GiTrashCan size={20} />
-																</button>
-															</React.Fragment>
-														) : (
-															<span className="block overflow-hidden"> </span>
-														)}
-													</td>
-												</React.Fragment>
+									<tr
+										key={protocol.id}
+										className={`border-b relative ${hoveredProtocolId === protocol.id ? 'bg-gray-100' : ''}`}
+										onMouseEnter={() => handleMouseEnterProtocol(protocol.id)}
+										onMouseLeave={handleMouseLeave}
+									>
+										<td className="p-1 text-start">
+											{editingRow === protocol.id ? (
+												<input
+													type="text"
+													className="w-full font-medium text-primary border px-2 py-1 rounded bg-white"
+													value={protocol.protocol_code || ''}
+													onChange={(e) => handleInputChange(protocol.id, 'protocol_code', e.target.value)}
+												/>
 											) : (
-												<td className="p-1 text-start text-" colSpan={5}>
-													<span className="block overflow-hidden">Chưa có chỉ tiêu</span>
-												</td>
+												<span
+													className="block overflow-hidden font-medium hover:font-bold hover:cursor-pointer text-primary"
+													onDoubleClick={async () => {
+														try {
+															if (navigator.clipboard) {
+																await navigator.clipboard.writeText(protocol.protocol_code);
+															} else {
+																const textArea = document.createElement('textarea');
+																textArea.value = protocol.protocol_code;
+																document.body.appendChild(textArea);
+																textArea.select();
+																document.execCommand('copy');
+																document.body.removeChild(textArea);
+															}
+															toast.success('✅ Đã copy mã phương pháp');
+														} catch (error) {
+															console.error('Clipboard Error:', error);
+															toast.error('❌ Copy mã phương pháp thất bại, kiểm tra lại!');
+														}
+													}}
+												>
+													{protocol.protocol_code || ''}
+												</span>
 											)}
-											<td className="p-0 text-center" rowSpan={protocol.parameters.length || 1}>
-												{editingRow === protocol.id ? (
-													<React.Fragment>
-														<button
-															className="text-blue-500 px-2 py-1 mr-1 focus:outline-none focus:border-none"
-															onClick={() => handleSaveClick(protocol.id)}
-														>
-															<GiConfirmed size={20} />
-														</button>
-														<button
-															className="text-red-500 px-2 ml-1 py-1 focus:outline-none focus:border-none"
-															onClick={handleCancelClick}
-														>
-															<GiCancel size={20} />
-														</button>
-														<button
-															className="text-green-500 px-2 py-1 mt-1 focus:outline-none focus:border-none"
-															onClick={() => handleAddParameterClick(protocol.id)}
-														>
-															Thêm mới
-														</button>
-													</React.Fragment>
-												) : (
-													<React.Fragment>
-														<button
-															className={`text-teal-500  p-1 focus:outline-none focus:border-none w-14' + ${
-																!editTool && 'h-16 px-4'
-															}`}
-															onClick={() => handleRowDoubleClick(protocol)}
-														>
-															<LiaInfoSolid size={20} />
-														</button>
-														{editTool && (
-															<React.Fragment>
-																<button
-																	className="text-blue-500 p-1 focus:outline-none focus:border-none "
-																	onClick={() => setEditingRow(protocol.id)}
-																>
-																	<RiEdit2Line size={20} />
-																</button>
-																<button
-																	className="text-red-500 p-1 focus:outline-none focus:border-none "
-																	onClick={() => handleDeleteClick(protocol.id)}
-																>
-																	<GiTrashCan size={20} />
-																</button>
-															</React.Fragment>
-														)}
-													</React.Fragment>
-												)}
-											</td>
-										</tr>
-										{protocol.parameters.slice(1).map((param, paramIndex) => (
-											<tr
-												key={paramIndex}
-												className={`border-b ${
-													hoveredParameterId === param.id
-														? 'bg-gray-300'
-														: hoveredProtocolId === protocol.id
-														? 'bg-gray-100'
-														: ''
-												}`}
-												onMouseEnter={() => handleMouseEnterParameter(protocol.id, param.id)}
-												onMouseLeave={handleMouseLeave}
-											>
-												<td className="p-1 text-start">
-													{editingRow === protocol.id ? (
-														<textarea
-															className="w-full font-medium text-text-secondary resize-none border px-2 py-1 rounded bg-white"
-															value={param.parameter_name}
-															onChange={(e) =>
-																handleParameterInputChange(
-																	protocol.id,
-																	paramIndex + 1,
-																	'parameter_name',
-																	e.target.value,
-																)
-															}
-														/>
-													) : (
-														<span
-															className="block font-medium overflow-hidden text-text-secondary hover:overflow-y-auto"
-															style={{
-																height: '40px',
-															}}
-														>
-															{param.parameter_name}
-														</span>
-													)}
-												</td>
-												<td className="p-1 text-start">
-													{editingRow === protocol.id ? (
-														<textarea
-															className="w-full font-medium text-text-secondary resize-none border px-2 py-1 rounded bg-white"
-															value={param.matrix}
-															onChange={(e) =>
-																handleParameterInputChange(protocol.id, paramIndex + 1, 'matrix', e.target.value)
-															}
-														/>
-													) : (
-														<span
-															className="block overflow-hidden text-text-secondary hover:overflow-y-auto"
-															style={{
-																height: '40px',
-															}}
-														>
-															{param.matrix}
-														</span>
-													)}
-												</td>
-												<td className="p-1 text-start">
-													{editingRow === protocol.id ? (
-														<div className="relative">
-															<button
-																className="w-full border px-2 py-1 rounded bg-white text-left"
-																onClick={() => toggleTechnicianDropdown(protocol.id, paramIndex + 1)}
+										</td>
+										<td className="p-1 text-start">
+											{editingRow === protocol.id ? (
+												<textarea
+													className="w-full font-medium text-primary resize-none border px-2 py-1 rounded bg-white"
+													value={protocol.protocol_name || ''}
+													rows={3}
+													onChange={(e) => handleInputChange(protocol.id, 'protocol_name', e.target.value)}
+												/>
+											) : (
+												<span className="block overflow-hidden text-primary" style={{ height: '60px' }}>
+													{protocol.protocol_name || ''}
+												</span>
+											)}
+										</td>
+										<td className="p-1 text-start">
+											{editingRow === protocol.id ? (
+												<select
+													className="w-full border px-2 py-1 rounded bg-white"
+													value={protocol.protocol_source || 'IRDOP'}
+													onChange={(e) => handleInputChange(protocol.id, 'protocol_source', e.target.value)}
+												>
+													{sourceOptions.map((option) => (
+														<option key={option} value={option}>
+															{option}
+														</option>
+													))}
+												</select>
+											) : (
+												<span className="block overflow-hidden" style={{ height: '60px' }}>
+													{protocol.protocol_source || ''}
+												</span>
+											)}
+										</td>
+										<td className="p-1 text-start">
+											{editingRow === protocol.id ? (
+												<textarea
+													className="w-full resize-none border px-2 py-1 rounded bg-white overflow-y-auto"
+													value={protocol.protocol_description || ''}
+													rows={3}
+													onChange={(e) => handleInputChange(protocol.id, 'protocol_description', e.target.value)}
+												/>
+											) : (
+												<span className="block overflow-hidden" style={{ height: '60px' }}>
+													{protocol.protocol_description || ''}
+												</span>
+											)}
+										</td>
+										<td className="p-1 text-start">
+											{editingRow === protocol.id ? (
+												<div className="flex flex-col gap-2">
+													{(protocol.equipment_list || []).map((item, idx) => (
+														<div key={idx} className="flex items-center gap-1">
+															<select
+																className="w-full border px-2 py-1 rounded bg-white"
+																value={item.equipment}
+																onChange={(e) => handleEquipmentChange(protocol.id, idx, e.target.value)}
 															>
-																{technician(param) || 'Chọn KTV'}
+																{equipmentOptions.map((option) => (
+																	<option key={option.equipment} value={option.equipment}>
+																		{option.equipment || 'Chọn thiết bị'}
+																	</option>
+																))}
+															</select>
+															<button 
+																className="text-red-500 p-1"
+																onClick={() => handleRemoveEquipment(protocol.id, idx)}
+															>
+																<FaTrash size={14} />
 															</button>
-															{technicianDropdownVisible &&
-																technicianDropdownVisible.protocolId === protocol.id &&
-																technicianDropdownVisible.paramIndex === paramIndex + 1 && (
-																	<ul className="absolute w-full bg-white border rounded shadow-lg z-10">
-																		{technicians.map((identity) => (
-																			<li
-																				key={identity.alias}
-																				className="p-1 text-md cursor-pointer hover:bg-gray-200"
-																				onClick={() =>
-																					handleParameterInputChange(
-																						protocol.id,
-																						paramIndex + 1,
-																						'technician_uid',
-																						identity.identity_uid,
-																					)
-																				}
-																			>
-																				<p className="font-bold text-primary text-sm">{identity.alias}</p>
-																				<p>{identity.identity_name}</p>
-																			</li>
-																		))}
-																	</ul>
-																)}
 														</div>
-													) : (
-														<span
-															className="block overflow-hidden hover:overflow-y-auto"
-															style={{
-																height: '40px',
-															}}
+													))}
+													{/* Always show at least one equipment row */}
+													{(protocol.equipment_list || []).length === 0 && (
+														<select
+															className="w-full border px-2 py-1 rounded bg-white"
+															value=""
+															onChange={(e) => handleEquipmentChange(protocol.id, 0, e.target.value)}
 														>
-															{technician(param) || ''}
-														</span>
+															{equipmentOptions.map((option) => (
+																<option key={option.equipment} value={option.equipment}>
+																	{option.equipment || 'Chọn thiết bị'}
+																</option>
+															))}
+														</select>
 													)}
-												</td>
-												<td className="p-1 text-start">
-													{editingRow === protocol.id ? (
-														<React.Fragment>
-															<input
-																type="number"
-																min="0"
-																className="w-14 border px-2 py-1 rounded bg-white"
-																value={param?.tat_expected?.days}
-																onChange={(e) =>
-																	handleParameterInputChange(
-																		protocol.id,
-																		paramIndex + 1,
-																		'tat_expected',
-																		e.target.value,
-																	)
-																}
-															/>
-															Ngày
-														</React.Fragment>
-													) : (
-														<span
-															className="block overflow-hidden hover:overflow-y-auto"
-															style={{
-																height: '40px',
-															}}
+													{/* Show add button if the last equipment is not empty */}
+													{(protocol.equipment_list || []).length > 0 && 
+													protocol.equipment_list[protocol.equipment_list.length-1].equipment && (
+														<button
+															className="flex items-center justify-center bg-blue-100 border border-blue-300 px-2 py-1 rounded text-blue-600 text-sm"
+															onClick={() => handleAddEquipment(protocol.id)}
 														>
-															{param?.tat_expected?.days ? param.tat_expected.days + ' ngày' : ''}
-														</span>
+															<FaPlus size={12} className="mr-1" /> Thêm thiết bị
+														</button>
 													)}
-												</td>
-												<td className="p-1 text-center">
-													{editingRow === protocol.id && (
-														<React.Fragment>
-															<button
-																className="text-blue-500 px-2 py-1 mr-1 focus:outline-none focus:border-none"
-																onClick={() => handleSaveParameterClick(protocol.id, paramIndex + 1)}
-															>
-																<GiSave size={20} />
-															</button>
-															<button
-																className="text-red-500 px-2 py-1 focus:outline-none focus:border-none"
-																onClick={() => handleDeleteParameterClick(protocol.id, paramIndex + 1)}
-															>
-																<GiTrashCan size={20} />
-															</button>
-														</React.Fragment>
-													)}
-												</td>
-											</tr>
-										))}
-									</React.Fragment>
+												</div>
+											) : (
+												<span className="block overflow-hidden" style={{ height: '60px' }}>
+													{formatEquipmentList(protocol.equipment_list)}
+												</span>
+											)}
+										</td>
+										<td className="p-1 text-start">
+											{editingRow === protocol.id ? (
+												<div
+													className="w-full h-16 border-2 border-dashed border-blue-400 rounded flex flex-col items-center justify-center cursor-pointer bg-blue-50"
+													onClick={() => handleFileColumnClick(protocol, 'protocol')}
+													onDragOver={(e) => e.preventDefault()}
+													onDrop={(e) => handleFileDrop(e, protocol, 'protocol')}
+												>
+													<input
+														type="file"
+														id={`protocol-file-${protocol.id}`}
+														className="hidden"
+														accept=".pdf,.xlsx,.csv,.docx,.doc"
+														onChange={(e) => handleProtocolFileChange(e, protocol, 'protocol')}
+													/>
+													<label
+														htmlFor={`protocol-file-${protocol.id}`}
+														className="cursor-pointer text-center flex flex-col items-center justify-center"
+													>
+														<FaUpload className="text-blue-500 text-xl mb-1" />
+														<span className="text-xs text-blue-600">Tải file phương pháp</span>
+													</label>
+												</div>
+											) : (
+												<span className="block overflow-hidden" style={{ height: '60px' }}>
+													{protocol.protocol_file_id || ''}
+												</span>
+											)}
+										</td>
+										<td className="p-1 text-start">
+											{editingRow === protocol.id ? (
+												<div
+													className="w-full h-16 border-2 border-dashed border-blue-400 rounded flex flex-col items-center justify-center cursor-pointer bg-blue-50"
+													onClick={() => handleFileColumnClick(protocol, 'report')}
+													onDragOver={(e) => e.preventDefault()}
+													onDrop={(e) => handleFileDrop(e, protocol, 'report')}
+												>
+													<input
+														type="file"
+														id={`report-file-${protocol.id}`}
+														className="hidden"
+														accept=".pdf,.xlsx,.csv,.docx,.doc"
+														onChange={(e) => handleProtocolFileChange(e, protocol, 'report')}
+													/>
+													<label
+														htmlFor={`report-file-${protocol.id}`}
+														className="cursor-pointer text-center flex flex-col items-center justify-center"
+													>
+														<FaUpload className="text-blue-500 text-xl mb-1" />
+														<span className="text-xs text-blue-600">Tải file biên bản</span>
+													</label>
+												</div>
+											) : (
+												<span className="block overflow-hidden" style={{ height: '60px' }}>
+													{protocol.report_file_id || ''}
+												</span>
+											)}
+										</td>
+										<td className="p-0 text-center">
+											{editingRow === protocol.id ? (
+												<div>
+													<button
+														className="text-blue-500 px-2 py-1 mr-1 focus:outline-none focus:border-none"
+														onClick={() => handleSaveClick(protocol.id)}
+													>
+														<GiConfirmed size={20} />
+													</button>
+													<button
+														className="text-red-500 px-2 ml-1 py-1 focus:outline-none focus:border-none"
+														onClick={handleCancelClick}
+													>
+														<GiCancel size={20} />
+													</button>
+												</div>
+											) : (
+												<div>
+													<button
+														className="text-blue-500 p-1 focus:outline-none focus:border-none"
+														onClick={() => setEditingRow(protocol.id)}
+													>
+														<RiEdit2Line size={20} />
+													</button>
+													<button
+														className="text-red-500 p-1 focus:outline-none focus:border-none"
+														onClick={() => handleDeleteClick(protocol.id)}
+													>
+														<GiTrashCan size={20} />
+													</button>
+												</div>
+											)}
+										</td>
+									</tr>
 								))}
 							</tbody>
 						</table>
