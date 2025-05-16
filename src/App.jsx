@@ -18,7 +18,6 @@ import ProcessingSample from './components/ProcessingSampleV3';
 import Report from './components/Report';
 import Result from './components/Analysis_result';
 import PrintSampleTag from './components/PrintSampleTag';
-import AccountInfor from './components/AccountInfor';
 
 const App = () => {
 	return (

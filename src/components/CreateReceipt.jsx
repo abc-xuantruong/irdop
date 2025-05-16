@@ -183,7 +183,6 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 		setReceipt({
 			request_number: '',
 			created_by_uid: '',
-			created_by_name: '',
 			receipt_date: null,
 			deadline: null,
 			contact: { index: -1, name: '', email: '', phone: '' },
@@ -238,7 +237,6 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 				: {
 						...receipt,
 						created_by_uid: currentUser.identity_uid,
-						created_by_name: currentUser.identity_name,
 						modified_by_uid: currentUser.identity_uid,
 				  };
 

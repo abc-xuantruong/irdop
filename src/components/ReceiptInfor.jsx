@@ -17,7 +17,6 @@ import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import axios from 'axios'; // Add axios import
 // Import the generateReportToHTML function
-import { generateReportToHTML } from '../contexts/generateReportToHTML';
 
 const ReceiptInfor = ({ receipt }) => {
 	const { setCurrentTitlePage, currentUser, technicians, status, purposes, formatDate, getIdenByUid, identityCache } =
@@ -1811,7 +1810,7 @@ const ReceiptInfor = ({ receipt }) => {
 			};
 
 			// Call the API
-			const response = await axios.post('http://127.0.0.1:1880/html_to_pdf', requestBody, {
+			const response = await axios.post('https://black.irdop.orgorg/khsi19me/html_to_pdf', requestBody, {
 				headers: {
 					'Content-Type': 'application/json',
 					Accept: '*/*',

@@ -6,7 +6,6 @@ import { GlobalContext } from '../contexts/GlobalContext';
 import ProtocolInfor from './ProtocolInfor';
 import AnalyteInfor from './AnalyteInfor';
 import ClientInfor from './ClientInfor';
-import AccountInfor from './AccountInfor';
 import { FaUserAlt, FaBook, FaFlask, FaClipboard } from 'react-icons/fa';
 
 const Library = () => {
@@ -14,28 +13,11 @@ const Library = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 
-	// Helper function to check if user is a technician
-	const isTechnician = () => {
-		return currentUser?.role?.staff_technician === true;
-	};
-
-	// Helper function to check if user is a superAdmin
-	const isSuperAdmin = () => {
-		console.log('currentUser', currentUser);
-		return currentUser?.role?.staff_superAdmin === true;
-	};
-
 	// Determine active tab based on URL query parameter
 	const getActiveTabFromQuery = () => {
 		const searchParams = new URLSearchParams(location.search);
 		const view = searchParams.get('view');
-
-		// If view is 'account' but user is not superAdmin, default to 'analyte'
-		if (view === 'account' && !isSuperAdmin()) {
-			return 'analyte';
-		}
-
-		return ['protocol', 'client', 'account'].includes(view) ? view : 'analyte'; // Default to 'analyte'
+		return view === 'protocol' || view === 'client' ? view : 'analyte'; // Default to 'analyte'
 	};
 
 	const [activeTab, setActiveTab] = useState(getActiveTabFromQuery());
@@ -45,13 +27,6 @@ const Library = () => {
 
 		// Set default query parameter if none exists
 		if (!location.search) {
-			navigate('?view=analyte', { replace: true });
-		}
-
-		// Redirect if trying to access account page without being superAdmin
-		const searchParams = new URLSearchParams(location.search);
-		const view = searchParams.get('view');
-		if (view === 'account' && !isSuperAdmin()) {
 			navigate('?view=analyte', { replace: true });
 		}
 	}, [setCurrentTitlePage, navigate, location.search]);
@@ -64,6 +39,11 @@ const Library = () => {
 	const handleTabChange = (tab) => {
 		setActiveTab(tab);
 		navigate(`?view=${tab}`);
+	};
+
+	// Helper function to check if user is a technician
+	const isTechnician = () => {
+		return currentUser?.role?.staff_technician === true;
 	};
 
 	return (
@@ -99,16 +79,6 @@ const Library = () => {
 							Khách hàng
 						</button>
 					)}
-					{isSuperAdmin() && (
-						<button
-							className={`w-40 p-1 ml-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
-								activeTab === 'account' ? 'bg-teritary' : 'bg-gray-200'
-							}`}
-							onClick={() => handleTabChange('account')}
-						>
-							Tài khoản
-						</button>
-					)}
 				</div>
 			</div>
 
@@ -119,7 +89,6 @@ const Library = () => {
 					{activeTab === 'protocol' && <ProtocolInfor />}
 					{activeTab === 'analyte' && <AnalyteInfor />}
 					{activeTab === 'client' && !isTechnician() && <ClientInfor />}
-					{activeTab === 'account' && isSuperAdmin() && <AccountInfor />}
 				</div>
 			</div>
 		</div>

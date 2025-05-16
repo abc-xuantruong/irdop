@@ -24,7 +24,7 @@ const CreateReceiptFromCRM = () => {
 	const [selectedParameters, setSelectedParameters] = useState([]);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [typingTimeout, setTypingTimeout] = useState(null);
-
+	
 	// Add new states for inline editing
 	const [editingField, setEditingField] = useState({
 		type: null, // 'client' or 'sample'
@@ -188,7 +188,6 @@ const CreateReceiptFromCRM = () => {
 				client: crmData.client,
 				samples: samplesWithStatus,
 				created_by_uid: currentUser.identity_uid,
-				created_by_name: currentUser.identity_name,
 				modified_by_uid: currentUser.identity_uid,
 				order_code: crmData.order_code,
 				quote_code: crmData.quote_code,
@@ -529,19 +528,19 @@ const CreateReceiptFromCRM = () => {
 				...crmData,
 				client: {
 					...crmData.client,
-					[editingField.field]: editValue,
-				},
+					[editingField.field]: editValue
+				}
 			});
 		} else if (editingField.type === 'sample') {
 			// Update sample name
 			const updatedSamples = [...crmData.samples];
 			updatedSamples[editingField.index] = {
 				...updatedSamples[editingField.index],
-				sample_name: editValue,
+				sample_name: editValue
 			};
 			setCrmData({
 				...crmData,
-				samples: updatedSamples,
+				samples: updatedSamples
 			});
 		}
 		// Reset editing state
@@ -558,22 +557,6 @@ const CreateReceiptFromCRM = () => {
 		} else if (e.key === 'Escape') {
 			cancelEdit();
 		}
-	};
-
-	// Handle the matrix change for a specific sample
-	const handleMatrixChange = (index, value) => {
-		if (!crmData) return;
-
-		const updatedSamples = [...crmData.samples];
-		updatedSamples[index] = {
-			...updatedSamples[index],
-			matrix: value,
-		};
-
-		setCrmData({
-			...crmData,
-			samples: updatedSamples,
-		});
 	};
 
 	return (
@@ -663,7 +646,7 @@ const CreateReceiptFromCRM = () => {
 												<span className="font-medium text-gray-500">Mã khách hàng: </span>
 												{crmData.client.client_uid || '--'}
 											</p>
-
+											
 											<div className="mb-2">
 												<p className="font-medium text-gray-500">Tên cá nhân / tổ chức</p>
 												{editingField.type === 'client' && editingField.field === 'client_name' ? (
@@ -677,8 +660,8 @@ const CreateReceiptFromCRM = () => {
 														className="w-full border p-1 rounded bg-white"
 													/>
 												) : (
-													<p
-														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
+													<p 
+														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded" 
 														onClick={() => startEditing('client', 'client_name', crmData.client.client_name)}
 														title="Nhấn để chỉnh sửa"
 													>
@@ -686,7 +669,7 @@ const CreateReceiptFromCRM = () => {
 													</p>
 												)}
 											</div>
-
+											
 											<div className="mb-2">
 												<p className="font-medium text-gray-500">Địa chỉ</p>
 												{editingField.type === 'client' && editingField.field === 'client_address' ? (
@@ -700,8 +683,8 @@ const CreateReceiptFromCRM = () => {
 														className="w-full border p-1 rounded bg-white"
 													/>
 												) : (
-													<p
-														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
+													<p 
+														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded" 
 														onClick={() => startEditing('client', 'client_address', crmData.client.client_address)}
 														title="Nhấn để chỉnh sửa"
 													>
@@ -709,7 +692,7 @@ const CreateReceiptFromCRM = () => {
 													</p>
 												)}
 											</div>
-
+											
 											<div className="mb-1">
 												<p className="font-medium text-gray-500">Mã số thuế / CCCD:</p>
 												{editingField.type === 'client' && editingField.field === 'legal_id' ? (
@@ -723,8 +706,8 @@ const CreateReceiptFromCRM = () => {
 														className="w-full border p-1 rounded bg-white"
 													/>
 												) : (
-													<p
-														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
+													<p 
+														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded" 
 														onClick={() => startEditing('client', 'legal_id', crmData.client.legal_id)}
 														title="Nhấn để chỉnh sửa"
 													>
@@ -790,8 +773,8 @@ const CreateReceiptFromCRM = () => {
 																	/>
 																</div>
 															) : (
-																<h2
-																	className="font-medium text-start text-lg cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
+																<h2 
+																	className="font-medium text-start text-lg cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded" 
 																	onClick={() => startEditing('sample', 'sample_name', sample.sample_name, index)}
 																	title="Nhấn để chỉnh sửa tên mẫu"
 																>
@@ -803,23 +786,10 @@ const CreateReceiptFromCRM = () => {
 																className="text-red-500 hover:border hover:border-red-500 rounded-full w-5 h-5 flex items-center justify-center"
 																title="Xóa mẫu"
 															>
-																✕
+																		✕
 															</button>
 														</div>
-
-														<div className="mb-2">
-															<label htmlFor={`matrix-${index}`} className="text-sm font-medium">
-																Nền mẫu:
-															</label>
-															<input
-																type="text"
-																id={`matrix-${index}`}
-																value={sample.matrix || ''}
-																onChange={(e) => handleMatrixChange(index, e.target.value)}
-																className="border p-1 rounded w-full bg-white"
-															/>
-														</div>
-
+														
 														<div className="flex items-center my-1">
 															<input
 																type="checkbox"
@@ -832,7 +802,7 @@ const CreateReceiptFromCRM = () => {
 																Mẫu khẩn
 															</label>
 														</div>
-
+														
 														<div className="overflow-x-auto">
 															<table className="w-full">
 																<thead>
@@ -863,7 +833,7 @@ const CreateReceiptFromCRM = () => {
 																</tbody>
 															</table>
 														</div>
-
+														
 														<div className="mt-3 flex justify-end">
 															<button
 																onClick={() => handleOpenAddParameter(index)}
@@ -880,7 +850,7 @@ const CreateReceiptFromCRM = () => {
 									</div>
 								</div>
 							)}
-
+							
 							{crmData && (
 								<div className="flex justify-end w-full mt-4">
 									<button

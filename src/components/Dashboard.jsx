@@ -2400,7 +2400,7 @@ const Dashboard = () => {
 														)}
 														<p className="text-xs text-gray-500">
 															{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
-															{receipt.created_by_name || getUserName(receipt.created_by_uid)}
+															{getUserName(receipt.created_by_uid)}
 														</p>
 													</div>
 												</td>
@@ -2589,7 +2589,7 @@ const Dashboard = () => {
 																		)}
 																		<p className="text-xs text-gray-500">
 																			{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
-																			{receipt.created_by_name || getUserName(receipt.created_by_uid)}
+																			{getUserName(receipt.created_by_uid)}
 																		</p>
 																	</div>
 																</td>
