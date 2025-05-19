@@ -1,10 +1,11 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { GlobalContext } from '../contexts/GlobalContext';
-import { apiPost } from '../contexts/helperFunctionCallAPI';
+import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import { useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2'; // Add Swal import
-import { MdLibraryAdd } from 'react-icons/md'; // Add this import
-import { FaTrashAlt } from 'react-icons/fa'; // Add this import
+import { createPortal } from 'react-dom';
+import Swal from 'sweetalert2';
+import { MdLibraryAdd } from 'react-icons/md';
+import { FaTrashAlt } from 'react-icons/fa';
 
 const CreateReceiptFromCRM = () => {
 	const [isModalOpen, setIsModalOpen] = useState(false);
@@ -16,6 +17,7 @@ const CreateReceiptFromCRM = () => {
 	const [urgentSamples, setUrgentSamples] = useState({});
 	const [allUrgent, setAllUrgent] = useState(false);
 	const [selectedPurpose, setSelectedPurpose] = useState(''); // Default purpose
+	const [deadline, setDeadline] = useState(''); // Add state for deadline
 	// Add new states for parameter selection
 	const [isAddingParameter, setIsAddingParameter] = useState(false);
 	const [currentSampleIndex, setCurrentSampleIndex] = useState(null);
@@ -24,7 +26,7 @@ const CreateReceiptFromCRM = () => {
 	const [selectedParameters, setSelectedParameters] = useState([]);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [typingTimeout, setTypingTimeout] = useState(null);
-	
+
 	// Add new states for inline editing
 	const [editingField, setEditingField] = useState({
 		type: null, // 'client' or 'sample'
@@ -33,8 +35,83 @@ const CreateReceiptFromCRM = () => {
 	});
 	const [editValue, setEditValue] = useState('');
 
+	// Add state for tracking which analysis cell is being edited
+	const [editingAnalysis, setEditingAnalysis] = useState({
+		sampleIndex: null,
+		analysisIndex: null,
+		field: null,
+	});
+	const [editAnalysisValue, setEditAnalysisValue] = useState('');
+
+	// Define options for select fields
+	const sourceOptions = ['--', 'IRDOP', 'IRDOP VS', 'EX'];
+	const fieldOptions = ['--', 'Hóa Lý', 'Vi sinh'];
+
 	const { formatDate, currentUser, purposes } = useContext(GlobalContext);
 	const navigate = useNavigate();
+
+	// Add function to handle global matrix change
+	const handleGlobalMatrixChange = (value) => {
+		if (!crmData) return;
+
+		const updatedSamples = crmData.samples.map((sample) => ({
+			...sample,
+			matrix: value,
+		}));
+
+		setCrmData({
+			...crmData,
+			samples: updatedSamples,
+		});
+	};
+
+	// Apply matrix to all samples and update analyses
+	const applyGlobalMatrix = async (matrix) => {
+		if (!crmData || !matrix) return;
+
+		// First update all sample matrices
+		const updatedSamples = crmData.samples.map((sample) => ({
+			...sample,
+			matrix: matrix,
+		}));
+
+		setCrmData({
+			...crmData,
+			samples: updatedSamples,
+		});
+
+		// Then update analyses for each sample
+		for (let index = 0; index < updatedSamples.length; index++) {
+			try {
+				const sample = updatedSamples[index];
+				// Create list of analyses with their parameter names and the new matrix
+				const listAnalysis = sample.analysis.map((item) => ({
+					analysis: item.parameter_name,
+					matrix: matrix,
+				}));
+
+				// Send API request to match analyses with matrix
+				const response = await apiPost('https://black.irdop.org/trelw82ki/match/analysis/matrix', {
+					listAnalysis,
+				});
+
+				// Update the sample with the response data
+				if (response.data) {
+					updatedSamples[index] = {
+						...updatedSamples[index],
+						analysis: response.data,
+					};
+
+					setCrmData({
+						...crmData,
+						samples: updatedSamples,
+					});
+				}
+			} catch (error) {
+				console.error('Error updating analyses based on matrix:', error);
+			}
+		}
+	};
 
 	const openModal = () => {
 		setIsModalOpen(true);
@@ -44,6 +121,7 @@ const CreateReceiptFromCRM = () => {
 		setUrgentSamples({});
 		setAllUrgent(false);
 		setSelectedPurpose(''); // Reset to default purpose
+		setDeadline(''); // Reset deadline
 	};
 
 	const closeModal = () => {
@@ -156,6 +234,16 @@ const CreateReceiptFromCRM = () => {
 	const handleCreateReceipt = async () => {
 		if (!crmData) return;
 
+		// Check if deadline is selected
+		if (!deadline) {
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Vui lòng chọn Hạn trả kết quả!',
+			});
+			return;
+		}
+
 		setIsCreating(true);
 
 		// Add status property to samples based on urgentSamples state
@@ -194,6 +282,7 @@ const CreateReceiptFromCRM = () => {
 				sale_recorder: crmData.sale_recorder,
 				total_amount: crmData.total_amount,
 				discount_summary: crmData.discount_summary,
+				deadline: deadline, // Add deadline to payload
 			});
 
 			// Check if the response contains an error
@@ -264,19 +353,6 @@ const CreateReceiptFromCRM = () => {
 			}, 500);
 
 			setTypingTimeout(timeout);
-		}
-	};
-
-	// Search parameters
-	const searchParameters = async (query) => {
-		try {
-			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/search/parameter', {
-				query,
-				matrix: crmData.samples[currentSampleIndex]?.matrix || '',
-			});
-			setParameterList(response.data);
-		} catch (error) {
-			console.error('Error searching parameters:', error);
 		}
 	};
 
@@ -528,19 +604,19 @@ const CreateReceiptFromCRM = () => {
 				...crmData,
 				client: {
 					...crmData.client,
-					[editingField.field]: editValue
-				}
+					[editingField.field]: editValue,
+				},
 			});
 		} else if (editingField.type === 'sample') {
 			// Update sample name
 			const updatedSamples = [...crmData.samples];
 			updatedSamples[editingField.index] = {
 				...updatedSamples[editingField.index],
-				sample_name: editValue
+				sample_name: editValue,
 			};
 			setCrmData({
 				...crmData,
-				samples: updatedSamples
+				samples: updatedSamples,
 			});
 		}
 		// Reset editing state
@@ -557,6 +633,197 @@ const CreateReceiptFromCRM = () => {
 		} else if (e.key === 'Escape') {
 			cancelEdit();
 		}
+	};
+
+	// Handle the matrix change for a specific sample
+	const handleMatrixChange = (index, value) => {
+		if (!crmData) return;
+
+		const updatedSamples = [...crmData.samples];
+		updatedSamples[index] = {
+			...updatedSamples[index],
+			matrix: value,
+		};
+
+		setCrmData({
+			...crmData,
+			samples: updatedSamples,
+		});
+	}; // Handle matrix input completion (on Enter key or blur)
+	const handleMatrixComplete = async (index, matrixParam) => {
+		if (!crmData) return;
+
+		const sample = crmData.samples[index];
+		const matrix = matrixParam !== undefined ? matrixParam : sample.matrix;
+
+		if (!matrix) return;
+
+		try {
+			// First ensure the sample matrix is correctly set in state
+			const updatedSamples = [...crmData.samples];
+			updatedSamples[index] = {
+				...updatedSamples[index],
+				matrix: matrix,
+			};
+
+			// Update the sample matrix value first before any API call
+			setCrmData({
+				...crmData,
+				samples: updatedSamples,
+			});
+
+			// Also make sure the input field displays the correct value
+			const inputField = document.getElementById(`matrix-${index}`);
+			if (inputField && inputField.value !== matrix) {
+				inputField.value = matrix;
+			}
+
+			// Create list of analyses with their parameter names and the new matrix
+			const listAnalysis = sample.analysis.map((item) => ({
+				analysis: item.parameter_name,
+				matrix: matrix,
+			}));
+
+			// Send API request to match analyses with matrix
+			const response = await apiPost('https://black.irdop.org/trelw82ki/match/analysis/matrix', {
+				listAnalysis,
+			});
+
+			// Update the sample with the response data
+			if (response.data) {
+				updatedSamples[index] = {
+					...updatedSamples[index],
+					matrix: matrix, // Ensure matrix value is preserved
+					analysis: response.data,
+				};
+
+				setCrmData({
+					...crmData,
+					samples: updatedSamples,
+				});
+			}
+		} catch (error) {
+			console.error('Error updating analyses based on matrix:', error);
+		}
+	};
+
+	// Search parameters
+	const searchParameters = async (query) => {
+		try {
+			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/search/parameter', {
+				query,
+				matrix: crmData.samples[currentSampleIndex]?.matrix || '',
+			});
+			setParameterList(response.data);
+		} catch (error) {
+			console.error('Error searching parameters:', error);
+		}
+	};
+
+	// Function to start editing analysis cell
+	const startEditingAnalysis = (sampleIndex, analysisIndex, field, value) => {
+		setEditingAnalysis({ sampleIndex, analysisIndex, field });
+		setEditAnalysisValue(value || '');
+	};
+
+	// Function to handle analysis edit change
+	const handleAnalysisEditChange = (e) => {
+		setEditAnalysisValue(e.target.value);
+	};
+	// Function to save analysis edit
+	const saveAnalysisEdit = () => {
+		const { sampleIndex, analysisIndex, field } = editingAnalysis;
+		if (sampleIndex === null || analysisIndex === null || !field) return;
+
+		// Don't set the value if it's '--'
+		if (editAnalysisValue !== '--') {
+			const updatedSamples = [...crmData.samples];
+
+			// Handle special case for ex_info fields
+			if (field === 'ex_name' || field === 'send_at') {
+				const currentAnalysis = updatedSamples[sampleIndex].analysis[analysisIndex];
+				const currentExInfo = currentAnalysis.ex_info || {};
+
+				updatedSamples[sampleIndex].analysis[analysisIndex] = {
+					...currentAnalysis,
+					ex_info: {
+						...currentExInfo,
+						[field]: editAnalysisValue,
+					},
+				};
+			} else {
+				// Regular field updates
+				updatedSamples[sampleIndex].analysis[analysisIndex] = {
+					...updatedSamples[sampleIndex].analysis[analysisIndex],
+					[field]: editAnalysisValue,
+				};
+			}
+
+			setCrmData({
+				...crmData,
+				samples: updatedSamples,
+			});
+		}
+
+		// Reset editing state
+		setEditingAnalysis({ sampleIndex: null, analysisIndex: null, field: null });
+	};
+
+	// Function to cancel analysis edit
+	const cancelAnalysisEdit = () => {
+		setEditingAnalysis({ sampleIndex: null, analysisIndex: null, field: null });
+	};
+
+	// Function to handle key events for analysis edit
+	const handleAnalysisKeyDown = (e) => {
+		if (e.key === 'Enter') {
+			saveAnalysisEdit();
+		} else if (e.key === 'Escape') {
+			cancelAnalysisEdit();
+		}
+	};
+
+	// Add state for matrix dropdown
+	const [uniqueMatrices, setUniqueMatrices] = useState([]);
+	const [matrixInput, setMatrixInput] = useState('');
+	const [showMatrixDropdown, setShowMatrixDropdown] = useState(false);
+	const [matrixPage, setMatrixPage] = useState(1);
+	const itemsPerPage = 10;
+	const [currentEditingMatrixIndex, setCurrentEditingMatrixIndex] = useState(null);
+	const skipBlurRef = useRef(false);
+
+	// Fetch matrices for dropdown
+	useEffect(() => {
+		const fetchMatrices = async () => {
+			try {
+				// Fetch matrices from API
+				const matricesResponse = await apiGet('https://black.irdop.org/get/list_enum/matrix');
+				if (matricesResponse.data && Array.isArray(matricesResponse.data)) {
+					setUniqueMatrices(matricesResponse.data.filter(Boolean));
+				}
+			} catch (error) {
+				console.error('Error fetching matrix list:', error);
+			}
+		};
+
+		fetchMatrices();
+	}, []);
+
+	// Filter matrices based on input
+	const filterMatrices = (input) => {
+		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
+		return uniqueMatrices.filter((matrix) => matrix && matrix.toLowerCase().includes((input || '').toLowerCase()));
+	};
+
+	// Get paginated results for dropdown
+	const getPaginatedMatrices = (input) => {
+		const filtered = filterMatrices(input);
+		return filtered.slice((matrixPage - 1) * itemsPerPage, matrixPage * itemsPerPage);
+	};
+
+	// Pagination handler
+	const handleMatrixPageChange = (pageNumber) => {
+		setMatrixPage(pageNumber);
 	};
 
 	return (
@@ -646,7 +913,7 @@ const CreateReceiptFromCRM = () => {
 												<span className="font-medium text-gray-500">Mã khách hàng: </span>
 												{crmData.client.client_uid || '--'}
 											</p>
-											
+
 											<div className="mb-2">
 												<p className="font-medium text-gray-500">Tên cá nhân / tổ chức</p>
 												{editingField.type === 'client' && editingField.field === 'client_name' ? (
@@ -660,8 +927,8 @@ const CreateReceiptFromCRM = () => {
 														className="w-full border p-1 rounded bg-white"
 													/>
 												) : (
-													<p 
-														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded" 
+													<p
+														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
 														onClick={() => startEditing('client', 'client_name', crmData.client.client_name)}
 														title="Nhấn để chỉnh sửa"
 													>
@@ -669,7 +936,7 @@ const CreateReceiptFromCRM = () => {
 													</p>
 												)}
 											</div>
-											
+
 											<div className="mb-2">
 												<p className="font-medium text-gray-500">Địa chỉ</p>
 												{editingField.type === 'client' && editingField.field === 'client_address' ? (
@@ -683,16 +950,16 @@ const CreateReceiptFromCRM = () => {
 														className="w-full border p-1 rounded bg-white"
 													/>
 												) : (
-													<p 
-														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded" 
+													<p
+														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
 														onClick={() => startEditing('client', 'client_address', crmData.client.client_address)}
 														title="Nhấn để chỉnh sửa"
 													>
-														{crmData.client.client_address}
+														{crmData.client.client_address || '--'}
 													</p>
 												)}
 											</div>
-											
+
 											<div className="mb-1">
 												<p className="font-medium text-gray-500">Mã số thuế / CCCD:</p>
 												{editingField.type === 'client' && editingField.field === 'legal_id' ? (
@@ -706,8 +973,8 @@ const CreateReceiptFromCRM = () => {
 														className="w-full border p-1 rounded bg-white"
 													/>
 												) : (
-													<p 
-														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded" 
+													<p
+														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
 														onClick={() => startEditing('client', 'legal_id', crmData.client.legal_id)}
 														title="Nhấn để chỉnh sửa"
 													>
@@ -755,6 +1022,120 @@ const CreateReceiptFromCRM = () => {
 														</select>
 													</div>
 												</div>
+											</div>{' '}
+											<div className="flex items-center mb-4">
+												<label htmlFor="global-matrix" className="text-sm font-medium mr-2">
+													Nền mẫu cho tất cả:
+												</label>
+												<div className="flex items-center">
+													<div className="relative inline-block">
+														<input
+															type="text"
+															id="global-matrix"
+															placeholder="Nhập nền mẫu"
+															className="border p-1 rounded bg-white w-60"
+															onChange={(e) => {
+																const newValue = e.target.value;
+																handleGlobalMatrixChange(newValue);
+																// Show matrix suggestions when typing
+																setMatrixInput(newValue);
+																setMatrixPage(1); // Reset to first page when typing
+																setShowMatrixDropdown(newValue.length >= 2); // Show dropdown once at least 2 chars entered
+																setCurrentEditingMatrixIndex(null); // Not editing a specific sample matrix
+															}}
+															onKeyDown={(e) => {
+																if (e.key === 'Enter') {
+																	setShowMatrixDropdown(false);
+																	applyGlobalMatrix(e.target.value);
+																}
+															}}
+															onBlur={(e) => {
+																setTimeout(() => {
+																	setShowMatrixDropdown(false);
+																	applyGlobalMatrix(e.target.value);
+																}, 200);
+															}}
+														/>
+														{showMatrixDropdown &&
+															currentEditingMatrixIndex === null &&
+															getPaginatedMatrices(matrixInput).length > 0 &&
+															createPortal(
+																<div
+																	className="absolute bg-white border rounded shadow-lg z-[9999]"
+																	style={{
+																		width: '300px',
+																		top:
+																			document.getElementById('global-matrix').getBoundingClientRect().bottom +
+																			window.scrollY,
+																		left:
+																			document.getElementById('global-matrix').getBoundingClientRect().left +
+																			window.scrollX,
+																	}}
+																>
+																	{getPaginatedMatrices(matrixInput).map((matrix, idx) => (
+																		<div
+																			key={idx}
+																			className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																			onClick={() => {
+																				// First update the matrix input state
+																				setMatrixInput(matrix);
+
+																				// Update all samples with the new matrix
+																				handleGlobalMatrixChange(matrix);
+
+																				// Also update the input field directly
+																				const globalMatrixInput = document.getElementById('global-matrix');
+																				if (globalMatrixInput) {
+																					globalMatrixInput.value = matrix;
+																				}
+
+																				// Apply matrix and update analyses after a small delay to ensure state is updated
+																				setTimeout(() => {
+																					applyGlobalMatrix(matrix);
+																				}, 100);
+
+																				// Hide dropdown
+																				setShowMatrixDropdown(false);
+																			}}
+																		>
+																			<p>{matrix}</p>
+																		</div>
+																	))}
+																	{filterMatrices(matrixInput).length > itemsPerPage && (
+																		<div className="flex justify-between p-2 bg-gray-100">
+																			<button
+																				className="px-2 py-1 border rounded disabled:opacity-50"
+																				onClick={() => handleMatrixPageChange(matrixPage - 1)}
+																				disabled={matrixPage === 1}
+																			>
+																				Prev
+																			</button>
+																			<span>
+																				{matrixPage}/{Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+																			</span>
+																			<button
+																				className="px-2 py-1 border rounded disabled:opacity-50"
+																				onClick={() => handleMatrixPageChange(matrixPage + 1)}
+																				disabled={
+																					matrixPage >= Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)
+																				}
+																			>
+																				Next
+																			</button>
+																		</div>
+																	)}
+																</div>,
+																document.body,
+															)}
+													</div>
+													<button
+														onClick={(e) => applyGlobalMatrix(document.getElementById('global-matrix').value)}
+														className="ml-2 bg-gray-200 hover:bg-gray-300 text-sm rounded-lg p-1 px-2"
+														title="Áp dụng nền mẫu cho tất cả"
+													>
+														Áp dụng
+													</button>
+												</div>
 											</div>
 											<div className="overflow-y-auto max-h-[50vh] pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
 												{crmData.samples.map((sample, index) => (
@@ -773,8 +1154,8 @@ const CreateReceiptFromCRM = () => {
 																	/>
 																</div>
 															) : (
-																<h2 
-																	className="font-medium text-start text-lg cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded" 
+																<h2
+																	className="font-medium text-start text-lg cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
 																	onClick={() => startEditing('sample', 'sample_name', sample.sample_name, index)}
 																	title="Nhấn để chỉnh sửa tên mẫu"
 																>
@@ -785,31 +1166,135 @@ const CreateReceiptFromCRM = () => {
 																onClick={() => handleDeleteSample(index)}
 																className="text-red-500 hover:border hover:border-red-500 rounded-full w-5 h-5 flex items-center justify-center"
 																title="Xóa mẫu"
-															>
-																		✕
-															</button>
+															></button>
 														</div>
-														
-														<div className="flex items-center my-1">
-															<input
-																type="checkbox"
-																id={`urgent-${index}`}
-																checked={urgentSamples[index] || false}
-																onChange={(e) => handleUrgentChange(index, e.target.checked)}
-																className="mr-2"
-															/>
-															<label htmlFor={`urgent-${index}`} className="text-sm font-medium">
-																Mẫu khẩn
-															</label>
+
+														<div className="mb-2 flex items-center justify-between">
+															<div className="relative">
+																<label htmlFor={`matrix-${index}`} className="text-sm font-medium w-20 mr-2">
+																	Nền mẫu:
+																</label>
+																<div className="relative inline-block">
+																	<input
+																		type="text"
+																		id={`matrix-${index}`}
+																		value={sample.matrix || ''}
+																		onChange={(e) => {
+																			const newValue = e.target.value;
+																			handleMatrixChange(index, newValue);
+																			// Show matrix suggestions when typing
+																			setMatrixInput(newValue);
+																			setMatrixPage(1); // Reset to first page when typing
+																			setShowMatrixDropdown(newValue.length >= 2); // Show dropdown once at least 2 chars entered
+																			setCurrentEditingMatrixIndex(index); // Track which matrix field is being edited
+																		}}
+																		onBlur={() => {
+																			setTimeout(() => {
+																				if (!showMatrixDropdown && !skipBlurRef.current) {
+																					handleMatrixComplete(index);
+																				}
+																				setShowMatrixDropdown(false);
+																			}, 200);
+																		}}
+																		onKeyDown={(e) => {
+																			if (e.key === 'Enter') {
+																				setShowMatrixDropdown(false);
+																				handleMatrixComplete(index);
+																			}
+																		}}
+																		className="border p-1 rounded bg-white w-60"
+																	/>
+																	{showMatrixDropdown &&
+																		currentEditingMatrixIndex === index &&
+																		getPaginatedMatrices(matrixInput).length > 0 &&
+																		createPortal(
+																			<div
+																				className="absolute bg-white border rounded shadow-lg z-[9999]"
+																				style={{
+																					width: '300px',
+																					top:
+																						document.getElementById(`matrix-${index}`).getBoundingClientRect().bottom +
+																						window.scrollY,
+																					left:
+																						document.getElementById(`matrix-${index}`).getBoundingClientRect().left +
+																						window.scrollX,
+																				}}
+																			>
+																				{getPaginatedMatrices(matrixInput).map((matrix, matrixIndex) => (
+																					<div
+																						key={matrixIndex}
+																						className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																						onClick={() => {
+																							// mirror global matrix apply behavior
+																							skipBlurRef.current = true; // prevent blur-based API
+																							setTimeout(() => {
+																								skipBlurRef.current = false;
+																							}, 300);
+																							setMatrixInput(matrix);
+																							handleMatrixChange(index, matrix);
+																							const inputField = document.getElementById(`matrix-${index}`);
+																							if (inputField) inputField.value = matrix;
+																							setTimeout(() => handleMatrixComplete(index, matrix), 100);
+																							setShowMatrixDropdown(false);
+																							setCurrentEditingMatrixIndex(null);
+																						}}
+																					>
+																						<p>{matrix}</p>
+																					</div>
+																				))}
+																				{filterMatrices(matrixInput).length > itemsPerPage && (
+																					<div className="flex justify-between p-2 bg-gray-100">
+																						<button
+																							className="px-2 py-1 border rounded disabled:opacity-50"
+																							onClick={() => handleMatrixPageChange(matrixPage - 1)}
+																							disabled={matrixPage === 1}
+																						>
+																							Prev
+																						</button>
+																						<span>
+																							{matrixPage}/
+																							{Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+																						</span>
+																						<button
+																							className="px-2 py-1 border rounded disabled:opacity-50"
+																							onClick={() => handleMatrixPageChange(matrixPage + 1)}
+																							disabled={
+																								matrixPage >=
+																								Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)
+																							}
+																						>
+																							Next
+																						</button>
+																					</div>
+																				)}
+																			</div>,
+																			document.body,
+																		)}
+																</div>
+															</div>
+															<div className="flex items-center my-1">
+																<input
+																	type="checkbox"
+																	id={`urgent-${index}`}
+																	checked={urgentSamples[index] || false}
+																	onChange={(e) => handleUrgentChange(index, e.target.checked)}
+																	className="mr-2"
+																/>
+																<label htmlFor={`urgent-${index}`} className="text-sm font-medium">
+																	Mẫu khẩn
+																</label>
+															</div>
 														</div>
-														
+
 														<div className="overflow-x-auto">
 															<table className="w-full">
 																<thead>
 																	<tr className="border-b-2 text-gray-500">
 																		<th className="p-1 text-start">Mã</th>
 																		<th className="p-1 text-start">Chỉ tiêu</th>
-																		<th className="p-1 text-start">Nền mẫu</th>
+																		<th className="p-1 text-start">Nguồn</th>
+																		<th className="p-1 text-start">Mã Phương pháp</th>
+																		<th className="p-1 text-start">Lĩnh vực</th>
 																		<th className="p-1 text-start w-10">Xóa</th>
 																	</tr>
 																</thead>
@@ -817,23 +1302,163 @@ const CreateReceiptFromCRM = () => {
 																	{sample.analysis.map((item, idx) => (
 																		<tr key={idx} className="border-b">
 																			<td className="p-1 text-start">{item.parameter_uid}</td>
-																			<td className="p-1 text-start">{item.parameter_name}</td>
-																			<td className="p-1 text-start">{item.matrix}</td>
+																			<td className="p-1 text-start">{item.parameter_name}</td>{' '}
+																			<td className="p-1 text-start w-28">
+																				{editingAnalysis.sampleIndex === index &&
+																				editingAnalysis.analysisIndex === idx &&
+																				editingAnalysis.field === 'protocol_source' ? (
+																					<select
+																						value={editAnalysisValue}
+																						onChange={handleAnalysisEditChange}
+																						onBlur={saveAnalysisEdit}
+																						autoFocus
+																						className="w-24 border p-0.5 rounded bg-white"
+																					>
+																						{sourceOptions.map((option, i) => (
+																							<option key={i} value={option === '--' ? '' : option}>
+																								{option}
+																							</option>
+																						))}
+																					</select>
+																				) : (
+																					<span
+																						className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
+																						onClick={() =>
+																							startEditingAnalysis(index, idx, 'protocol_source', item.protocol_source)
+																						}
+																						title="Nhấn để chỉnh sửa"
+																					>
+																						{item.protocol_source || '--'}
+																					</span>
+																				)}
+																			</td>
+																			<td className="p-1 text-start">
+																				{editingAnalysis.sampleIndex === index &&
+																				editingAnalysis.analysisIndex === idx &&
+																				editingAnalysis.field === 'protocol_code' ? (
+																					<input
+																						type="text"
+																						value={editAnalysisValue}
+																						onChange={handleAnalysisEditChange}
+																						onKeyDown={handleAnalysisKeyDown}
+																						onBlur={saveAnalysisEdit}
+																						autoFocus
+																						className="w-full border p-1 rounded bg-white"
+																					/>
+																				) : (
+																					<span
+																						className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
+																						onClick={() =>
+																							startEditingAnalysis(index, idx, 'protocol_code', item.protocol_code)
+																						}
+																						title="Nhấn để chỉnh sửa"
+																					>
+																						{item.protocol_code || '--'}
+																					</span>
+																				)}
+																				{/* Add the EX info fields if protocol_source is EX */}
+																				{item.protocol_source === 'EX' && (
+																					<>
+																						<div className="mt-1">
+																							{editingAnalysis.sampleIndex === index &&
+																							editingAnalysis.analysisIndex === idx &&
+																							editingAnalysis.field === 'ex_name' ? (
+																								<input
+																									type="text"
+																									value={editAnalysisValue}
+																									onChange={handleAnalysisEditChange}
+																									onKeyDown={handleAnalysisKeyDown}
+																									onBlur={saveAnalysisEdit}
+																									autoFocus
+																									className="w-full border p-1 rounded bg-white"
+																									placeholder="Tên thầu phụ"
+																								/>
+																							) : (
+																								<span
+																									className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full text-sm"
+																									onClick={() =>
+																										startEditingAnalysis(index, idx, 'ex_name', item.ex_info?.ex_name)
+																									}
+																									title="Nhấn để chỉnh sửa tên thầu phụ"
+																								>
+																									{item.ex_info?.ex_name || 'Thầu phụ...'}
+																								</span>
+																							)}
+																						</div>
+																						<div className="mt-1">
+																							{editingAnalysis.sampleIndex === index &&
+																							editingAnalysis.analysisIndex === idx &&
+																							editingAnalysis.field === 'send_at' ? (
+																								<input
+																									type="date"
+																									value={
+																										editAnalysisValue
+																											? new Date(editAnalysisValue).toISOString().split('T')[0]
+																											: ''
+																									}
+																									onChange={handleAnalysisEditChange}
+																									onKeyDown={handleAnalysisKeyDown}
+																									onBlur={saveAnalysisEdit}
+																									autoFocus
+																									className="w-full border p-1 rounded bg-white"
+																								/>
+																							) : (
+																								<span
+																									className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full text-sm"
+																									onClick={() =>
+																										startEditingAnalysis(index, idx, 'send_at', item.ex_info?.send_at)
+																									}
+																									title="Nhấn để chọn ngày gửi mẫu"
+																								>
+																									{item.ex_info?.send_at
+																										? new Date(item.ex_info.send_at).toLocaleDateString('vi-VN')
+																										: 'Ngày gửi mẫu...'}
+																								</span>
+																							)}
+																						</div>
+																					</>
+																				)}
+																			</td>
+																			<td className="p-1 text-start w-24">
+																				{editingAnalysis.sampleIndex === index &&
+																				editingAnalysis.analysisIndex === idx &&
+																				editingAnalysis.field === 'field' ? (
+																					<select
+																						value={editAnalysisValue}
+																						onChange={handleAnalysisEditChange}
+																						onBlur={saveAnalysisEdit}
+																						autoFocus
+																						className="max-w-20 border p-0.5 rounded bg-white"
+																					>
+																						{fieldOptions.map((option, i) => (
+																							<option key={i} value={option === '--' ? '' : option}>
+																								{option}
+																							</option>
+																						))}
+																					</select>
+																				) : (
+																					<span
+																						className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
+																						onClick={() => startEditingAnalysis(index, idx, 'field', item.field)}
+																						title="Nhấn để chỉnh sửa"
+																					>
+																						{item.field || '--'}
+																					</span>
+																				)}
+																			</td>
 																			<td className="p-1 text-center">
 																				<button
 																					onClick={() => handleDeleteAnalysis(index, idx)}
 																					className="text-red-500 hover:border hover:border-red-500 rounded-full w-5 h-5 flex items-center justify-center mx-auto"
 																					title="Xóa chỉ tiêu"
-																				>
-																					✕
-																				</button>
+																				></button>
 																			</td>
 																		</tr>
 																	))}
 																</tbody>
 															</table>
 														</div>
-														
+
 														<div className="mt-3 flex justify-end">
 															<button
 																onClick={() => handleOpenAddParameter(index)}
@@ -850,16 +1475,31 @@ const CreateReceiptFromCRM = () => {
 									</div>
 								</div>
 							)}
-							
+
 							{crmData && (
-								<div className="flex justify-end w-full mt-4">
-									<button
-										onClick={handleCreateReceipt}
-										disabled={isCreating}
-										className="bg-primary text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
-									>
-										{isCreating ? 'Đang tạo...' : 'Tạo tiếp nhận mẫu'}
-									</button>
+								<div className="w-full mt-4">
+									<div className="flex justify-end items-center mb-2">
+										<label htmlFor="deadline" className="text-sm font-medium mr-2">
+											Hạn trả kết quả:
+										</label>
+										<input
+											type="date"
+											id="deadline"
+											value={deadline}
+											onChange={(e) => setDeadline(e.target.value)}
+											className="border p-1 rounded bg-white"
+											required
+										/>
+									</div>
+									<div className="flex justify-end w-full">
+										<button
+											onClick={handleCreateReceipt}
+											disabled={isCreating}
+											className="bg-primary text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+										>
+											{isCreating ? 'Đang tạo...' : 'Tạo tiếp nhận mẫu'}
+										</button>
+									</div>
 								</div>
 							)}
 						</div>

@@ -126,6 +126,11 @@ const Dashboard = () => {
 	const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
 	const paymentDropdownRef = useRef(null);
 
+	// Add state for sales recorder filtering
+	const [salesRecorderFilter, setSalesRecorderFilter] = useState(null);
+	const [showSalesRecorderDropdown, setShowSalesRecorderDropdown] = useState(false);
+	const salesRecorderDropdownRef = useRef(null);
+
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
 		// Remove any existing separators to normalize
@@ -1848,6 +1853,9 @@ const Dashboard = () => {
 			}
 			if (paymentDropdownRef.current && !paymentDropdownRef.current.contains(event.target)) {
 				setShowPaymentDropdown(false);
+				if (salesRecorderDropdownRef.current && !salesRecorderDropdownRef.current.contains(event.target)) {
+					setShowSalesRecorderDropdown(false);
+				}
 			}
 		};
 
@@ -1869,6 +1877,151 @@ const Dashboard = () => {
 			date.getMonth() === today.getMonth() &&
 			date.getFullYear() === today.getFullYear()
 		);
+	};
+
+	// Modified function to handle draft send date click when no date is present
+	const handleDraftSendCheckbox = (receiptId) => {
+		// Confirm before setting the date
+		Swal.fire({
+			title: 'Xác nhận',
+			text: 'Bạn có muốn cập nhật trạng thái gửi sơ bộ không?',
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonColor: '#3085d6',
+			cancelButtonColor: '#d33',
+			confirmButtonText: 'Xác nhận',
+			cancelButtonText: 'Hủy',
+		}).then((result) => {
+			if (result.isConfirmed) {
+				// If confirmed, set today's date and submit
+				const today = new Date();
+				handleDraftSendChangeAPI(receiptId, today);
+
+				// Update local state immediately for better UI feedback
+				setCurrentList((prevList) => {
+					return prevList.map((receipt) => {
+						if (receipt.id === receiptId) {
+							return { ...receipt, draft_send_at: today };
+						}
+						return receipt;
+					});
+				});
+			}
+		});
+	};
+
+	// Modified function to handle PPT send date click when no date is present
+	const handlePptSendCheckbox = (receiptId) => {
+		// Confirm before setting the date
+		Swal.fire({
+			title: 'Xác nhận',
+			text: 'Bạn có muốn cập nhật trạng thái gửi phiếu phân tích không?',
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonColor: '#3085d6',
+			cancelButtonColor: '#d33',
+			confirmButtonText: 'Xác nhận',
+			cancelButtonText: 'Hủy',
+		}).then((result) => {
+			if (result.isConfirmed) {
+				// If confirmed, set today's date and submit
+				const today = new Date();
+				handlePptSendChangeAPI(receiptId, today);
+
+				// Update local state immediately for better UI feedback
+				setCurrentList((prevList) => {
+					return prevList.map((receipt) => {
+						if (receipt.id === receiptId) {
+							return {
+								...receipt,
+								ppt_send_at: today,
+								ppt_send_by: currentUser?.identity_uid,
+							};
+						}
+						return receipt;
+					});
+				});
+			}
+		});
+	};
+
+	// Get array of unique sales recorder names from the current list
+	const getUniqueSalesRecorders = () => {
+		const recorders = currentList
+			.filter((receipt) => receipt.sale_recorder) // Only include receipts with a sales recorder
+			.map((receipt) => receipt.sale_recorder);
+
+		// Get unique values and sort them alphabetically
+		return [...new Set(recorders)].sort((a, b) => a.localeCompare(b));
+	};
+
+	// Handle sales recorder filter selection
+	const handleSalesRecorderFilter = (recorder) => {
+		// If clicking the same filter that's already active, clear the filter
+		if (salesRecorderFilter === recorder) {
+			setSalesRecorderFilter(null);
+
+			// Reset to original list or maintain other filters
+			if (searchTerm || filterInfo.isFilterActive) {
+				// If we have active filters, restore the filtered list
+				fetchReceipt().then(() => {
+					// Re-apply existing filters
+					if (searchTerm) {
+						const queryParams = new URLSearchParams(location.search);
+						const searchParam = queryParams.get('search');
+						if (searchParam) {
+							// Re-search with existing term
+							const filtered = originalList.filter(
+								(receipt) =>
+									(receipt.receipt_uid || '').includes(searchParam) ||
+									(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
+									receipt.samples?.some(
+										(sample) =>
+											(sample.sample_uid || '').includes(searchParam) ||
+											(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
+									),
+							);
+							setCurrentList(filtered);
+						}
+					} else if (filterInfo.isFilterActive) {
+						// Re-apply date filter
+						fetchReceiptsByDeadline(filterInfo.startDate, filterInfo.endDate);
+					} else {
+						setCurrentList(originalList);
+					}
+				});
+			} else {
+				// No filters active, just restore original list
+				setCurrentList(originalList);
+			}
+			showToast('Đã hủy lọc người ghi nhận', 'info');
+		} else {
+			// Apply the new sales recorder filter
+			setSalesRecorderFilter(recorder);
+
+			// Filter current list based on sales recorder
+			const filteredList = [...currentList].filter((receipt) => receipt.sale_recorder === recorder);
+			setCurrentList(filteredList);
+
+			showToast(`Hiển thị ${filteredList.length} tiếp nhận có người ghi nhận là "${recorder}"`, 'info');
+		}
+		// Close the dropdown after selection
+		setShowSalesRecorderDropdown(false);
+	};
+
+	// Toggle sales recorder dropdown
+	const toggleSalesRecorderDropdown = () => {
+		if (salesRecorderFilter !== null) {
+			// If filter is active, clear it
+			handleSalesRecorderFilter(salesRecorderFilter);
+		} else {
+			// Toggle dropdown visibility
+			setShowSalesRecorderDropdown(!showSalesRecorderDropdown);
+			// Close other dropdowns
+			setShowRecordCodeDropdown(false);
+			setShowRequestNumberDropdown(false);
+			setShowPaymentDropdown(false);
+		}
 	};
 
 	return (
@@ -2347,7 +2500,34 @@ const Dashboard = () => {
 												</div>
 											)}
 										</th>
-										<th className="p-1 border-b text-start w-[15%] min-w-36">Người ghi nhận</th>
+										<th
+											className="p-1 border-b text-start w-[15%] min-w-36 cursor-pointer hover:text-[#103667] underline text-blue-700 relative"
+											onClick={toggleSalesRecorderDropdown}
+										>
+											{salesRecorderFilter !== null ? salesRecorderFilter : 'Người ghi nhận'}
+											{showSalesRecorderDropdown && (
+												<div
+													ref={salesRecorderDropdownRef}
+													className="absolute z-10 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 max-h-80 overflow-y-auto"
+													style={{ top: '100%', left: 0, minWidth: '200px' }}
+												>
+													{getUniqueSalesRecorders().map((recorder, index) => (
+														<div
+															key={index}
+															className={`px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
+																salesRecorderFilter === recorder ? 'bg-blue-100 text-blue-700 font-medium' : ''
+															}`}
+															onClick={(e) => {
+																e.stopPropagation();
+																handleSalesRecorderFilter(recorder);
+															}}
+														>
+															{recorder}
+														</div>
+													))}
+												</div>
+											)}
+										</th>
 									</>
 								)}
 							</tr>
@@ -2400,7 +2580,7 @@ const Dashboard = () => {
 														)}
 														<p className="text-xs text-gray-500">
 															{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
-															{getUserName(receipt.created_by_uid)}
+															{receipt.created_by_name || getUserName(receipt.created_by_uid)}
 														</p>
 													</div>
 												</td>
@@ -2448,7 +2628,14 @@ const Dashboard = () => {
 															) : receipt.draft_send_at ? (
 																formatDate(receipt.draft_send_at)
 															) : (
-																'--'
+																<div className="flex items-center">
+																	<span
+																		className="cursor-pointer text-gray-500 hover:text-blue-600"
+																		onClick={() => handleDraftSendCheckbox(receipt.id)}
+																	>
+																		Chưa gửi
+																	</span>
+																</div>
 															)}
 														</td>
 														<td
@@ -2488,7 +2675,14 @@ const Dashboard = () => {
 															) : receipt.ppt_send_at ? (
 																formatDate(receipt.ppt_send_at)
 															) : (
-																'--'
+																<div className="flex items-center">
+																	<span
+																		className="cursor-pointer text-gray-500 hover:text-blue-600"
+																		onClick={() => handlePptSendCheckbox(receipt.id)}
+																	>
+																		Chưa gửi
+																	</span>
+																</div>
 															)}
 														</td>
 														<td className="p-1 text-start">
@@ -2589,7 +2783,7 @@ const Dashboard = () => {
 																		)}
 																		<p className="text-xs text-gray-500">
 																			{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
-																			{getUserName(receipt.created_by_uid)}
+																			{receipt.created_by_name || getUserName(receipt.created_by_uid)}
 																		</p>
 																	</div>
 																</td>
@@ -2682,7 +2876,18 @@ const Dashboard = () => {
 																				</div>
 																			) : (
 																				<div className="w-full h-full p-1 py-0 rounded cursor-pointer hover:bg-gray-100">
-																					{receipt.draft_send_at ? formatDate(receipt.draft_send_at) : '--'}
+																					{receipt.draft_send_at ? (
+																						formatDate(receipt.draft_send_at)
+																					) : (
+																						<div className="flex items-center">
+																							<span
+																								className="cursor-pointer text-gray-500 hover:text-blue-600"
+																								onClick={() => handleDraftSendCheckbox(receipt.id)}
+																							>
+																								Chưa gửi
+																							</span>
+																						</div>
+																					)}
 																				</div>
 																			)}
 																		</td>
@@ -2725,7 +2930,18 @@ const Dashboard = () => {
 																				</div>
 																			) : (
 																				<div className="w-full h-full p-1 py-0 rounded cursor-pointer hover:bg-gray-100">
-																					{receipt.ppt_send_at ? formatDate(receipt.ppt_send_at) : '--'}
+																					{receipt.ppt_send_at ? (
+																						formatDate(receipt.ppt_send_at)
+																					) : (
+																						<div className="flex items-center">
+																							<span
+																								className="cursor-pointer text-gray-500 hover:text-blue-600"
+																								onClick={() => handlePptSendCheckbox(receipt.id)}
+																							>
+																								Chưa gửi
+																							</span>
+																						</div>
+																					)}
 																				</div>
 																			)}
 																		</td>

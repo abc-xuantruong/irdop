@@ -23,7 +23,9 @@ const Login = () => {
 			if (response.status === 200) {
 				toast.success('Đăng nhập thành công!');
 				const auth = response.data.session_uid;
+				const app_uid = response.data.app_uid;
 				Cookies.set('auth', auth);
+				Cookies.set('appUID', app_uid);
 				setIsLoading(true);
 				document.getElementById('login-container').classList.add('blur');
 				fetchUser();

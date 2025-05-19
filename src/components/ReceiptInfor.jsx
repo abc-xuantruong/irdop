@@ -1810,7 +1810,7 @@ const ReceiptInfor = ({ receipt }) => {
 			};
 
 			// Call the API
-			const response = await axios.post('https://black.irdop.orgorg/khsi19me/html_to_pdf', requestBody, {
+			const response = await axios.post('http://127.0.0.1:1880/html_to_pdf', requestBody, {
 				headers: {
 					'Content-Type': 'application/json',
 					Accept: '*/*',

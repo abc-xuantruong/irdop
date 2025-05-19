@@ -186,6 +186,8 @@ export default function MultiPageEditor() {
 
 			// Process the header content to replace the draft text with actual ppt_uid
 			let processedHeader = reportData.header_section || header;
+
+			// Make sure to preserve the original processedHeader from API without replacing the date
 			if (reportData.ppt_uid && !reportData.ppt_uid.includes('DRAFT')) {
 				// Replace any draft text variations with the actual ppt_uid
 				processedHeader = processedHeader
@@ -199,7 +201,9 @@ export default function MultiPageEditor() {
 
 			// Update HTML content with processed header
 			setHeaderHTML(processedHeader);
+			setHeader(processedHeader); // Also update the header state to ensure it's consistently used
 			setFooterHTML(reportData.footer_section || footer);
+			setFooter(reportData.footer_section || footer); // Also update footer state
 			setCustomerSectionHTML(reportData.customer_section || '');
 			setSampleInfoSectionHTML(reportData.sample_section || '');
 			setAnalysisSectionHTML(reportData.analysis_section || '');
@@ -330,6 +334,9 @@ export default function MultiPageEditor() {
 			// Set editor to editable mode
 			setIsReadOnly(false);
 
+			// Set the date to current date in the header
+			updateHeaderDateToCurrent();
+
 			// If we have sample data, reload it to reset the form to default
 			if (sampleData) {
 				setShowVlas(false);
@@ -353,6 +360,36 @@ export default function MultiPageEditor() {
 			// Load the selected report data and set editor to read-only mode
 			// (unless it's a draft, which is handled in loadPublishedReport)
 			loadPublishedReport(selectedValue);
+		}
+	};
+
+	// Function to update header date to current date
+	const updateHeaderDateToCurrent = () => {
+		// Create a temporary container to parse the header HTML
+		const tempDiv = document.createElement('div');
+		tempDiv.innerHTML = header;
+
+		// Find the date element in the header
+		const dateSpan = tempDiv.querySelector('.published_date');
+		if (dateSpan) {
+			// Update the date to the current date
+			dateSpan.innerHTML = `Ngày / Date: ${formatDate(new Date())}`;
+
+			// Update the header state with the new HTML
+			const updatedHeader = tempDiv.innerHTML;
+			setHeader(updatedHeader);
+			setHeaderHTML(updatedHeader);
+
+			// Update TinyMCE editor if available
+			if (window.tinymce) {
+				const headerElements = document.getElementsByClassName('header-editable');
+				if (headerElements.length > 0 && headerElements[0].id) {
+					const headerEditor = window.tinymce.get(headerElements[0].id);
+					if (headerEditor) {
+						headerEditor.setContent(updatedHeader);
+					}
+				}
+			}
 		}
 	};
 
