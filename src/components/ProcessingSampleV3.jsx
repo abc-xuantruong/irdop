@@ -1069,29 +1069,16 @@ const ProcessingSample = () => {
 		setFiles([]);
 		setShowFileUploadModal(false);
 	};
-
-	// Function to confirm upload and show association form
+	// Function to confirm upload and show file name next to button
 	const handleConfirmUpload = () => {
 		if (files.length === 0) {
 			toast.error('Không có file nào được chọn');
 			return;
 		}
 
-		// Initialize file associations
-		const initialAssociations = files.map((file) => ({
-			fileName: file.name,
-			file: file,
-			receiptCode: '',
-			sampleCode: '',
-			parameterName: '',
-			searchResults: {},
-			selectedSamples: [],
-			selectedParameters: [],
-		}));
-
-		setFileAssociations(initialAssociations);
-		setShowFileAssociationForm(true);
+		// Just close the modal and keep the files state
 		setShowFileUploadModal(false);
+		toast.success(`Đã chọn file: ${files[0].name}`);
 	};
 
 	// Function to handle input change in association form
@@ -1342,9 +1329,7 @@ const ProcessingSample = () => {
 								title="Hiển thị mẫu quá hạn"
 							>
 								Quá hạn
-							</button>
-
-							{/* Add deadline filter button */}
+							</button>							{/* Add deadline filter button */}
 							<div className="relative">
 								<button
 									className={`p-2 rounded-lg bg-gray-100 border-gray-300 flex items-center justify-center focus:outline-none gap-2 py-1 ${
@@ -1423,23 +1408,6 @@ const ProcessingSample = () => {
 									)}
 								</button>
 							</div>
-							{/* Add file upload button */}
-							<button
-								className={`px-3 py-1 text-sm rounded-lg border flex items-center gap-1 bg-gray-100 border-gray-300 hover:bg-gray-200`}
-								onClick={(e) => {
-									setShowFileUploadModal(true);
-									// Store button position for positioning the modal
-									const buttonRect = e.target.getBoundingClientRect();
-									setDropdownPosition({
-										top: buttonRect.bottom + window.scrollY,
-										left: buttonRect.left + window.scrollX,
-									});
-								}}
-								title="Tải lên biên bản"
-							>
-								<FaUpload size={12} />
-								Tải lên
-							</button>
 						</div>
 						<button
 							className={`px-3 py-1 text-sm rounded-lg border flex items-center gap-1 ${
@@ -1466,12 +1434,14 @@ const ProcessingSample = () => {
 
 				{/* File Upload Modal */}
 				{showFileUploadModal && (
-					<div className="fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowFileUploadModal(false)}>
+					<div className="fixed inset-0 bg-black bg-opacity-50 z-[200]" onClick={() => setShowFileUploadModal(false)}>
 						<div
-							className="w-96 border-dashed border-2 border-gray-400 rounded-lg p-4 bg-white absolute z-10"
+							className="w-96 border-dashed border-2 border-gray-400 rounded-lg p-4 bg-white absolute z-[201]"
 							style={{
 								top: `${dropdownPosition.top}px`,
 								left: `${dropdownPosition.left}px`,
+								maxHeight: '80vh',
+								overflowY: 'auto'
 							}}
 							onClick={(e) => e.stopPropagation()}
 							onDrop={handleFileDrop}
@@ -1671,7 +1641,7 @@ const ProcessingSample = () => {
 																			// Check if all analyses in this sample are selected
 																			checked={sample.analysis.every((analysis) =>
 																				association.selectedSamples.some(
-																					(selection) =>
+																					selection =>
 																						selection.receiptId === receipt.id &&
 																						selection.sampleId === sample.id &&
 																						selection.analysisIds.includes(analysis.id),
@@ -1749,17 +1719,25 @@ const ProcessingSample = () => {
 							filteredProcessingSample
 								.slice(0, showAllReceipts ? filteredProcessingSample.length : displayCount)
 								.map((receipt) => (
-									<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto relative">
-										<div className="text-start mb-2 flex justify-between items-center">
+									<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto relative">										<div className="text-start mb-2 flex justify-between items-center">
 											<div>
-												<p className="text-primary font-semibold">{receipt.receipt_uid || 'N/A'}</p>
+												<div className="flex items-center gap-2">
+													<p className="text-primary font-semibold">{receipt.receipt_uid || 'N/A'}</p>
+													<FaStickyNote 
+														className="text-gray-500 cursor-pointer hover:text-blue-500" 
+														onClick={() => handleEditNote(receipt)} 
+														title="Thêm/Sửa ghi chú"
+														size={14}
+													/>
+												</div>
 												{editingNote === receipt.id ? (
-													<div className="flex items-center gap-2">
+													<div className="flex items-center gap-2 mt-2">
 														<textarea
 															value={noteInput}
 															onChange={(e) => setNoteInput(e.target.value)}
 															className="p-2 border rounded-lg w-full bg-white"
 															rows={3}
+															placeholder="Nhập ghi chú..."
 														/>
 														<div className="flex flex-col gap-2">
 															<button
@@ -1777,12 +1755,14 @@ const ProcessingSample = () => {
 														</div>
 													</div>
 												) : (
-													<p
-														className="text-gray-600 italic cursor-pointer hover:underline w-fit"
-														onClick={() => handleEditNote(receipt)}
-													>
-														Ghi chú: {receipt.note || 'Không có ghi chú'}
-													</p>
+													receipt.note && (
+														<p
+															className="text-gray-600 italic cursor-pointer hover:underline w-fit mt-1"
+															onClick={() => handleEditNote(receipt)}
+														>
+															Ghi chú: {receipt.note}
+														</p>
+													)
 												)}
 											</div>
 
@@ -1824,13 +1804,13 @@ const ProcessingSample = () => {
 													</h2>
 
 													{/* Form with labels on top */}
-													<div className="grid grid-cols-3 gap-4 mb-6">
+													<div className="flex flex-row gap-4 mb-6 overflow-x-auto">
 														{/* Combined Protocol source and code fields */}
-														<div className="flex flex-col">
-															<label className="mb-1 font-medium text-sm">Phương pháp thử</label>
+														<div className="flex flex-col min-w-[180px]">
+															<label className="mb-1 font-medium text-sm text-left">Phương pháp thử</label>
 															<div className="flex gap-1">
 																<select
-																	className="p-2 border rounded-lg bg-white w-1/3"
+																	className="p-2 border rounded-lg bg-white w-1/3 text-sm"
 																	value={bulkEditValues.protocol_source || ''}
 																	onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
 																>
@@ -1841,8 +1821,8 @@ const ProcessingSample = () => {
 																</select>
 																<input
 																	type="text"
-																	className="p-2 border rounded-lg bg-white w-2/3"
-																	placeholder="Nhập mã phương pháp"
+																	className="p-2 border rounded-lg bg-white w-2/3 text-sm"
+																	placeholder="Mã PTT"
 																	value={bulkEditValues.protocol_code || ''}
 																	onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
 																/>
@@ -1850,11 +1830,11 @@ const ProcessingSample = () => {
 														</div>
 
 														{/* Reference field */}
-														<div className="flex flex-col">
-															<label className="mb-1 font-medium text-sm">Tham chiếu</label>
+														<div className="flex flex-col min-w-[140px]">
+															<label className="mb-1 font-medium text-sm text-left">Tham chiếu</label>
 															<input
 																type="text"
-																className="p-2 border rounded-lg bg-white"
+																className="p-2 border rounded-lg bg-white text-sm"
 																placeholder="Nhập tham chiếu"
 																value={bulkEditValues.reference || ''}
 																onChange={(e) => handleBulkEditChange('reference', e.target.value)}
@@ -1862,25 +1842,25 @@ const ProcessingSample = () => {
 														</div>
 
 														{/* Deadline field */}
-														<div className="flex flex-col">
-															<label className="mb-1 font-medium text-sm">Hạn trả</label>
+														<div className="flex flex-col min-w-[180px]">
+															<label className="mb-1 font-medium text-sm text-left">Hạn trả</label>
 															<input
 																type="datetime-local"
-																className="p-2 border rounded-lg bg-white"
+																className="p-2 border rounded-lg bg-white text-sm"
 																value={bulkEditValues.deadline || ''}
 																onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
 															/>
 														</div>
 
 														{/* Result value field */}
-														<div className="flex flex-col">
-															<label className="mb-1 font-medium text-sm">Kết quả</label>
+														<div className="flex flex-col min-w-[180px]">
+															<label className="mb-1 font-medium text-sm text-left">Kết quả</label>
 															<div
-																className="h-10 flex items-center  border rounded-lg bg-white hover:border-purple-500 cursor-text"
-																onClick={() => handleBulkEditCellClick('result_value', receipt.id)}
+																className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
+																onClick={() => handleBulkEditCellClick('result_value', 'global')}
 																onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
 															>
-																{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === receipt.id ? (
+																{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === 'global' ? (
 																	<TinyMceInput
 																		value={bulkEditValues.result_value || ''}
 																		onUpdate={(content) => handleBulkEditChange('result_value', content)}
@@ -1888,7 +1868,7 @@ const ProcessingSample = () => {
 																) : (
 																	<div
 																		dangerouslySetInnerHTML={{
-																			__html: bulkEditValues.result_value || 'Nhấp để chỉnh sửa...',
+																			__html: bulkEditValues.result_value || 'Nhấp để sửa...',
 																		}}
 																		className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
 																	/>
@@ -1897,14 +1877,14 @@ const ProcessingSample = () => {
 														</div>
 
 														{/* Result unit field */}
-														<div className="flex flex-col">
-															<label className="mb-1 font-medium text-sm">Đơn vị</label>
+														<div className="flex flex-col min-w-[140px]">
+															<label className="mb-1 font-medium text-sm text-left">Đơn vị</label>
 															<div
-																className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text"
-																onClick={() => handleBulkEditCellClick('result_unit', receipt.id)}
+																className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
+																onClick={() => handleBulkEditCellClick('result_unit', 'global')}
 																onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
 															>
-																{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === receipt.id ? (
+																{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === 'global' ? (
 																	<TinyMceInput
 																		value={bulkEditValues.result_unit || ''}
 																		onUpdate={(content) => handleBulkEditChange('result_unit', content)}
@@ -1913,19 +1893,17 @@ const ProcessingSample = () => {
 																) : (
 																	<div
 																		dangerouslySetInnerHTML={{
-																			__html: bulkEditValues.result_unit || 'Nhấp để chỉnh sửa...',
+																			__html: bulkEditValues.result_unit || 'Nhấp để sửa...',
 																		}}
 																		className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
 																	/>
 																)}
 															</div>
-														</div>
-
-														{/* Technician field */}
-														<div className="flex flex-col">
-															<label className="mb-1 font-medium text-sm">Người thực hiện</label>
+														</div>														{/* Technician field */}
+														<div className="flex flex-col min-w-[180px]">
+															<label className="mb-1 font-medium text-sm text-left">Người thực hiện</label>
 															<select
-																className="p-2 border rounded-lg bg-white"
+																className="p-2 border rounded-lg bg-white text-sm"
 																value={bulkEditValues.technician_uid || ''}
 																onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
 															>
@@ -1936,6 +1914,34 @@ const ProcessingSample = () => {
 																	</option>
 																))}
 															</select>
+														</div>
+
+														{/* File upload button */}
+														<div className="flex flex-col min-w-[180px] relative">
+															<label className="mb-1 font-medium text-sm text-left">Biên bản</label>
+															<div className="flex items-center gap-2">
+																<button
+																	id="fileUploadButton"
+																	className="p-2 border rounded-lg bg-white hover:bg-gray-100 text-sm flex items-center justify-center gap-1"
+																	onClick={(e) => {
+																		setShowFileUploadModal(true);
+																		// Store button position for positioning the modal
+																		const buttonRect = e.target.getBoundingClientRect();
+																		setDropdownPosition({
+																			top: buttonRect.bottom + window.scrollY + 5,
+																			left: buttonRect.left + window.scrollX - 200,
+																		});
+																	}}
+																	title="Tải lên biên bản"
+																>
+																	<FaUpload size={12} /> Tải lên
+																</button>
+																{files.length > 0 && (
+																	<span className="text-sm text-gray-600 truncate max-w-[120px]" title={files[0].name}>
+																		{files[0].name}
+																	</span>
+																)}
+															</div>
 														</div>
 													</div>
 
@@ -2027,11 +2033,11 @@ const ProcessingSample = () => {
 															onClick={closeBulkEditForm}
 														>
 															Hủy bỏ
-														</button>
-														<button
+														</button>														<button
 															className="px-2 py-1 border-2 border-gray-600  rounded hover:bg-blue-600 flex items-center w-fit "
 															onClick={() => {
 																handleBulkUpdate(selectedCheckboxesByReceipt[receipt.id]);
+																setFiles([]); // Clear files after confirmation
 																closeBulkEditForm();
 															}}
 														>
@@ -2045,14 +2051,10 @@ const ProcessingSample = () => {
 										{/* Organize by samples */}
 										{receipt.samples && receipt.samples.length > 0 ? (
 											receipt.samples.map((sample) => (
-												<div key={sample.id} className="mb-4 border-l-2 border-teritary px-1 overflow-auto">
-													<div className="  mb-2 flex justify-between items-center">
-														<div className="flex flex-col gap-2">
+												<div key={sample.id} className="mb-4 border-l-2 border-teritary px-1 overflow-auto">													<div className="  mb-2 flex justify-between items-center">
+														<div className="flex flex-col">
 															<div className="min-w-40">
-																<span className="font-semibold">Mã mẫu:</span> {sample.sample_uid}
-															</div>
-															<div className="min-w-40">
-																<span className="font-semibold">Tên mẫu:</span> {sample.sample_name || 'N/A'}
+																<span className="font-semibold">{sample.sample_uid}</span>: {sample.sample_name || 'N/A'}
 															</div>
 															<div className="min-w-40">
 																<span className="font-semibold">Nền mẫu:</span> {sample.matrix || 'N/A'}
@@ -2113,7 +2115,7 @@ const ProcessingSample = () => {
 																		<td className="border p-1 text-start ">
 																			<div className="flex items-center gap-0.5">
 																				<select
-																					className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
+																				className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
 																					onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
 																					value={item.protocol_source || ''}
 																				>
@@ -2271,154 +2273,182 @@ const ProcessingSample = () => {
 
 			{/* Global Bulk Edit Modal */}
 			{showGlobalBulkEditForm && (
-				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[100]">
 					<div className="bg-white p-6 rounded-lg shadow-lg min-w-[400px] w-5/6">
 						<h2 className="text-xl font-bold mb-4 flex justify-between items-center">
 							<span>Chỉnh sửa hàng loạt</span>
 							<span className="text-sm font-normal text-gray-600">
 								({selectedCheckboxesV3.length} chỉ tiêu được chọn)
 							</span>
-						</h2>
-
-						{/* Form with labels on top */}
-						<div className="grid grid-cols-3 gap-4 mb-6">
-							{/* Combined Protocol source and code fields */}
-							<div className="flex flex-col">
-								<label className="mb-1 font-medium text-sm">Phương pháp thử</label>
-								<div className="flex gap-1">
-									<select
-										className="p-2 border rounded-lg bg-white w-1/3"
-										value={bulkEditValues.protocol_source || ''}
-										onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
-									>
-										<option value="">--</option>
-										<option value="IRDOP">IRDOP</option>
-										<option value="IRDOP VS">IRDOP VS</option>
-										<option value="EX">EX</option>
-									</select>
-									<input
-										type="text"
-										className="p-2 border rounded-lg bg-white w-2/3"
-										placeholder="Nhập mã phương pháp"
-										value={bulkEditValues.protocol_code || ''}
-										onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
-									/>
-								</div>
-							</div>
-
-							{/* Reference field */}
-							<div className="flex flex-col">
-								<label className="mb-1 font-medium text-sm">Tham chiếu</label>
-								<input
-									type="text"
-									className="p-2 border rounded-lg bg-white"
-									placeholder="Nhập tham chiếu"
-									value={bulkEditValues.reference || ''}
-									onChange={(e) => handleBulkEditChange('reference', e.target.value)}
-								/>
-							</div>
-
-							{/* Deadline field */}
-							<div className="flex flex-col">
-								<label className="mb-1 font-medium text-sm">Hạn trả</label>
-								<input
-									type="datetime-local"
-									className="p-2 border rounded-lg bg-white"
-									value={bulkEditValues.deadline || ''}
-									onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
-								/>
-							</div>
-
-							{/* Result value field */}
-							<div className="flex flex-col">
-								<label className="mb-1 font-medium text-sm">Kết quả</label>
-								<div
-									className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text"
-									onClick={() => handleBulkEditCellClick('result_value', 'global')}
-									onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
-								>
-									{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === 'global' ? (
-										<TinyMceInput
-											value={bulkEditValues.result_value || ''}
-											onUpdate={(content) => handleBulkEditChange('result_value', content)}
-										/>
+						</h2>{/* Flex container for Overview and Inputs */}
+						<div className="flex flex-col gap-4 mb-4">
+							
+							{/* "Tổng quan các mục đã chọn" Section - Above the update info */}
+							<div>
+								<h3 className="text-md font-semibold mb-2 text-left">Tổng quan các mục đã chọn</h3>
+								<div className="max-h-[200px] overflow-auto border rounded p-2">
+									{Object.keys(selectedCheckboxesByReceipt).length > 0 ? (
+										<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+											{Object.entries(selectedCheckboxesByReceipt).map(([receiptId, analysisIds]) => {
+												const receipt = filteredProcessingSample?.find((r) => r.id === parseInt(receiptId));
+												return (
+													<div key={receiptId} className="border rounded p-2 bg-gray-50 text-left">
+														<div className="font-medium text-sm">{receipt?.receipt_uid || `Phiếu ${receiptId}`}</div>
+														<div className="text-xs">{analysisIds.length} chỉ tiêu được chọn</div>
+													</div>
+												);
+											})}
+										</div>
 									) : (
-										<div
-											dangerouslySetInnerHTML={{
-												__html: bulkEditValues.result_value || 'Nhấp để chỉnh sửa...',
-											}}
-											className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
-										/>
+										<div className="text-gray-500 italic text-left">Không có chỉ tiêu nào được chọn</div>
 									)}
 								</div>
 							</div>
 
-							{/* Result unit field */}
-							<div className="flex flex-col">
-								<label className="mb-1 font-medium text-sm">Đơn vị</label>
-								<div
-									className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text"
-									onClick={() => handleBulkEditCellClick('result_unit', 'global')}
-									onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
-								>
-									{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === 'global' ? (
-										<TinyMceInput
-											value={bulkEditValues.result_unit || ''}
-											onUpdate={(content) => handleBulkEditChange('result_unit', content)}
-											onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
-										/>
-									) : (
-										<div
-											dangerouslySetInnerHTML={{
-												__html: bulkEditValues.result_unit || 'Nhấp để chỉnh sửa...',
-											}}
-											className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
-										/>
-									)}
-								</div>
-							</div>
-
-							{/* Technician field */}
-							<div className="flex flex-col">
-								<label className="mb-1 font-medium text-sm">Người thực hiện</label>
-								<select
-									className="p-2 border rounded-lg bg-white"
-									value={bulkEditValues.technician_uid || ''}
-									onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
-								>
-									<option value="">-- Không thay đổi --</option>
-									{technicians.map((tech) => (
-										<option key={tech.identity_uid} value={tech.identity_uid}>
-											{tech.identity_name}
-										</option>
-									))}
-								</select>
-							</div>
-						</div>
-
-						{/* Show count of selected items from each receipt */}
-						<div className="mb-6">
-							<h3 className="text-md font-semibold mb-2">Tổng quan các mục đã chọn</h3>
-							<div className="max-h-[300px] overflow-auto border rounded p-3">
-								{Object.keys(selectedCheckboxesByReceipt).length > 0 ? (
-									<div className="grid grid-cols-3 gap-3">
-										{Object.entries(selectedCheckboxesByReceipt).map(([receiptId, analysisIds]) => {
-											// Find receipt from data
-											const receipt = filteredProcessingSample?.find((r) => r.id === parseInt(receiptId));
-											return (
-												<div key={receiptId} className="border rounded p-2 bg-gray-50">
-													<div className="font-medium">{receipt?.receipt_uid || `Phiếu ${receiptId}`}</div>
-													<div>{analysisIds.length} chỉ tiêu được chọn</div>
-												</div>
-											);
-										})}
+							{/* Input Fields Section */}
+							<div>
+								<h3 className="text-md font-semibold mb-2 text-left">Thông tin cập nhật</h3>
+								<div className="flex flex-row gap-3 overflow-x-auto pb-3">
+									{/* Combined Protocol source and code fields */}
+									<div className="flex flex-col min-w-[180px]">
+										<label className="mb-1 font-medium text-sm text-left">Phương pháp thử</label>
+										<div className="flex gap-1">
+											<select
+												className="p-2 border rounded-lg bg-white w-1/3 text-sm"
+												value={bulkEditValues.protocol_source || ''}
+												onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
+											>
+												<option value="">--</option>
+												<option value="IRDOP">IRDOP</option>
+												<option value="IRDOP VS">IRDOP VS</option>
+												<option value="EX">EX</option>
+											</select>
+											<input
+												type="text"
+												className="p-2 border rounded-lg bg-white w-2/3 text-sm"
+												placeholder="Mã PTT"
+												value={bulkEditValues.protocol_code || ''}
+												onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
+											/>
+										</div>
 									</div>
-								) : (
-									<div className="text-gray-500 italic">Không có chỉ tiêu nào được chọn</div>
-								)}
+
+									{/* Reference field */}
+									<div className="flex flex-col min-w-[140px]">
+										<label className="mb-1 font-medium text-sm text-left">Tham chiếu</label>
+										<input
+											type="text"
+											className="p-2 border rounded-lg bg-white text-sm"
+											placeholder="Nhập tham chiếu"
+											value={bulkEditValues.reference || ''}
+											onChange={(e) => handleBulkEditChange('reference', e.target.value)}
+										/>
+									</div>
+
+									{/* Deadline field */}
+									<div className="flex flex-col min-w-[180px]">
+										<label className="mb-1 font-medium text-sm text-left">Hạn trả</label>
+										<input
+											type="datetime-local"
+											className="p-2 border rounded-lg bg-white text-sm"
+											value={bulkEditValues.deadline || ''}
+											onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
+										/>
+									</div>
+
+									{/* Result value field */}
+									<div className="flex flex-col min-w-[180px]">
+										<label className="mb-1 font-medium text-sm text-left">Kết quả</label>
+										<div
+											className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
+											onClick={() => handleBulkEditCellClick('result_value', 'global')}
+											onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+										>
+											{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === 'global' ? (
+												<TinyMceInput
+													value={bulkEditValues.result_value || ''}
+													onUpdate={(content) => handleBulkEditChange('result_value', content)}
+												/>
+											) : (
+												<div
+													dangerouslySetInnerHTML={{
+														__html: bulkEditValues.result_value || 'Nhấp để sửa...',
+													}}
+													className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
+												/>
+											)}
+										</div>
+									</div>
+
+									{/* Result unit field */}
+									<div className="flex flex-col min-w-[140px]">
+										<label className="mb-1 font-medium text-sm text-left">Đơn vị</label>
+										<div
+											className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
+											onClick={() => handleBulkEditCellClick('result_unit', 'global')}
+											onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+										>
+											{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === 'global' ? (
+												<TinyMceInput
+													value={bulkEditValues.result_unit || ''}
+													onUpdate={(content) => handleBulkEditChange('result_unit', content)}
+													onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+												/>
+											) : (
+												<div
+													dangerouslySetInnerHTML={{
+														__html: bulkEditValues.result_unit || 'Nhấp để sửa...',
+													}}
+													className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
+												/>
+											)}
+										</div>
+									</div>									{/* Technician field */}
+									<div className="flex flex-col min-w-[180px]">
+										<label className="mb-1 font-medium text-sm text-left">Người thực hiện</label>
+										<select
+											className="p-2 border rounded-lg bg-white text-sm"
+											value={bulkEditValues.technician_uid || ''}
+											onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
+										>
+											<option value="">-- Không thay đổi --</option>
+											{technicians.map((tech) => (
+												<option key={tech.identity_uid} value={tech.identity_uid}>
+													{tech.identity_name}
+												</option>
+											))}
+										</select>
+									</div>									{/* File upload button */}
+									<div className="flex flex-col min-w-[180px] relative">
+										<label className="mb-1 font-medium text-sm text-left">Biên bản</label>
+										<div className="flex items-center gap-2">
+											<button
+												id="fileUploadButton"
+												className="p-2 border rounded-lg bg-white hover:bg-gray-100 text-sm flex items-center justify-center gap-1"
+												onClick={(e) => {
+													setShowFileUploadModal(true);
+													// Store button position for positioning the modal
+													const buttonRect = e.target.getBoundingClientRect();
+													setDropdownPosition({
+														top: buttonRect.bottom + window.scrollY + 5,
+														left: buttonRect.left + window.scrollX - 200,
+													});
+												}}
+												title="Tải lên biên bản"
+											>
+												<FaUpload size={12} /> Tải lên
+											</button>
+											{files.length > 0 && (
+												<span className="text-sm text-gray-600 truncate max-w-[120px]" title={files[0].name}>
+													{files[0].name}
+												</span>
+											)}
+										</div>
+									</div>
+								</div>
 							</div>
 						</div>
-
+						
 						{/* Preview table showing all selected analyses */}
 						<div className="mb-6 max-h-[300px] overflow-auto">
 							<h3 className="text-md font-semibold mb-2">Xem trước thay đổi</h3>
@@ -2517,11 +2547,11 @@ const ProcessingSample = () => {
 								}}
 							>
 								Hủy bỏ
-							</button>
-							<button
+							</button>							<button
 								className="px-4 py-2 border-2 border-blue-600 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center"
 								onClick={() => {
 									handleBulkUpdate(selectedCheckboxesV3);
+									setFiles([]); // Clear files after confirmation
 									setShowGlobalBulkEditForm(false);
 								}}
 							>

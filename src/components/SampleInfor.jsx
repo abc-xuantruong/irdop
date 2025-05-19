@@ -24,6 +24,7 @@ import {
 	FaRegCopy,
 	FaCheck,
 	FaSync,
+	FaLayerGroup,
 } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -91,8 +92,6 @@ const SampleInfor = () => {
 	const [editingParameterField, setEditingParameterField] = useState(null); // Add state to track which parameter field is being edited
 	const [editingMatrixField, setEditingMatrixField] = useState(null); // Add state to track which matrix field is being edited
 	const [editingProtocolField, setEditingProtocolField] = useState(null); // Add state to track which protocol field is being edited
-	const [updateParameterMode, setUpdateParameterMode] = useState(false); // Add state to track parameter update mode
-	const [isParameterWarningVisible, setIsParameterWarningVisible] = useState(false); // Add state for parameter warning modal
 	const [sampleDropdownVisible, setSampleDropdownVisible] = useState(false);
 	const [isBulkDeadlineVisible, setIsBulkDeadlineVisible] = useState(false);
 	const [bulkDeadlineDate, setBulkDeadlineDate] = useState(new Date());
@@ -102,11 +101,9 @@ const SampleInfor = () => {
 	const [uniqueMatrices, setUniqueMatrices] = useState([]);
 	const [uniqueProtocolCodes, setUniqueProtocolCodes] = useState([]);
 	const [uniqueUnits, setUniqueUnits] = useState([]);
-	const [parameterNameInput, setParameterNameInput] = useState('');
 	const [matrixInput, setMatrixInput] = useState('');
 	const [protocolCodeInput, setProtocolCodeInput] = useState('');
 	const [unitInput, setUnitInput] = useState('');
-	const [showParameterNameDropdown, setShowParameterNameDropdown] = useState(false);
 	const [showMatrixDropdown, setShowMatrixDropdown] = useState(false);
 	const [showProtocolCodeDropdown, setShowProtocolCodeDropdown] = useState(false);
 	const [showUnitDropdown, setShowUnitDropdown] = useState(false);
@@ -607,136 +604,49 @@ const SampleInfor = () => {
 	const handleCancelNewParameter = () => {
 		setIsAddingNewParameter(false);
 	};
-
-	// Function to toggle parameter update mode with warning
-	const toggleParameterUpdateMode = () => {
-		if (updateParameterMode) {
-			setUpdateParameterMode(false);
-		} else {
-			setIsParameterWarningVisible(true);
-		}
-	};
-
-	// Function to handle confirmation of parameter update mode
-	const confirmParameterUpdateMode = () => {
-		setUpdateParameterMode(true);
-		setIsParameterWarningVisible(false);
-		showToast('Đã bật chế độ cập nhật thư viện chỉ tiêu', 'info');
-	};
-
-	// Function to handle cancellation of parameter update mode
-	const cancelParameterUpdateMode = () => {
-		setUpdateParameterMode(false);
-		setIsParameterWarningVisible(false);
-	};
-	// Helper function to update parameter first, then analysis
-	const updateParameterAndAnalysis = async (analysis) => {
+	// These functions have been removed as they were related to updateParameterMode	// Helper function for updating analysis
+	const updateAnalysis = async (analysis) => {
 		try {
-			// First, update the parameter if updateParameterMode is true
-			if (
-				analysis.parameter_name ||
-				analysis.matrix ||
-				analysis.protocol_code ||
-				analysis.protocol_source ||
-				analysis.field
-			) {
-				const parameterResponse = await apiPost('https://black.irdop.org/ha8i0uw2/db/upsert/parameter', {
-					parameter: {
-						parameter_uid: analysis.parameter_uid || '',
-						parameter_name: analysis.parameter_name,
-						matrix: analysis.matrix,
-						protocol_code: analysis.protocol_code,
-						protocol_source: analysis.protocol_source,
-						field: analysis.field,
-					},
-				});
+			// Determine which fields need to be updated
+			const changedFields = {};
 
-				// Update the parameter_id in the analysis object
-				if (parameterResponse.status === 200) {
-					// Create minimal update object with required fields
-					const updateData = {
-						id: analysis.id,
-						sample_id: analysis.sample_id,
-						receipt_id: analysis.receipt_id,
-						matrix: analysis.matrix,
-						parameter_id: parameterResponse.data.id,
-						parameter_uid: parameterResponse.data.parameter_uid || '', // Ensure parameter_uid is included
-						parameter_name: analysis.parameter_name, // Ensure parameter_name is included
-						field: analysis.field, // Include field property
-						modified_by_uid: currentUser.identity_uid,
-					};
+			// Identify which fields need to be updated
+			if (analysis.parameter_name !== undefined) changedFields.parameter_name = analysis.parameter_name;
+			if (analysis.result_value !== undefined) changedFields.result_value = analysis.result_value;
+			if (analysis.matrix !== undefined) changedFields.matrix = analysis.matrix;
+			if (analysis.result_unit !== undefined) changedFields.result_unit = analysis.result_unit;
+			if (analysis.protocol_code !== undefined) changedFields.protocol_code = analysis.protocol_code;
+			if (analysis.protocol_source !== undefined) changedFields.protocol_source = analysis.protocol_source;
+			if (analysis.deadline !== undefined) changedFields.deadline = analysis.deadline;
+			if (analysis.field !== undefined) changedFields.field = analysis.field;
 
-					// Add fields that were updated
-					if (analysis.matrix) updateData.matrix = analysis.matrix;
-					if (analysis.protocol_code) updateData.protocol_code = analysis.protocol_code;
-					if (analysis.protocol_source) updateData.protocol_source = analysis.protocol_source;
+			// Create minimal update object
+			const updateData = {
+				id: analysis.id,
+				sample_id: analysis.sample_id,
+				receipt_id: analysis.receipt_id,
+				modified_by_uid: currentUser.identity_uid,
+				...changedFields,
+			};
 
-					// Now update the analysis with the new parameter_id
-					const analysisResponse = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-						analysis: updateData,
-					});
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				analysis: updateData,
+			});
 
-					if (analysisResponse.status === 200) {
-						showToast('Chỉ tiêu và thư viện đã được cập nhật!');
-						return { ...analysis, parameter_id: parameterResponse.data.id };
-					} else {
-						Swal.fire({
-							icon: 'error',
-							title: 'Lỗi',
-							text: analysisResponse.data?.message || 'Lỗi khi cập nhật chỉ tiêu.',
-						});
-						return analysis;
-					}
-				} else {
-					Swal.fire({
-						icon: 'error',
-						title: 'Lỗi',
-						text: parameterResponse.data?.message || 'Lỗi khi cập nhật thư viện chỉ tiêu.',
-					});
-					return analysis;
-				}
+			if (response.status === 200) {
+				showToast('Chỉ tiêu đã được cập nhật!');
+				// Return the analysis data from the response instead of the original analysis
+				return response.data || analysis;
 			} else {
-				// Standard analysis update without parameter changes
-				const changedFields = {};
-
-				// Identify which fields need to be updated
-				if (analysis.parameter_name !== undefined) changedFields.parameter_name = analysis.parameter_name;
-				if (analysis.result_value !== undefined) changedFields.result_value = analysis.result_value;
-				if (analysis.matrix !== undefined) changedFields.matrix = analysis.matrix;
-				if (analysis.result_unit !== undefined) changedFields.result_unit = analysis.result_unit;
-				if (analysis.protocol_code !== undefined) changedFields.protocol_code = analysis.protocol_code;
-				if (analysis.protocol_source !== undefined) changedFields.protocol_source = analysis.protocol_source;
-				if (analysis.deadline !== undefined) changedFields.deadline = analysis.deadline;
-				if (analysis.field !== undefined) changedFields.field = analysis.field;
-
-				// Create minimal update object
-				const updateData = {
-					id: analysis.id,
-					sample_id: analysis.sample_id,
-					receipt_id: analysis.receipt_id,
-					modified_by_uid: currentUser.identity_uid,
-					...changedFields,
-				};
-
-				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: updateData,
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật chỉ tiêu.',
 				});
-
-				if (response.status === 200) {
-					showToast('Chỉ tiêu đã được cập nhật!');
-					// Return the analysis data from the response instead of the original analysis
-					return response.data || analysis;
-				} else {
-					Swal.fire({
-						icon: 'error',
-						title: 'Lỗi',
-						text: response.data?.message || 'Lỗi khi cập nhật chỉ tiêu.',
-					});
-				}
-				return analysis;
 			}
+			return analysis;
 		} catch (error) {
-			console.error('Error updating parameter and analysis:', error);
+			console.error('Error updating analysis:', error);
 			Swal.fire({
 				icon: 'error',
 				title: 'Lỗi',
@@ -745,52 +655,43 @@ const SampleInfor = () => {
 			return analysis;
 		}
 	};
-
 	const onUpdateAnalysis = async (analysis) => {
 		try {
-			// Check if the analysis has parameter data changes that need to be updated
-			if (
-				updateParameterMode &&
-				(analysis.parameter_name || analysis.matrix || analysis.protocol_code || analysis.protocol_source)
-			) {
-				return await updateParameterAndAnalysis(analysis);
+			// Determine which field is being updated
+			const fieldBeingUpdated = {};
+
+			// Check each field that might have been updated
+			if (analysis.parameter_name !== undefined) fieldBeingUpdated.parameter_name = analysis.parameter_name;
+			if (analysis.result_value !== undefined) fieldBeingUpdated.result_value = analysis.result_value;
+			if (analysis.result_unit !== undefined) fieldBeingUpdated.result_unit = analysis.result_unit;
+			if (analysis.protocol_code !== undefined) fieldBeingUpdated.protocol_code = analysis.protocol_code;
+			if (analysis.protocol_source !== undefined) fieldBeingUpdated.protocol_source = analysis.protocol_source;
+			if (analysis.technician_uid !== undefined) fieldBeingUpdated.technician_uid = analysis.technician_uid;
+			if (analysis.deadline !== undefined) fieldBeingUpdated.deadline = analysis.deadline;
+
+			// Create minimal update object
+			const updateData = {
+				id: analysis.id,
+				sample_id: analysis.sample_id,
+				receipt_id: analysis.receipt_id,
+				modified_by_uid: currentUser.identity_uid,
+				...fieldBeingUpdated,
+			};
+
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				analysis: updateData,
+			});
+
+			if (response.status === 200) {
+				showToast('Chỉ tiêu đã được cập nhật!');
 			} else {
-				// Determine which field is being updated
-				const fieldBeingUpdated = {};
-
-				// Check each field that might have been updated
-				if (analysis.parameter_name !== undefined) fieldBeingUpdated.parameter_name = analysis.parameter_name;
-				if (analysis.result_value !== undefined) fieldBeingUpdated.result_value = analysis.result_value;
-				if (analysis.result_unit !== undefined) fieldBeingUpdated.result_unit = analysis.result_unit;
-				if (analysis.protocol_code !== undefined) fieldBeingUpdated.protocol_code = analysis.protocol_code;
-				if (analysis.protocol_source !== undefined) fieldBeingUpdated.protocol_source = analysis.protocol_source;
-				if (analysis.technician_uid !== undefined) fieldBeingUpdated.technician_uid = analysis.technician_uid;
-				if (analysis.deadline !== undefined) fieldBeingUpdated.deadline = analysis.deadline;
-
-				// Create minimal update object
-				const updateData = {
-					id: analysis.id,
-					sample_id: analysis.sample_id,
-					receipt_id: analysis.receipt_id,
-					modified_by_uid: currentUser.identity_uid,
-					...fieldBeingUpdated,
-				};
-
-				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: updateData,
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật chỉ tiêu.',
 				});
-
-				if (response.status === 200) {
-					showToast('Chỉ tiêu đã được cập nhật!');
-				} else {
-					Swal.fire({
-						icon: 'error',
-						title: 'Lỗi',
-						text: response.data?.message || 'Lỗi khi cập nhật chỉ tiêu.',
-					});
-				}
-				return analysis;
 			}
+			return analysis;
 		} catch (error) {
 			console.error('Error updating analysis:', error);
 			Swal.fire({
@@ -812,33 +713,8 @@ const SampleInfor = () => {
 					text: 'Tên chỉ tiêu không được để trống',
 				});
 				return;
-			}
-
-			// First upsert the parameter to get a parameter_id if updateParameterMode is true
-			if (updateParameterMode) {
-				const parameterResponse = await apiPost('https://black.irdop.org/ha8i0uw2/db/upsert/parameter', {
-					parameter: {
-						parameter_uid: newParameter.parameter_uid,
-						parameter_name: newParameter.parameter_name,
-						matrix: newParameter.matrix,
-						protocol_code: newParameter.protocol_code,
-						protocol_source: newParameter.protocol_source,
-					},
-				});
-
-				if (parameterResponse.status !== 200) {
-					Swal.fire({
-						icon: 'error',
-						title: 'Lỗi',
-						text: parameterResponse.data?.message || 'Lỗi khi tạo chỉ tiêu trong thư viện.',
-					});
-					return;
-				}
-
-				var parameter_id = parameterResponse.data.id;
-			} else {
-				var parameter_id = 0; // No parameter_id if not updating parameter library
-			}
+			} // We don't update the parameter library anymore
+			var parameter_id = 0;
 
 			// Now create the analysis with the parameter_id
 			const analysisToAdd = {
@@ -1944,7 +1820,7 @@ const SampleInfor = () => {
 		const buttonRect = event.target.getBoundingClientRect(); // Lấy vị trí button trên màn hình
 		onUpdateAnalysis;
 		setDropdownPosition({
-			top: buttonRect.top + window.scrollY - 204, // Display above the button with 4px gap
+			top: buttonRect.bottom + window.scrollY + 4, // Display below the button with 4px gap
 			left: buttonRect.left + window.scrollX, // Căn theo button
 		});
 
@@ -2243,13 +2119,12 @@ const SampleInfor = () => {
 		});
 		setListAnalytes(updatedAnalytes);
 	};
-
 	const handleMatrixBlur = async (index) => {
 		setEditingMatrixField(null);
 		const analysis = listAnalytes.find((item) => item.id === index);
-		const updatedAnalysis = await updateParameterAndAnalysis(analysis);
+		const updatedAnalysis = await updateAnalysis(analysis);
 
-		// Update the list with the returned analysis that has the new parameter_id
+		// Update the list with the returned analysis
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
 				return updatedAnalysis;
@@ -2263,9 +2138,9 @@ const SampleInfor = () => {
 	const handleParameterBlur = async (index) => {
 		setEditingParameterField(null);
 		const analysis = listAnalytes.find((item) => item.id === index);
-		const updatedAnalysis = await updateParameterAndAnalysis(analysis);
+		const updatedAnalysis = await updateAnalysis(analysis);
 
-		// Update the list with the returned analysis that has the new parameter_id
+		// Update the list with the returned analysis
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
 				return updatedAnalysis;
@@ -2350,7 +2225,6 @@ const SampleInfor = () => {
 			e.target.blur();
 		}
 	};
-
 	const handleProtocolSourceChange = async (index, newValue) => {
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
@@ -2363,33 +2237,19 @@ const SampleInfor = () => {
 		try {
 			const analysis = updatedAnalytes.find((item) => item.id === index);
 
-			if (updateParameterMode) {
-				const updatedAnalysis = await updateParameterAndAnalysis(analysis);
+			// Create minimal update object with only required fields
+			const updateData = {
+				id: analysis.id,
+				sample_id: analysis.sample_id,
+				receipt_id: analysis.receipt_id,
+				protocol_source: newValue,
+				modified_by_uid: currentUser.identity_uid,
+			};
 
-				// Update the list with the returned analysis that has the new parameter_id
-				const finalAnalytes = updatedAnalytes.map((item) => {
-					if (item.id === index) {
-						return updatedAnalysis;
-					}
-					return item;
-				});
-
-				setListAnalytes(finalAnalytes);
-			} else {
-				// Create minimal update object with only required fields
-				const updateData = {
-					id: analysis.id,
-					sample_id: analysis.sample_id,
-					receipt_id: analysis.receipt_id,
-					protocol_source: newValue,
-					modified_by_uid: currentUser.identity_uid,
-				};
-
-				// Send the update to the server
-				await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: updateData,
-				});
-			}
+			// Send the update to the server
+			await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				analysis: updateData,
+			});
 		} catch (error) {
 			console.error('Error updating protocol source:', error);
 			Swal.fire({
@@ -2789,26 +2649,6 @@ const SampleInfor = () => {
 		</div>
 	);
 
-	// Render parameter warning modal
-	const renderParameterWarningModal = () => {
-		return (
-			<div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
-				<div className="bg-white p-4 rounded-lg w-[400px] max-w-90vw">
-					<h2 className="text-xl font-semibold mb-4 text-yellow-600">Cảnh báo!</h2>
-					<p className="mb-6">Mọi thay đổi của bạn sẽ thay đổi dữ liệu của thư viện chỉ tiêu.</p>
-					<div className="flex justify-end space-x-2">
-						<button className="bg-gray-500 text-white px-4 py-2 rounded-lg" onClick={cancelParameterUpdateMode}>
-							Hủy bỏ
-						</button>
-						<button className="bg-yellow-500 text-white px-4 py-2 rounded-lg" onClick={confirmParameterUpdateMode}>
-							Xác nhận
-						</button>
-					</div>
-				</div>
-			</div>
-		);
-	};
-
 	// Add a new function to handle the review action
 	const handleReviewAnalyses = async () => {
 		if (selectedAnalytes.length === 0) {
@@ -2866,7 +2706,6 @@ const SampleInfor = () => {
 			});
 		}
 	};
-
 	// Add function to handle bulk deadline updates
 	const handleBulkDeadlineUpdate = async () => {
 		if (selectedAnalytes.length === 0) {
@@ -2879,6 +2718,95 @@ const SampleInfor = () => {
 		}
 
 		setIsBulkDeadlineVisible(true);
+	};
+
+	// Add function to handle bulk field updates
+	const handleBulkFieldUpdate = async () => {
+		if (selectedAnalytes.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Vui lòng chọn ít nhất một chỉ tiêu để cập nhật lĩnh vực',
+			});
+			return;
+		}
+
+		// Prompt for the field value
+		const { value: field } = await Swal.fire({
+			title: 'Chọn lĩnh vực',
+			input: 'select',
+			inputOptions: {
+				'Hóa lý': 'Hóa lý',
+				'Vi sinh': 'Vi sinh',
+			},
+			inputPlaceholder: 'Chọn lĩnh vực',
+			showCancelButton: true,
+			cancelButtonText: 'Hủy bỏ',
+			confirmButtonText: 'Cập nhật',
+			inputValidator: (value) => {
+				if (!value) {
+					return 'Bạn cần chọn một lĩnh vực!';
+				}
+			},
+		});
+
+		if (field) {
+			try {
+				// Get the selected analytes
+				const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
+
+				let successCount = 0;
+				let failCount = 0;
+
+				// Make API calls for each analyte separately with minimal data
+				for (const analyte of selectedItems) {
+					try {
+						// Create minimal update object
+						const updateData = {
+							id: analyte.id,
+							sample_id: analyte.sample_id,
+							receipt_id: analyte.receipt_id,
+							field: field,
+							modified_by_uid: currentUser.identity_uid,
+						};
+
+						await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+							analysis: updateData,
+						});
+						successCount++;
+					} catch (error) {
+						console.error(`Error updating analysis ID ${analyte.id}:`, error);
+						failCount++;
+					}
+				}
+
+				// Update the UI
+				const newAnalytesList = listAnalytes.map((analyte) => {
+					if (selectedAnalytes.includes(analyte.id)) {
+						return { ...analyte, field: field };
+					}
+					return analyte;
+				});
+				setListAnalytes(newAnalytesList);
+
+				if (failCount > 0) {
+					Swal.fire({
+						icon: 'warning',
+						title: 'Kết quả',
+						text: `${successCount} chỉ tiêu cập nhật thành công, ${failCount} thất bại`,
+					});
+				} else {
+					showToast(`Đã cập nhật lĩnh vực "${field}" cho ${selectedAnalytes.length} chỉ tiêu`);
+				}
+			} catch (error) {
+				console.error('Error updating fields:', error);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: error.message || 'Đã xảy ra lỗi khi cập nhật lĩnh vực',
+				});
+			}
+		}
 	};
 
 	// Function to apply the new deadline to all selected analyses
@@ -3147,25 +3075,74 @@ const SampleInfor = () => {
 
 			for (const analysis of analysesToUpdate) {
 				try {
-					// Temporarily set updateParameterMode to true for this operation
-					const wasUpdateMode = updateParameterMode;
-					setUpdateParameterMode(true);
+					// First update the parameter database with the analysis information
+					if (
+						analysis.parameter_name ||
+						analysis.matrix ||
+						analysis.protocol_code ||
+						analysis.protocol_source ||
+						analysis.field
+					) {
+						const parameterResponse = await apiPost('https://black.irdop.org/ha8i0uw2/db/upsert/parameter', {
+							parameter: {
+								parameter_uid: analysis.parameter_uid || '',
+								parameter_name: analysis.parameter_name,
+								matrix: analysis.matrix,
+								protocol_code: analysis.protocol_code,
+								protocol_source: analysis.protocol_source,
+								field: analysis.field,
+							},
+						});
 
-					// Update parameter and analysis
-					const updatedAnalysis = await updateParameterAndAnalysis(analysis);
+						if (parameterResponse.status === 200 && parameterResponse.data) {
+							// Update the analysis with the returned parameter data
+							const updatedAnalysisData = {
+								...analysis,
+								parameter_uid: parameterResponse.data.parameter_uid || analysis.parameter_uid,
+								parameter_id: parameterResponse.data.id || analysis.parameter_id,
+								parameter_name: parameterResponse.data.parameter_name || analysis.parameter_name,
+								protocol_code: parameterResponse.data.protocol_code || analysis.protocol_code,
+								protocol_source: parameterResponse.data.protocol_source || analysis.protocol_source,
+								field: parameterResponse.data.field || analysis.field,
+								modified_by_uid: currentUser.identity_uid,
+							};
 
-					// Restore original updateParameterMode setting
-					setUpdateParameterMode(wasUpdateMode);
+							// Update the analysis in the database with the new parameter info
+							const analysisResponse = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+								analysis: updatedAnalysisData,
+							});
 
-					// Update the list with the returned analysis
-					updatedAnalytes = updatedAnalytes.map((item) => {
-						if (item.id === analysis.id) {
-							return updatedAnalysis;
+							if (analysisResponse.status === 200) {
+								// Update the list with the returned analysis
+								updatedAnalytes = updatedAnalytes.map((item) => {
+									if (item.id === analysis.id) {
+										return {
+											...item,
+											parameter_uid: parameterResponse.data.parameter_uid || item.parameter_uid,
+											parameter_id: parameterResponse.data.id || item.parameter_id,
+											parameter_name: parameterResponse.data.parameter_name || item.parameter_name,
+											protocol_code: parameterResponse.data.protocol_code || item.protocol_code,
+											protocol_source: parameterResponse.data.protocol_source || item.protocol_source,
+											field: parameterResponse.data.field || item.field,
+										};
+									}
+									return item;
+								});
+								successCount++;
+							}
 						}
-						return item;
-					});
+					} else {
+						// Fallback to original update method if required fields are missing
+						const updatedAnalysis = await updateAnalysis(analysis);
 
-					successCount++;
+						updatedAnalytes = updatedAnalytes.map((item) => {
+							if (item.id === analysis.id) {
+								return updatedAnalysis;
+							}
+							return item;
+						});
+						successCount++;
+					}
 				} catch (error) {
 					console.error(`Error updating analysis ID ${analysis.id}:`, error);
 					failCount++;
@@ -3666,7 +3643,7 @@ const SampleInfor = () => {
 								<FaUserCog className="mr-1" />
 								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
 							</button>
-							{/* Add the bulk deadline update button */}
+							{/* Add the bulk deadline update button */}{' '}
 							<button
 								className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
 									selectedAnalytes.length > 0 ? 'bg-orange-500' : 'bg-gray-300 cursor-not-allowed'
@@ -3676,9 +3653,20 @@ const SampleInfor = () => {
 							>
 								<MdCalendarMonth className="mr-1" size={16} />
 								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
+							</button>{' '}
+							{/* Add button to update field in bulk with a different icon */}
+							<button
+								className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+									selectedAnalytes.length > 0 ? 'bg-purple-500' : 'bg-gray-300 cursor-not-allowed'
+								} mr-2`}
+								onClick={selectedAnalytes.length > 0 ? handleBulkFieldUpdate : undefined}
+								title="Cập nhật lĩnh vực"
+							>
+								<FaLayerGroup className="mr-1" size={14} />
+								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
 							</button>
 							{/* Modify the review button to check for admin role */}
-							{isAdmin() && (
+							{/* {isAdmin() && (
 								<button
 									className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
 										selectedAnalytes.length > 0 ? 'bg-green-500' : 'bg-gray-300 cursor-not-allowed'
@@ -3689,7 +3677,7 @@ const SampleInfor = () => {
 									<FaCheck className="mr-1" />
 									{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
 								</button>
-							)}
+							)} */}
 							{/* If not admin, show disabled review button with tooltip */}
 							{!isAdmin() && (
 								<button
@@ -3729,8 +3717,9 @@ const SampleInfor = () => {
 								<th className="p-2 border-x w-[25%] min-w-44 text-left">Phương pháp</th>
 								<th className="p-2 border-x w-[12%] min-w-28 text-left">Kết quả</th>
 								<th className="p-2 border-x w-1/12 min-w-24 text-left">Đơn vị</th>
-								<th className="p-2 border-x w-1/12 min-w-28 text-left">Hạn trả</th>
+								<th className="p-2 border-x w-1/12 min-w-28 text-left">Hạn trả</th>{' '}
 								<th className="p-2 border-x w-[5%] min-w-24 text-left ">Lĩnh vực</th>
+								<th className="p-2 border-x w-[10%] min-w-32 text-left">Thực hiện</th>
 								<th className="py-2 border-x w-10 min-w-10">
 									<input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="w-4 h-4" />
 								</th>
@@ -3797,10 +3786,20 @@ const SampleInfor = () => {
 									<td className="p-1 border relative">
 										{/* Hạn trả - không nhập */}
 										<div className="p-1 text-gray-400 italic text-center">--</div>
+									</td>{' '}
+									<td className="p-1 border relative">
+										<select
+											className="w-full bg-white border rounded p-1 text-left"
+											value={newParameter.field || ''}
+											onChange={(e) => handleNewParameterChange('field', e.target.value)}
+										>
+											<option value="">-- Chọn --</option>
+											<option value="Hóa lý">Hóa lý</option>
+											<option value="Vi sinh">Vi sinh</option>
+										</select>
 									</td>
 									<td className="p-1 border relative">
-										{/* Lĩnh vực - không nhập */}
-										<div className="p-1 text-gray-400 italic text-center">--</div>
+										<div className="p-1 text-gray-400 italic text-center">Chưa xác định</div>
 									</td>
 									<td className="pt-[5px] pb-0 border align-top text-center">
 										<div className="flex flex-col gap-0.5 items-center">
@@ -3847,7 +3846,7 @@ const SampleInfor = () => {
 												<input
 													type="text"
 													id={`parameter-name-${order.id}`}
-													className="w-full bg-white border rounded p-1 text-left"
+													className="w-full bg-white border rounded py-0 px-1 text-left"
 													placeholder="Tên chỉ tiêu"
 													value={order.parameter_name || ''}
 													onChange={(e) => handleParameterNameChange(order.id, e.target.value)}
@@ -3858,7 +3857,9 @@ const SampleInfor = () => {
 											</>
 										) : (
 											<div
-												className={`p-1 cursor-pointer hover:border-indigo-500 border border-white rounded overflow-y-auto 
+												className={`py-0 px-1 cursor-pointer hover:border-indigo-500 border 
+												${!order.parameter_name || order.parameter_name.trim() === '' ? 'border-yellow-400' : 'border-white'} 
+												rounded overflow-y-auto 
 												${order.parameter_name && order.parameter_name.trim() !== '' ? 'text-left' : 'center'}
 												`}
 												onClick={() => handleParameterNameClick(order.id)}
@@ -3870,15 +3871,27 @@ const SampleInfor = () => {
 										)}
 									</td>{' '}
 									<td className="p-1 border relative align-top">
-										<div className="p-1 text-left border border-white rounded overflow-y-auto">
+										<div
+											className={`py-0 px-1 text-left border rounded overflow-y-auto
+											${
+												(!order.matrix || order.matrix.trim() === '') &&
+												(!sample?.matrix || sample.matrix.trim() === '')
+													? 'border-yellow-400'
+													: 'border-white'
+											}
+										`}
+										>
 											<span>{order.matrix && order.matrix.trim() !== '' ? order.matrix : sample?.matrix || '--'}</span>
 										</div>
 									</td>{' '}
-									<td className="p-1 border relative">
+									<td className="p-1 border relative align-top">
 										<div className="flex flex-col">
 											<div className="flex items-center gap-0.5">
+												{' '}
 												<select
-													className="w-fit min-w-24 cursor-pointer p-1 py-[5px] font-semibold text-slate-500 bg-white  border rounded text-sm hover:border-indigo-500 hover:border focus:outline-none text-left"
+													className={`w-fit min-w-24 cursor-pointer p-1 py-[5px] font-semibold text-slate-500 bg-white border rounded text-sm hover:border-indigo-500 hover:border focus:outline-none text-left ${
+														!order.protocol_source || order.protocol_source.trim() === '' ? 'border-yellow-400' : ''
+													}`}
 													onChange={(e) => handleProtocolSourceChange(order.id, e.target.value)}
 													value={order.protocol_source || '--'}
 												>
@@ -3893,16 +3906,22 @@ const SampleInfor = () => {
 														<input
 															type="text"
 															id={`protocol-code-${order.id}`}
-															className="w-full bg-white border rounded p-1 text-left"
+															className="w-full bg-white border rounded py-0 px-1 text-left"
 															placeholder="Mã phương pháp"
 															value={order.protocol_code || ''}
 															onChange={(e) => {
-																setProtocolCodeInput(e.target.value);
+																const newValue = e.target.value;
+																setProtocolCodeInput(newValue);
 																setProtocolCodePage(1);
-																setShowProtocolCodeDropdown(e.target.value.length >= 2);
-																handleProtocolChange(order.id, e.target.value);
+																setShowProtocolCodeDropdown(newValue.length >= 2);
+																handleProtocolChange(order.id, newValue);
 															}}
-															onBlur={() => handleProtocolBlur(order.id)}
+															onBlur={() => {
+																setTimeout(() => {
+																	setShowProtocolCodeDropdown(false);
+																	handleProtocolBlur(order.id);
+																}, 200);
+															}}
 															onKeyDown={(e) => handleProtocolKeyDown(e, order.id)}
 															autoFocus
 														/>{' '}
@@ -3925,7 +3944,11 @@ const SampleInfor = () => {
 																		<div
 																			key={index}
 																			className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-																			onClick={() => handleProtocolCodeSelect(code)}
+																			onClick={() => {
+																				handleProtocolChange(order.id, code);
+																				handleProtocolBlur(order.id);
+																				setShowProtocolCodeDropdown(false);
+																			}}
 																		>
 																			<p>{code}</p>
 																		</div>
@@ -3961,8 +3984,9 @@ const SampleInfor = () => {
 													</>
 												) : (
 													<div
-														className={`w-full p-1 cursor-pointer hover:border-indigo-500 border rounded overflow-y-auto 
-													${order.protocol_code && order.protocol_code.trim() !== '' ? 'text-left' : 'center'}
+														className={`w-full py-0 px-1 cursor-pointer hover:border-indigo-500 border rounded overflow-y-auto 
+														${!order.protocol_code || order.protocol_code.trim() === '' ? 'border-yellow-400' : ''}
+														${order.protocol_code && order.protocol_code.trim() !== '' ? 'text-left' : 'center'}
 													`}
 														onClick={() => handleProtocolClick(order.id)}
 													>
@@ -4019,8 +4043,8 @@ const SampleInfor = () => {
 												</>
 											)}
 										</div>
-									</td>
-									<td className="p-1 border relative" onClick={() => handleResultValueClick(order)}>
+									</td>{' '}
+									<td className="p-1 border relative align-top" onClick={() => handleResultValueClick(order)}>
 										<div className="hover:border-purple-500 hover:border rounded text-center">
 											{editingField === `result_value-${order.sample_id}-${order.id}` && isEditorVisible ? (
 												<TinyMceInput value={inputValue || ''} onUpdate={handleSaveContent} onKey={handleKeyDown} />
@@ -4033,22 +4057,115 @@ const SampleInfor = () => {
 												/>
 											)}
 										</div>
-									</td>
-									<td className="p-1 border relative" onClick={() => handleResultUnitClick(order)}>
-										<div className="hover:border-purple-500 hover:border rounded ">
-											{editingField === `result_unit-${order.sample_id}-${order.id}` && isEditorVisible ? (
-												<TinyMceInput value={inputValue || ''} onUpdate={handleSaveContent} onKey={handleKeyDown} />
-											) : (
+									</td>{' '}
+									<td className="p-1 border relative align-top">
+										{editingField === `result_unit-${order.sample_id}-${order.id}` ? (
+											<>
+												<input
+													type="text"
+													id={`result-unit-${order.id}`}
+													className="w-full bg-white border rounded py-0 px-1 text-left"
+													placeholder="Đơn vị"
+													value={inputValue || ''}
+													onChange={(e) => {
+														const newValue = e.target.value;
+														setInputValue(newValue);
+														setUnitInput(newValue);
+														setUnitPage(1);
+														setShowUnitDropdown(newValue.length >= 1); // Show dropdown with at least 1 character for units
+													}}
+													onBlur={() => {
+														// Use a global variable to store the timeout, so we can clear it if needed
+														window.unitBlurTimeout = setTimeout(() => {
+															setShowUnitDropdown(false);
+															// Only save if we haven't already saved from dropdown selection
+															if (!window.unitSavedFromDropdown) {
+																handleSaveContent(inputValue);
+															}
+															window.unitSavedFromDropdown = false;
+														}, 200);
+													}}
+													onKeyDown={(e) => {
+														if (e.key === 'Enter') {
+															e.preventDefault();
+															handleSaveContent(inputValue);
+														}
+													}}
+													autoFocus
+												/>{' '}
+												{showUnitDropdown &&
+													getPaginatedUnits(unitInput).length > 0 &&
+													createPortal(
+														<div
+															className="absolute bg-white border rounded shadow-lg z-[9999]"
+															style={{
+																width: document.getElementById(`result-unit-${order.id}`)?.offsetWidth + 'px',
+																top:
+																	document.getElementById(`result-unit-${order.id}`)?.getBoundingClientRect().bottom +
+																	window.scrollY,
+																left:
+																	document.getElementById(`result-unit-${order.id}`)?.getBoundingClientRect().left +
+																	window.scrollX,
+															}}
+														>
+															{getPaginatedUnits(unitInput).map((unit, index) => (
+																<div
+																	key={index}
+																	className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																	onClick={() => {
+																		// Stop the blur timeout to prevent double API calls
+																		clearTimeout(window.unitBlurTimeout);
+																		setInputValue(unit);
+																		handleSaveContent(unit);
+																		setShowUnitDropdown(false);
+																	}}
+																>
+																	<p>{unit}</p>
+																</div>
+															))}
+															{filterUnits(unitInput).length > itemsPerPage && (
+																<div className="flex justify-between p-2 bg-gray-100">
+																	<button
+																		className="px-2 py-1 border rounded disabled:opacity-50"
+																		onClick={() => handleUnitPageChange(unitPage - 1)}
+																		disabled={unitPage === 1}
+																	>
+																		Prev
+																	</button>
+																	<span>
+																		{unitPage}/{Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+																	</span>
+																	<button
+																		className="px-2 py-1 border rounded disabled:opacity-50"
+																		onClick={() => handleUnitPageChange(unitPage + 1)}
+																		disabled={unitPage >= Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+																	>
+																		Next
+																	</button>
+																</div>
+															)}
+														</div>,
+														document.body,
+													)}
+											</>
+										) : (
+											<div
+												className="hover:border-purple-500 hover:border rounded"
+												onClick={() => {
+													setEditingField(`result_unit-${order.sample_id}-${order.id}`);
+													setInputValue(order.result_unit || '');
+												}}
+											>
 												<div
 													dangerouslySetInnerHTML={{
 														__html: order?.result_unit ? order.result_unit : '--',
 													}}
-													className="p-1"
+													className="py-0 px-1 cursor-pointer"
 												/>
-											)}
-										</div>
-									</td>
-									<td className="p-1 border relative">
+											</div>
+										)}
+									</td>{' '}
+									<td className="p-1 border relative align-top">
 										<div className="relative">
 											{deadlineDropdownVisible === order.id ? (
 												<div className="relative">
@@ -4096,10 +4213,12 @@ const SampleInfor = () => {
 												</button>
 											)}
 										</div>
-									</td>
+									</td>{' '}
 									<td className="p-1 border relative align-top">
 										<select
-											className="w-full bg-white border rounded p-1 text-left"
+											className={`w-full bg-white border rounded p-1 text-left ${
+												!order.field || order.field.trim() === '' ? 'border-yellow-400' : ''
+											}`}
 											value={order.field || ''}
 											onChange={(e) => handleFieldColumnChange(order.id, e.target.value)}
 										>
@@ -4107,6 +4226,44 @@ const SampleInfor = () => {
 											<option value="Hóa lý">Hóa lý</option>
 											<option value="Vi sinh">Vi sinh</option>
 										</select>
+									</td>{' '}
+									<td className="p-1 border relative align-top">
+										<div className="relative">
+											<button
+												className={`w-full dropdown-button font-normal ${
+													technicianDropdownVisible === order.id && 'border border-slate-200'
+												} p-1 rounded bg-white text-left h-fit`}
+												onClick={(event) => toggleTechnicianDropdown(order.id, event)}
+											>
+												{technician(order) || 'Chọn KTV'}
+											</button>
+										</div>
+
+										{technicianDropdownVisible === order.id &&
+											createPortal(
+												<ul
+													className="fixed w-max min-w-[150px] bg-white border rounded shadow-lg z-[99]"
+													style={{
+														top: dropdownPosition.top + 'px',
+														left: dropdownPosition.left + 'px',
+														position: 'absolute',
+														maxHeight: '200px',
+														overflowY: 'auto',
+													}}
+												>
+													{technicians.map((identity) => (
+														<li
+															key={identity.alias}
+															className="p-1 text-md cursor-pointer hover:bg-gray-200 dropdown-item"
+															onClick={() => handleTechnicianChange(order.id, identity.identity_uid)}
+														>
+															<p className="font-bold text-primary text-sm text-start">{identity.alias || ''}</p>
+															<p className="text-start">{identity.identity_name || ''}</p>
+														</li>
+													))}
+												</ul>,
+												document.body,
+											)}
 									</td>
 									<td className="pt-[5px] pb-0 border align-top text-center">
 										<input
@@ -4136,7 +4293,7 @@ const SampleInfor = () => {
 						? handleDeleteMultipleConfirmAction
 						: handleDeleteAnalysisConfirmAction,
 				)}
-			{isParameterWarningVisible && renderParameterWarningModal()}
+
 			{isBulkDeadlineVisible && renderBulkDeadlinePicker()}
 		</div>
 	);
