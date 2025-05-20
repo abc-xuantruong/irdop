@@ -180,7 +180,6 @@ const AccountInfor = () => {
 	const handleEditBlur = () => {
 		handleEditSave();
 	};
-
 	// Save edited value
 	const handleEditSave = async () => {
 		if (!editingCell) return;
@@ -213,11 +212,6 @@ const AccountInfor = () => {
 				[columnName]: columnName === 'relation_id' && editValue === '' ? 4 : editValue,
 			};
 		}
-
-		// Update data
-		const updatedData = accountData.map((item, index) => (index === rowIndex ? updatedRow : item));
-
-		setAccountData(updatedData);
 
 		// Create the log object in the required format
 		const logObject = {
@@ -284,8 +278,9 @@ const AccountInfor = () => {
 			await apiPost(url, payload);
 			toast.success('Cập nhật thành công!');
 
-			// Refresh data
-			await fetchAccountData();
+			// Update data locally without refetching
+			const updatedData = accountData.map((item, index) => (index === rowIndex ? updatedRow : item));
+			setAccountData(updatedData);
 		} catch (err) {
 			console.error('Error updating account data:', err);
 			toast.error('Cập nhật không thành công.');
@@ -295,7 +290,6 @@ const AccountInfor = () => {
 		setEditingCell(null);
 		setEditValue('');
 	};
-
 	// New function to handle role checkbox changes
 	const handleRoleChange = async (row, columnName, checked) => {
 		// Update the row's role value
@@ -306,18 +300,6 @@ const AccountInfor = () => {
 				[columnName]: checked,
 			},
 		};
-
-		// Update the account data array
-		const updatedData = accountData.map((item) => {
-			// Compare rows to find the one that needs updating
-			// Since we don't have a reliable unique ID, we'll do a simple comparison
-			if (item === row) {
-				return updatedRow;
-			}
-			return item;
-		});
-
-		setAccountData(updatedData);
 
 		// Create log object in the required format
 		const logObject = {
@@ -369,8 +351,17 @@ const AccountInfor = () => {
 			await apiPost(url, payload);
 			toast.success('Cập nhật quyền thành công!');
 
-			// Refresh data
-			await fetchAccountData();
+			// Update the account data array without refetching
+			const updatedData = accountData.map((item) => {
+				// Compare rows to find the one that needs updating
+				// Since we don't have a reliable unique ID, we'll do a simple comparison
+				if (item === row) {
+					return updatedRow;
+				}
+				return item;
+			});
+
+			setAccountData(updatedData);
 		} catch (err) {
 			console.error('Error updating role data:', err);
 			toast.error('Cập nhật quyền không thành công.');
@@ -405,7 +396,6 @@ const AccountInfor = () => {
 			handleAddColumn();
 		}
 	};
-
 	const handleAddRow = async () => {
 		// Create new row with roles object
 		const basicFields = {};
@@ -440,11 +430,16 @@ const AccountInfor = () => {
 				},
 			};
 
-			await apiPost(url, payload);
+			const response = await apiPost(url, payload);
 			toast.success('Thêm tài khoản thành công!');
 
-			// Refresh data
-			await fetchAccountData();
+			// If we received an identity_uid from the API response, add it to our new row
+			if (response && response.data && response.data.identity_uid) {
+				newRow.identity_uid = response.data.identity_uid;
+			}
+
+			// Add the new row to the accountData state without refetching
+			setAccountData([...accountData, newRow]);
 
 			// Reset new row data
 			const emptyRow = {};
@@ -461,9 +456,6 @@ const AccountInfor = () => {
 		} catch (err) {
 			console.error('Error adding new account:', err);
 			toast.error('Thêm tài khoản không thành công.');
-
-			// Add the new row to the data even if API call fails (can be adjusted based on requirements)
-			setAccountData([...accountData, newRow]);
 		}
 	};
 
@@ -599,17 +591,26 @@ const AccountInfor = () => {
 			toast.success(`Đã xóa cột "${columnName}"`);
 		}
 	};
-
 	// Function to handle row deletion
-	const handleDeleteRow = (rowIndex, row) => {
+	const handleDeleteRow = async (rowIndex, row) => {
 		if (window.confirm('Bạn có chắc chắn muốn xóa hàng này không?')) {
 			console.log('Deleting row:', row);
 
-			// Remove the row from accountData
-			const updatedData = accountData.filter((_, index) => index !== rowIndex);
-			setAccountData(updatedData);
+			try {
+				// Here you would add the API call to delete the row
+				// const url = 'https://pink.irdop.org/ab4dg2/delete/iden';
+				// const payload = { identity_uid: row.identity_uid };
+				// await apiPost(url, payload);
 
-			toast.success('Đã xóa hàng thành công');
+				// Remove the row from accountData only if API call succeeds
+				const updatedData = accountData.filter((_, index) => index !== rowIndex);
+				setAccountData(updatedData);
+
+				toast.success('Đã xóa hàng thành công');
+			} catch (err) {
+				console.error('Error deleting row:', err);
+				toast.error('Xóa hàng không thành công');
+			}
 		}
 	};
 

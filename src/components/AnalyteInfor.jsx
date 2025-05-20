@@ -141,7 +141,7 @@ const AnalyteInfor = () => {
 	const extractUniqueLists = (data) => {
 		const parameterNames = [...new Set(data.map((item) => item.parameter_name || '').filter(Boolean))];
 		const protocolCodes = [...new Set(data.map((item) => item.protocol_code || '').filter(Boolean))];
-		
+
 		setUniqueParameterNames(parameterNames);
 		setUniqueProtocolCodes(protocolCodes);
 		// Note: uniqueMatrices and uniqueUnits are now fetched from API
@@ -290,7 +290,9 @@ const AnalyteInfor = () => {
 		} else {
 			handleNewAnalyteChange('default_unit', value);
 		}
-		setShowUnitDropdown(true);
+		// Only show dropdown if there are filtered units to display
+		const filteredUnits = filterUnits(value);
+		setShowUnitDropdown(filteredUnits.length > 0);
 	};
 
 	const technician = (param) => {
@@ -699,9 +701,10 @@ const AnalyteInfor = () => {
 								<th className="py-2 text-start pl-2 min-w-44 w-1/5 ">Nền mẫu</th>
 								<th className="py-2 text-start pl-2 min-w-24 w-24">Nguồn </th>
 								<th className="py-2 text-start pl-2 min-w-44 w-44">Code</th>
-								<th className="py-2 text-start pl-2 min-w-16 w-16">Đơn vị</th>
+								<th className="py-2 text-start pl-2 min-w-20 w-20">Đơn vị</th>
 								<th className="py-2 text-start pl-2 min-w-40 w-40">Ngưỡng giới hạn</th>
 								<th className="py-2 text-start pl-2 min-w-32 w-32">Giá thành</th>
+								<th className="py-2 text-start pl-2 min-w-32 w-32">Chứng nhận</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -967,6 +970,28 @@ const AnalyteInfor = () => {
 											value={newAnalyte.price || ''}
 											onChange={(e) => handleNewAnalyteChange('price', e.target.value)}
 										/>
+									</td>
+									<td className="p-1 text-start">
+										<div className="flex flex-col gap-1">
+											<label className="flex items-center">
+												<input
+													type="checkbox"
+													className="mr-2"
+													checked={newAnalyte.accreditation?.includes('107')}
+													onChange={() => handleNewAccreditationChange('107')}
+												/>
+												<span>107</span>
+											</label>
+											<label className="flex items-center">
+												<input
+													type="checkbox"
+													className="mr-2"
+													checked={newAnalyte.accreditation?.includes('VILAS 997')}
+													onChange={() => handleNewAccreditationChange('VILAS 997')}
+												/>
+												<span>VILAS 997</span>
+											</label>
+										</div>
 									</td>
 									<td className="p-1 text-center  ">
 										<button
@@ -1335,6 +1360,37 @@ const AnalyteInfor = () => {
 												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 											>
 												{analyte.price || ''}
+											</span>
+										)}
+									</td>
+									<td className="p-1 text-start">
+										{editingRow === analyte.id ? (
+											<div className="flex flex-col gap-1">
+												<label className="flex items-center">
+													<input
+														type="checkbox"
+														className="mr-2"
+														checked={analyte.accreditation?.includes('107')}
+														onChange={() => handleAccreditationChange(analyte.id, '107')}
+													/>
+													<span>107</span>
+												</label>
+												<label className="flex items-center">
+													<input
+														type="checkbox"
+														className="mr-2"
+														checked={analyte.accreditation?.includes('VILAS 997')}
+														onChange={() => handleAccreditationChange(analyte.id, 'VILAS 997')}
+													/>
+													<span>VILAS 997</span>
+												</label>
+											</div>
+										) : (
+											<span
+												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
+												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+											>
+												{analyte.accreditation || ''}
 											</span>
 										)}
 									</td>

@@ -302,10 +302,104 @@ const CreateReceiptFromCRM = () => {
 		} finally {
 			setIsCreating(false);
 		}
+	}; // Function to handle creating and downloading request form with timeout
+	const handleCreateRequestForm = async () => {
+		if (!crmData) return;
+
+		try {
+			setIsCreating(true);
+
+			// Show loading notification
+			showBriefNotification('Đang tạo phiếu yêu cầu...', 'info');
+
+			// Prepare request data
+			const requestData = {
+				...crmData,
+				created_at: new Date().toISOString(),
+				created_by_uid: currentUser.identity_uid,
+			};
+
+			// Create a promise that will be rejected after timeout
+			const timeoutPromise = new Promise((_, reject) => {
+				setTimeout(() => reject(new Error('Request timed out after 10 seconds')), 10000);
+			});
+
+			// Specify Excel MIME type explicitly
+			const excelMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+			// Race between the actual request and the timeout
+			const response = await Promise.race([
+				fetch('https://black.irdop.org/xlsx/download/request_form', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${localStorage.getItem('token')}`,
+					},
+					body: JSON.stringify(requestData),
+				}),
+				timeoutPromise,
+			]);
+
+			if (response.ok) {
+				// Get the blob directly from the response
+				const blob = await response.blob();
+
+				// Create a new blob with explicit type to ensure correct handling
+				const excelBlob = new Blob([blob], { type: excelMimeType });
+
+				// Create a URL for the blob
+				const url = window.URL.createObjectURL(excelBlob);
+
+				// For IE/Edge browsers
+				if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+					window.navigator.msSaveOrOpenBlob(excelBlob, `Phieu_Yeu_Cau_${crmData.order_code || 'CRM'}.xlsx`);
+				} else {
+					// For modern browsers
+					const link = document.createElement('a');
+					link.href = url;
+					link.setAttribute('download', `Phieu_Yeu_Cau_${crmData.order_code || 'CRM'}.xlsx`);
+					link.style.display = 'none';
+
+					// Append to body, click and remove
+					document.body.appendChild(link);
+					link.click();
+
+					// Clean up after a short delay to ensure download starts
+					setTimeout(() => {
+						document.body.removeChild(link);
+						window.URL.revokeObjectURL(url);
+					}, 200);
+				}
+
+				// Show success message and close modal
+				await showBriefNotification('Đã tạo phiếu yêu cầu thành công!');
+				closeModal();
+			} else {
+				// Handle HTTP errors
+				console.error('Error downloading file:', response.status, response.statusText);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: `Không thể tạo phiếu yêu cầu (${response.status}). Vui lòng thử lại`,
+				});
+			}
+		} catch (error) {
+			console.error('Error creating request form:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text:
+					error.message === 'Request timed out after 10 seconds'
+						? 'Yêu cầu đã quá thời gian chờ. Vui lòng thử lại sau!'
+						: 'Không thể tạo phiếu yêu cầu. Vui lòng thử lại sau!',
+			});
+		} finally {
+			setIsCreating(false);
+		}
 	};
 
 	// New function to show brief notification before navigation
-	const showBriefNotification = (message) => {
+	const showBriefNotification = (message, icon = 'success') => {
 		return new Promise((resolve) => {
 			const Toast = Swal.mixin({
 				toast: true,
@@ -318,12 +412,12 @@ const CreateReceiptFromCRM = () => {
 					toast.addEventListener('mouseleave', Swal.resumeTimer);
 				},
 				customClass: {
-					popup: 'colored-toast swal2-icon-success',
+					popup: `colored-toast swal2-icon-${icon}`,
 				},
 			});
 
 			Toast.fire({
-				icon: 'success',
+				icon: icon,
 				title: message,
 			}).then(() => {
 				resolve();
@@ -841,7 +935,6 @@ const CreateReceiptFromCRM = () => {
 					<div className="bg-white rounded-lg p-6 max-w-7xl w-11/12 z-10 max-h-[90vh] min-h-72 relative flex flex-col justify-between">
 						<div>
 							<h2 className="text-xl font-bold mb-4">Tạo tiếp nhận mẫu từ CRM</h2>
-
 							<form onSubmit={handleSubmit} className="mb-4">
 								<div className="flex items-center gap-2">
 									<input
@@ -861,14 +954,12 @@ const CreateReceiptFromCRM = () => {
 									</button>
 								</div>
 							</form>
-
 							{error && (
 								<div className="text-red-500 mb-4 p-3 bg-red-50 border border-red-200 rounded">
 									<p className="font-medium">Lỗi:</p>
 									<p>{error}</p>
 								</div>
 							)}
-
 							{crmData && (
 								<div className="flex flex-col lg:flex-row gap-4">
 									{/* Left Column: Order and Customer Information */}
@@ -1021,13 +1112,13 @@ const CreateReceiptFromCRM = () => {
 															))}
 														</select>
 													</div>
-												</div>
+												</div>{' '}
 											</div>{' '}
-											<div className="flex items-center mb-4">
-												<label htmlFor="global-matrix" className="text-sm font-medium mr-2">
-													Nền mẫu cho tất cả:
-												</label>
+											<div className="flex items-center justify-between mb-4">
 												<div className="flex items-center">
+													<label htmlFor="global-matrix" className="text-sm font-medium mr-2">
+														Nền mẫu cho tất cả:
+													</label>
 													<div className="relative inline-block">
 														<input
 															type="text"
@@ -1128,16 +1219,23 @@ const CreateReceiptFromCRM = () => {
 																document.body,
 															)}
 													</div>
-													<button
-														onClick={(e) => applyGlobalMatrix(document.getElementById('global-matrix').value)}
-														className="ml-2 bg-gray-200 hover:bg-gray-300 text-sm rounded-lg p-1 px-2"
-														title="Áp dụng nền mẫu cho tất cả"
-													>
-														Áp dụng
-													</button>
+												</div>
+
+												<div className="flex items-center">
+													<label htmlFor="deadline" className="text-sm font-medium mr-2">
+														Hạn trả kết quả:
+													</label>
+													<input
+														type="date"
+														id="deadline"
+														value={deadline}
+														onChange={(e) => setDeadline(e.target.value)}
+														className="border p-1 rounded bg-white"
+														required
+													/>
 												</div>
 											</div>
-											<div className="overflow-y-auto max-h-[50vh] pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+											<div className="overflow-y-auto max-h-[50vh] pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 mb-10">
 												{crmData.samples.map((sample, index) => (
 													<div key={index} className="mb-4 p-2 border rounded w-full">
 														<div className="flex justify-between items-center">
@@ -1166,7 +1264,9 @@ const CreateReceiptFromCRM = () => {
 																onClick={() => handleDeleteSample(index)}
 																className="text-red-500 hover:border hover:border-red-500 rounded-full w-5 h-5 flex items-center justify-center"
 																title="Xóa mẫu"
-															></button>
+															>
+																✕
+															</button>
 														</div>
 
 														<div className="mb-2 flex items-center justify-between">
@@ -1451,7 +1551,9 @@ const CreateReceiptFromCRM = () => {
 																					onClick={() => handleDeleteAnalysis(index, idx)}
 																					className="text-red-500 hover:border hover:border-red-500 rounded-full w-5 h-5 flex items-center justify-center mx-auto"
 																					title="Xóa chỉ tiêu"
-																				></button>
+																				>
+																					✕
+																				</button>
 																			</td>
 																		</tr>
 																	))}
@@ -1459,7 +1561,7 @@ const CreateReceiptFromCRM = () => {
 															</table>
 														</div>
 
-														<div className="mt-3 flex justify-end">
+														<div className="mt-2 flex justify-end">
 															<button
 																onClick={() => handleOpenAddParameter(index)}
 																className="border border-primary text-primary text-sm rounded-lg p-1 flex items-center"
@@ -1475,43 +1577,36 @@ const CreateReceiptFromCRM = () => {
 									</div>
 								</div>
 							)}
-
+						</div>{' '}
+						{/* Close button (X) at top right */}
+						<button
+							onClick={closeModal}
+							className="absolute top-2 right-2 w-8 h-8 border border-red-500 rounded-lg  flex items-center justify-center bg-white text-red-500 hover:bg-gray-100 hover:border-red-700 "
+							title="Đóng"
+							disabled={isCreating}
+						>
+							✕
+						</button>
+						{/* Action buttons at bottom */}
+						<div className="flex justify-end mt-4 gap-3 absolute bottom-6 right-6">
 							{crmData && (
-								<div className="w-full mt-4">
-									<div className="flex justify-end items-center mb-2">
-										<label htmlFor="deadline" className="text-sm font-medium mr-2">
-											Hạn trả kết quả:
-										</label>
-										<input
-											type="date"
-											id="deadline"
-											value={deadline}
-											onChange={(e) => setDeadline(e.target.value)}
-											className="border p-1 rounded bg-white"
-											required
-										/>
-									</div>
-									<div className="flex justify-end w-full">
-										<button
-											onClick={handleCreateReceipt}
-											disabled={isCreating}
-											className="bg-primary text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
-										>
-											{isCreating ? 'Đang tạo...' : 'Tạo tiếp nhận mẫu'}
-										</button>
-									</div>
-								</div>
+								<>
+									<button
+										onClick={handleCreateRequestForm}
+										disabled={isCreating}
+										className="bg-primary text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+									>
+										Tạo phiếu yêu cầu
+									</button>
+									<button
+										onClick={handleCreateReceipt}
+										disabled={isCreating}
+										className="bg-primary text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+									>
+										{isCreating ? 'Đang tạo...' : 'Tạo tiếp nhận mẫu'}
+									</button>
+								</>
 							)}
-						</div>
-
-						<div className="flex justify-end mt-4">
-							<button
-								onClick={closeModal}
-								className="bg-gray-300 text-gray-700 font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-gray-400"
-								disabled={isCreating}
-							>
-								Đóng
-							</button>
 						</div>
 					</div>
 				</div>
