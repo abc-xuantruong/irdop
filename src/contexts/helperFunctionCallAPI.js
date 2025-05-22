@@ -6,6 +6,12 @@ const getAuthHeader = () => {
 	const authToken = Cookies.get('auth');
 	return authToken ? { Authorization: `Bearer ${authToken}` } : {};
 };
+const headers = {
+	'Content-Type': 'application/json',
+	...getAuthHeader(),
+	'x-fh-app-uid': 'LIMS-IRDOP-PRD',
+	'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
+};
 
 const redirectToLogin = (message) => {
 	Swal.fire({
@@ -31,7 +37,7 @@ const forbidden = (message) => {
 
 export const checkAuth = async () => {};
 
-export const apiGet = async (url, headers = {}) => {
+export const apiGet = async (url, customHeaders = {}) => {
 	try {
 		let response = { status: 200 };
 		const auth_token = getAuthHeader();
@@ -40,7 +46,7 @@ export const apiGet = async (url, headers = {}) => {
 			return { status: 401, data: { message: 'Unauthorized' } };
 		}
 
-		const auth = await axios.post('https://pink.irdop.org/ab4dg2/auth/me', {}, { headers: { ...getAuthHeader() } });
+		const auth = await axios.post('https://pink.irdop.org/ab4dg2/auth/me', {}, { headers });
 
 		const expiry_date = new Date(auth.data.session_expiry);
 
@@ -53,7 +59,7 @@ export const apiGet = async (url, headers = {}) => {
 			return { status: 401, data: { message: 'Session expired' } };
 		}
 
-		response = await axios.get(url, { headers: { ...getAuthHeader(), ...headers } });
+		response = await axios.get(url, { headers: { ...headers, ...customHeaders } });
 		return response;
 	} catch (error) {
 		console.error('GET request error:', error);
@@ -77,7 +83,7 @@ export const apiGet = async (url, headers = {}) => {
 	}
 };
 
-export const apiPost = async (url, body, headers = {}) => {
+export const apiPost = async (url, body, customHeaders = {}) => {
 	try {
 		let response = { status: 200 };
 		const auth_token = getAuthHeader();
@@ -87,7 +93,7 @@ export const apiPost = async (url, body, headers = {}) => {
 			return { status: 401, data: { message: 'Unauthorized' } };
 		}
 
-		const auth = await axios.post('https://pink.irdop.org/ab4dg2/auth/me', {}, { headers: { ...getAuthHeader() } });
+		const auth = await axios.post('https://pink.irdop.org/ab4dg2/auth/me', {}, { headers });
 
 		const expiry_date = new Date(auth.data.session_expiry);
 
@@ -97,7 +103,7 @@ export const apiPost = async (url, body, headers = {}) => {
 			return { status: 401, data: { message: 'Session expired' } };
 		}
 
-		response = await axios.post(url, body, { headers: { ...getAuthHeader(), ...headers } });
+		response = await axios.post(url, body, { headers: { ...headers, ...customHeaders } });
 		return response;
 	} catch (error) {
 		console.error('POST request error:', error);

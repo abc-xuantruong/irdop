@@ -2948,9 +2948,8 @@ const SampleInfor = () => {
 						);
 						if (matchedAnalysis) {
 							return {
-								id: analyte.id,
+								...analyte, // Keep all original properties
 								parameter_name: matchedAnalysis.parameter_name,
-								matrix: analyte.matrix,
 								parameter_uid: matchedAnalysis.parameter_uid || analyte.parameter_uid,
 								parameter_id: matchedAnalysis.parameter_id || analyte.parameter_id,
 								protocol_code: matchedAnalysis.protocol_code || analyte.protocol_code,
@@ -2970,7 +2969,6 @@ const SampleInfor = () => {
 				// Now update each analysis in the database
 				let successCount = 0;
 				let failCount = 0;
-
 				for (const analyte of updatedAnalytes.filter((a) => selectedAnalytes.includes(a.id))) {
 					try {
 						if (analyte.parameter_uid || analyte.parameter_id) {
@@ -3083,11 +3081,14 @@ const SampleInfor = () => {
 						analysis.protocol_source ||
 						analysis.field
 					) {
+						// Ensure matrix is not null or undefined before sending
+						const matrixToUse = analysis.matrix || sample.matrix || '';
+
 						const parameterResponse = await apiPost('https://black.irdop.org/ha8i0uw2/db/upsert/parameter', {
 							parameter: {
 								parameter_uid: analysis.parameter_uid || '',
 								parameter_name: analysis.parameter_name,
-								matrix: analysis.matrix,
+								matrix: matrixToUse, // Use the guaranteed non-null value
 								protocol_code: analysis.protocol_code,
 								protocol_source: analysis.protocol_source,
 								field: analysis.field,

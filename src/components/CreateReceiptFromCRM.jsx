@@ -230,7 +230,6 @@ const CreateReceiptFromCRM = () => {
 			samples: updatedSamples,
 		});
 	};
-
 	const handleCreateReceipt = async () => {
 		if (!crmData) return;
 
@@ -246,30 +245,46 @@ const CreateReceiptFromCRM = () => {
 
 		setIsCreating(true);
 
-		// Add status property to samples based on urgentSamples state
-		const samplesWithStatus = crmData.samples.map((sample, index) => ({
-			...sample,
-			sample_information: [
-				{
-					fname: 'Tên mẫu thử / name.',
-					fvalue: sample?.sample_name || '',
-				},
-				// { fname: 'Số lô / LOT no.', fvalue: '' },
-				// { fname: 'Ngày sản xuất / mfg.', fvalue: '' },
-				// { fname: 'Hạn sử dụng / exp.', fvalue: '' },
-				// { fname: 'Nơi sản xuất / mfr.', fvalue: '' },
-				{
-					fname: 'Ngày tiếp nhận / receipt date.',
-					fvalue: new Date().toLocaleDateString('vi-VN'),
-				},
-				{
-					fname: 'Mô tả / desc.',
-					fvalue: sample?.sample_description || '',
-				},
-			],
-			status: urgentSamples[index] ? 1 : 0,
-			purpose: selectedPurpose, // Add purpose to each sample
-		}));
+		// Add status property to samples based on urgentSamples state and ensure all analysis items have required properties
+		const samplesWithStatus = crmData.samples.map((sample, index) => {
+			// Make sure each analysis has all required properties
+			const updatedAnalysis = sample.analysis.map((item) => ({
+				parameter_uid: item.parameter_uid || '',
+				parameter_name: item.parameter_name || '',
+				protocol_source: item.protocol_source || '',
+				protocol_code: item.protocol_code || '',
+				matrix: item.matrix || sample.matrix || '',
+				field: item.field || '',
+				// Keep any other properties that might be present
+				...item,
+			}));
+
+			return {
+				...sample,
+				// Update the analysis array with the complete objects
+				analysis: updatedAnalysis,
+				sample_information: [
+					{
+						fname: 'Tên mẫu thử / name.',
+						fvalue: sample?.sample_name || '',
+					},
+					// { fname: 'Số lô / LOT no.', fvalue: '' },
+					// { fname: 'Ngày sản xuất / mfg.', fvalue: '' },
+					// { fname: 'Hạn sử dụng / exp.', fvalue: '' },
+					// { fname: 'Nơi sản xuất / mfr.', fvalue: '' },
+					{
+						fname: 'Ngày tiếp nhận / receipt date.',
+						fvalue: new Date().toLocaleDateString('vi-VN'),
+					},
+					{
+						fname: 'Mô tả / desc.',
+						fvalue: sample?.sample_description || '',
+					},
+				],
+				status: urgentSamples[index] ? 1 : 0,
+				purpose: selectedPurpose, // Add purpose to each sample
+			};
+		});
 
 		try {
 			const response = await apiPost('https://black.irdop.org/crm/create_receipt', {

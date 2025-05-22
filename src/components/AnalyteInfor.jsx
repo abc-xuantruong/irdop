@@ -17,7 +17,7 @@ const AnalyteInfor = () => {
 	const [newAnalyte, setNewAnalyte] = useState({
 		parameter_name: '',
 		field: 'Hóa lý',
-		matrix: 'Đất',
+		matrix: '',
 		product_type: '',
 		tat_expected: '1 day',
 		default_unit: '',
@@ -27,7 +27,7 @@ const AnalyteInfor = () => {
 		parameter_uid: '',
 		protocol_source: 'IRDOP',
 		threshold_limit: '',
-		price: '', // Added price field
+		price: 0, // Added price field
 	});
 	const [protocolSearch, setProtocolSearch] = useState('');
 
