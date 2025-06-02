@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState, useRef } from 'react';
+import React, { useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { FiRefreshCcw } from 'react-icons/fi';
 import Breadcrumb from './Breadcrumb';
@@ -19,6 +19,7 @@ import {
 	FaStickyNote,
 	FaTimes,
 } from 'react-icons/fa';
+import { set } from 'date-fns';
 
 const Dashboard = () => {
 	const location = useLocation();
@@ -50,9 +51,24 @@ const Dashboard = () => {
 	});
 	const [selectedPreliminaryType, setSelectedPreliminaryType] = useState('not_sent_preliminary');
 
-	// Remove isEditMode state
-	// Add state to track which field is being edited
-	const [editingField, setEditingField] = useState({ receiptId: null, sampleId: null, field: null });
+	// Remove isEditMode state	// Add state to track which field is being edited
+	const [editingField, setEditingField] = useState({ receiptId: null, sampleId: null, field: null }); // Add state to track which transaction field is being edited
+	const [editingTransaction, setEditingTransaction] = useState({
+		receiptId: null,
+		transactionIndex: null,
+		field: null,
+	});
+
+	// Add state for transaction modal
+	const [showTransactionModal, setShowTransactionModal] = useState(false);
+	const [transactionForm, setTransactionForm] = useState({
+		receiptId: null,
+		transactionDate: new Date(),
+		transactionType: 'TK viện',
+		amount: '',
+		invoiceNumber: '',
+	});
+	const [transactionErrors, setTransactionErrors] = useState({});
 
 	// Add state for user information
 	const [userInfo, setUserInfo] = useState({});
@@ -125,13 +141,287 @@ const Dashboard = () => {
 	const [paymentStatusFilter, setPaymentStatusFilter] = useState(null);
 	const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
 	const paymentDropdownRef = useRef(null);
-
 	// Add state for sales recorder filtering
 	const [salesRecorderFilter, setSalesRecorderFilter] = useState(null);
 	const [showSalesRecorderDropdown, setShowSalesRecorderDropdown] = useState(false);
 	const salesRecorderDropdownRef = useRef(null);
 
-	// Function to format date strings entered manually
+	// Function to open transaction modal
+
+	const handleCopyToClipboard = (text) => {
+		navigator.clipboard
+			.writeText(text)
+			.then(() => {
+				Swal.fire({
+					position: 'top-end',
+					icon: 'success',
+					title: 'Copied to clipboard',
+					showConfirmButton: false,
+					timer: 1000,
+					toast: true,
+				});
+			})
+			.catch((err) => {
+				Swal.fire({
+					position: 'top-end',
+					icon: 'error',
+					title: 'Failed to copy',
+					showConfirmButton: false,
+					timer: 1000,
+					toast: true,
+				});
+				console.error('Failed to copy text: ', err);
+			});
+	};
+
+	const handleOpenTransactionModal = (receiptId) => {
+		setTransactionForm({
+			receiptId: receiptId,
+			transactionDate: new Date(),
+			transactionType: 'TK viện',
+			amount: '',
+			invoiceNumber: '',
+		});
+		setTransactionErrors({});
+		setShowTransactionModal(true);
+	};
+
+	// Function to handle transaction form changes
+	const handleTransactionFormChange = (field, value) => {
+		setTransactionForm((prev) => ({
+			...prev,
+			[field]: value,
+		}));
+
+		// Clear error for this field when user makes changes
+		if (transactionErrors[field]) {
+			setTransactionErrors((prev) => ({
+				...prev,
+				[field]: null,
+			}));
+		}
+	};
+
+	// Function to validate transaction form
+	const validateTransactionForm = () => {
+		const errors = {};
+
+		if (!transactionForm.transactionDate) {
+			errors.transactionDate = 'Vui lòng chọn ngày thanh toán';
+		}
+
+		if (!transactionForm.transactionType) {
+			errors.transactionType = 'Vui lòng chọn hình thức thanh toán';
+		}
+
+		if (!transactionForm.amount || transactionForm.amount <= 0) {
+			errors.amount = 'Vui lòng nhập số tiền hợp lệ';
+		}
+
+		return errors;
+	};
+	// Function to handle transaction form submission
+	const handleTransactionFormSubmit = async () => {
+		const errors = validateTransactionForm();
+
+		if (Object.keys(errors).length > 0) {
+			setTransactionErrors(errors);
+			return;
+		}
+
+		try {
+			// Find the receipt to get current transactions
+			const receipt = currentList.find((r) => r.id === transactionForm.receiptId);
+			if (!receipt) return; // Create new transaction
+			const newTransaction = {
+				transactionDate: transactionForm.transactionDate,
+				transactionType: transactionForm.transactionType,
+				amount: Number(transactionForm.amount),
+				invoiceNumber: transactionForm.invoiceNumber || '',
+			};
+
+			// Add to transactions array
+			const updatedTransactions = [...(receipt.transactions || []), newTransaction]; // Update via API
+			const payload = {
+				receipt: {
+					id: transactionForm.receiptId,
+					receipt_uid: getReceiptUidById(transactionForm.receiptId),
+					transactions: updatedTransactions,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+			if (response.status === 200) {
+				showToast('Thêm giao dịch thành công!');
+				fetchReceipt(); // Refresh data
+				setShowTransactionModal(false); // Close modal
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi thêm giao dịch',
+				});
+			}
+		} catch (error) {
+			console.error('Error adding transaction:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi thêm giao dịch',
+			});
+		}
+	};
+	// Add function to handle transaction field update
+	const handleTransactionChange = async (receiptId, transactionIndex, field, newValue) => {
+		// Prevent technicians from updating transaction data
+		if (isTechnician()) {
+			showToast('Bạn không có quyền cập nhật thông tin thanh toán', 'error');
+			return;
+		}
+
+		try {
+			// Find the receipt to get current transactions
+			const receipt = currentList.find((r) => r.id === receiptId);
+			if (!receipt) return;
+
+			// Create a copy of transactions array
+			let updatedTransactions = [...(receipt.transactions || [])];
+
+			// If transaction index doesn't exist, create new transaction
+			if (transactionIndex >= updatedTransactions.length) {
+				updatedTransactions[transactionIndex] = {
+					transactionDate: null,
+					transactionType: 'TK viện',
+					amount: null,
+				};
+			}
+
+			// Update the specific field
+			updatedTransactions[transactionIndex] = {
+				...updatedTransactions[transactionIndex],
+				[field]: newValue,
+			};
+
+			// Format date if it's a date field
+			if (field === 'transactionDate' && newValue) {
+				const adjustedDate = new Date(newValue);
+				adjustedDate.setHours(adjustedDate.getHours() + 7);
+				updatedTransactions[transactionIndex].transactionDate = adjustedDate.toISOString().split('T')[0];
+			}
+
+			const payload = {
+				receipt: {
+					id: receiptId,
+					receipt_uid: getReceiptUidById(receiptId),
+					transactions: updatedTransactions,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+			if (response.status === 200) {
+				showToast('Cập nhật thông tin giao dịch thành công!');
+				fetchReceipt(); // Fetch new data to update the list
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật thông tin giao dịch',
+				});
+			}
+		} catch (error) {
+			console.error('Error updating transaction:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật thông tin giao dịch',
+			});
+		} finally {
+			setEditingTransaction({ receiptId: null, transactionIndex: null, field: null });
+		}
+	};
+
+	// Handle transaction input change for local state update
+	const handleTransactionInputChange = (e, receiptId, transactionIndex, field) => {
+		const { value } = e.target;
+
+		// Update the transaction directly in the current list to reflect changes immediately
+		setCurrentList((prevList) => {
+			return prevList.map((receipt) => {
+				if (receipt.id === receiptId) {
+					const updatedTransactions = [...(receipt.transactions || [])];
+
+					// If transaction index doesn't exist, create new transaction
+					if (transactionIndex >= updatedTransactions.length) {
+						updatedTransactions[transactionIndex] = {
+							transactionDate: null,
+							transactionType: 'TK viện',
+							amount: null,
+						};
+					}
+
+					updatedTransactions[transactionIndex] = {
+						...updatedTransactions[transactionIndex],
+						[field]: value,
+					};
+
+					return { ...receipt, transactions: updatedTransactions };
+				}
+				return receipt;
+			});
+		});
+	};
+
+	// Handle transaction key down event
+	const handleTransactionKeyDown = (e, receiptId, transactionIndex, field, value) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			handleTransactionChange(receiptId, transactionIndex, field, value);
+		} else if (e.key === 'Escape') {
+			setEditingTransaction({ receiptId: null, transactionIndex: null, field: null });
+		}
+	};
+
+	// Handle transaction select change
+	const handleTransactionSelectChange = (e, receiptId, transactionIndex, field) => {
+		const newValue = e.target.value;
+		handleTransactionChange(receiptId, transactionIndex, field, newValue);
+	};
+
+	// Handle transaction date change
+	const handleTransactionDateChange = (receiptId, transactionIndex, date) => {
+		// Update the date in the UI
+		setCurrentList((prevList) => {
+			return prevList.map((receipt) => {
+				if (receipt.id === receiptId) {
+					const updatedTransactions = [...(receipt.transactions || [])];
+
+					if (transactionIndex >= updatedTransactions.length) {
+						updatedTransactions[transactionIndex] = {
+							transactionDate: null,
+							transactionType: 'TK viện',
+							amount: null,
+						};
+					}
+
+					updatedTransactions[transactionIndex] = {
+						...updatedTransactions[transactionIndex],
+						transactionDate: date,
+					};
+
+					return { ...receipt, transactions: updatedTransactions };
+				}
+				return receipt;
+			});
+		});
+		setEditingTransaction({ receiptId: null, transactionIndex: null, field: null });
+
+		// If we have a valid date, trigger the API update
+		if (date) {
+			handleTransactionChange(receiptId, transactionIndex, 'transactionDate', date);
+		}
+	};
 	const formatDateString = (dateStr) => {
 		// Remove any existing separators to normalize
 		const normalized = dateStr.replace(/[^0-9]/g, '');
@@ -351,12 +641,11 @@ const Dashboard = () => {
 				adjustedDate.setHours(adjustedDate.getHours() + 7);
 				formattedDate = adjustedDate.toISOString().split('T')[0];
 			}
-
 			const payload = {
 				receipt: {
 					id: receiptId,
+					receipt_uid: getReceiptUidById(receiptId), // Helper function to get receipt_uid by id
 					deadline: formattedDate,
-					modified_by_uid: currentUser?.identity_uid,
 				},
 			};
 
@@ -432,13 +721,12 @@ const Dashboard = () => {
 				adjustedDate.setHours(adjustedDate.getHours() + 7);
 				formattedDate = adjustedDate.toISOString().split('T')[0];
 			}
-
 			const payload = {
 				receipt: {
 					id: receiptId,
+					receipt_uid: getReceiptUidById(receiptId),
 					draft_send_at: formattedDate,
-					ppt_send_by: currentUser?.identity_uid, // Add current user as the sender
-					modified_by_uid: currentUser?.identity_uid,
+					ppt_send_by: currentUser?.identity_uid, // Still need to set the sender
 				},
 			};
 
@@ -476,13 +764,12 @@ const Dashboard = () => {
 				adjustedDate.setHours(adjustedDate.getHours() + 7);
 				formattedDate = adjustedDate.toISOString().split('T')[0];
 			}
-
 			const payload = {
 				receipt: {
 					id: receiptId,
+					receipt_uid: getReceiptUidById(receiptId),
 					ppt_send_at: formattedDate,
-					ppt_send_by: currentUser?.identity_uid, // Set current user as the sender
-					modified_by_uid: currentUser?.identity_uid,
+					ppt_send_by: currentUser?.identity_uid, // Still need to set the sender
 				},
 			};
 
@@ -1162,13 +1449,6 @@ const Dashboard = () => {
 						setShowTodayDeadlines(false);
 					}
 				}
-
-				// Fetch user information for all receipts
-				response.data.forEach((receipt) => {
-					if (receipt.created_by_uid) {
-						fetchUserIdentity(receipt.created_by_uid);
-					}
-				});
 			} else {
 				Swal.fire({
 					icon: 'error',
@@ -1215,6 +1495,59 @@ const Dashboard = () => {
 		if (editingField.field === 'deadline') return;
 		setHoveredReceiptId(receiptId);
 	};
+	// Handle sales recorder filter selection
+	const handleSalesRecorderFilter = (recorder) => {
+		// If clicking the same filter that's already active, clear the filter
+		if (salesRecorderFilter === recorder) {
+			setSalesRecorderFilter(null);
+
+			// Reset to original list or maintain other filters
+			if (searchTerm || filterInfo.isFilterActive) {
+				// If we have active filters, restore the filtered list
+				fetchReceipt().then(() => {
+					// Re-apply existing filters
+					if (searchTerm) {
+						const queryParams = new URLSearchParams(location.search);
+						const searchParam = queryParams.get('search');
+						if (searchParam) {
+							// Re-search with existing term
+							const filtered = originalList.filter(
+								(receipt) =>
+									(receipt.receipt_uid || '').includes(searchParam) ||
+									(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
+									receipt.samples?.some(
+										(sample) =>
+											(sample.sample_uid || '').includes(searchParam) ||
+											(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
+									),
+							);
+							setCurrentList(filtered);
+						}
+					} else if (filterInfo.isFilterActive) {
+						// Re-apply date filter
+						fetchReceiptsByDeadline(filterInfo.startDate, filterInfo.endDate);
+					} else {
+						setCurrentList(originalList);
+					}
+				});
+			} else {
+				// No filters active, just restore original list
+				setCurrentList(originalList);
+			}
+			showToast('Đã hủy lọc người ghi nhận', 'info');
+		} else {
+			// Apply the new sales recorder filter
+			setSalesRecorderFilter(recorder);
+
+			// Filter current list based on sales recorder
+			const filteredList = [...currentList].filter((receipt) => receipt.sale_recorder === recorder);
+			setCurrentList(filteredList);
+
+			showToast(`Hiển thị ${filteredList.length} tiếp nhận có người ghi nhận là "${recorder}"`, 'info');
+		}
+		// Close the dropdown after selection
+		setShowSalesRecorderDropdown(false);
+	};
 
 	const handleReceiptMouseLeave = () => {
 		// Don't update state if we're editing a date
@@ -1243,7 +1576,6 @@ const Dashboard = () => {
 		}
 		setEditingField({ receiptId, sampleId, field });
 	};
-
 	// Update this function to properly handle input changes
 	const handleInputChange = (e, receiptId, sampleId, field) => {
 		const { value } = e.target;
@@ -1251,7 +1583,7 @@ const Dashboard = () => {
 		// Update the sample directly in the current list to reflect changes immediately
 		setCurrentList((prevList) => {
 			return prevList.map((receipt) => {
-				if (receipt.receipt_id === receiptId) {
+				if (receipt.id === receiptId) {
 					return {
 						...receipt,
 						samples: receipt.samples.map((sample) => {
@@ -1278,8 +1610,8 @@ const Dashboard = () => {
 		try {
 			const payload = {
 				sample: {
-					receipt_id: receiptId,
 					id: sampleId,
+					sample_uid: getSampleUidById(sampleId), // Helper function to get sample_uid by id
 					[field]: newValue,
 				},
 			};
@@ -1308,12 +1640,13 @@ const Dashboard = () => {
 			setEditingField({ receiptId: null, sampleId: null, field: null });
 		}
 	};
-
 	// Handle key down event for inputs
 	const handleInputKeyDown = (e, receiptId, sampleId, field, value) => {
 		if (e.key === 'Enter') {
 			e.preventDefault(); // Prevent form submission
 			handleSampleChange(receiptId, sampleId, field, value);
+		} else if (e.key === 'Escape') {
+			setEditingField({ receiptId: null, sampleId: null, field: null });
 		}
 	};
 
@@ -1335,6 +1668,7 @@ const Dashboard = () => {
 			const payload = {
 				receipt: {
 					id: receiptId,
+					receipt_uid: getReceiptUidById(receiptId),
 					pay_status: newStatus,
 				},
 			};
@@ -1390,8 +1724,8 @@ const Dashboard = () => {
 			const payload = {
 				receipt: {
 					id: receiptId,
+					receipt_uid: getReceiptUidById(receiptId),
 					[field]: newValue,
-					modified_by_uid: currentUser?.identity_uid,
 				},
 			};
 
@@ -1522,9 +1856,9 @@ const Dashboard = () => {
 
 	// Add this function to check if user is a technician
 	const isTechnician = () => {
-		return currentUser?.role?.staff_technician;
+		// Admin users bypass technician restrictions
+		return currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin;
 	};
-
 	// Add function to handle note icon click
 	const handleNoteClick = (receipt) => {
 		// Open a dialog with the current note content
@@ -1552,14 +1886,65 @@ const Dashboard = () => {
 		});
 	};
 
+	// Add function to handle transaction deletion
+	const handleDeleteTransaction = async (receiptId, transactionIndex) => {
+		const result = await Swal.fire({
+			title: 'Xác nhận xóa',
+			text: 'Bạn có chắc chắn muốn xóa giao dịch này?',
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonColor: '#d33',
+			cancelButtonColor: '#3085d6',
+			confirmButtonText: 'Xóa',
+			cancelButtonText: 'Hủy',
+		});
+
+		if (result.isConfirmed) {
+			try {
+				// Find the receipt and remove the transaction
+				const receipt = currentList.find((r) => r.id === receiptId);
+				if (!receipt || !receipt.transactions) return;
+
+				const updatedTransactions = receipt.transactions.filter((_, index) => index !== transactionIndex);
+
+				const payload = {
+					receipt: {
+						id: receiptId,
+						receipt_uid: getReceiptUidById(receiptId),
+						transactions: updatedTransactions,
+					},
+				};
+
+				const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+				if (response.status === 200) {
+					showToast('Đã xóa giao dịch thành công!');
+					fetchReceipt();
+				} else {
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: response.data?.message || 'Lỗi khi xóa giao dịch',
+					});
+				}
+			} catch (error) {
+				console.error('Error deleting transaction:', error);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: error.message || 'Có lỗi xảy ra khi xóa giao dịch',
+				});
+			}
+		}
+	};
 	// Add function to handle note update
 	const handleNoteUpdate = async (receiptId, noteContent) => {
 		try {
 			const payload = {
 				receipt: {
 					id: receiptId,
+					receipt_uid: getReceiptUidById(receiptId),
 					note: noteContent,
-					modified_by_uid: currentUser?.identity_uid,
 				},
 			};
 
@@ -1955,73 +2340,141 @@ const Dashboard = () => {
 		return [...new Set(recorders)].sort((a, b) => a.localeCompare(b));
 	};
 
-	// Handle sales recorder filter selection
-	const handleSalesRecorderFilter = (recorder) => {
-		// If clicking the same filter that's already active, clear the filter
-		if (salesRecorderFilter === recorder) {
-			setSalesRecorderFilter(null);
-
-			// Reset to original list or maintain other filters
-			if (searchTerm || filterInfo.isFilterActive) {
-				// If we have active filters, restore the filtered list
-				fetchReceipt().then(() => {
-					// Re-apply existing filters
-					if (searchTerm) {
-						const queryParams = new URLSearchParams(location.search);
-						const searchParam = queryParams.get('search');
-						if (searchParam) {
-							// Re-search with existing term
-							const filtered = originalList.filter(
-								(receipt) =>
-									(receipt.receipt_uid || '').includes(searchParam) ||
-									(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
-									receipt.samples?.some(
-										(sample) =>
-											(sample.sample_uid || '').includes(searchParam) ||
-											(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
-									),
-							);
-							setCurrentList(filtered);
-						}
-					} else if (filterInfo.isFilterActive) {
-						// Re-apply date filter
-						fetchReceiptsByDeadline(filterInfo.startDate, filterInfo.endDate);
-					} else {
-						setCurrentList(originalList);
-					}
-				});
-			} else {
-				// No filters active, just restore original list
-				setCurrentList(originalList);
-			}
-			showToast('Đã hủy lọc người ghi nhận', 'info');
-		} else {
-			// Apply the new sales recorder filter
-			setSalesRecorderFilter(recorder);
-
-			// Filter current list based on sales recorder
-			const filteredList = [...currentList].filter((receipt) => receipt.sale_recorder === recorder);
-			setCurrentList(filteredList);
-
-			showToast(`Hiển thị ${filteredList.length} tiếp nhận có người ghi nhận là "${recorder}"`, 'info');
-		}
-		// Close the dropdown after selection
-		setShowSalesRecorderDropdown(false);
+	// Helper functions to get receipt_uid and sample_uid by ID
+	const getReceiptUidById = (receiptId) => {
+		const receipt = currentList.find((r) => r.id === receiptId);
+		return receipt?.receipt_uid || '';
 	};
 
-	// Toggle sales recorder dropdown
-	const toggleSalesRecorderDropdown = () => {
-		if (salesRecorderFilter !== null) {
-			// If filter is active, clear it
-			handleSalesRecorderFilter(salesRecorderFilter);
-		} else {
-			// Toggle dropdown visibility
-			setShowSalesRecorderDropdown(!showSalesRecorderDropdown);
-			// Close other dropdowns
-			setShowRecordCodeDropdown(false);
-			setShowRequestNumberDropdown(false);
-			setShowPaymentDropdown(false);
-		}
+	const getSampleUidById = (sampleId) => {
+		let sampleUid = '';
+		currentList.forEach((receipt) => {
+			if (receipt.samples) {
+				const sample = receipt.samples.find((s) => s.id === sampleId);
+				if (sample) {
+					sampleUid = sample.sample_uid || '';
+				}
+			}
+		});
+		return sampleUid;
+	};
+
+	// Render transaction modal
+	const renderTransactionModal = () => {
+		if (!showTransactionModal) return null;
+
+		return (
+			<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+				<div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+					<div className="flex justify-between items-center mb-4">
+						<h2 className="text-xl font-semibold text-gray-800">Thêm giao dịch</h2>
+						<button
+							onClick={() => setShowTransactionModal(false)}
+							className="text-gray-500 hover:text-gray-700 text-xl"
+						>
+							<FaTimes />
+						</button>
+					</div>
+
+					<div className="space-y-4">
+						{/* Ngày thanh toán */}
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-1">
+								Ngày thanh toán <span className="text-red-500">*</span>
+							</label>
+							<DatePicker
+								selected={transactionForm.transactionDate}
+								onChange={(date) => handleTransactionFormChange('transactionDate', date)}
+								dateFormat="dd/MM/yyyy"
+								className={`w-full p-2 border rounded-md text-sm bg-white ${
+									transactionErrors.transactionDate ? 'border-red-500' : 'border-gray-300'
+								}`}
+								placeholderText="Chọn ngày thanh toán"
+								calendarStartDay={1}
+							/>
+							{transactionErrors.transactionDate && (
+								<p className="text-red-500 text-xs mt-1">{transactionErrors.transactionDate}</p>
+							)}
+						</div>
+
+						{/* Hình thức thanh toán */}
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-1">
+								Hình thức thanh toán <span className="text-red-500">*</span>
+							</label>
+							<select
+								value={transactionForm.transactionType}
+								onChange={(e) => handleTransactionFormChange('transactionType', e.target.value)}
+								className={`w-full p-2 border rounded-md text-sm bg-white ${
+									transactionErrors.transactionType ? 'border-red-500' : 'border-gray-300'
+								}`}
+							>
+								<option value="TK viện">TK viện</option>
+								<option value="TK cá nhân">TK cá nhân</option>
+								<option value="Tiền mặt">Tiền mặt</option>
+								<option value="Hoàn trả">Hoàn trả</option>
+							</select>
+							{transactionErrors.transactionType && (
+								<p className="text-red-500 text-xs mt-1">{transactionErrors.transactionType}</p>
+							)}
+						</div>
+
+						{/* Số tiền thanh toán */}
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-1">
+								Số tiền thanh toán <span className="text-red-500">*</span>
+							</label>
+							<input
+								type="number"
+								value={transactionForm.amount}
+								onChange={(e) => handleTransactionFormChange('amount', e.target.value)}
+								className={`w-full p-2 border rounded-md text-sm bg-white ${
+									transactionErrors.amount ? 'border-red-500' : 'border-gray-300'
+								}`}
+								placeholder="Nhập số tiền (VNĐ)"
+								min="0"
+								step="1000"
+							/>{' '}
+							{transactionErrors.amount && <p className="text-red-500 text-xs mt-1">{transactionErrors.amount}</p>}
+							{transactionForm.amount && !transactionErrors.amount && (
+								<p className="text-gray-600 text-xs mt-1">
+									{Number(transactionForm.amount).toLocaleString('vi-VN')} VNĐ
+								</p>
+							)}
+						</div>
+
+						{/* Số hóa đơn */}
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-1">Số hóa đơn</label>
+							<input
+								type="text"
+								value={transactionForm.invoiceNumber}
+								onChange={(e) => handleTransactionFormChange('invoiceNumber', e.target.value)}
+								className="w-full p-2 border border-gray-300 rounded-md text-sm bg-white"
+								placeholder="Nhập số hóa đơn (tùy chọn)"
+							/>
+						</div>
+					</div>
+
+					{/* Action buttons */}
+					<div className="flex justify-end space-x-3 mt-6">
+						<button
+							onClick={() => setShowTransactionModal(false)}
+							className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+						>
+							Hủy
+						</button>
+						<button
+							onClick={handleTransactionFormSubmit}
+							className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center"
+						>
+							<FaMoneyBillWave className="mr-2" />
+							Xác nhận
+						</button>
+					</div>
+				</div>
+			</div>
+		);
 	};
 
 	return (
@@ -2193,7 +2646,14 @@ const Dashboard = () => {
 										}}
 										// Remove the onBlur handler that causes premature closing
 										shouldCloseOnSelect={false} // Don't close automatically on selection
-										dayClassName={(date) => (isToday(date) ? 'bg-blue-100 font-bold rounded-full' : undefined)}
+										popperModifiers={{
+											preventOverflow: {
+												enabled: true,
+											},
+											hide: {
+												enabled: true,
+											},
+										}}
 									/>
 									<button
 										className="ml-1 p-1 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
@@ -2277,176 +2737,130 @@ const Dashboard = () => {
 				<div className="overflow-x-auto px-1 py-2">
 					<table className="w-full text-black">
 						<thead>
+							{' '}
 							<tr className="border-b-2">
 								{/* Common columns - always displayed */}
 								<th className="p-1 border-b text-start min-w-[300px]">Mã tiếp nhận mẫu</th>
-								<th
-									className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700"
-									onClick={toggleDeadlineFormat}
-								>
-									Hạn trả KQ
-								</th>
-
-								{/* New columns for Preliminary view to be added right after Hạn trả KQ */}
-								{isPreliminaryActive && (
+								{/* For PPT view - only show the 7 specific columns */}{' '}
+								{isPreliminaryActive ? (
 									<>
-										<th className="p-1 border-b text-start max-w-28 min-w-[100px]">Gửi sơ bộ</th>
+										{/* The 7 specific columns for PPT view */}
+										<th
+											className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700"
+											onClick={toggleDeadlineFormat}
+										>
+											Hạn trả KQ
+										</th>
+										<th className="p-1 border-b text-start min-w-[200px]">Địa chỉ</th>
+										<th className="p-1 border-b text-start min-w-[150px]">Người liên hệ</th>
+										<th className="p-1 border-b text-start min-w-[120px]">Điện thoại</th>
 										<th className="p-1 border-b text-start max-w-28 min-w-[100px]">Gửi PPT</th>
 										<th className="p-1 border-b text-start min-w-[110px]">Người gửi</th>
-									</>
-								)}
-
-								{/* Payment view specific columns - reordered */}
-								{isPaymentActive && (
-									<>
-										<th
-											className={`p-1 border-b text-start w-[6%] min-w-20 cursor-pointer hover:text-[#103667] underline text-blue-700 relative`}
-											onClick={toggleRequestNumberSort}
-										>
-											SYC {requestNumberSort === 1 ? '↓' : requestNumberSort === 2 ? '∅' : ''}
-											{showRequestNumberDropdown && (
-												<div
-													ref={requestNumberDropdownRef}
-													className="absolute z-10 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 w-32"
-													style={{ top: '100%', right: 0 }}
-												>
-													<div
-														className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer"
-														onClick={(e) => {
-															e.stopPropagation();
-															handleRequestNumberFilter('descending');
-														}}
-													>
-														Giảm dần
-													</div>
-													<div
-														className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer"
-														onClick={(e) => {
-															e.stopPropagation();
-															handleRequestNumberFilter('empty');
-														}}
-													>
-														Chưa điền
-													</div>
-												</div>
-											)}
-										</th>
-										<th
-											className={`p-1 border-b text-start w-[6%] min-w-20 cursor-pointer hover:text-[#103667] underline text-blue-700 relative`}
-											onClick={toggleRecordCodeSort}
-										>
-											HSL {recordCodeSort === 1 ? '↓' : recordCodeSort === 2 ? '∅' : ''}
-											{showRecordCodeDropdown && (
-												<div
-													ref={recordCodeDropdownRef}
-													className="absolute z-10 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 w-32"
-													style={{ top: '100%', right: 0 }}
-												>
-													<div
-														className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer"
-														onClick={(e) => {
-															e.stopPropagation();
-															handleRecordCodeFilter('descending');
-														}}
-													>
-														Giảm dần
-													</div>
-													<div
-														className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer"
-														onClick={(e) => {
-															e.stopPropagation();
-															handleRecordCodeFilter('empty');
-														}}
-													>
-														Chưa điền
-													</div>
-												</div>
-											)}
-										</th>
-									</>
-								)}
-
-								<th className="p-1 border-b text-start w-36 min-w-36">Mã mẫu thử</th>
-								<th className="p-1 border-b text-start w-full min-w-72">Thông tin mẫu thử</th>
-
-								{/* Normal view specific columns */}
-								{!isPaymentActive && !isPreliminaryActive && (
-									<>
-										<th className="p-1 border-b text-start w-[10%] min-w-28">Số lượng</th>
-										<th className="p-1 border-b text-start w-[6%] min-w-24">Mục đích</th>
-										<th
-											className="p-1 border-b text-start w-[6%] min-w-[100px] cursor-pointer hover:text-[#103667] underline text-blue-700 relative"
-											onClick={toggleStatusDropdown}
-										>
-											{statusFilter !== null ? status[statusFilter] : 'Trạng thái'}
-											{showStatusDropdown && (
-												<div
-													ref={statusDropdownRef}
-													className="absolute z-10 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 max-h-80 overflow-y-auto"
-													style={{ top: '100%', left: 0, minWidth: '200px' }}
-												>
-													{status.map((statusName, index) => (
-														<div
-															key={index}
-															className={`px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
-																statusFilter === index ? 'bg-blue-100 text-blue-700 font-medium' : ''
-															}`}
-															onClick={(e) => {
-																e.stopPropagation();
-																handleStatusFilter(index);
-															}}
-														>
-															{statusName}
-														</div>
-													))}
-												</div>
-											)}
-										</th>
-										<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
-									</>
-								)}
-
-								{/* PPT view specific columns */}
-								{isPreliminaryActive && (
-									<>
-										<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
-										<th
-											className="p-1 border-b text-start w-[6%] min-w-[100px] cursor-pointer hover:text-[#103667] underline text-blue-700 relative"
-											onClick={toggleStatusDropdown}
-										>
-											{statusFilter !== null ? status[statusFilter] : 'Trạng thái'}
-											{showStatusDropdown && (
-												<div
-													ref={statusDropdownRef}
-													className="absolute z-10 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 max-h-80 overflow-y-auto"
-													style={{ top: '100%', left: 0, minWidth: '200px' }}
-												>
-													{status.map((statusName, index) => (
-														<div
-															key={index}
-															className={`px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
-																statusFilter === index ? 'bg-blue-100 text-blue-700 font-medium' : ''
-															}`}
-															onClick={(e) => {
-																e.stopPropagation();
-																handleStatusFilter(index);
-															}}
-														>
-															{statusName}
-														</div>
-													))}
-												</div>
-											)}
-										</th>
+										<th className="p-1 border-b text-start min-w-[100px] w-[10%]">Mã mẫu</th>
 										<th className="p-1 border-b text-start w-[15%] min-w-40">Mã PPT</th>
 									</>
-								)}
+								) : (
+									<>
+										{/* Non-PPT view columns */}
+										{/* Show Hạn trả KQ only for non-payment views */}
+										{!isPaymentActive && (
+											<th
+												className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700"
+												onClick={toggleDeadlineFormat}
+											>
+												Hạn trả KQ
+											</th>
+										)}
 
-								{/* Payment view specific columns - remaining columns */}
+										{/* Payment view specific columns - removed SYC column */}
+										{isPaymentActive && (
+											<>
+												<th
+													className={`p-1 border-b text-start w-[6%] min-w-20 cursor-pointer hover:text-[#103667] underline text-blue-700 relative`}
+													onClick={toggleRecordCodeSort}
+												>
+													HSL {recordCodeSort === 1 ? '↓' : recordCodeSort === 2 ? '∅' : ''}
+													{showRecordCodeDropdown && (
+														<div
+															ref={recordCodeDropdownRef}
+															className="absolute z-10 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 w-32"
+															style={{ top: '100%', right: 0 }}
+														>
+															<div
+																className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	handleRecordCodeFilter('descending');
+																}}
+															>
+																Giảm dần
+															</div>
+															<div
+																className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	handleRecordCodeFilter('empty');
+																}}
+															>
+																Chưa điền
+															</div>
+														</div>
+													)}
+												</th>{' '}
+											</>
+										)}
+
+										{/* Show Thông tin mẫu thử only for non-payment views */}
+										{!isPaymentActive && (
+											<>
+												<th className="p-1 border-b text-start min-w-[100px] w-[10%]">Mã mẫu</th>
+												<th className="p-1 border-b text-start w-full min-w-72">Thông tin mẫu thử</th>
+											</>
+										)}
+
+										{/* Normal view specific columns */}
+										{!isPaymentActive && !isPreliminaryActive && (
+											<>
+												<th className="p-1 border-b text-start w-[10%] min-w-28">Số lượng</th>
+												<th className="p-1 border-b text-start w-[6%] min-w-24">Mục đích</th>
+												<th
+													className="p-1 border-b text-start w-[6%] min-w-[100px] cursor-pointer hover:text-[#103667] underline text-blue-700 relative"
+													onClick={toggleStatusDropdown}
+												>
+													{statusFilter !== null ? status[statusFilter] : 'Trạng thái'}
+													{showStatusDropdown && (
+														<div
+															ref={statusDropdownRef}
+															className="absolute z-10 mt-1 bg-white shadow-lg rounded-md border border-gray-200 py-1 max-h-80 overflow-y-auto"
+															style={{ top: '100%', left: 0, minWidth: '200px' }}
+														>
+															{status.map((statusName, index) => (
+																<div
+																	key={index}
+																	className={`px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
+																		statusFilter === index ? 'bg-blue-100 text-blue-700 font-medium' : ''
+																	}`}
+																	onClick={(e) => {
+																		e.stopPropagation();
+																		handleStatusFilter(index);
+																	}}
+																>
+																	{statusName}
+																</div>
+															))}
+														</div>
+													)}
+												</th>
+												<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
+											</>
+										)}
+									</>
+								)}{' '}
+								{/* Payment view specific columns - remaining columns */}{' '}
 								{isPaymentActive && (
 									<>
+										<th className="p-1 border-b text-start w-[10%] min-w-28">MST/CCCD</th>
 										<th className="p-1 border-b text-start w-[10%] min-w-28">Mã đơn hàng</th>
-										<th className="p-1 border-b text-start w-[10%] min-w-28">Mã báo giá</th>
 										<th
 											className="p-1 border-b text-start w-[10%] min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700 relative"
 											onClick={togglePaymentDropdown}
@@ -2499,10 +2913,18 @@ const Dashboard = () => {
 													</div>
 												</div>
 											)}
-										</th>
+										</th>{' '}
 										<th
 											className="p-1 border-b text-start w-[15%] min-w-36 cursor-pointer hover:text-[#103667] underline text-blue-700 relative"
-											onClick={toggleSalesRecorderDropdown}
+											onClick={() => {
+												if (salesRecorderFilter !== null) {
+													// If filter is active, clear it
+													handleSalesRecorderFilter(salesRecorderFilter);
+												} else {
+													// Toggle dropdown visibility
+													setShowSalesRecorderDropdown(!showSalesRecorderDropdown);
+												}
+											}}
 										>
 											{salesRecorderFilter !== null ? salesRecorderFilter : 'Người ghi nhận'}
 											{showSalesRecorderDropdown && (
@@ -2527,7 +2949,9 @@ const Dashboard = () => {
 													))}
 												</div>
 											)}
-										</th>
+										</th>{' '}
+										<th className="p-1 border-b text-start w-[18%] min-w-[330px]">Thông tin thanh toán</th>
+										<th className="p-1 border-b text-start w-[12%] min-w-32">Số hóa đơn</th>
 									</>
 								)}
 							</tr>
@@ -2572,7 +2996,14 @@ const Dashboard = () => {
 														)}
 													</div>
 													<div className="flex flex-col">
-														<p className="text-sm">
+														<p
+															className="text-sm cursor-pointer"
+															onClick={() =>
+																handleCopyToClipboard(
+																	!isTechnician() ? receipt.client?.client_name || '--' : '[Thông tin bị ẩn]',
+																)
+															}
+														>
 															{!isTechnician() ? receipt.client?.client_name || '--' : '[Thông tin bị ẩn]'}
 														</p>
 														{receipt.record_code && !isTechnician() && (
@@ -2582,129 +3013,83 @@ const Dashboard = () => {
 															{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
 															{receipt.created_by_name || getUserName(receipt.created_by_uid)}
 														</p>
-													</div>
-												</td>
-												<td className="p-1 text-start">
-													{receipt.deadline ? formatDeadlineWithStyle(receipt.deadline, receipt) : '--'}
-												</td>
-
-												{/* Add the new columns for Preliminary view for empty receipts */}
-												{isPreliminaryActive && (
-													<>
-														<td
-															className="p-1 text-start cursor-pointer"
-															onClick={() => handleFieldClick(receipt.id, null, 'draft_send_at')}
-														>
-															{editingField.receiptId === receipt.id &&
-															editingField.sampleId === null &&
-															editingField.field === 'draft_send_at' ? (
-																<div
-																	onClick={(e) => e.stopPropagation()}
-																	onMouseEnter={(e) => e.stopPropagation()}
-																	onMouseLeave={(e) => e.stopPropagation()}
-																>
-																	<DatePicker
-																		selected={receipt.draft_send_at ? new Date(receipt.draft_send_at) : null}
-																		onChange={(date) => handleDraftSendChange(receipt.id, date)}
-																		onFocus={() => handleDatePickerFocus(receipt.id, receipt.draft_send_at)}
-																		onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
-																		onKeyDown={(e) => handleDraftSendKeyDown(e, receipt.id)}
-																		dateFormat="dd/MM/yyyy"
-																		className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
-																		calendarClassName="text-black"
-																		placeholderText="Chọn ngày gửi"
-																		autoFocus
-																		shouldCloseOnSelect={true}
-																		popperModifiers={{
-																			preventOverflow: {
-																				enabled: true,
-																			},
-																			hide: {
-																				enabled: true,
-																			},
-																		}}
-																	/>
-																</div>
-															) : receipt.draft_send_at ? (
-																formatDate(receipt.draft_send_at)
-															) : (
-																<div className="flex items-center">
-																	<span
-																		className="cursor-pointer text-gray-500 hover:text-blue-600"
-																		onClick={() => handleDraftSendCheckbox(receipt.id)}
-																	>
-																		Chưa gửi
-																	</span>
-																</div>
-															)}
-														</td>
-														<td
-															className="p-1 text-start cursor-pointer"
-															onClick={() => handleFieldClick(receipt.id, null, 'ppt_send_at')}
-														>
-															{editingField.receiptId === receipt.id &&
-															editingField.sampleId === null &&
-															editingField.field === 'ppt_send_at' ? (
-																<div
-																	onClick={(e) => e.stopPropagation()}
-																	onMouseEnter={(e) => e.stopPropagation()}
-																	onMouseLeave={(e) => e.stopPropagation()}
-																>
-																	<DatePicker
-																		selected={receipt.ppt_send_at ? new Date(receipt.ppt_send_at) : null}
-																		onChange={(date) => handlePptSendChange(receipt.id, date)}
-																		onFocus={() => handleDatePickerFocus(receipt.id, receipt.ppt_send_at)}
-																		onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
-																		onKeyDown={(e) => handlePptSendKeyDown(e, receipt.id)}
-																		dateFormat="dd/MM/yyyy"
-																		className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
-																		calendarClassName="text-black"
-																		placeholderText="Chọn ngày gửi"
-																		autoFocus
-																		shouldCloseOnSelect={true}
-																		popperModifiers={{
-																			preventOverflow: {
-																				enabled: true,
-																			},
-																			hide: {
-																				enabled: true,
-																			},
-																		}}
-																	/>
-																</div>
-															) : receipt.ppt_send_at ? (
-																formatDate(receipt.ppt_send_at)
-															) : (
-																<div className="flex items-center">
-																	<span
-																		className="cursor-pointer text-gray-500 hover:text-blue-600"
-																		onClick={() => handlePptSendCheckbox(receipt.id)}
-																	>
-																		Chưa gửi
-																	</span>
-																</div>
-															)}
-														</td>
-														<td className="p-1 text-start">
-															{receipt.ppt_send_by ? getUserName(receipt.ppt_send_by) : '--'}
-														</td>
-													</>
-												)}
-
-												{/* Additional empty columns for payment view */}
+													</div>{' '}
+												</td>{' '}
+												{/* Additional empty columns for payment view - removed SYC column */}{' '}
 												{isPaymentActive && (
 													<>
-														<td className="p-1 text-center text-gray-500">{receipt.request_number || '--'}</td>
-														<td className="p-1 text-center text-gray-500">{receipt.record_code || '--'}</td>
+														{' '}
+														<td className="p-1 text-start text-gray-500">{receipt.record_code || '--'}</td>
+														<td
+															className="p-1 text-start text-gray-500 cursor-pointer hover:bg-gray-100"
+															onClick={() =>
+																handleCopyToClipboard(
+																	!isTechnician() ? receipt.client?.legal_id || '--' : '[Thông tin bị ẩn]',
+																)
+															}
+														>
+															{!isTechnician() ? receipt.client?.legal_id || '--' : '[Thông tin bị ẩn]'}
+														</td>
+														<td className="p-1 text-start text-gray-500">{receipt.order_code || '--'}</td>
+														<td className="p-1 text-start text-gray-500">
+															{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
+														</td>
+														<td className="p-1 text-start text-gray-500">{receipt.sale_recorder || '--'}</td>{' '}
+														{/* Transaction columns for empty receipts */}{' '}
+														<td className="p-1 text-start text-gray-500">
+															{receipt.transactions && receipt.transactions.length > 0 ? (
+																<div className="space-y-1">
+																	{receipt.transactions.map((transaction, index) => (
+																		<div key={index} className="text-sm border border-gray-200 rounded p-2">
+																			<div className="flex items-center justify-between mb-1">
+																				<span className="text-xs text-gray-600">
+																					{transaction.transactionDate ? formatDate(transaction.transactionDate) : '--'}
+																				</span>
+																				<span
+																					className="text-red-500 hover:text-red-700 cursor-pointer text-xs"
+																					title="Xóa giao dịch"
+																				>
+																					✕
+																				</span>
+																			</div>
+																			<div className="flex items-center justify-between mb-1">
+																				<span className="text-xs">{transaction.transactionType || '--'}</span>
+																			</div>
+																			<div className="flex items-center">
+																				<span className="text-xs font-medium">
+																					{transaction.amount
+																						? `${Number(transaction.amount).toLocaleString('vi-VN')} ₫`
+																						: '--'}
+																				</span>
+																			</div>
+																		</div>
+																	))}
+																</div>
+															) : (
+																'--'
+															)}
+														</td>
 													</>
-												)}
-
-												<td
-													colSpan={isPreliminaryActive ? '5' : isPaymentActive ? '7' : '6'}
-													className="p-1 text-center text-gray-500"
-												>
-													Chưa có thông tin mẫu thử . . .
-												</td>
+												)}{' '}
+												{/* Sample information columns - empty state */}
+												{!isPaymentActive &&
+													(isPreliminaryActive ? (
+														<>
+															{/* For PPT view - empty sample columns (2 columns for empty receipts) */}
+															<td className="p-1 text-start text-gray-500">--</td>
+															<td className="p-1 text-start text-gray-500">--</td>
+														</>
+													) : (
+														<>
+															{/* For normal view - empty sample columns (6 columns for empty receipts) */}
+															<td className="p-1 text-start text-gray-500">--</td>
+															<td className="p-1 text-start text-gray-500">--</td>
+															<td className="p-1 text-start text-gray-500">--</td>
+															<td className="p-1 text-start text-gray-500">--</td>
+															<td className="p-1 text-start text-gray-500">--</td>
+															<td className="p-1 text-start text-gray-500">--</td>
+														</>
+													))}
 											</tr>
 										) : (
 											/* Display for receipts with samples */
@@ -2775,7 +3160,10 @@ const Dashboard = () => {
 																		)}
 																	</div>
 																	<div className="flex flex-col">
-																		<p className="text-sm">
+																		<p
+																			className="text-sm cursor-pointer"
+																			onClick={() => handleCopyToClipboard(receipt.client?.client_name || '--')}
+																		>
 																			{!isTechnician() ? receipt.client?.client_name || '--' : '[Thông tin bị ẩn]'}
 																		</p>
 																		{receipt.record_code && !isTechnician() && (
@@ -2785,111 +3173,102 @@ const Dashboard = () => {
 																			{receipt.receipt_date && formatDate(receipt.receipt_date)}{' '}
 																			{receipt.created_by_name || getUserName(receipt.created_by_uid)}
 																		</p>
-																	</div>
+																	</div>{' '}
 																</td>
-
-																<td
-																	className={`p-1 text-start cursor-pointer align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
-																	onClick={() => handleFieldClick(receipt.id, null, 'deadline')}
-																>
-																	{editingField.receiptId === receipt.id &&
-																	editingField.sampleId === null &&
-																	editingField.field === 'deadline' ? (
-																		<div
-																			onClick={(e) => e.stopPropagation()}
-																			onMouseEnter={(e) => e.stopPropagation()}
-																			onMouseLeave={(e) => e.stopPropagation()}
-																		>
-																			<DatePicker
-																				selected={receipt.deadline ? new Date(receipt.deadline) : null}
-																				onChange={(date) => handleDeadlineChange(receipt.id, date)}
-																				onFocus={() => handleDatePickerFocus(receipt.id, receipt.deadline)}
-																				onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
-																				onKeyDown={(e) => handleDeadlineKeyDown(e, receipt.id)}
-																				dateFormat="dd/MM/yyyy"
-																				className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
-																				calendarClassName="text-black"
-																				placeholderText="Chọn hạn trả"
-																				autoFocus
-																				shouldCloseOnSelect={true}
-																				popperModifiers={{
-																					preventOverflow: {
-																						enabled: true,
-																					},
-																					hide: {
-																						enabled: true,
-																					},
-																				}}
-																			/>
-																		</div>
-																	) : (
-																		<div className="w-full h-full p-1 py-0 rounded">
-																			{showRelativeTime
-																				? formatDeadlineAsRelative(receipt.deadline, receipt)
-																				: formatDeadlineWithStyle(receipt.deadline, receipt)}
-																		</div>
-																	)}
-																</td>
-
-																{/* Add the new columns for receipts with samples in Preliminary view */}
+																{/* Show deadline column only for non-payment views */}
+																{!isPaymentActive && (
+																	<td
+																		className={`p-1 text-start cursor-pointer align-top ${
+																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																		}`}
+																		rowSpan={samplesToShow.length}
+																		onClick={() => handleFieldClick(receipt.id, null, 'deadline')}
+																	>
+																		{editingField.receiptId === receipt.id &&
+																		editingField.sampleId === null &&
+																		editingField.field === 'deadline' ? (
+																			<div
+																				onClick={(e) => e.stopPropagation()}
+																				onMouseEnter={(e) => e.stopPropagation()}
+																				onMouseLeave={(e) => e.stopPropagation()}
+																			>
+																				<DatePicker
+																					selected={receipt.deadline ? new Date(receipt.deadline) : null}
+																					onChange={(date) => handleDeadlineChange(receipt.id, date)}
+																					onFocus={() => handleDatePickerFocus(receipt.id, receipt.deadline)}
+																					onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
+																					onKeyDown={(e) => handleDeadlineKeyDown(e, receipt.id)}
+																					dateFormat="dd/MM/yyyy"
+																					className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
+																					calendarClassName="text-black"
+																					placeholderText="Chọn hạn trả"
+																					autoFocus
+																					shouldCloseOnSelect={true}
+																					popperModifiers={{
+																						preventOverflow: {
+																							enabled: true,
+																						},
+																						hide: {
+																							enabled: true,
+																						},
+																					}}
+																				/>
+																			</div>
+																		) : (
+																			<div className="w-full h-full p-1 py-0 rounded">
+																				{showRelativeTime
+																					? formatDeadlineAsRelative(receipt.deadline, receipt)
+																					: formatDeadlineWithStyle(receipt.deadline, receipt)}
+																			</div>
+																		)}
+																	</td>
+																)}{' '}
+																{/* Add the new columns for Preliminary view for empty receipts */}
 																{isPreliminaryActive && (
 																	<>
 																		<td
-																			className={`p-1 text-start cursor-pointer align-top ${
+																			className={`p-1 text-start align-top cursor-pointer hover:bg-blue-50 ${
 																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
 																			}`}
 																			rowSpan={samplesToShow.length}
-																			onClick={() => handleFieldClick(receipt.id, null, 'draft_send_at')}
+																			onClick={() =>
+																				handleCopyToClipboard(
+																					!isTechnician()
+																						? receipt.client?.client_address || '--'
+																						: '[Thông tin bị ẩn]',
+																				)
+																			}
+																			title="Click để copy địa chỉ"
 																		>
-																			{editingField.receiptId === receipt.id &&
-																			editingField.sampleId === null &&
-																			editingField.field === 'draft_send_at' ? (
-																				<div
-																					onClick={(e) => e.stopPropagation()}
-																					onMouseEnter={(e) => e.stopPropagation()}
-																					onMouseLeave={(e) => e.stopPropagation()}
-																				>
-																					<DatePicker
-																						selected={receipt.draft_send_at ? new Date(receipt.draft_send_at) : null}
-																						onChange={(date) => handleDraftSendChange(receipt.id, date)}
-																						onFocus={() => handleDatePickerFocus(receipt.id, receipt.draft_send_at)}
-																						onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
-																						onKeyDown={(e) => handleDraftSendKeyDown(e, receipt.id)}
-																						dateFormat="dd/MM/yyyy"
-																						className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
-																						calendarClassName="text-black"
-																						placeholderText="Chọn ngày gửi"
-																						autoFocus
-																						shouldCloseOnSelect={true}
-																						popperModifiers={{
-																							preventOverflow: {
-																								enabled: true,
-																							},
-																							hide: {
-																								enabled: true,
-																							},
-																						}}
-																					/>
-																				</div>
-																			) : (
-																				<div className="w-full h-full p-1 py-0 rounded cursor-pointer hover:bg-gray-100">
-																					{receipt.draft_send_at ? (
-																						formatDate(receipt.draft_send_at)
-																					) : (
-																						<div className="flex items-center">
-																							<span
-																								className="cursor-pointer text-gray-500 hover:text-blue-600"
-																								onClick={() => handleDraftSendCheckbox(receipt.id)}
-																							>
-																								Chưa gửi
-																							</span>
-																						</div>
-																					)}
-																				</div>
-																			)}
+																			{!isTechnician() ? receipt.client?.client_address || '--' : '[Thông tin bị ẩn]'}
+																		</td>
+																		<td
+																			className={`p-1 text-start align-top cursor-pointer hover:bg-blue-50 ${
+																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																			onClick={() =>
+																				handleCopyToClipboard(
+																					!isTechnician() ? receipt.contact?.name || '--' : '[Thông tin bị ẩn]',
+																				)
+																			}
+																			title="Click để copy tên người liên hệ"
+																		>
+																			{!isTechnician() ? receipt.contact?.name || '--' : '[Thông tin bị ẩn]'}
+																		</td>
+																		<td
+																			className={`p-1 text-start align-top cursor-pointer hover:bg-blue-50 ${
+																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																			onClick={() =>
+																				handleCopyToClipboard(
+																					!isTechnician() ? receipt.contact?.phone || '--' : '[Thông tin bị ẩn]',
+																				)
+																			}
+																			title="Click để copy số điện thoại"
+																		>
+																			{!isTechnician() ? receipt.contact?.phone || '--' : '[Thông tin bị ẩn]'}
 																		</td>
 																		<td
 																			className={`p-1 text-start cursor-pointer align-top ${
@@ -2954,27 +3333,48 @@ const Dashboard = () => {
 																			{receipt.ppt_send_by ? getUserName(receipt.ppt_send_by) : '--'}
 																		</td>
 																	</>
-																)}
-
-																{/* Payment view specific columns - SYC & HSL moved up */}
+																)}{' '}
+																{/* Payment view specific columns - removed SYC column, keeping only HSL */}
 																{isPaymentActive && (
 																	<>
+																		{/* HSL column - first payment column */}{' '}
 																		<td
 																			className={`p-1 text-start align-top ${
 																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
 																			}`}
 																			rowSpan={samplesToShow.length}
-																			onClick={() => handleFieldClick(receipt.id, null, 'request_number')}
+																		>
+																			{receipt.record_code || '--'}
+																		</td>
+																		<td
+																			className={`p-1 text-start align-top cursor-pointer hover:bg-gray-100 ${
+																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																			onClick={() =>
+																				handleCopyToClipboard(
+																					!isTechnician() ? receipt.client?.legal_id || '--' : '[Thông tin bị ẩn]',
+																				)
+																			}
+																		>
+																			{!isTechnician() ? receipt.client?.legal_id || '--' : '[Thông tin bị ẩn]'}
+																		</td>
+																		<td
+																			className={`p-1 text-start align-top ${
+																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																			onClick={() => handleFieldClick(receipt.id, null, 'order_code')}
 																		>
 																			{editingField.receiptId === receipt.id &&
 																			editingField.sampleId === null &&
-																			editingField.field === 'request_number' ? (
+																			editingField.field === 'order_code' ? (
 																				<input
 																					type="text"
-																					value={receipt.request_number || ''}
-																					onChange={(e) => handleReceiptInputChange(e, receipt.id, 'request_number')}
+																					value={receipt.order_code || ''}
+																					onChange={(e) => handleReceiptInputChange(e, receipt.id, 'order_code')}
 																					onKeyDown={(e) =>
-																						handleReceiptInputKeyDown(e, receipt.id, 'request_number', e.target.value)
+																						handleReceiptInputKeyDown(e, receipt.id, 'order_code', e.target.value)
 																					}
 																					onBlur={() =>
 																						setEditingField({ receiptId: null, sampleId: null, field: null })
@@ -2984,7 +3384,7 @@ const Dashboard = () => {
 																				/>
 																			) : (
 																				<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
-																					{receipt.request_number || '--'}
+																					{receipt.order_code || '--'}
 																				</p>
 																			)}
 																		</td>
@@ -2993,17 +3393,36 @@ const Dashboard = () => {
 																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
 																			}`}
 																			rowSpan={samplesToShow.length}
-																			onClick={() => handleFieldClick(receipt.id, null, 'record_code')}
+																			onClick={() => handlePaymentConfirmation(receipt.id)}
+																		>
+																			<p
+																				className={`cursor-pointer hover:bg-gray-100 p-1 rounded font-medium ${
+																					receipt.pay_status === 1
+																						? 'text-green-600'
+																						: receipt.pay_status === 2
+																						? 'text-black'
+																						: 'text-gray-500'
+																				}`}
+																			>
+																				{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
+																			</p>
+																		</td>
+																		<td
+																			className={`p-1 text-start align-top ${
+																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																			onClick={() => handleFieldClick(receipt.id, null, 'sale_recorder')}
 																		>
 																			{editingField.receiptId === receipt.id &&
 																			editingField.sampleId === null &&
-																			editingField.field === 'record_code' ? (
+																			editingField.field === 'sale_recorder' ? (
 																				<input
 																					type="text"
-																					value={receipt.record_code || ''}
-																					onChange={(e) => handleReceiptInputChange(e, receipt.id, 'record_code')}
+																					value={receipt.sale_recorder || ''}
+																					onChange={(e) => handleReceiptInputChange(e, receipt.id, 'sale_recorder')}
 																					onKeyDown={(e) =>
-																						handleReceiptInputKeyDown(e, receipt.id, 'record_code', e.target.value)
+																						handleReceiptInputKeyDown(e, receipt.id, 'sale_recorder', e.target.value)
 																					}
 																					onBlur={() =>
 																						setEditingField({ receiptId: null, sampleId: null, field: null })
@@ -3013,279 +3432,495 @@ const Dashboard = () => {
 																				/>
 																			) : (
 																				<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
-																					{receipt.record_code || '--'}
+																					{receipt.sale_recorder || '--'}
 																				</p>
 																			)}
+																		</td>{' '}
+																		{/* Transaction columns for payment view */}
+																		<td
+																			className={`p-1 text-start align-top ${
+																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																		>
+																			{receipt.transactions && receipt.transactions.length > 0 ? (
+																				<div className="space-y-1">
+																					{' '}
+																					{receipt.transactions.map((transaction, index) => (
+																						<div
+																							key={index}
+																							className="text-xs border border-gray-200 rounded p-1 bg-gray-50"
+																						>
+																							<div className="flex items-center justify-between space-x-1">
+																								{/* All transaction info on one line with separators */}
+																								<div className="flex items-center space-x-1 text-xs flex-1">
+																									<span
+																										className="cursor-pointer hover:bg-gray-100 p-1 rounded"
+																										onClick={() =>
+																											setEditingTransaction({
+																												receiptId: receipt.id,
+																												transactionIndex: index,
+																												field: 'transactionDate',
+																											})
+																										}
+																									>
+																										{editingTransaction.receiptId === receipt.id &&
+																										editingTransaction.transactionIndex === index &&
+																										editingTransaction.field === 'transactionDate' ? (
+																											<div onClick={(e) => e.stopPropagation()}>
+																												<DatePicker
+																													selected={
+																														transaction.transactionDate
+																															? new Date(transaction.transactionDate)
+																															: null
+																													}
+																													onChange={(date) =>
+																														handleTransactionDateChange(receipt.id, index, date)
+																													}
+																													dateFormat="dd/MM/yyyy"
+																													className="p-1 border rounded-md text-xs bg-white w-20"
+																													placeholderText="Chọn ngày"
+																													autoFocus
+																													shouldCloseOnSelect={true}
+																												/>
+																											</div>
+																										) : transaction.transactionDate ? (
+																											formatDate(transaction.transactionDate)
+																										) : (
+																											'--'
+																										)}
+																									</span>
+																									<span className="text-gray-400">|</span>
+																									<span
+																										className="cursor-pointer hover:bg-gray-100 p-1 rounded"
+																										onClick={() =>
+																											setEditingTransaction({
+																												receiptId: receipt.id,
+																												transactionIndex: index,
+																												field: 'transactionType',
+																											})
+																										}
+																									>
+																										{editingTransaction.receiptId === receipt.id &&
+																										editingTransaction.transactionIndex === index &&
+																										editingTransaction.field === 'transactionType' ? (
+																											<select
+																												value={transaction.transactionType || 'TK viện'}
+																												onChange={(e) =>
+																													handleTransactionSelectChange(
+																														e,
+																														receipt.id,
+																														index,
+																														'transactionType',
+																													)
+																												}
+																												onBlur={() =>
+																													setEditingTransaction({
+																														receiptId: null,
+																														transactionIndex: null,
+																														field: null,
+																													})
+																												}
+																												className="p-1 border rounded-md text-xs bg-white w-20"
+																												autoFocus
+																												onClick={(e) => e.stopPropagation()}
+																											>
+																												<option value="TK viện">TK viện</option>
+																												<option value="TK cá nhân">TK cá nhân</option>
+																												<option value="Tiền mặt">Tiền mặt</option>
+																												<option value="Hoàn trả">Hoàn trả</option>
+																											</select>
+																										) : (
+																											transaction.transactionType || 'TK viện'
+																										)}
+																									</span>
+																									<span className="text-gray-400">|</span>{' '}
+																									<span
+																										className="cursor-pointer hover:bg-gray-100 p-1 rounded font-medium text-green-600"
+																										onClick={() =>
+																											setEditingTransaction({
+																												receiptId: receipt.id,
+																												transactionIndex: index,
+																												field: 'amount',
+																											})
+																										}
+																									>
+																										{editingTransaction.receiptId === receipt.id &&
+																										editingTransaction.transactionIndex === index &&
+																										editingTransaction.field === 'amount' ? (
+																											<input
+																												type="number"
+																												value={transaction.amount || ''}
+																												onChange={(e) =>
+																													handleTransactionInputChange(e, receipt.id, index, 'amount')
+																												}
+																												onKeyDown={(e) =>
+																													handleTransactionKeyDown(
+																														e,
+																														receipt.id,
+																														index,
+																														'amount',
+																														e.target.value,
+																													)
+																												}
+																												onBlur={() =>
+																													setEditingTransaction({
+																														receiptId: null,
+																														transactionIndex: null,
+																														field: null,
+																													})
+																												}
+																												className="p-1 border rounded-md text-xs bg-white w-20"
+																												placeholder="Số tiền"
+																												autoFocus
+																												onClick={(e) => e.stopPropagation()}
+																											/>
+																										) : transaction.amount ? (
+																											`${Number(transaction.amount).toLocaleString('vi-VN')} ₫`
+																										) : (
+																											'--'
+																										)}
+																									</span>
+																									{/* Invoice Number */}
+																									{(transaction.invoiceNumber ||
+																										(editingTransaction.receiptId === receipt.id &&
+																											editingTransaction.transactionIndex === index &&
+																											editingTransaction.field === 'invoiceNumber')) && (
+																										<>
+																											<span className="text-gray-400">|</span>
+																											<span
+																												className="cursor-pointer hover:bg-gray-100 p-1 rounded text-blue-600"
+																												onClick={() =>
+																													setEditingTransaction({
+																														receiptId: receipt.id,
+																														transactionIndex: index,
+																														field: 'invoiceNumber',
+																													})
+																												}
+																											>
+																												{editingTransaction.receiptId === receipt.id &&
+																												editingTransaction.transactionIndex === index &&
+																												editingTransaction.field === 'invoiceNumber' ? (
+																													<input
+																														type="text"
+																														value={transaction.invoiceNumber || ''}
+																														onChange={(e) =>
+																															handleTransactionInputChange(
+																																e,
+																																receipt.id,
+																																index,
+																																'invoiceNumber',
+																															)
+																														}
+																														onKeyDown={(e) =>
+																															handleTransactionKeyDown(
+																																e,
+																																receipt.id,
+																																index,
+																																'invoiceNumber',
+																																e.target.value,
+																															)
+																														}
+																														onBlur={() =>
+																															setEditingTransaction({
+																																receiptId: null,
+																																transactionIndex: null,
+																																field: null,
+																															})
+																														}
+																														className="p-1 border rounded-md text-xs bg-white w-16"
+																														placeholder="Số HĐ"
+																														autoFocus
+																														onClick={(e) => e.stopPropagation()}
+																													/>
+																												) : (
+																													`HĐ: ${transaction.invoiceNumber}`
+																												)}
+																											</span>
+																										</>
+																									)}
+																									{/* Add invoice button when no invoice exists */}
+																									{!transaction.invoiceNumber &&
+																										!(
+																											editingTransaction.receiptId === receipt.id &&
+																											editingTransaction.transactionIndex === index &&
+																											editingTransaction.field === 'invoiceNumber'
+																										) && (
+																											<>
+																												<span className="text-gray-400">|</span>
+																												<span
+																													className="cursor-pointer hover:bg-gray-100 p-1 rounded text-gray-500 text-xs"
+																													onClick={() =>
+																														setEditingTransaction({
+																															receiptId: receipt.id,
+																															transactionIndex: index,
+																															field: 'invoiceNumber',
+																														})
+																													}
+																												>
+																													+ HĐ
+																												</span>
+																											</>
+																										)}
+																								</div>
+
+																								{/* Delete button */}
+																								<span
+																									className="text-red-500 hover:text-red-700 cursor-pointer text-sm flex-shrink-0"
+																									title="Xóa giao dịch"
+																									onClick={() => handleDeleteTransaction(receipt.id, index)}
+																								>
+																									✕
+																								</span>
+																							</div>
+																						</div>
+																					))}
+																					{/* Add new transaction button */}
+																					<div
+																						className="text-xs text-blue-600 cursor-pointer hover:underline mt-1"
+																						onClick={() => handleOpenTransactionModal(receipt.id)}
+																					>
+																						+ Thêm giao dịch
+																					</div>
+																				</div>
+																			) : (
+																				<div
+																					className="cursor-pointer text-gray-500 hover:text-blue-600 text-sm"
+																					onClick={() => handleOpenTransactionModal(receipt.id)}
+																				>
+																					+ Thêm giao dịch
+																				</div>
+																			)}
 																		</td>
+																		<td
+																			className={`p-1 text-start align-top ${
+																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																			onClick={() => handleFieldClick(receipt.id, null, 'invoiceNumber')}
+																		>
+																			{editingField.receiptId === receipt.id &&
+																			editingField.sampleId === null &&
+																			editingField.field === 'invoiceNumber' ? (
+																				<input
+																					type="text"
+																					value={receipt.invoiceNumber || ''}
+																					onChange={(e) => handleReceiptInputChange(e, receipt.id, 'invoiceNumber')}
+																					onKeyDown={(e) =>
+																						handleReceiptInputKeyDown(e, receipt.id, 'invoiceNumber', e.target.value)
+																					}
+																					onBlur={() =>
+																						setEditingField({ receiptId: null, sampleId: null, field: null })
+																					}
+																					className="p-1 border rounded-md w-full text-sm bg-white"
+																					placeholder="Nhập số hóa đơn"
+																					autoFocus
+																				/>
+																			) : (
+																				<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
+																					{receipt.invoiceNumber || '--'}
+																				</p>
+																			)}
+																		</td>{' '}
 																	</>
 																)}
 															</>
-														)}
-
-														{/* Common sample columns */}
-														<td className="p-1 text-start align-top">
-															<NavLink
-																className="text-primary font-normal hover:text-[#103667]"
-																to={`/dashboard/sample?receipt_uid=${receipt.receipt_uid || receipt.id}&sample_uid=${
-																	sample.sample_uid || sample.id
-																}`}
-															>
-																{sample.sample_uid || sample.id}
-															</NavLink>
-														</td>
-														<td className="p-1 text-start align-top">{displayValue(sample.sample_name)}</td>
-
-														{/* Normal view specific columns */}
-														{!isPaymentActive && !isPreliminaryActive && (
-															<>
-																<td
-																	className="p-1 text-start cursor-text align-top"
-																	onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'sample_volume')}
-																>
-																	{editingField.receiptId === receipt.receipt_id &&
-																	editingField.sampleId === sample.id &&
-																	editingField.field === 'sample_volume' ? (
-																		<input
-																			type="text"
-																			value={sample.sample_volume || ''}
-																			onChange={(e) =>
-																				handleInputChange(e, receipt.receipt_id, sample.id, 'sample_volume')
-																			}
-																			onKeyDown={(e) =>
-																				handleInputKeyDown(
-																					e,
-																					receipt.receipt_id,
-																					sample.id,
-																					'sample_volume',
-																					e.target.value,
-																				)
-																			}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		/>
-																	) : (
-																		<div className="w-full h-full rounded">{displayValue(sample.sample_volume)}</div>
-																	)}
-																</td>
-																<td
-																	className="p-1 text-start cursor-pointer align-top"
-																	onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'purpose')}
-																>
-																	{editingField.receiptId === receipt.receipt_id &&
-																	editingField.sampleId === sample.id &&
-																	editingField.field === 'purpose' ? (
-																		<select
-																			value={sample.purpose || ''}
-																			onChange={(e) => handleSelectChange(e, receipt.receipt_id, sample.id, 'purpose')}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		>
-																			<option value="">--</option>
-																			{purposes.map((purpose, index) => (
-																				<option key={index} value={purpose}>
-																					{purpose}
-																				</option>
-																			))}
-																		</select>
-																	) : (
-																		<div className="w-full h-full rounded">{displayValue(sample.purpose)}</div>
-																	)}{' '}
-																</td>
-																<td
-																	className="p-1 text-start cursor-pointer align-top"
-																	onClick={() => handleFieldClick(receipt.receipt_id, sample.id, 'status')}
-																>
-																	{editingField.receiptId === receipt.receipt_id &&
-																	editingField.sampleId === sample.id &&
-																	editingField.field === 'status' ? (
-																		<select
-																			value={sample.status}
-																			onChange={(e) => handleSelectChange(e, receipt.receipt_id, sample.id, 'status')}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		>
-																			{status.map((statusName, index) => (
-																				<option key={index} value={index}>
-																					{statusName}
-																				</option>
-																			))}
-																		</select>
-																	) : (
-																		<div className="w-full h-full rounded">
-																			{status[sample.status] ? (
-																				status[sample.status]
+														)}{' '}
+														{/* Sample-specific columns */}{' '}
+														{!isPaymentActive &&
+															(isPreliminaryActive ? (
+																<>
+																	{/* PPT view - show only 3 sample-specific columns (5 receipt columns are handled above) */}{' '}
+																	{/* Mã mẫu column */}
+																	<td className="p-1 text-start align-top">
+																		<div className="text-sm max-w-40 truncate">
+																			{sample.sample_uid ? (
+																				<NavLink
+																					to={`/dashboard/sample?receipt_uid=${receipt.receipt_uid}&sample_uid=${sample.sample_uid}`}
+																					className="text-primary hover:text-[#103667] font-medium"
+																				>
+																					{sample.sample_uid}
+																				</NavLink>
 																			) : (
-																				<span className="text-start block">--</span>
+																				'--'
 																			)}
 																		</div>
-																	)}
-																</td>
-																<td className="p-1 text-start align-top">
-																	{completedTests} / {totalTests}
-																</td>
-															</>
-														)}
-
-														{/* PPT view specific columns */}
-														{isPreliminaryActive && (
-															<>
-																<td className="p-1 text-start align-top">
-																	{completedTests} / {totalTests}
-																</td>
-																<td className="p-1 text-start align-top">
-																	{status[sample.status] ? status[sample.status] : '--'}
-																</td>
-																<td className="p-1 text-start align-top">
-																	<div className="flex items-center justify-start space-x-2">
-																		<select
-																			className="p-0.5 border rounded flex-grow text-sm bg-white"
-																			value={
-																				selectedReportIds[sampleKey] ||
-																				(reports.length > 0 ? reports[reports.length - 1].ppt_uid : '')
-																			}
-																			onChange={(e) => handleReportSelection(sampleKey, e.target.value)}
-																		>
-																			{reports.length > 0 ? (
-																				reports.map((report) => (
-																					<option key={report.ppt_uid} value={report.ppt_uid}>
-																						{report.ppt_uid}
-																					</option>
-																				))
+																	</td>{' '}
+																	{/* Mã PPT column - display ppt_uid from first report object if it exists */}
+																	<td className="p-1 text-start align-top">
+																		<div className="text-sm">
+																			{reports && reports.length > 0 && reports[0].ppt_uid ? (
+																				<button
+																					onClick={() => {
+																						const url = `/report?sample_uid=${sample.sample_uid}&ppt_uid=${reports[0].ppt_uid}`;
+																						window.open(url, '_blank');
+																					}}
+																					className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer bg-transparent border-none p-0"
+																					title="Click để mở báo cáo trong tab mới"
+																				>
+																					{reports[0].ppt_uid}
+																				</button>
 																			) : (
-																				<option value="">Chưa tạo PPT</option>
+																				'--'
 																			)}
-																		</select>
-																		<button
-																			className="p-1 text-blue-500 hover:text-blue-700 focus:outline-none"
-																			onClick={() => {
-																				const url = `${window.location.origin}/report?sample_uid=${
-																					sample.sample_uid || sample.id
-																				}${
-																					selectedReportIds[sampleKey]
-																						? `&ppt_uid=${selectedReportIds[sampleKey]}`
-																						: reports.length > 0
-																						? `&ppt_uid=${reports[reports.length - 1].ppt_uid}`
-																						: ''
-																				}`;
-																				window.open(url, '_blank');
+																		</div>
+																	</td>
+																</>
+															) : (
+																<>
+																	{/* Regular non-PPT view */}{' '}
+																	<td className="p-1 text-start align-top">
+																		<div className="text-sm max-w-40 truncate">
+																			{sample.sample_uid ? (
+																				<NavLink
+																					to={`/dashboard/sample?receipt_uid=${receipt.receipt_uid}&sample_uid=${sample.sample_uid}`}
+																					className="text-primary hover:text-[#103667] font-medium"
+																				>
+																					{sample.sample_uid}
+																				</NavLink>
+																			) : (
+																				'--'
+																			)}
+																		</div>
+																	</td>
+																	<td className="p-1 text-start align-top">
+																		<div
+																			className="text-sm w-full line-clamp-2"
+																			title={sample.sample_name || '--'}
+																			style={{
+																				display: '-webkit-box',
+																				WebkitLineClamp: 2,
+																				WebkitBoxOrient: 'vertical',
+																				overflow: 'hidden',
 																			}}
-																			title="Xem báo cáo"
 																		>
-																			<FaExternalLinkAlt />
-																		</button>
-																	</div>
-																</td>
-															</>
-														)}
-
-														{/* Payment view specific columns - reordered */}
-														{sampleIndex === 0 && isPaymentActive && (
-															<>
-																<td
-																	className={`p-1 text-start align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
-																	onClick={() => handleFieldClick(receipt.id, null, 'order_code')}
-																>
-																	{editingField.receiptId === receipt.id &&
-																	editingField.sampleId === null &&
-																	editingField.field === 'order_code' ? (
-																		<input
-																			type="text"
-																			value={receipt.order_code || ''}
-																			onChange={(e) => handleReceiptInputChange(e, receipt.id, 'order_code')}
-																			onKeyDown={(e) =>
-																				handleReceiptInputKeyDown(e, receipt.id, 'order_code', e.target.value)
-																			}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		/>
-																	) : (
-																		<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
-																			{receipt.order_code || '--'}
-																		</p>
-																	)}
-																</td>
-																<td
-																	className={`p-1 text-start align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
-																	onClick={() => handleFieldClick(receipt.id, null, 'quote_code')}
-																>
-																	{editingField.receiptId === receipt.id &&
-																	editingField.sampleId === null &&
-																	editingField.field === 'quote_code' ? (
-																		<input
-																			type="text"
-																			value={receipt.quote_code || ''}
-																			onChange={(e) => handleReceiptInputChange(e, receipt.id, 'quote_code')}
-																			onKeyDown={(e) =>
-																				handleReceiptInputKeyDown(e, receipt.id, 'quote_code', e.target.value)
-																			}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		/>
-																	) : (
-																		<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
-																			{receipt.quote_code || '--'}
-																		</p>
-																	)}
-																</td>
-																<td
-																	className={`p-1 text-start align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
-																	onClick={() => handlePaymentConfirmation(receipt.id)}
-																>
-																	<p
-																		className={`cursor-pointer hover:bg-gray-100 p-1 rounded font-medium ${
-																			receipt.pay_status === 1
-																				? 'text-green-600'
-																				: receipt.pay_status === 2
-																				? 'text-black'
-																				: 'text-gray-500'
-																		}`}
+																			{sample.sample_name || '--'}
+																		</div>
+																	</td>{' '}
+																	<td
+																		className="p-1 text-start align-top cursor-pointer hover:bg-gray-100"
+																		onClick={() => handleFieldClick(receipt.id, sample.id, 'sample_volume')}
 																	>
-																		{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
-																	</p>
-																</td>
-																<td
-																	className={`p-1 text-start align-top ${
-																		hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																	}`}
-																	rowSpan={samplesToShow.length}
-																	onClick={() => handleFieldClick(receipt.id, null, 'sale_recorder')}
-																>
-																	{editingField.receiptId === receipt.id &&
-																	editingField.sampleId === null &&
-																	editingField.field === 'sale_recorder' ? (
-																		<input
-																			type="text"
-																			value={receipt.sale_recorder || ''}
-																			onChange={(e) => handleReceiptInputChange(e, receipt.id, 'sale_recorder')}
-																			onKeyDown={(e) =>
-																				handleReceiptInputKeyDown(e, receipt.id, 'sale_recorder', e.target.value)
-																			}
-																			onBlur={() => setEditingField({ receiptId: null, sampleId: null, field: null })}
-																			className="p-1 border rounded-md w-full text-sm bg-white"
-																			autoFocus
-																		/>
-																	) : (
-																		<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
-																			{receipt.sale_recorder || '--'}
-																		</p>
-																	)}
-																</td>
-															</>
-														)}
+																		{editingField.receiptId === receipt.id &&
+																		editingField.sampleId === sample.id &&
+																		editingField.field === 'sample_volume' ? (
+																			<textarea
+																				value={sample.sample_volume || ''}
+																				onChange={(e) => handleInputChange(e, receipt.id, sample.id, 'sample_volume')}
+																				onBlur={(e) =>
+																					handleSampleChange(receipt.id, sample.id, 'sample_volume', e.target.value)
+																				}
+																				className="p-1 border rounded-md w-full text-sm bg-white"
+																				autoFocus
+																			/>
+																		) : (
+																			<div className="text-sm">
+																				{sample.sample_volume ? (
+																					<span className="font-medium">{sample.sample_volume}</span>
+																				) : (
+																					<span className="text-gray-500">--</span>
+																				)}
+																			</div>
+																		)}
+																	</td>
+																	<td
+																		className="p-1 text-start align-top cursor-pointer hover:bg-gray-100"
+																		onClick={() => handleFieldClick(receipt.id, sample.id, 'purpose')}
+																	>
+																		{editingField.receiptId === receipt.id &&
+																		editingField.sampleId === sample.id &&
+																		editingField.field === 'purpose' ? (
+																			<select
+																				value={sample.purpose || ''}
+																				onChange={(e) => handleSelectChange(e, receipt.id, sample.id, 'purpose')}
+																				className="p-1 border rounded-md w-full text-sm bg-white"
+																				autoFocus
+																			>
+																				<option value="">-- Chọn --</option>
+																				<option value="Chất lượng">Chất lượng</option>
+																				<option value="Dự án">Dự án</option>
+																				<option value="Đề tài">Đề tài</option>
+																				<option value="Công bố">Công bố</option>
+																				<option value="Thầu phụ">Thầu phụ</option>
+																			</select>
+																		) : (
+																			<div className="text-sm max-w-32 truncate" title={sample.purpose || '--'}>
+																				{sample.purpose || '--'}
+																			</div>
+																		)}
+																	</td>
+																	<td
+																		className="p-1 text-start align-top cursor-pointer hover:bg-gray-100"
+																		onClick={() => handleFieldClick(receipt.id, sample.id, 'status')}
+																	>
+																		{editingField.receiptId === receipt.id &&
+																		editingField.sampleId === sample.id &&
+																		editingField.field === 'status' ? (
+																			<select
+																				value={sample.status || 0}
+																				onChange={(e) => handleSelectChange(e, receipt.id, sample.id, 'status')}
+																				className="p-1 border rounded-md w-full text-sm bg-white"
+																				autoFocus
+																			>
+																				<option value={0}>Chờ xử lý</option>
+																				<option value={1}>Mẫu khẩn</option>
+																				<option value={2}>Đang xử lý</option>
+																				<option value={3}>Hoàn thành</option>
+																				<option value={4}>Hủy bỏ</option>
+																			</select>
+																		) : (
+																			<div className="text-sm">
+																				<span
+																					className={`px-2 py-1 rounded-full text-xs font-medium ${
+																						sample.status === 3
+																							? 'bg-green-100 text-green-800'
+																							: sample.status === 2
+																							? 'bg-blue-100 text-blue-800'
+																							: sample.status === 1
+																							? 'bg-yellow-200 text-yellow-800'
+																							: sample.status === 0
+																							? 'bg-gray-100 text-gray-800'
+																							: sample.status === 4
+																							? 'bg-red-100 text-red-800'
+																							: 'bg-gray-100 text-gray-800'
+																					}`}
+																				>
+																					{sample.status === 3
+																						? 'Hoàn thành'
+																						: sample.status === 2
+																						? 'Đang xử lý'
+																						: sample.status === 1
+																						? 'Mẫu khẩn'
+																						: sample.status === 0
+																						? 'Chờ xử lý'
+																						: sample.status === 4
+																						? 'Hủy bỏ'
+																						: 'Chưa xác định'}
+																				</span>
+																			</div>
+																		)}
+																	</td>
+																	<td className="p-1 text-start align-top">
+																		<div className="text-sm">
+																			{totalTests > 0 ? (
+																				<span
+																					className={`font-medium ${
+																						completedTests === totalTests
+																							? 'text-green-600'
+																							: completedTests > 0
+																							? 'text-yellow-600'
+																							: 'text-gray-600'
+																					}`}
+																				>
+																					{completedTests}/{totalTests}
+																				</span>
+																			) : (
+																				<span className="text-gray-500">0/0</span>
+																			)}
+																		</div>
+																	</td>
+																</>
+															))}
 													</tr>
 												);
 											})
@@ -3315,6 +3950,9 @@ const Dashboard = () => {
 					</div>
 				</div>
 			</div>
+
+			{/* Transaction modal - added at the end of the component */}
+			{renderTransactionModal()}
 		</div>
 	);
 };

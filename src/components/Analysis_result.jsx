@@ -458,24 +458,32 @@ export default function MultiPageEditor() {
 		
 	</div>
 </div>`;
-
 	const signatureSection = `
-	<div style="padding-top: 0; display: flex; ; margin:0;">
-		<div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
-			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between; width: 50%;">
-
-			</div>
-			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
+	<div style="padding-top: 0; display: flex; margin:0;">
+		<div style="padding: 0pt; width: 100%; position: relative; display:flex; justify-content:space-between; height:2.7cm;">
+			<div style="width: 33.33%; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
 				<strong contenteditable="true" 
-						class="signature signer_fist_title print-text-paragraph"
+						class="signature signer_left_title print-text-paragraph"
 						style="font-size:12px; line-height:1.2; margin:0;">
-					QUẢN LÝ PHÒNG KIỂM NGHIỆM<br>/ Lab manager
+					KIỂM SOÁT CHẤT LƯỢNG<br>/ Quality Control
 				</strong>
 				<p contenteditable="true" 
-				   class="signature signer_first_name print-text-paragraph" 
+				   class="signature signer_left_name print-text-paragraph" 
 				   style="font-size:12px; margin:0; line-height:1.4;">
-
-				   </p>
+					Nguyễn Trung Kiên
+				</p>
+			</div>
+			<div style="width: 33.33%; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
+				<strong contenteditable="true" 
+						class="signature signer_right_title print-text-paragraph"
+						style="font-size:12px; line-height:1.2; margin:0;">
+					THỪA ỦY QUYỀN<br>/ Excessive Delegation
+				</strong>
+				<p contenteditable="true" 
+				   class="signature signer_right_name print-text-paragraph" 
+				   style="font-size:12px; margin:0; line-height:1.4;">
+				   
+				</p>
 			</div>
 		</div>
 	</div>`;

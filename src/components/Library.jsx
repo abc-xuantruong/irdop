@@ -16,7 +16,8 @@ const Library = () => {
 
 	// Helper function to check if user is a technician
 	const isTechnician = () => {
-		return currentUser?.role?.staff_technician === true;
+		// Admin users bypass technician restrictions
+		return currentUser?.role?.staff_technician === true && currentUser?.role?.staff_admin !== true;
 	};
 
 	// Helper function to check if user is a superAdmin

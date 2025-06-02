@@ -152,7 +152,6 @@ const Header = () => {
 							>
 								Lab
 							</Link>
-
 							{shouldShowReception() && (
 								<Link
 									to="/dashboard"
@@ -164,8 +163,7 @@ const Header = () => {
 								>
 									Tiếp nhận
 								</Link>
-							)}
-
+							)}{' '}
 							<Link
 								to="/library"
 								className={`cursor-pointer md:text-md ml-4 text-md font-medium ${
@@ -173,6 +171,14 @@ const Header = () => {
 								}`}
 							>
 								Thư viện
+							</Link>
+							<Link
+								to="/files"
+								className={`cursor-pointer md:text-md ml-4 text-md font-medium ${
+									currentPath.includes('/files') ? 'text-primary' : 'text-teritary hover:text-primary'
+								}`}
+							>
+								Files
 							</Link>
 						</>
 					)}
@@ -301,12 +307,18 @@ const Header = () => {
 											>
 												Tiếp nhận
 											</button>
-										)}
+										)}{' '}
 										<button
 											onClick={() => handleNavigate('/library')}
 											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
 										>
 											Thư viện
+										</button>
+										<button
+											onClick={() => handleNavigate('/files')}
+											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
+										>
+											Files
 										</button>
 										<button
 											onClick={handleLogout}

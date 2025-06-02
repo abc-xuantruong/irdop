@@ -24,8 +24,12 @@ const Login = () => {
 				toast.success('Đăng nhập thành công!');
 				const auth = response.data.session_uid;
 				const app_uid = response.data.app_uid;
+				const identity_uid = response.data.identity_uid;
+				const identity_name = response.data.identity_name;
 				Cookies.set('auth', auth);
 				Cookies.set('appUID', app_uid);
+				Cookies.set('identityName', identity_name);
+				Cookies.set('identityUID', identity_uid);
 				setIsLoading(true);
 				document.getElementById('login-container').classList.add('blur');
 				fetchUser();
@@ -34,7 +38,7 @@ const Login = () => {
 					document.getElementById('login-container').classList.remove('blur');
 					const newPath = window.location.pathname.replace('/login', '');
 					navigate(newPath || '/');
-				}, 750);
+				}, 1000);
 			} else {
 			}
 		} catch (error) {

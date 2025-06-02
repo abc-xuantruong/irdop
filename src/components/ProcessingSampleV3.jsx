@@ -2,7 +2,8 @@ import React, { useState, useContext, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom'; // Import createPortal
 import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
-import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
+import { apiGet, apiPost, apiPut } from '../contexts/helperFunctionCallAPI';
+import axios from 'axios';
 import TinyMceInput from './Input';
 import { toast, ToastContainer } from 'react-toastify';
 import { GrDocumentText, GrPrint } from 'react-icons/gr';
@@ -16,6 +17,7 @@ import {
 	FaCalendarDay,
 	FaTimes,
 	FaUpload,
+	FaTrashAlt,
 } from 'react-icons/fa';
 import { useLocation, useNavigate } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
@@ -35,6 +37,7 @@ const ProcessingSample = () => {
 	});
 	const [showFileUploadModal, setShowFileUploadModal] = useState(false);
 	const [files, setFiles] = useState([]);
+	const [uploadedFiles, setUploadedFiles] = useState([]); // Store uploaded files with upload info
 	const [showFileAssociationForm, setShowFileAssociationForm] = useState(false);
 	const [fileAssociations, setFileAssociations] = useState([]);
 	const [associationSearchResults, setAssociationSearchResults] = useState({});
@@ -46,13 +49,22 @@ const ProcessingSample = () => {
 	const handleBulkEditCellClick = (column, receiptId) => {
 		setBulkEditCell({ column, receiptId });
 	};
-
 	const [searchTerm, setSearchTerm] = useState('');
 	const [sampleSearchTerm, setSampleSearchTerm] = useState('');
 	const [parameterSearchTerm, setParameterSearchTerm] = useState('');
+	// Category filter state
+	const [filters, setFilters] = useState({
+		categories: [],
+	});
+	const [showFilters, setShowFilters] = useState({
+		categories: false,
+	});
 	const [editingNote, setEditingNote] = useState(null);
 	const [noteInput, setNoteInput] = useState('');
 	const [bulkEditValues, setBulkEditValues] = useState({}); // Add state to track bulk edit values
+	const [bulkDescription, setBulkDescription] = useState(''); // Add state for bulk description update
+	const [showCategoryDropdown, setShowCategoryDropdown] = useState(false); // Add state for category dropdown visibility
+	const [selectedHeaderCategories, setSelectedHeaderCategories] = useState([]); // Add state for header category selection
 	const [showBulkEditForm, setShowBulkEditForm] = useState(null); // Add state to track which receipt's bulk edit form is visible
 	const [showGlobalBulkEditForm, setShowGlobalBulkEditForm] = useState(false); // Add state for global bulk edit form
 	const [filterUrgent, setFilterUrgent] = useState(false); // Add state for urgent filter
@@ -176,7 +188,6 @@ const ProcessingSample = () => {
 			setFilteredProcessingSample([]);
 		}
 	};
-
 	// Update filtered data to remove pagination
 	const setFilteredBySearch = () => {
 		if (!processingSample) return [];
@@ -196,10 +207,16 @@ const ProcessingSample = () => {
 						sampleTerms.length === 0 || sampleTerms.some((term) => sample.sample_uid?.toLowerCase().includes(term));
 
 					const filteredAnalyses = sample.analysis?.filter((analysis) => {
-						return (
+						// Parameter name filter
+						const matchesParameter =
 							parameterTerms.length === 0 ||
-							parameterTerms.some((term) => analysis.parameter_name?.toLowerCase().includes(term))
-						);
+							parameterTerms.some((term) => analysis.parameter_name?.toLowerCase().includes(term));
+
+						// Category filter (using protocol_source)
+						const matchesCategory =
+							filters.categories.length === 0 || filters.categories.includes(analysis.protocol_source);
+
+						return matchesParameter && matchesCategory;
 					});
 
 					return matchesSampleUid && filteredAnalyses?.length > 0;
@@ -214,10 +231,16 @@ const ProcessingSample = () => {
 				const filteredSamples = receipt.samples
 					?.map((sample) => {
 						const filteredAnalyses = sample.analysis?.filter((analysis) => {
-							return (
+							// Parameter name filter
+							const matchesParameter =
 								parameterTerms.length === 0 ||
-								parameterTerms.some((term) => analysis.parameter_name?.toLowerCase().includes(term))
-							);
+								parameterTerms.some((term) => analysis.parameter_name?.toLowerCase().includes(term));
+
+							// Category filter (using protocol_source)
+							const matchesCategory =
+								filters.categories.length === 0 || filters.categories.includes(analysis.protocol_source);
+
+							return matchesParameter && matchesCategory;
 						});
 
 						return {
@@ -237,14 +260,13 @@ const ProcessingSample = () => {
 				};
 			});
 	};
-
-	// Apply filters whenever search terms change
+	// Apply filters whenever search terms or category filters change
 	useEffect(() => {
 		if (processingSample) {
 			const filteredData = setFilteredBySearch();
 			setFilteredProcessingSample(filteredData);
 		}
-	}, [searchTerm, sampleSearchTerm, parameterSearchTerm, processingSample]);
+	}, [searchTerm, sampleSearchTerm, parameterSearchTerm, filters.categories, processingSample]);
 
 	const handleSearchChange = (e) => {
 		setSearchTerm(e.target.value);
@@ -253,9 +275,66 @@ const ProcessingSample = () => {
 	const handleSampleSearchChange = (e) => {
 		setSampleSearchTerm(e.target.value);
 	};
-
 	const handleParameterSearchChange = (e) => {
 		setParameterSearchTerm(e.target.value);
+	};
+
+	// Function to get unique categories from all analyses
+	const getUniqueCategories = () => {
+		const categories = new Set();
+		if (processingSample) {
+			processingSample.forEach((receipt) => {
+				receipt.samples?.forEach((sample) => {
+					sample.analysis?.forEach((analysis) => {
+						if (analysis.protocol_source) {
+							categories.add(analysis.protocol_source);
+						}
+					});
+				});
+			});
+		}
+		return Array.from(categories).sort();
+	};
+
+	// Function to handle category filter change
+	const handleCategoryFilterChange = (category, isChecked) => {
+		setFilters((prev) => {
+			const newCategories = isChecked
+				? [...prev.categories, category]
+				: prev.categories.filter((cat) => cat !== category);
+			return {
+				...prev,
+				categories: newCategories,
+			};
+		});
+	};
+
+	// Function to get category display name
+	const getCategoryDisplayName = (category) => {
+		switch (category) {
+			case 'IRDOP':
+				return 'IRDOP';
+			case 'IRDOP VS':
+				return 'IRDOP VS';
+			case 'EX':
+				return 'EX';
+			default:
+				return category || 'Không xác định';
+		}
+	};
+
+	// Function to toggle filter input visibility
+	const toggleFilter = (column) => {
+		setShowFilters((prev) => ({
+			...prev,
+			[column]: !prev[column],
+		}));
+		// Clear filter when hiding
+		if (showFilters[column]) {
+			if (column === 'categories') {
+				setFilters((prev) => ({ ...prev, categories: [] }));
+			}
+		}
 	};
 
 	useEffect(() => {
@@ -280,6 +359,24 @@ const ProcessingSample = () => {
 
 		return () => clearInterval(interval);
 	}, []);
+
+	// Handle click outside category dropdown to close it
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			// Check if click is outside the category dropdown area
+			if (!event.target.closest('.category-dropdown-container')) {
+				setShowCategoryDropdown(false);
+			}
+		};
+
+		if (showCategoryDropdown) {
+			document.addEventListener('mousedown', handleClickOutside);
+		}
+
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside);
+		};
+	}, [showCategoryDropdown]);
 
 	const parseSearchTerms = (searchString) => {
 		return searchString
@@ -597,11 +694,70 @@ const ProcessingSample = () => {
 	// Add a function to handle bulk edit value changes
 	const handleBulkEditChange = (field, value) => {
 		setBulkEditValues((prev) => ({ ...prev, [field]: value }));
-	};
-
-	// Add a function to handle bulk update submission
+	}; // Add a function to handle bulk update submission
 	const handleBulkUpdate = async (selectedRows) => {
 		try {
+			// First, upload files to S3 if there are any uploaded files
+			if (uploadedFiles.length > 0) {
+				try {
+					// Generate UUID with 'gp_' prefix for fileGroupUID
+					const fileGroupUID = 'gp_' + crypto.randomUUID();
+
+					// Generate foreignKeys for each uploaded file
+					const foreignKeys = [];
+
+					// For each selected analysis, create foreign key string
+					selectedRows.forEach((analysisId) => {
+						// Find the analysis and its corresponding sample
+						let foundSample = null;
+
+						filteredProcessingSample?.forEach((receipt) => {
+							receipt.samples?.forEach((sample) => {
+								const analysis = sample.analysis?.find((a) => a.id === analysisId);
+								if (analysis) {
+									foundSample = sample;
+								}
+							});
+						});
+
+						if (foundSample && foundSample.sample_uid) {
+							// Remove first 2 characters from sample_uid and create foreign key
+							const sampleUidWithoutPrefix = foundSample.sample_uid.substring(2);
+							const foreignKey = `AN${sampleUidWithoutPrefix}^${analysisId}`;
+							foreignKeys.push(foreignKey);
+						}
+					});
+					for (const uploadedFile of uploadedFiles) {
+						// Add foreignKeys and fileGroupUID properties to each uploaded file
+						const fileWithForeignKeys = {
+							...uploadedFile,
+							foreignKeys: foreignKeys,
+							fileGroupUID: fileGroupUID, // Assign the generated fileGroupUID to each file
+						};
+
+						delete fileWithForeignKeys.metadata; // Remove metadata property if it exists
+						// Send each uploaded file object to the upload complete API
+						const s3Response = await apiPost(
+							'https://red.irdop.org/v1/file/uplink/upload_complete',
+							fileWithForeignKeys,
+						);
+
+						if (s3Response.status !== 200) {
+							console.warn(`Failed to send upload complete for file: ${uploadedFile.fileInfo.fileName}`);
+						} else {
+							console.log(`Successfully sent upload complete for file: ${uploadedFile.fileInfo.fileName}`);
+							console.log(`File assigned fileGroupUID: ${fileGroupUID}`);
+						}
+					}
+					toast.success(`Đã tải lên ${uploadedFiles.length} file thành công`);
+				} catch (fileError) {
+					console.error('Error uploading files to S3:', fileError);
+					toast.error('Có lỗi khi tải file lên S3');
+					// Continue with the analysis update even if file upload fails
+				}
+			}
+
+			// Then proceed with the bulk analysis update
 			const updatePromises = selectedRows.map((rowId) => {
 				const body = {
 					analysis: {
@@ -644,15 +800,14 @@ const ProcessingSample = () => {
 			// Clear all checkboxes after update
 			document.querySelectorAll('.row-checkbox').forEach((checkbox) => {
 				checkbox.checked = false;
-			});
-
-			// Clear selectedCheckboxesV3 and selectedCheckboxesByReceipt
+			}); // Clear selectedCheckboxesV3 and selectedCheckboxesByReceipt
 			setSelectedCheckboxesV3([]);
 			setSelectedCheckboxesByReceipt({});
 
-			// Reset bulk edit values
+			// Reset bulk edit values and uploaded files
 			setBulkEditValues({});
 			setBulkEditCell({ column: null, receiptId: null });
+			setUploadedFiles([]); // Clear uploaded files after successful update
 		} catch (error) {
 			console.error('Error during bulk update:', error);
 			toast.error('Lỗi khi cập nhật hàng loạt');
@@ -1068,17 +1223,68 @@ const ProcessingSample = () => {
 	const handleCancelUpload = () => {
 		setFiles([]);
 		setShowFileUploadModal(false);
-	};
-	// Function to confirm upload and show file name next to button
-	const handleConfirmUpload = () => {
+	}; // Function to confirm upload and show file name next to button
+	const handleConfirmUpload = async () => {
 		if (files.length === 0) {
 			toast.error('Không có file nào được chọn');
 			return;
 		}
 
-		// Just close the modal and keep the files state
-		setShowFileUploadModal(false);
-		toast.success(`Đã chọn file: ${files[0].name}`);
+		try {
+			const uploadResults = []; // Store results for each file
+
+			// Process each file
+			for (const file of files) {
+				// First get the upload link using apiPost
+				const linkResponse = await apiPost('https://red.irdop.org/v1/file/uplink/lab/activities');
+
+				if (linkResponse.status !== 200) {
+					throw new Error(`Failed to get upload link: ${linkResponse.data?.message || 'Unknown error'}`);
+				}
+
+				const uploadInfo = linkResponse.data;
+				console.log('Received upload info:', uploadInfo);
+				if (!uploadInfo || !uploadInfo.url) {
+					throw new Error('Không nhận được URL upload từ API');
+				}
+
+				// Convert file to buffer for upload
+				const fileBuffer = await file.arrayBuffer();
+
+				// Upload using axios.put with only fileBuffer and Content-Type header
+				const uploadResponse = await axios.put(uploadInfo.url, fileBuffer, {
+					headers: {
+						'Content-Type': file.type || 'application/octet-stream',
+					},
+				});
+
+				if (uploadResponse.status !== 200) {
+					throw new Error(`Failed to upload file: ${uploadResponse.data?.message || 'Unknown error'}`);
+				}
+				uploadResults.push({
+					fileInfo: {
+						fileName: file.name,
+						fileSize: file.size,
+						fileType: file.type,
+					},
+					...linkResponse.data, // Spread all key-value pairs from uploadResponse.data
+					fileCategory: [], // Default value as empty array for multiple categories
+					uploadDescription: bulkDescription || '', // Use bulk description if available
+					createdbyUID: '', // Default machine type value
+				});
+
+				toast.success(`Đã tải lên thành công: ${file.name}`);
+			} // Store uploaded files with their upload info - append to existing files
+			console;
+			setUploadedFiles((prevFiles) => [...prevFiles, ...uploadResults]);
+
+			// Clear the files list and close the modal
+			setFiles([]);
+			setShowFileUploadModal(false);
+		} catch (error) {
+			console.error('Error uploading files:', error);
+			toast.error(`Lỗi khi tải lên: ${error.message}`);
+		}
 	};
 
 	// Function to handle input change in association form
@@ -1210,23 +1416,129 @@ const ProcessingSample = () => {
 		setAssociationSearchResults({});
 		setShowFileAssociationForm(false);
 	};
-
 	// Function to cancel association
 	const handleCancelAssociation = () => {
 		setFileAssociations([]);
 		setShowFileAssociationForm(false);
+	}; // Function to handle uploaded file edit
+	const handleUploadedFileEdit = (index, field, value) => {
+		setUploadedFiles((prev) => {
+			const updated = [...prev];
+			updated[index] = { ...updated[index], [field]: value };
+
+			// Log the edited object
+			console.log('Uploaded file edited:', updated[index]);
+
+			return updated;
+		});
+	};
+
+	// Function to handle uploaded file delete
+	const handleUploadedFileDelete = (index) => {
+		setUploadedFiles((prev) => {
+			const updated = [...prev];
+			const deletedFile = updated[index];
+			console.log('Uploaded file deleted:', deletedFile);
+			updated.splice(index, 1);
+			return updated;
+		});
+	};
+
+	// Function to handle bulk description update
+	const handleBulkDescriptionChange = (value) => {
+		setBulkDescription(value);
+		// Update all uploaded files with the new description
+		setUploadedFiles((prev) => {
+			const updated = prev.map((fileInfo) => ({
+				...fileInfo,
+				uploadDescription: value,
+			}));
+			return updated;
+		});
+	};
+	// Function to handle checkbox-based category selection
+	const handleCategoryCheckboxChange = (fileIndex, category, isChecked) => {
+		setUploadedFiles((prev) => {
+			const updated = [...prev];
+			const currentCategories = updated[fileIndex].fileCategory || [];
+
+			if (isChecked) {
+				// Add category if not already present
+				if (!currentCategories.includes(category)) {
+					updated[fileIndex] = {
+						...updated[fileIndex],
+						fileCategory: [...currentCategories, category],
+					};
+				}
+			} else {
+				// Remove category
+				updated[fileIndex] = {
+					...updated[fileIndex],
+					fileCategory: currentCategories.filter((cat) => cat !== category),
+				};
+			}
+
+			// Log the edited object
+			console.log('Uploaded file edited:', updated[fileIndex]);
+			return updated;
+		});
+	};
+
+	// Function to handle header category dropdown toggle
+	const toggleCategoryDropdown = () => {
+		setShowCategoryDropdown(!showCategoryDropdown);
+	};
+
+	// Function to handle header category selection (bulk select all files)
+	const handleHeaderCategoryChange = (category, isChecked) => {
+		if (isChecked) {
+			setSelectedHeaderCategories((prev) => [...prev, category]);
+			// Apply to all uploaded files
+			setUploadedFiles((prev) => {
+				return prev.map((fileInfo) => {
+					const currentCategories = fileInfo.fileCategory || [];
+					if (!currentCategories.includes(category.replace(' ', ''))) {
+						return {
+							...fileInfo,
+							fileCategory: [...currentCategories, category.replace(' ', '')],
+						};
+					}
+					return fileInfo;
+				});
+			});
+		} else {
+			setSelectedHeaderCategories((prev) => prev.filter((cat) => cat !== category));
+			// Remove from all uploaded files
+			setUploadedFiles((prev) => {
+				return prev.map((fileInfo) => {
+					const currentCategories = fileInfo.fileCategory || [];
+					return {
+						...fileInfo,
+						fileCategory: currentCategories.filter((cat) => cat !== category.replace(' ', '')),
+					};
+				});
+			});
+		}
 	};
 
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
 			<Breadcrumb paths={[{}]} />
-
 			<div className="w-full h-full flex justify-between items-center rounded-lg mb-2">
-				<div>
-					<button className="w-40 p-1 ml-1 text-sm font-medium focus:outline-none active:bg-sky-400 bg-teritary">
+				<div className="flex gap-2">
+					<button
+						onClick={() => navigate('/processing')}
+						className="px-4 py-0.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+					>
 						Bàn giao
 					</button>
+					{/* <button
+						onClick={() => navigate('/processing/machine')}
+						className="px-4 py-0.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+					>
+						Hệ máy
+					</button> */}
 				</div>
 			</div>
 
@@ -1260,7 +1572,6 @@ const ProcessingSample = () => {
 						{/* Add filter buttons */}
 						<div className="flex flex-wrap gap-2">
 							{/* Add global bulk edit button */}
-
 							<button
 								className={`px-3 py-1 text-sm rounded-lg border ${
 									new URLSearchParams(location.search).has('urgent')
@@ -1329,10 +1640,11 @@ const ProcessingSample = () => {
 								title="Hiển thị mẫu quá hạn"
 							>
 								Quá hạn
-							</button>							{/* Add deadline filter button */}
+							</button>{' '}
+							{/* Add deadline filter button */}
 							<div className="relative">
 								<button
-									className={`p-2 rounded-lg bg-gray-100 border-gray-300 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+									className={`p-2 rounded-lg text-sm bg-gray-100 border-gray-300 flex items-center justify-center focus:outline-none gap-2 py-1 ${
 										showTodayDeadlines ? 'bg-teritary border-primary' : 'text-black'
 									}`}
 									onClick={filterTodayDeadlines}
@@ -1441,7 +1753,7 @@ const ProcessingSample = () => {
 								top: `${dropdownPosition.top}px`,
 								left: `${dropdownPosition.left}px`,
 								maxHeight: '80vh',
-								overflowY: 'auto'
+								overflowY: 'auto',
 							}}
 							onClick={(e) => e.stopPropagation()}
 							onDrop={handleFileDrop}
@@ -1641,7 +1953,7 @@ const ProcessingSample = () => {
 																			// Check if all analyses in this sample are selected
 																			checked={sample.analysis.every((analysis) =>
 																				association.selectedSamples.some(
-																					selection =>
+																					(selection) =>
 																						selection.receiptId === receipt.id &&
 																						selection.sampleId === sample.id &&
 																						selection.analysisIds.includes(analysis.id),
@@ -1719,13 +2031,15 @@ const ProcessingSample = () => {
 							filteredProcessingSample
 								.slice(0, showAllReceipts ? filteredProcessingSample.length : displayCount)
 								.map((receipt) => (
-									<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto relative">										<div className="text-start mb-2 flex justify-between items-center">
+									<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto relative">
+										{' '}
+										<div className="text-start mb-2 flex justify-between items-center">
 											<div>
 												<div className="flex items-center gap-2">
 													<p className="text-primary font-semibold">{receipt.receipt_uid || 'N/A'}</p>
-													<FaStickyNote 
-														className="text-gray-500 cursor-pointer hover:text-blue-500" 
-														onClick={() => handleEditNote(receipt)} 
+													<FaStickyNote
+														className="text-gray-500 cursor-pointer hover:text-blue-500"
+														onClick={() => handleEditNote(receipt)}
 														title="Thêm/Sửa ghi chú"
 														size={14}
 													/>
@@ -1791,7 +2105,6 @@ const ProcessingSample = () => {
 													)}
 											</div>
 										</div>
-
 										{/* Bulk Edit Form */}
 										{showBulkEditForm === receipt.id && (
 											<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
@@ -1802,7 +2115,6 @@ const ProcessingSample = () => {
 															({selectedCheckboxesByReceipt[receipt.id]?.length || 0} chỉ tiêu được chọn)
 														</span>
 													</h2>
-
 													{/* Form with labels on top */}
 													<div className="flex flex-row gap-4 mb-6 overflow-x-auto">
 														{/* Combined Protocol source and code fields */}
@@ -1828,7 +2140,6 @@ const ProcessingSample = () => {
 																/>
 															</div>
 														</div>
-
 														{/* Reference field */}
 														<div className="flex flex-col min-w-[140px]">
 															<label className="mb-1 font-medium text-sm text-left">Tham chiếu</label>
@@ -1840,20 +2151,18 @@ const ProcessingSample = () => {
 																onChange={(e) => handleBulkEditChange('reference', e.target.value)}
 															/>
 														</div>
-
 														{/* Deadline field */}
-														<div className="flex flex-col min-w-[180px]">
+														<div className="flex flex-col min-w-[120px]">
 															<label className="mb-1 font-medium text-sm text-left">Hạn trả</label>
 															<input
-																type="datetime-local"
+																type="date"
 																className="p-2 border rounded-lg bg-white text-sm"
-																value={bulkEditValues.deadline || ''}
+																value={bulkEditValues.deadline ? bulkEditValues.deadline.split('T')[0] : ''}
 																onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
 															/>
 														</div>
-
 														{/* Result value field */}
-														<div className="flex flex-col min-w-[180px]">
+														<div className="flex flex-col min-w-[140px]">
 															<label className="mb-1 font-medium text-sm text-left">Kết quả</label>
 															<div
 																className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
@@ -1875,9 +2184,8 @@ const ProcessingSample = () => {
 																)}
 															</div>
 														</div>
-
 														{/* Result unit field */}
-														<div className="flex flex-col min-w-[140px]">
+														<div className="flex flex-col min-w-[120px]">
 															<label className="mb-1 font-medium text-sm text-left">Đơn vị</label>
 															<div
 																className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
@@ -1899,7 +2207,8 @@ const ProcessingSample = () => {
 																	/>
 																)}
 															</div>
-														</div>														{/* Technician field */}
+														</div>{' '}
+														{/* Technician field */}
 														<div className="flex flex-col min-w-[180px]">
 															<label className="mb-1 font-medium text-sm text-left">Người thực hiện</label>
 															<select
@@ -1914,37 +2223,36 @@ const ProcessingSample = () => {
 																	</option>
 																))}
 															</select>
-														</div>
-
+														</div>{' '}
 														{/* File upload button */}
 														<div className="flex flex-col min-w-[180px] relative">
-															<label className="mb-1 font-medium text-sm text-left">Biên bản</label>
-															<div className="flex items-center gap-2">
-																<button
-																	id="fileUploadButton"
-																	className="p-2 border rounded-lg bg-white hover:bg-gray-100 text-sm flex items-center justify-center gap-1"
-																	onClick={(e) => {
-																		setShowFileUploadModal(true);
-																		// Store button position for positioning the modal
-																		const buttonRect = e.target.getBoundingClientRect();
-																		setDropdownPosition({
-																			top: buttonRect.bottom + window.scrollY + 5,
-																			left: buttonRect.left + window.scrollX - 200,
-																		});
-																	}}
-																	title="Tải lên biên bản"
-																>
-																	<FaUpload size={12} /> Tải lên
-																</button>
-																{files.length > 0 && (
-																	<span className="text-sm text-gray-600 truncate max-w-[120px]" title={files[0].name}>
-																		{files[0].name}
+															<label
+																className="mb-1 font-medium text-sm text-left flex items-center gap-1 cursor-pointer hover:text-blue-500"
+																onClick={(e) => {
+																	setShowFileUploadModal(true);
+																	// Store button position for positioning the modal
+																	const buttonRect = e.target.getBoundingClientRect();
+																	setDropdownPosition({
+																		top: buttonRect.bottom + window.scrollY + 5,
+																		left: buttonRect.left + window.scrollX - 200,
+																	});
+																}}
+																title="Tải lên biên bản"
+															>
+																Upload file <FaUpload size={12} />
+															</label>
+															<div className="flex items-center">
+																{uploadedFiles.length > 0 && (
+																	<span
+																		className="text-sm text-green-600 truncate max-w-[150px]"
+																		title={`${uploadedFiles.length} file(s) uploaded`}
+																	>
+																		{uploadedFiles.length} file(s) uploaded
 																	</span>
 																)}
 															</div>
 														</div>
 													</div>
-
 													{/* Table of selected analyses with preview */}
 													<div className="mb-6 max-h-[300px] overflow-auto">
 														<h3 className="text-md font-semibold mb-2">Xem trước thay đổi</h3>
@@ -1958,7 +2266,7 @@ const ProcessingSample = () => {
 																	<th className="border p-1 text-start min-w-28">Đơn vị</th>
 																	<th className="border p-1 text-start w-24 min-w-24">Hạn trả</th>
 																	<th className="border p-1 text-start w-32 min-w-32">KTV</th>
-																	<th className="border p-1 text-start w-32 min-w-32">Tham chiếu</th>
+																	<th className="border p-1 text-start w-32">Tham chiếu</th>
 																</tr>
 															</thead>
 															<tbody>
@@ -2022,18 +2330,190 @@ const ProcessingSample = () => {
 																			</td>
 																		</tr>
 																	) : null;
-																})}
+																})}{' '}
 															</tbody>
 														</table>
-													</div>
-
+													</div>{' '}
+													{/* Uploaded Files Table for Individual Receipt */}
+													{uploadedFiles.length > 0 && (
+														<div className="mb-6">
+															{' '}
+															<h3 className="text-md font-semibold mb-2">Danh sách file đã tải lên</h3>
+															<div className="max-h-[240px] overflow-auto">
+																<table className="w-full border-collapse border border-gray-300">
+																	<thead className="bg-gray-100">
+																		<tr>
+																			<th className="border p-1 text-center w-16">STT</th>
+																			<th className="border p-1 text-start">Tên file</th>
+																			<th className="border p-1 text-start">File UID</th>
+																			<th className="border p-1 text-start w-32 relative">
+																				{' '}
+																				<div
+																					className="flex items-center gap-1 cursor-pointer hover:bg-gray-50 p-1 rounded category-dropdown-container"
+																					onClick={toggleCategoryDropdown}
+																				>
+																					<span>Danh mục</span>
+																					<svg
+																						className={`w-4 h-4 transition-transform ${
+																							showCategoryDropdown ? 'rotate-180' : ''
+																						}`}
+																						fill="none"
+																						stroke="currentColor"
+																						viewBox="0 0 24 24"
+																					>
+																						<path
+																							strokeLinecap="round"
+																							strokeLinejoin="round"
+																							strokeWidth={2}
+																							d="M19 9l-7 7-7-7"
+																						/>
+																					</svg>
+																				</div>
+																				{showCategoryDropdown && (
+																					<div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[160px] category-dropdown-container">
+																						<div className="p-2">
+																							{['Raw Data', 'Prepare Report', 'Calculation'].map((category) => (
+																								<label
+																									key={category}
+																									className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer"
+																								>
+																									<input
+																										type="checkbox"
+																										checked={selectedHeaderCategories.includes(category)}
+																										onChange={(e) =>
+																											handleHeaderCategoryChange(category, e.target.checked)
+																										}
+																										className="w-4 h-4"
+																									/>
+																									<span className="text-sm">{category}</span>
+																								</label>
+																							))}
+																						</div>
+																					</div>
+																				)}
+																			</th>
+																			<th className="border p-1 text-start w-32">Loại máy</th>
+																			<th className="border p-1 text-start">
+																				{' '}
+																				<div className="flex flex-col gap-1">
+																					<span>Mô tả</span>
+																					<input
+																						type="text"
+																						value={bulkDescription}
+																						onChange={(e) => handleBulkDescriptionChange(e.target.value)}
+																						className="w-full p-1 text-xs border rounded bg-white"
+																						placeholder="Cập nhật tất cả mô tả..."
+																					/>
+																				</div>
+																			</th>
+																			<th className="border p-1 text-center w-16">Xóa</th>
+																		</tr>
+																	</thead>
+																	<tbody>
+																		{uploadedFiles.map((fileInfo, index) => (
+																			<tr key={index} className="hover:bg-gray-50">
+																				<td className="border p-2 text-center">{index + 1}</td>
+																				<td className="border p-2 text-start break-words">
+																					{fileInfo.fileInfo.fileName}
+																				</td>
+																				<td className="border p-2 text-start font-mono text-sm">
+																					{fileInfo.fileUID || fileInfo.key || 'N/A'}
+																				</td>{' '}
+																				<td className="border p-1">
+																					<div className="flex flex-col gap-1 min-w-32">
+																						{/* Checkbox-based category selection */}
+																						<div className="flex flex-col gap-1">
+																							<label className="flex items-center gap-1 text-xs">
+																								<input
+																									type="checkbox"
+																									checked={(fileInfo.fileCategory || []).includes('RawData')}
+																									onChange={(e) =>
+																										handleCategoryCheckboxChange(index, 'RawData', e.target.checked)
+																									}
+																									className="w-3 h-3"
+																								/>
+																								Raw Data
+																							</label>
+																							<label className="flex items-center gap-1 text-xs">
+																								<input
+																									type="checkbox"
+																									checked={(fileInfo.fileCategory || []).includes('PreparedReport')}
+																									onChange={(e) =>
+																										handleCategoryCheckboxChange(
+																											index,
+																											'PreparedReport',
+																											e.target.checked,
+																										)
+																									}
+																									className="w-3 h-3"
+																								/>
+																								Prepare Report
+																							</label>
+																							<label className="flex items-center gap-1 text-xs">
+																								<input
+																									type="checkbox"
+																									checked={(fileInfo.fileCategory || []).includes('Calculation')}
+																									onChange={(e) =>
+																										handleCategoryCheckboxChange(index, 'Calculation', e.target.checked)
+																									}
+																									className="w-3 h-3"
+																								/>
+																								Calculation
+																							</label>
+																						</div>
+																					</div>
+																				</td>
+																				<td className="border p-1">
+																					<select
+																						value={fileInfo.createdbyUID || ''}
+																						onChange={(e) =>
+																							handleUploadedFileEdit(index, 'createdbyUID', e.target.value)
+																						}
+																						className="w-full p-1 text-xs border rounded bg-white"
+																					>
+																						<option value="">-- Chọn loại máy --</option>
+																						<option value="HPLC01">HPLC01</option>
+																						<option value="GCMS01">GCMS01</option>
+																						<option value="AAS01">AAS01</option>
+																						<option value="AAS02">AAS02</option>
+																					</select>
+																				</td>
+																				<td className="border p-1">
+																					{' '}
+																					<input
+																						type="text"
+																						value={fileInfo.uploadDescription || ''}
+																						onChange={(e) =>
+																							handleUploadedFileEdit(index, 'uploadDescription', e.target.value)
+																						}
+																						className="w-full p-1 text-xs border rounded bg-white"
+																						placeholder="Nhập mô tả..."
+																					/>
+																				</td>
+																				<td className="border p-2 text-center">
+																					<button
+																						onClick={() => handleUploadedFileDelete(index)}
+																						className="text-red-500 hover:text-red-700 p-1"
+																						title="Xóa file"
+																					>
+																						<FaTrashAlt size={14} />
+																					</button>
+																				</td>
+																			</tr>
+																		))}
+																	</tbody>
+																</table>
+															</div>
+														</div>
+													)}
 													<div className="flex justify-end gap-3">
 														<button
 															className="px-2 py-1 border-2 border-gray-600 text-gray-600 rounded hover:bg-gray-400 w-fit"
 															onClick={closeBulkEditForm}
 														>
 															Hủy bỏ
-														</button>														<button
+														</button>{' '}
+														<button
 															className="px-2 py-1 border-2 border-gray-600  rounded hover:bg-blue-600 flex items-center w-fit "
 															onClick={() => {
 																handleBulkUpdate(selectedCheckboxesByReceipt[receipt.id]);
@@ -2041,20 +2521,22 @@ const ProcessingSample = () => {
 																closeBulkEditForm();
 															}}
 														>
-															Xác nhận
+															<FaSave className="mr-2" /> Xác nhận cập nhật
 														</button>
 													</div>
 												</div>
 											</div>
 										)}
-
 										{/* Organize by samples */}
 										{receipt.samples && receipt.samples.length > 0 ? (
 											receipt.samples.map((sample) => (
-												<div key={sample.id} className="mb-4 border-l-2 border-teritary px-1 overflow-auto">													<div className="  mb-2 flex justify-between items-center">
+												<div key={sample.id} className="mb-4 border-l-2 border-teritary px-1 overflow-auto">
+													{' '}
+													<div className="  mb-2 flex justify-between items-center">
 														<div className="flex flex-col">
 															<div className="min-w-40">
-																<span className="font-semibold">{sample.sample_uid}</span>: {sample.sample_name || 'N/A'}
+																<span className="font-semibold">{sample.sample_uid}</span>:{' '}
+																{sample.sample_name || 'N/A'}
 															</div>
 															<div className="min-w-40">
 																<span className="font-semibold">Nền mẫu:</span> {sample.matrix || 'N/A'}
@@ -2076,13 +2558,14 @@ const ProcessingSample = () => {
 															</div>
 														</button>
 													</div>
-
 													{/* Analysis table for this sample */}
 													{sample.analysis && sample.analysis.length > 0 ? (
 														<table className="w-full border-collapse border border-gray-200">
 															<thead>
+																{' '}
 																<tr className="bg-gray-100  text-sm text-gray-600">
 																	<th className="font-normal p-1 text-start min-w-60 w-1/4">Chỉ tiêu</th>
+
 																	<th className="font-normal p-1 text-start min-w-60 w-1/4">Phương pháp</th>
 																	<th className="font-normal p-1 text-start min-w-40">Kết quả</th>
 																	<th className="font-normal p-1 text-start min-w-32">Đơn vị</th>
@@ -2112,10 +2595,11 @@ const ProcessingSample = () => {
 																		} hover:bg-gray-50`}
 																	>
 																		<td className="border p-1 text-start">{item.parameter_name || 'N/A'}</td>
+
 																		<td className="border p-1 text-start ">
 																			<div className="flex items-center gap-0.5">
 																				<select
-																				className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
+																					className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
 																					onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
 																					value={item.protocol_source || ''}
 																				>
@@ -2275,35 +2759,30 @@ const ProcessingSample = () => {
 			{showGlobalBulkEditForm && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[100]">
 					<div className="bg-white p-6 rounded-lg shadow-lg min-w-[400px] w-5/6">
-						<h2 className="text-xl font-bold mb-4 flex justify-between items-center">
+						<h2 className="text-xl font-bold mb-2 flex justify-between items-center">
 							<span>Chỉnh sửa hàng loạt</span>
 							<span className="text-sm font-normal text-gray-600">
 								({selectedCheckboxesV3.length} chỉ tiêu được chọn)
 							</span>
-						</h2>{/* Flex container for Overview and Inputs */}
-						<div className="flex flex-col gap-4 mb-4">
-							
-							{/* "Tổng quan các mục đã chọn" Section - Above the update info */}
-							<div>
-								<h3 className="text-md font-semibold mb-2 text-left">Tổng quan các mục đã chọn</h3>
-								<div className="max-h-[200px] overflow-auto border rounded p-2">
-									{Object.keys(selectedCheckboxesByReceipt).length > 0 ? (
-										<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-											{Object.entries(selectedCheckboxesByReceipt).map(([receiptId, analysisIds]) => {
-												const receipt = filteredProcessingSample?.find((r) => r.id === parseInt(receiptId));
-												return (
-													<div key={receiptId} className="border rounded p-2 bg-gray-50 text-left">
-														<div className="font-medium text-sm">{receipt?.receipt_uid || `Phiếu ${receiptId}`}</div>
-														<div className="text-xs">{analysisIds.length} chỉ tiêu được chọn</div>
-													</div>
-												);
-											})}
-										</div>
-									) : (
-										<div className="text-gray-500 italic text-left">Không có chỉ tiêu nào được chọn</div>
-									)}
+						</h2>{' '}
+						{/* Flex container for Overview and Inputs */}
+						<div className="flex flex-col gap-2 mb-2">
+							{/* Selected items display in new format - positioned on upper left */}
+							{Object.keys(selectedCheckboxesByReceipt).length > 0 && (
+								<div className="text-left">
+									<span className="text-sm">
+										{Object.entries(selectedCheckboxesByReceipt).map(([receiptId, analysisIds], index) => {
+											const receipt = filteredProcessingSample?.find((r) => r.id === parseInt(receiptId));
+											const receiptUid = receipt?.receipt_uid || `Phiếu ${receiptId}`;
+											return (
+												<span key={receiptId}>
+													{index > 0 && ', '}({receiptUid}: {analysisIds.length} chỉ tiêu được chọn)
+												</span>
+											);
+										})}
+									</span>
 								</div>
-							</div>
+							)}
 
 							{/* Input Fields Section */}
 							<div>
@@ -2332,7 +2811,6 @@ const ProcessingSample = () => {
 											/>
 										</div>
 									</div>
-
 									{/* Reference field */}
 									<div className="flex flex-col min-w-[140px]">
 										<label className="mb-1 font-medium text-sm text-left">Tham chiếu</label>
@@ -2344,20 +2822,18 @@ const ProcessingSample = () => {
 											onChange={(e) => handleBulkEditChange('reference', e.target.value)}
 										/>
 									</div>
-
 									{/* Deadline field */}
-									<div className="flex flex-col min-w-[180px]">
+									<div className="flex flex-col min-w-[120px]">
 										<label className="mb-1 font-medium text-sm text-left">Hạn trả</label>
 										<input
-											type="datetime-local"
+											type="date"
 											className="p-2 border rounded-lg bg-white text-sm"
-											value={bulkEditValues.deadline || ''}
+											value={bulkEditValues.deadline ? bulkEditValues.deadline.split('T')[0] : ''}
 											onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
 										/>
 									</div>
-
 									{/* Result value field */}
-									<div className="flex flex-col min-w-[180px]">
+									<div className="flex flex-col min-w-[140px]">
 										<label className="mb-1 font-medium text-sm text-left">Kết quả</label>
 										<div
 											className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
@@ -2379,9 +2855,8 @@ const ProcessingSample = () => {
 											)}
 										</div>
 									</div>
-
 									{/* Result unit field */}
-									<div className="flex flex-col min-w-[140px]">
+									<div className="flex flex-col min-w-[120px]">
 										<label className="mb-1 font-medium text-sm text-left">Đơn vị</label>
 										<div
 											className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
@@ -2403,7 +2878,8 @@ const ProcessingSample = () => {
 												/>
 											)}
 										</div>
-									</div>									{/* Technician field */}
+									</div>{' '}
+									{/* Technician field */}
 									<div className="flex flex-col min-w-[180px]">
 										<label className="mb-1 font-medium text-sm text-left">Người thực hiện</label>
 										<select
@@ -2418,29 +2894,31 @@ const ProcessingSample = () => {
 												</option>
 											))}
 										</select>
-									</div>									{/* File upload button */}
+									</div>{' '}
+									{/* File upload button */}
 									<div className="flex flex-col min-w-[180px] relative">
-										<label className="mb-1 font-medium text-sm text-left">Biên bản</label>
-										<div className="flex items-center gap-2">
-											<button
-												id="fileUploadButton"
-												className="p-2 border rounded-lg bg-white hover:bg-gray-100 text-sm flex items-center justify-center gap-1"
-												onClick={(e) => {
-													setShowFileUploadModal(true);
-													// Store button position for positioning the modal
-													const buttonRect = e.target.getBoundingClientRect();
-													setDropdownPosition({
-														top: buttonRect.bottom + window.scrollY + 5,
-														left: buttonRect.left + window.scrollX - 200,
-													});
-												}}
-												title="Tải lên biên bản"
-											>
-												<FaUpload size={12} /> Tải lên
-											</button>
-											{files.length > 0 && (
-												<span className="text-sm text-gray-600 truncate max-w-[120px]" title={files[0].name}>
-													{files[0].name}
+										<label
+											className="mb-1 font-medium text-sm text-left flex items-center gap-1 cursor-pointer hover:text-blue-500"
+											onClick={(e) => {
+												setShowFileUploadModal(true);
+												// Store button position for positioning the modal
+												const buttonRect = e.target.getBoundingClientRect();
+												setDropdownPosition({
+													top: buttonRect.bottom + window.scrollY + 5,
+													left: buttonRect.left + window.scrollX - 200,
+												});
+											}}
+											title="Tải lên biên bản"
+										>
+											Upload file <FaUpload size={12} />
+										</label>
+										<div className="flex items-center">
+											{uploadedFiles.length > 0 && (
+												<span
+													className="text-sm text-green-600 truncate max-w-[150px]"
+													title={`${uploadedFiles.length} file(s) uploaded`}
+												>
+													{uploadedFiles.length} file(s) uploaded
 												</span>
 											)}
 										</div>
@@ -2448,7 +2926,6 @@ const ProcessingSample = () => {
 								</div>
 							</div>
 						</div>
-						
 						{/* Preview table showing all selected analyses */}
 						<div className="mb-6 max-h-[300px] overflow-auto">
 							<h3 className="text-md font-semibold mb-2">Xem trước thay đổi</h3>
@@ -2463,7 +2940,7 @@ const ProcessingSample = () => {
 										<th className="border p-1 text-start min-w-28">Đơn vị</th>
 										<th className="border p-1 text-start w-24 min-w-24">Hạn trả</th>
 										<th className="border p-1 text-start w-32 min-w-32">KTV</th>
-										<th className="border p-1 text-start w-32 min-w-32">Tham chiếu</th>
+										<th className="border p-1 text-start w-32">Tham chiếu</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -2532,26 +3009,158 @@ const ProcessingSample = () => {
 												</td>
 											</tr>
 										) : null;
-									})}
+									})}{' '}
 								</tbody>
 							</table>
-						</div>
-
+						</div>{' '}
+						{/* Uploaded Files Table */}
+						{uploadedFiles.length > 0 && (
+							<div className="mb-6">
+								<h3 className="text-md font-semibold mb-2">Danh sách file đã tải lên</h3>
+								<div className="max-h-[240px] overflow-auto">
+									{' '}
+									<table className="w-full border-collapse border border-gray-300">
+										<thead className="bg-gray-100">
+											<tr>
+												<th className="border p-1 text-center w-16">STT</th>
+												<th className="border p-1 text-start">Tên file</th>
+												<th className="border p-1 text-start">File UID</th>
+												<th className="border p-1 text-start w-32 relative">
+													{' '}
+													<div
+														className="flex items-center gap-1 cursor-pointer hover:bg-gray-50 p-1 rounded category-dropdown-container"
+														onClick={toggleCategoryDropdown}
+													>
+														<span>Danh mục</span>
+														<svg
+															className={`w-4 h-4 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`}
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+														</svg>
+													</div>
+													{showCategoryDropdown && (
+														<div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[160px] category-dropdown-container">
+															<div className="p-2">
+																{['Raw Data', 'Prepare Report', 'Calculation'].map((category) => (
+																	<label
+																		key={category}
+																		className="flex items-center gap-1 p-0.5 hover:bg-gray-50 cursor-pointer font-normal"
+																	>
+																		<input
+																			type="checkbox"
+																			checked={selectedHeaderCategories.includes(category)}
+																			onChange={(e) => handleHeaderCategoryChange(category, e.target.checked)}
+																			className="w-4 h-4"
+																		/>
+																		<span className="text-sm">{category}</span>
+																	</label>
+																))}
+															</div>
+														</div>
+													)}
+												</th>
+												<th className="border p-1 text-start w-32">Loại máy</th>{' '}
+												<th className="border p-1 text-start">
+													<div className="flex gap-1">
+														<span className="min-w-12">Mô tả</span>
+														<input
+															type="text"
+															value={bulkDescription}
+															onChange={(e) => handleBulkDescriptionChange(e.target.value)}
+															className="w-full p-1 text-xs border rounded bg-white"
+															placeholder="Nhập mô tả chung..."
+														/>
+													</div>
+												</th>
+												<th className="border p-1 text-center w-16">Xóa</th>
+											</tr>
+										</thead>
+										<tbody>
+											{uploadedFiles.map((fileInfo, index) => (
+												<tr key={index} className="hover:bg-gray-50">
+													<td className="border p-2 text-center">{index + 1}</td>{' '}
+													<td className="border p-2 text-start break-words">{fileInfo.fileInfo.fileName}</td>
+													<td className="border p-2 text-start font-mono text-sm">
+														{fileInfo.fileUID || fileInfo.key || 'N/A'}
+													</td>
+													<td className="border p-1">
+														<div className="flex flex-col gap-1 min-w-32">
+															{/* Category checkboxes */}
+															{['Raw Data', 'Prepare Report', 'Calculation'].map((category) => (
+																<label key={category} className="flex items-center gap-1 text-xs">
+																	<input
+																		type="checkbox"
+																		checked={(fileInfo.fileCategory || []).includes(category.replace(' ', ''))}
+																		onChange={(e) =>
+																			handleCategoryCheckboxChange(index, category.replace(' ', ''), e.target.checked)
+																		}
+																		className="w-3 h-3"
+																	/>
+																	<span>{category}</span>
+																</label>
+															))}
+														</div>
+													</td>
+													<td className="border p-1">
+														<select
+															value={fileInfo.createdbyUID || ''}
+															onChange={(e) => handleUploadedFileEdit(index, 'createdbyUID', e.target.value)}
+															className="w-full p-1 text-xs border rounded bg-white"
+														>
+															<option value="">-- Chọn loại máy --</option>
+															<option value="HPLC01">HPLC01</option>
+															<option value="GCMS01">GCMS01</option>
+															<option value="AAS01">AAS01</option>
+															<option value="AAS02">AAS02</option>
+														</select>
+													</td>{' '}
+													<td className="border p-1">
+														<input
+															type="text"
+															value={fileInfo.uploadDescription || ''}
+															onChange={(e) => handleUploadedFileEdit(index, 'uploadDescription', e.target.value)}
+															className="w-full p-1 text-xs border rounded bg-white"
+															placeholder="Nhập mô tả..."
+														/>
+													</td>
+													<td className="border p-2 text-center">
+														<button
+															onClick={() => handleUploadedFileDelete(index)}
+															className="text-red-500 hover:text-red-700 p-1"
+															title="Xóa file"
+														>
+															<FaTrashAlt size={14} />
+														</button>
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							</div>
+						)}
 						<div className="flex justify-end gap-3">
+							{' '}
 							<button
 								className="px-4 py-2 border-2 border-gray-600 text-gray-600 rounded hover:bg-gray-400"
 								onClick={() => {
 									setShowGlobalBulkEditForm(false);
 									setBulkEditValues({});
 									setBulkEditCell({ column: null, receiptId: null });
+									setUploadedFiles([]); // Clear uploaded files when canceling
 								}}
 							>
 								Hủy bỏ
-							</button>							<button
+							</button>{' '}
+							<button
 								className="px-4 py-2 border-2 border-blue-600 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center"
 								onClick={() => {
 									handleBulkUpdate(selectedCheckboxesV3);
 									setFiles([]); // Clear files after confirmation
+									setUploadedFiles([]); // Clear uploaded files after confirmation
 									setShowGlobalBulkEditForm(false);
 								}}
 							>

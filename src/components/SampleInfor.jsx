@@ -177,7 +177,63 @@ const SampleInfor = () => {
 		}
 	};
 
-	// Add a new function to handle saving individual field changes
+	// Add function to handle accreditation toggle
+	const handleAccreditationToggle = async (analysisId) => {
+		try {
+			// Find the analysis
+			const analysis = listAnalytes.find((item) => item.id === analysisId);
+			if (!analysis) return;
+
+			// Determine new accreditation value
+			const newAccreditation = !analysis.accreditation || analysis.accreditation.trim() === '' ? '107' : '';
+
+			// Update UI immediately
+			const updatedAnalytes = listAnalytes.map((item) => {
+				if (item.id === analysisId) {
+					return { ...item, accreditation: newAccreditation };
+				}
+				return item;
+			});
+			setListAnalytes(updatedAnalytes);
+
+			// Create minimal update object
+			const updateData = {
+				id: analysis.id,
+				sample_id: analysis.sample_id,
+				receipt_id: analysis.receipt_id,
+				accreditation: newAccreditation,
+				modified_by_uid: currentUser.identity_uid,
+			};
+
+			// Send the update to the server
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				analysis: updateData,
+			});
+
+			if (response.status === 200) {
+				showToast(newAccreditation ? 'Đã thêm chứng nhận' : 'Đã bỏ chứng nhận');
+			} else {
+				// Revert UI on error
+				setListAnalytes(listAnalytes);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi cập nhật chứng nhận',
+				});
+			}
+		} catch (error) {
+			console.error('Error updating accreditation:', error);
+			// Revert UI on error
+			setListAnalytes(listAnalytes);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Đã xảy ra lỗi khi cập nhật chứng nhận',
+			});
+		}
+	};
+
+	// Add function to handle saving individual field changes
 	const handleSaveField = async (field, value) => {
 		try {
 			// Create a copy of the sample with just the updated field
@@ -211,22 +267,26 @@ const SampleInfor = () => {
 				updatedSample.sample_information = [...customerInfo, ...updatedReceiptInfo];
 				setReceiptInfo(updatedReceiptInfo);
 			}
-
 			if (field === 'matrix') {
-				// Update the "Nền mẫu / matrix." field in receiptInfo
+				// Update the "Nền mẫu / matrix." field in receiptInfo only locally
 				const updatedReceiptInfo = receiptInfo.map((item) => {
 					if (item.fname.includes('Nền mẫu') || item.fname.includes('matrix')) {
 						return { ...item, fvalue: value };
 					}
 					return item;
 				});
-				updatedSample.sample_information = [...customerInfo, ...updatedReceiptInfo];
 				setReceiptInfo(updatedReceiptInfo);
-			}
-
-			// Send the update to the server
+				// Don't include sample_information in matrix updates
+			} // Send the update to the server using the required structure
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
-				sample: updatedSample,
+				sample: {
+					id: sample.id,
+					sample_uid: sample.sample_uid,
+					[field]: value,
+					modified_by_uid: currentUser.identity_uid,
+					...(field === 'sample_name' && { sample_information: [...customerInfo, ...receiptInfo] }),
+					...(field === 'sample_description' && { sample_information: [...customerInfo, ...receiptInfo] }),
+				},
 			});
 
 			if (response.status === 200) {
@@ -969,12 +1029,12 @@ const SampleInfor = () => {
 		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
 		{ fname: 'Nơi sản xuất / mfr.', favlue: '' },
 	];
-
 	let defaultReceiptFields = [
 		{
 			fname: 'Ngày tiếp nhận / receipt date.',
 			fvalue: formatDate(receiptFull?.receipt_date) || '',
 		},
+		{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
 		{
 			fname: 'Mô tả / desc.',
 			fvalue: currentSample?.sample_description || '',
@@ -1272,7 +1332,11 @@ const SampleInfor = () => {
 
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
 				sample: {
-					...sample,
+					id: sample.id,
+					sample_uid: sample.sample_uid,
+					sample_name: sample.sample_name,
+					sample_description: sample.sample_description,
+					matrix: sample.matrix,
 					sample_information: combinedInfo,
 					modified_by_uid: currentUser.identity_uid,
 				},
@@ -1362,7 +1426,6 @@ const SampleInfor = () => {
 		setNewField({ fname: '', fvalue: '' });
 		setIsReportChanged(true); // Mark report as changed
 	};
-
 	const handleCustomerFieldChange = (index, field, value) => {
 		const updatedCustomerInfo = [...customerInfo];
 		if (field === 'fname') {
@@ -1380,15 +1443,8 @@ const SampleInfor = () => {
 		setCustomerInfo(updatedCustomerInfo);
 		setIsReportChanged(true); // Mark report as changed
 
-		// If changing value of "Tên mẫu thử / name", update the main sample name field
-		if (
-			field === 'fvalue' &&
-			(updatedCustomerInfo[index].fname.includes('Tên mẫu thử') || updatedCustomerInfo[index].fname.includes('name'))
-		) {
-			setSample((prevSample) => ({ ...prevSample, sample_name: value }));
-		}
+		// We don't update sample_name when changing sample_information fields
 	};
-
 	const handleReceiptFieldChange = (index, field, value) => {
 		const updatedReceiptInfo = [...receiptInfo];
 		if (field === 'fname') {
@@ -1406,24 +1462,7 @@ const SampleInfor = () => {
 		setReceiptInfo(updatedReceiptInfo);
 		setIsReportChanged(true); // Mark report as changed
 
-		// If changing value of "Mô tả / desc", update the main sample description field
-		if (
-			field === 'fvalue' &&
-			(updatedReceiptInfo[index].fname.includes('Mô tả') || updatedReceiptInfo[index].fname.includes('desc'))
-		) {
-			setSample((prevSample) => ({
-				...prevSample,
-				sample_description: value,
-			}));
-		}
-
-		// If changing value of "Nền mẫu / matrix", update the main matrix field
-		if (
-			field === 'fvalue' &&
-			(updatedReceiptInfo[index].fname.includes('Nền mẫu') || updatedReceiptInfo[index].fname.includes('matrix'))
-		) {
-			setSample((prevSample) => ({ ...prevSample, matrix: value }));
-		}
+		// We don't update sample_description or matrix when changing sample_information fields
 	};
 
 	const handleDeleteCustomerField = (index) => {
@@ -1472,11 +1511,12 @@ const SampleInfor = () => {
 
 		// Combine both arrays into a single sample_information array
 		const combinedInfo = [...updatedCustomerInfo, ...updatedReceiptInfo];
-
 		try {
+			// Only update the sample_information without changing sample_name and sample_description
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
 				sample: {
-					...sample,
+					id: sample.id,
+					sample_uid: sample.sample_uid,
 					sample_information: combinedInfo,
 					modified_by_uid: currentUser.identity_uid,
 				},
@@ -1547,7 +1587,8 @@ const SampleInfor = () => {
 
 	// Add a helper function to check if user is a technician
 	const isTechnician = () => {
-		return currentUser?.role?.staff_technician;
+		// Admin users bypass technician restrictions
+		return currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin;
 	};
 
 	// Add a helper function to check if user is an admin
@@ -2380,6 +2421,7 @@ const SampleInfor = () => {
 		try {
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/delete/sample', {
 				id: deleteItemId,
+				sample_uid: sample.sample_uid,
 				modified_by_uid: currentUser.identity_uid,
 			});
 
@@ -3824,8 +3866,17 @@ const SampleInfor = () => {
 							)}
 							{listAnalytes?.map((order) => (
 								<tr key={order.id} className="border">
+									{' '}
 									<td className="p-1 border relative align-top">
 										<div className="relative w-full">
+											{order.accreditation && (
+												<div
+													className="absolute right-0.5 top-0.5 z-10 bg-cyan-600 text-white text-xs px-1 rounded cursor-default"
+													title="Accreditation"
+												>
+													{order.accreditation}
+												</div>
+											)}
 											<input
 												type="text"
 												className={`w-full font-normal bg-white border-none p-1 hover:cursor-pointer hover:outline hover:outline-1 rounded hover:outline-indigo-500 text-left ${
@@ -3833,6 +3884,7 @@ const SampleInfor = () => {
 												}`}
 												value={order.parameter_uid || ''}
 												readOnly
+												onDoubleClick={() => handleAccreditationToggle(order.id)}
 											/>
 											{order.reviewed_by && (
 												<div className="absolute right-1 top-1" title="Đã được kiểm tra">

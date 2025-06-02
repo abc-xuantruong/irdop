@@ -48,6 +48,7 @@ const ReceiptInfor = ({ receipt }) => {
 		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
 		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
 		{ fname: 'Nơi sản / mfr.', fvalue: '' },
+		{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
 	]);
 	const [checkConfirm, setCheckConfirm] = useState(false);
 	const defaultFields = sampleInformation;
@@ -821,6 +822,7 @@ const ReceiptInfor = ({ receipt }) => {
 		try {
 			const response = await apiPost('https://black.irdop.org/khsi19me/db/delete/receipt', {
 				id: currentReceipt.id,
+				receipt_uid: currentReceipt.receipt_uid,
 				modified_by_uid: currentUser.identity_uid,
 			});
 			if (response.status === 200) {
@@ -1289,6 +1291,7 @@ const ReceiptInfor = ({ receipt }) => {
 			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', {
 				receipt: {
 					id: currentReceipt.id,
+					receipt_uid: currentReceipt.receipt_uid,
 					pay_status: newPayStatus,
 					modified_by_uid: currentUser.identity_uid,
 				},
@@ -1345,7 +1348,6 @@ const ReceiptInfor = ({ receipt }) => {
 			</div>
 		</div>
 	);
-
 	// Function to handle API update for receipt fields
 	const handleReceiptApiUpdate = async (field, value) => {
 		try {
@@ -1358,6 +1360,7 @@ const ReceiptInfor = ({ receipt }) => {
 			const payload = {
 				receipt: {
 					id: currentReceipt.id,
+					receipt_uid: currentReceipt.receipt_uid,
 					[field]: adjustedValue,
 					modified_by_uid: currentUser.identity_uid,
 				},
@@ -1388,7 +1391,6 @@ const ReceiptInfor = ({ receipt }) => {
 			return false;
 		}
 	};
-
 	// Handle client information update
 	const handleClientApiUpdate = async (field, value) => {
 		try {
@@ -1404,6 +1406,7 @@ const ReceiptInfor = ({ receipt }) => {
 			const payload = {
 				receipt: {
 					id: currentReceipt.id,
+					receipt_uid: currentReceipt.receipt_uid,
 					client: updatedClient,
 					modified_by_uid: currentUser.identity_uid,
 				},
@@ -1434,7 +1437,6 @@ const ReceiptInfor = ({ receipt }) => {
 			return false;
 		}
 	};
-
 	// Handle contact information update
 	const handleContactApiUpdate = async (field, value) => {
 		try {
@@ -1451,6 +1453,7 @@ const ReceiptInfor = ({ receipt }) => {
 			const payload = {
 				receipt: {
 					id: currentReceipt.id,
+					receipt_uid: currentReceipt.receipt_uid,
 					contact: updatedContact,
 					modified_by_uid: currentUser.identity_uid,
 				},
@@ -2197,9 +2200,8 @@ const ReceiptInfor = ({ receipt }) => {
 	}
 
 	const isTechnician = () => {
-		// Implement your logic to determine if the current user is a technician
-		// For example, you might check the user's role or permissions
-		return currentUser?.role?.staff_technician;
+		// Admin users bypass technician restrictions
+		return currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin;
 	};
 
 	// Add this function before the return statement, near other helper functions

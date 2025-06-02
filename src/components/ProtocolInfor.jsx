@@ -9,18 +9,43 @@ import { RiEdit2Line } from 'react-icons/ri';
 import { GiConfirmed, GiCancel, GiTrashCan, GiSave } from 'react-icons/gi';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { FaUpload } from 'react-icons/fa'; // Added for file upload icon
+import { FaUpload, FaEye, FaDownload } from 'react-icons/fa'; // Added for file upload icon
 import { FaPlus, FaTrash } from 'react-icons/fa';
 import { is } from 'date-fns/locale';
+
+// Utility function to clean objects before API calls
+const cleanObject = (obj) => {
+	if (!obj || typeof obj !== 'object') return obj;
+
+	const cleanedObj = { ...obj };
+
+	Object.keys(cleanedObj).forEach((key) => {
+		const value = cleanedObj[key];
+
+		// Check for empty strings, null, undefined
+		if (value === '' || value === null || value === undefined) {
+			delete cleanedObj[key];
+		} else if (Array.isArray(value) && value.length === 0) {
+			// Remove empty arrays
+			delete cleanedObj[key];
+		} else if (typeof value === 'object' && !Array.isArray(value)) {
+			// Recursively clean nested objects
+			const cleaned = cleanObject(value);
+			if (Object.keys(cleaned).length === 0) {
+				delete cleanedObj[key];
+			} else {
+				cleanedObj[key] = cleaned;
+			}
+		}
+	});
+
+	return cleanedObj;
+};
 
 const ProtocolInfor = () => {
 	const { setCurrentTitlePage, currentUser, technicians } = useContext(GlobalContext);
 	const [protocols, setProtocols] = useState([]);
 	const [source, setSource] = useState([]);
-	const [isUploadBoxVisible, setIsUploadBoxVisible] = useState(false);
-	const [files, setFiles] = useState([]);
-	const [isLoading, setIsLoading] = useState(false);
-	const [receivedData, setReceivedData] = useState(null);
 	const [editingRow, setEditingRow] = useState(null);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [instance, setInstance] = useState(null);
@@ -43,6 +68,9 @@ const ProtocolInfor = () => {
 	const [isEditing, setIsEditing] = useState(false);
 	const [hoveredProtocolId, setHoveredProtocolId] = useState(null);
 	const [fileUploading, setFileUploading] = useState({ type: null, id: null }); // To track which file is being uploaded
+	const [pendingFiles, setPendingFiles] = useState({}); // Store temporarily uploaded files
+	const [receivedData, setReceivedData] = useState(null);
+	const [isLoading, setIsLoading] = useState(false);
 	let isFetch = false;
 
 	const technician = (param) => {
@@ -147,7 +175,6 @@ const ProtocolInfor = () => {
 			console.error('Error fetching equipment options:', error);
 		}
 	};
-
 	const fetchProtocols = async () => {
 		try {
 			const response = await apiGet('https://black.irdop.org/el9k24zah/db/get/protocol');
@@ -159,23 +186,24 @@ const ProtocolInfor = () => {
 						if (typeof protocol.equipment === 'string') {
 							// Try to parse string as JSON
 							const parsedEquipment = JSON.parse(protocol.equipment);
-							// Check if it's already in array of objects format
+							// If it's already an array, use it directly
 							if (Array.isArray(parsedEquipment)) {
-								if (parsedEquipment.length > 0 && typeof parsedEquipment[0] === 'object') {
-									equipment = parsedEquipment;
-								} else {
-									// Convert string array to array of objects
-									equipment = parsedEquipment.map((eq) => ({ name: eq }));
-								}
+								// Handle both formats - objects with name property or plain strings
+								equipment = parsedEquipment.map((eq) => {
+									if (typeof eq === 'object' && eq.name) {
+										return eq.name; // Extract just the name
+									}
+									return eq; // Already a string
+								});
 							}
 						} else if (Array.isArray(protocol.equipment)) {
-							// Check if array elements are objects or strings
-							if (protocol.equipment.length > 0 && typeof protocol.equipment[0] === 'object') {
-								equipment = protocol.equipment;
-							} else {
-								// Convert string array to array of objects
-								equipment = protocol.equipment.map((eq) => ({ name: eq }));
-							}
+							// Convert all elements to strings
+							equipment = protocol.equipment.map((eq) => {
+								if (typeof eq === 'object' && eq.name) {
+									return eq.name; // Extract just the name
+								}
+								return eq; // Already a string
+							});
 						}
 					} catch (e) {
 						console.error('Error parsing equipment:', e);
@@ -204,8 +232,7 @@ const ProtocolInfor = () => {
 		return new Date(dateString).toLocaleDateString('en-GB', options);
 	};
 
-	/** Note: Handle */
-	const handleSaveClick = async (id) => {
+	/** Note: Handle */ const handleSaveClick = async (id) => {
 		const updatedProtocol = protocols.find((protocol) => protocol.id === id);
 
 		// Trim protocol_source to remove extra whitespace
@@ -213,9 +240,63 @@ const ProtocolInfor = () => {
 			updatedProtocol.protocol_source = updatedProtocol.protocol_source.trim();
 		}
 
+		// Check for pending file uploads and complete them
+		const protocolKey = `${id}_protocol`;
+		const reportKey = `${id}_report`;
 		try {
+			// Complete pending protocol file upload if exists
+			if (pendingFiles[protocolKey]) {
+				const uploadCompletePayload = {
+					fileInfo: pendingFiles[protocolKey].fileInfo,
+					...pendingFiles[protocolKey].uploadInfo,
+					fileCategory: ['Protocol'],
+				};
+
+				const completeResponse = await apiPost(
+					'https://red.irdop.org/v1/file/uplink/upload_complete',
+					uploadCompletePayload,
+				);				if (completeResponse.status === 200) {
+					updatedProtocol.protocol_file_id = {
+						objectName: completeResponse.data.objectName,
+						fileName: completeResponse.data.fileInfo.fileName,
+					};
+				}
+
+				// Remove from pending files
+				const newPendingFiles = { ...pendingFiles };
+				delete newPendingFiles[protocolKey];
+				setPendingFiles(newPendingFiles);
+			}
+
+			// Complete pending report file upload if exists
+			if (pendingFiles[reportKey]) {
+				const uploadCompletePayload = {
+					fileInfo: pendingFiles[reportKey].fileInfo,
+					...pendingFiles[reportKey].uploadInfo,
+					fileCategory: ['MinutesTemplate'],
+				};
+
+				const completeResponse = await apiPost(
+					'https://red.irdop.org/v1/file/uplink/upload_complete',
+					uploadCompletePayload,
+				);
+
+				if (completeResponse.status === 200) {
+					updatedProtocol.report_file_id = {
+						objectName: completeResponse.data.objectName,
+						fileName: completeResponse.data.fileInfo.fileName,
+					};
+				}
+
+				// Remove from pending files
+				const newPendingFiles = { ...pendingFiles };
+				delete newPendingFiles[reportKey];
+				setPendingFiles(newPendingFiles);
+			}
+
+			const cleanedProtocol = cleanObject(updatedProtocol);
 			const response = await apiPost('https://black.irdop.org/el9k24zah/db/update/protocol', {
-				protocol: updatedProtocol,
+				protocol: cleanedProtocol,
 			});
 			setEditingRow(null);
 			if (response.status === 200) {
@@ -228,10 +309,9 @@ const ProtocolInfor = () => {
 			console.error('Error saving protocol:', error);
 		}
 	};
-
 	const handleSaveParameterClick = async (protocolId, paramIndex) => {
 		const updatedProtocol = protocols.find((protocol) => protocol.id === protocolId);
-		const updatedParameter = updatedProtocol.parameters[paramIndex];
+		const updatedParameter = { ...updatedProtocol.parameters[paramIndex] };
 
 		if (Number.isNaN(parseInt(updatedParameter.tat_expected))) {
 			delete updatedParameter.tat_expected;
@@ -240,10 +320,11 @@ const ProtocolInfor = () => {
 			updatedParameter.tat_expected = `${days} ${days > 1 ? 'days' : 'day'}`;
 		}
 		try {
-			const response = updatedParameter.id
-				? await apiPost('https://black.irdop.org/ha8i0uw2/db/update/parameter', { parameter: updatedParameter })
+			const cleanedParameter = cleanObject(updatedParameter);
+			const response = cleanedParameter.id
+				? await apiPost('https://black.irdop.org/ha8i0uw2/db/update/parameter', { parameter: cleanedParameter })
 				: await apiPost('https://black.irdop.org/ha8i0uw2/db/insert/bulk/parameter', {
-						parameters: [updatedParameter],
+						parameters: [cleanedParameter],
 				  });
 			if (response.status === 200) {
 				toast.success('Parameter saved successfully');
@@ -305,22 +386,19 @@ const ProtocolInfor = () => {
 		});
 		setProtocols(updatedProtocols);
 	};
-
 	const handleEquipmentChange = (id, index, selectedEquipment) => {
 		const updatedProtocols = protocols.map((protocol) => {
 			if (protocol.id === id) {
 				const updatedEquipment = [...(protocol.equipment || [])];
 
 				if (selectedEquipment) {
-					// Create an equipment object with name property
-					const equipmentObject = { name: selectedEquipment };
-
+					// Store as plain string, not object
 					// If equipment already exists at this index, replace it
 					if (index < updatedEquipment.length) {
-						updatedEquipment[index] = equipmentObject;
+						updatedEquipment[index] = selectedEquipment;
 					} else {
 						// Otherwise add the new equipment
-						updatedEquipment.push(equipmentObject);
+						updatedEquipment.push(selectedEquipment);
 					}
 				} else {
 					// If empty selection and not the last equipment, remove this entry
@@ -479,19 +557,19 @@ const ProtocolInfor = () => {
 		setReceivedData(null);
 		setIsLoading(false);
 	};
-
 	const handleConfirmReceivedData = async () => {
 		if (!receivedData) {
 			toast.error('No data received');
 			return;
 		}
-		const protocol = receivedData;
-		let parameters = receivedData.parameters;
+		const protocol = { ...receivedData };
+		let parameters = [...receivedData.parameters];
 		delete protocol.parameters;
 		// Handle the confirmation of received data
 		try {
+			const cleanedProtocol = cleanObject(protocol);
 			const protocolResponse = await apiPost('https://black.irdop.org/el9k24zah/db/insert/protocol', {
-				protocol: protocol,
+				protocol: cleanedProtocol,
 			});
 
 			const updatedParameters = parameters.map((param) => ({
@@ -500,8 +578,7 @@ const ProtocolInfor = () => {
 				protocol_code: receivedData.protocol_code,
 				matrix: param.matrix === 'Khác' ? customMatrix[param.parameter_name] : param.matrix,
 			}));
-
-			parameters = updatedParameters;
+			parameters = updatedParameters.map((param) => cleanObject(param));
 			const parameterResponse = await apiPost('https://black.irdop.org/ha8i0uw2/db/insert/bulk/parameter', {
 				parameters: parameters,
 			});
@@ -577,20 +654,17 @@ const ProtocolInfor = () => {
 	const handleNewProtocolChange = (field, value) => {
 		setNewProtocol({ ...newProtocol, [field]: value });
 	};
-
 	const handleNewProtocolEquipmentChange = (index, selectedEquipment) => {
 		const updatedEquipment = [...(newProtocol.equipment || [])];
 
 		if (selectedEquipment) {
-			// Create equipment object with name property
-			const equipmentObject = { name: selectedEquipment };
-
+			// Store equipment as string directly
 			// If equipment already exists at this index, replace it
 			if (index < updatedEquipment.length) {
-				updatedEquipment[index] = equipmentObject;
+				updatedEquipment[index] = selectedEquipment;
 			} else {
 				// Otherwise add the new equipment
-				updatedEquipment.push(equipmentObject);
+				updatedEquipment.push(selectedEquipment);
 			}
 		} else {
 			// If empty selection and not the last equipment, remove this entry
@@ -610,16 +684,57 @@ const ProtocolInfor = () => {
 		const updatedEquipment = [...(newProtocol.equipment || [])];
 		updatedEquipment.splice(index, 1);
 		setNewProtocol({ ...newProtocol, equipment: updatedEquipment });
-	};
-
-	const handleSaveNewProtocol = async () => {
+	};	const handleSaveNewProtocol = async () => {
 		if (!newProtocol.protocol_name || !newProtocol.protocol_code) {
 			toast.error('Các trường Tên phương pháp, Mã phương pháp là bắt buộc');
 			return;
 		}
 		try {
+			// Prepare the protocol object for saving
+			let protocolToSave = { ...newProtocol };
+
+			// Complete file uploads if they exist
+			if (newProtocol.protocol_file_id && typeof newProtocol.protocol_file_id === 'object' && newProtocol.protocol_file_id.uploadInfo) {
+				const uploadCompletePayload = {
+					fileInfo: newProtocol.protocol_file_id.fileInfo,
+					...newProtocol.protocol_file_id.uploadInfo,
+					fileCategory: ['Protocol'],
+				};
+
+				const completeResponse = await apiPost(
+					'https://red.irdop.org/v1/file/uplink/upload_complete',
+					uploadCompletePayload,
+				);				if (completeResponse.status === 200) {
+					protocolToSave.protocol_file_id = {
+						objectName: completeResponse.data.objectName,
+						fileName: completeResponse.data.fileInfo.fileName,
+					};
+				}
+			}
+
+			if (newProtocol.report_file_id && typeof newProtocol.report_file_id === 'object' && newProtocol.report_file_id.uploadInfo) {
+				const uploadCompletePayload = {
+					fileInfo: newProtocol.report_file_id.fileInfo,
+					...newProtocol.report_file_id.uploadInfo,
+					fileCategory: ['MinutesTemplate'],
+				};
+
+				const completeResponse = await apiPost(
+					'https://red.irdop.org/v1/file/uplink/upload_complete',
+					uploadCompletePayload,
+				);
+
+				if (completeResponse.status === 200) {
+					protocolToSave.report_file_id = {
+						objectName: completeResponse.data.objectName,
+						fileName: completeResponse.data.fileInfo.fileName,
+					};
+				}
+			}
+
+			const cleanedProtocol = cleanObject(protocolToSave);
 			const response = await apiPost('https://black.irdop.org/el9k24zah/db/insert/protocol', {
-				protocol: newProtocol,
+				protocol: cleanedProtocol,
 			});
 			if (response.status === 200) {
 				toast.success('New protocol added successfully');
@@ -643,11 +758,6 @@ const ProtocolInfor = () => {
 			console.error('Error adding new protocol:', error);
 			toast.error('Failed to add new protocol');
 		}
-	};
-
-	const handleAddNewProtocolClick = () => {
-		setIsUploadBoxVisible(false);
-		setReceivedData(newProtocol);
 	};
 
 	const handleAddParameterClick = (protocolId) => {
@@ -739,6 +849,223 @@ const ProtocolInfor = () => {
 	const handleMouseLeave = () => {
 		setHoveredProtocolId(null);
 	};
+	// Handle file view
+	const handleFileView = async (fileInfo) => {
+		try {
+			let objectName = null;
+
+			// Extract objectName from different formats
+			if (typeof fileInfo === 'string') {
+				try {
+					const parsed = JSON.parse(fileInfo);
+					objectName = parsed.objectName;
+				} catch (e) {
+					// If not valid JSON, treat as objectName directly
+					objectName = fileInfo;
+				}
+			} else if (typeof fileInfo === 'object' && fileInfo.objectName) {
+				objectName = fileInfo.objectName;
+			}
+
+			if (!objectName) {
+				toast.error('Không tìm thấy thông tin file để xem', {
+					autoClose: 1000,
+				});
+				return;
+			}
+
+			// Get the download URL from the API
+			const linkResponse = await apiPost('https://red.irdop.org/v1/file/downlink', {
+				objectName: objectName,
+			});
+
+			if (linkResponse.status !== 200) {
+				console.error('Failed to get view link:', linkResponse.data?.message || 'Unknown error');
+				toast.error(`Lỗi khi lấy link xem: ${linkResponse.data?.message || 'Unknown error'}`, {
+					autoClose: 1000,
+				});
+				return;
+			}
+
+			// Open the file URL in a new tab
+			window.open(linkResponse.data.url, '_blank');
+
+			toast.success('Đã mở file trong tab mới', {
+				autoClose: 1000,
+			});
+		} catch (error) {
+			console.error('Error viewing file:', error);
+			toast.error('Lỗi kết nối khi xem file', {
+				autoClose: 1000,
+			});
+		}
+	};
+
+	// Handle file download
+	const handleFileDownload = async (fileInfo) => {
+		try {
+			let objectName = null;
+			let fileName = 'downloaded-file';
+
+			// Extract objectName and fileName from different formats
+			if (typeof fileInfo === 'string') {
+				try {
+					const parsed = JSON.parse(fileInfo);
+					objectName = parsed.objectName;
+					fileName = parsed.fileName || fileName;
+				} catch (e) {
+					// If not valid JSON, treat as objectName directly
+					objectName = fileInfo;
+				}
+			} else if (typeof fileInfo === 'object' && fileInfo.objectName) {
+				objectName = fileInfo.objectName;
+				fileName = fileInfo.fileName || fileName;
+			}
+
+			if (!objectName) {
+				toast.error('Không tìm thấy thông tin file để tải xuống', {
+					autoClose: 1000,
+				});
+				return;
+			}
+
+			// First get the download URL from the API
+			const linkResponse = await apiPost('https://red.irdop.org/v1/file/downlink', {
+				objectName: objectName,
+			});
+
+			if (linkResponse.status !== 200) {
+				console.error('Failed to get download link:', linkResponse.data?.message || 'Unknown error');
+				toast.error(`Lỗi khi lấy link tải: ${linkResponse.data?.message || 'Unknown error'}`, {
+					autoClose: 1000,
+				});
+				return;
+			}
+
+			// Using fetch function with correct headers and responseType
+			const response = await fetch(linkResponse.data.url, {
+				method: 'GET',
+				headers: {},
+			});
+
+			if (response.ok) {
+				// Get the blob directly from the response
+				const blob = await response.blob();
+
+				// Create a new blob with explicit type to ensure correct handling
+				const fileBlob = new Blob([blob], { type: 'application/octet-stream' });
+
+				// Create a URL for the blob
+				const url = window.URL.createObjectURL(fileBlob);
+
+				// For IE/Edge browsers
+				if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+					window.navigator.msSaveOrOpenBlob(fileBlob, fileName);
+				} else {
+					// For modern browsers
+					const link = document.createElement('a');
+					link.href = url;
+					link.setAttribute('download', fileName);
+					link.style.display = 'none';
+
+					// Append to body, click and remove
+					document.body.appendChild(link);
+					link.click();
+
+					// Clean up after a short delay to ensure download starts
+					setTimeout(() => {
+						document.body.removeChild(link);
+						window.URL.revokeObjectURL(url);
+					}, 200);
+				}
+
+				toast.success('Tải file thành công', {
+					autoClose: 1000,
+				});
+			} else {
+				console.error('Failed to download file:', response.statusText);
+				toast.error(`Lỗi khi tải file: ${response.statusText}`, {
+					autoClose: 1000,
+				});
+			}
+		} catch (error) {
+			console.error('Error downloading file:', error);
+			toast.error('Lỗi kết nối khi tải file', {
+				autoClose: 1000,
+			});
+		}
+	};
+
+	// Handle file upload for new protocol
+	const handleNewProtocolFileChange = async (event, fileType) => {
+		const file = event.target.files[0];
+		if (!file) return;
+
+		const fileExtension = file.name.split('.').pop().toLowerCase();
+		const validExtensions = ['pdf', 'xlsx', 'csv', 'docx', 'doc'];
+
+		if (!validExtensions.includes(fileExtension)) {
+			toast.error('Chỉ chấp nhận các file .pdf, .xlsx, .csv, .docx, .doc');
+			return;
+		}
+
+		try {
+			// Step 1: Get upload link from red.irdop.org
+			const linkResponse = await apiPost('https://red.irdop.org/v1/file/uplink/SOP/protocol');
+
+			if (linkResponse.status !== 200) {
+				throw new Error(`Failed to get upload link: ${linkResponse.data?.message || 'Unknown error'}`);
+			}
+
+			const uploadInfo = linkResponse.data;
+
+			if (!uploadInfo || !uploadInfo.url) {
+				throw new Error('Không nhận được URL upload từ API');
+			}
+
+			// Step 2: Convert file to buffer and upload to S3
+			const fileBuffer = await file.arrayBuffer();
+
+			const uploadResponse = await axios.put(uploadInfo.url, fileBuffer, {
+				headers: {
+					'Content-Type': file.type || 'application/octet-stream',
+				},
+			});
+
+			if (uploadResponse.status !== 200) {
+				throw new Error(`Failed to upload file: ${uploadResponse.data?.message || 'Unknown error'}`);
+			}			// Step 3: Store file info in newProtocol for completion later
+			const fileInfo = {
+				fileName: file.name,
+				fileSize: file.size,
+				fileType: file.type,
+			};
+
+			// Store upload info for completion when user clicks save
+			const fileUploadData = {
+				fileInfo: fileInfo,
+				uploadInfo: uploadInfo,
+			};
+
+			// Update the newProtocol state with the upload data
+			if (fileType === 'protocol') {
+				setNewProtocol((prevState) => ({
+					...prevState,
+					protocol_file_id: fileUploadData,
+				}));
+			} else if (fileType === 'report') {
+				setNewProtocol((prevState) => ({
+					...prevState,
+					report_file_id: fileUploadData,
+				}));
+			}
+
+			toast.success(`File ${file.name} đã được tải lên. Nhấn 'Xác nhận' để lưu.`);
+		} catch (error) {
+			console.error('Error uploading file:', error);
+			toast.error(`Có lỗi khi tải file lên: ${error.message}`);
+		}
+	};
 
 	const renderProtocolDetails = (type) => {
 		if (!receivedData) return null;
@@ -749,13 +1076,13 @@ const ProtocolInfor = () => {
 		const handleEditClick = () => {
 			setIsEditing(true);
 		};
-
 		const handleSaveClick = async () => {
 			const protocol = receivedData;
 			try {
+				const cleanedProtocol = cleanObject(protocol);
 				const protocolResponse = protocol.id
-					? await apiPost('https://black.irdop.org/el9k24zah/db/update/protocol', { protocol: protocol })
-					: await apiPost('https://black.irdop.org/el9k24zah/db/insert/protocol', { protocol: protocol });
+					? await apiPost('https://black.irdop.org/el9k24zah/db/update/protocol', { protocol: cleanedProtocol })
+					: await apiPost('https://black.irdop.org/el9k24zah/db/insert/protocol', { protocol: cleanedProtocol });
 
 				const response = await apiGet('https://black.irdop.org/el9k24zah/db/get/protocol');
 				const data = response.data;
@@ -859,14 +1186,15 @@ const ProtocolInfor = () => {
 										<div className="flex flex-col gap-2 w-full">
 											{(receivedData.equipment || []).map((item, idx) => (
 												<div key={idx} className="flex items-center gap-1">
+													{' '}
 													<select
 														className={`w-full border px-2 py-1 rounded bg-white ${
 															isViewMode && !isEditing ? 'border-none' : ''
 														}`}
-														value={typeof item === 'object' ? item.name : item}
+														value={typeof item === 'object' && item.name ? item.name : item}
 														onChange={(e) => {
 															const updatedEquipment = [...receivedData.equipment];
-															updatedEquipment[idx] = { name: e.target.value };
+															updatedEquipment[idx] = e.target.value; // Store as plain string
 															setReceivedData({ ...receivedData, equipment: updatedEquipment });
 														}}
 														disabled={isViewMode && !isEditing}
@@ -896,7 +1224,7 @@ const ProtocolInfor = () => {
 												<button
 													className="flex items-center justify-center bg-blue-100 border border-blue-300 px-2 py-1 rounded text-blue-600 text-sm"
 													onClick={() => {
-														const updatedEquipment = [...receivedData.equipment, { name: '' }];
+														const updatedEquipment = [...receivedData.equipment, '']; // Add empty string instead of object
 														setReceivedData({ ...receivedData, equipment: updatedEquipment });
 													}}
 												>
@@ -905,7 +1233,7 @@ const ProtocolInfor = () => {
 											)}
 										</div>
 									</td>
-								</tr>
+								</tr>{' '}
 								<tr className="border-b">
 									<td className="p-1 text-start font-semibold">File phương pháp ID:</td>
 									<td className="p-1 text-start flex items-center">
@@ -914,7 +1242,11 @@ const ProtocolInfor = () => {
 												isViewMode && !isEditing ? 'border-none' : ''
 											}`}
 											rows={1}
-											value={receivedData.protocol_file_id || ''}
+											value={
+												typeof receivedData.protocol_file_id === 'object'
+													? JSON.stringify(receivedData.protocol_file_id)
+													: receivedData.protocol_file_id || ''
+											}
 											onChange={(e) => setReceivedData({ ...receivedData, protocol_file_id: e.target.value })}
 											disabled={isViewMode && !isEditing}
 										/>
@@ -928,7 +1260,11 @@ const ProtocolInfor = () => {
 												isViewMode && !isEditing ? 'border-none' : ''
 											}`}
 											rows={1}
-											value={receivedData.report_file_id || ''}
+											value={
+												typeof receivedData.report_file_id === 'object'
+													? JSON.stringify(receivedData.report_file_id)
+													: receivedData.report_file_id || ''
+											}
 											onChange={(e) => setReceivedData({ ...receivedData, report_file_id: e.target.value })}
 											disabled={isViewMode && !isEditing}
 										/>
@@ -976,7 +1312,6 @@ const ProtocolInfor = () => {
 	const handleFileColumnClick = (protocol, fileType) => {
 		setFileUploading({ type: fileType, id: protocol.id });
 	};
-
 	const handleProtocolFileChange = async (event, protocol, fileType) => {
 		const file = event.target.files[0];
 		if (!file) return;
@@ -989,47 +1324,60 @@ const ProtocolInfor = () => {
 			return;
 		}
 
-		// Read the file
-		const reader = new FileReader();
-		reader.onload = async (e) => {
-			try {
-				const fileBase64 = e.target.result.split(',')[1];
-				const media = {
-					file_name: file.name,
-					file_mime: file.type,
-					file_buffer: fileBase64,
-				};
+		setFileUploading({ type: fileType, id: protocol.id });
 
-				// Upload the file
-				const response = await apiPost('https://black.irdop.org/upload_file', { media });
+		try {
+			// Step 1: Get upload link from red.irdop.org
+			const linkResponse = await apiPost('https://red.irdop.org/v1/file/uplink/SOP/protocol');
 
-				if (response.status === 200 && response.data) {
-					// Update the protocol with the file ID
-					const fileIdField = fileType === 'protocol' ? 'protocol_file_id' : 'report_file_id';
-					const updatedProtocol = { ...protocol, [fileIdField]: response.data.file_id };
-
-					// Save the updated protocol
-					const updateResponse = await apiPost('https://black.irdop.org/el9k24zah/db/update/protocol', {
-						protocol: updatedProtocol,
-					});
-
-					if (updateResponse.status === 200) {
-						toast.success(`File ${file.name} đã được tải lên thành công`);
-						fetchProtocols(); // Refresh data
-					} else {
-						toast.error('Có lỗi khi cập nhật thông tin file');
-					}
-				} else {
-					toast.error('Có lỗi khi tải file lên');
-				}
-			} catch (error) {
-				console.error('Error uploading file:', error);
-				toast.error('Có lỗi khi tải file lên');
-			} finally {
-				setFileUploading({ type: null, id: null });
+			if (linkResponse.status !== 200) {
+				throw new Error(`Failed to get upload link: ${linkResponse.data?.message || 'Unknown error'}`);
 			}
-		};
-		reader.readAsDataURL(file);
+
+			const uploadInfo = linkResponse.data;
+			console.log('Received upload info:', uploadInfo);
+
+			if (!uploadInfo || !uploadInfo.url) {
+				throw new Error('Không nhận được URL upload từ API');
+			}
+
+			// Step 2: Convert file to buffer and upload to S3
+			const fileBuffer = await file.arrayBuffer();
+
+			const uploadResponse = await axios.put(uploadInfo.url, fileBuffer, {
+				headers: {
+					'Content-Type': file.type || 'application/octet-stream',
+				},
+			});
+
+			if (uploadResponse.status !== 200) {
+				throw new Error(`Failed to upload file: ${uploadResponse.data?.message || 'Unknown error'}`);
+			}
+
+			// Step 3: Store pending file info (don't complete upload yet)
+			const fileKey = `${protocol.id}_${fileType}`;
+			const fileInfo = {
+				fileName: file.name,
+				fileSize: file.size,
+				fileType: file.type,
+			};
+
+			setPendingFiles((prev) => ({
+				...prev,
+				[fileKey]: {
+					fileInfo,
+					uploadInfo,
+					tempFileName: file.name,
+				},
+			}));
+
+			toast.success(`File ${file.name} đã được tải lên. Nhấn 'Xác nhận' để lưu.`);
+		} catch (error) {
+			console.error('Error uploading file:', error);
+			toast.error(`Có lỗi khi tải file lên: ${error.message}`);
+		} finally {
+			setFileUploading({ type: null, id: null });
+		}
 	};
 
 	const handleFileDrop = async (e, protocol, fileType) => {
@@ -1051,7 +1399,6 @@ const ProtocolInfor = () => {
 				files: [file],
 			},
 		};
-
 		handleProtocolFileChange(syntheticEvent, protocol, fileType);
 	};
 
@@ -1061,15 +1408,102 @@ const ProtocolInfor = () => {
 			return '';
 		}
 
+		// Normalize equipment items: could be strings or objects with name property
 		return equipment
 			.map((item) => {
-				// Handle both string and object formats
 				if (typeof item === 'object' && item.name) {
 					return item.name;
+				} else if (typeof item === 'string') {
+					return item;
 				}
-				return item;
+				return '';
 			})
+			.filter((item) => item) // Filter out empty items
 			.join(', ');
+	};
+	// Format file info for display
+	const formatFileDisplay = (fileInfo, protocolId, fileType, isEditing = false) => {
+		// Check if there's a pending file for this protocol and file type
+		const fileKey = `${protocolId}_${fileType}`;
+		const pendingFile = pendingFiles[fileKey];
+
+		if (pendingFile) {
+			return (
+				<div className="flex flex-col gap-1">
+					<div
+						className="text-xs text-green-600 font-medium break-words"
+						style={{ maxHeight: '2.5em', overflow: 'hidden' }}
+					>
+						{pendingFile.tempFileName}
+					</div>
+				</div>
+			);
+		}
+
+		// Check if fileInfo is empty, null, or doesn't have fileName
+		if (!fileInfo || (typeof fileInfo === 'object' && !fileInfo.fileName) || (typeof fileInfo === 'string' && fileInfo.trim() === '')) {
+			return (
+				<div className="flex flex-col gap-1">
+					<div className="text-xs text-gray-500">Chưa có file</div>
+				</div>
+			);
+		}
+
+		// Parse file info to get display name and check if file exists
+		let displayName = '';
+		let hasValidFile = false;
+
+		// If it's a string, try to parse as JSON
+		if (typeof fileInfo === 'string') {
+			try {
+				const parsed = JSON.parse(fileInfo);
+				displayName = parsed.fileName || 'Chưa có file';
+				hasValidFile = !!parsed.objectName;
+			} catch (e) {
+				// If not valid JSON, return the string itself or default message
+				displayName = fileInfo || 'Chưa có file';
+				hasValidFile = !!fileInfo;
+			}
+		} else if (typeof fileInfo === 'object' && fileInfo.fileName) {
+			// If it's already an object
+			displayName = fileInfo.fileName;
+			hasValidFile = !!fileInfo.objectName;
+		} else {
+			displayName = 'Chưa có file';
+			hasValidFile = false;
+		}
+
+		return (
+			<div className="flex flex-col gap-1">
+				<div className="text-xs break-words" style={{ maxHeight: '2.5em', overflow: 'hidden' }}>
+					{displayName}
+				</div>
+				{hasValidFile && !isEditing && (
+					<div className="flex gap-1 mt-1">
+						<button
+							className="text-blue-500 hover:text-blue-700 cursor-pointer p-1"
+							title="Xem"
+							onClick={(e) => {
+								e.stopPropagation();
+								handleFileView(fileInfo);
+							}}
+						>
+							<FaEye size={12} />
+						</button>
+						<button
+							className="text-green-500 hover:text-green-700 cursor-pointer p-1"
+							title="Tải xuống"
+							onClick={(e) => {
+								e.stopPropagation();
+								handleFileDownload(fileInfo);
+							}}
+						>
+							<FaDownload size={12} />
+						</button>
+					</div>
+				)}
+			</div>
+		);
 	};
 
 	return (
@@ -1079,55 +1513,14 @@ const ProtocolInfor = () => {
 			<div className={`w-full h-full mt-2 rounded-lg bg-white p-2 ${receivedData ? 'blur-sm' : ''}`}>
 				<div className="flex justify-between items-center">
 					<div className="relative"></div>
-					<h2 className="text-4xl text-primary font-semibold py-2">Danh sách phương pháp</h2>
-					<div className="relative z-10">
-						<button
-							className="bg-blue-500 text-white px-4 py-0 w-44 rounded-lg font-medium "
-							onClick={() => setIsUploadBoxVisible(!isUploadBoxVisible)}
-						>
-							Thêm mới
-						</button>
-						{isUploadBoxVisible && (
-							<div
-								className="w-96 border-dashed border-2 border-gray-400 rounded-lg p-4 mt-8 absolute top-0 right-0 z-10 bg-white"
-								onDrop={handleFileDrop}
-								onDragOver={(e) => e.preventDefault()}
+					<h2 className="text-4xl text-primary font-semibold py-2">Danh sách phương pháp</h2>{' '}					<div className="relative z-10">
+						{currentUser?.role?.staff_admin && (
+							<button
+								className="bg-blue-500 text-white px-4 py-0 w-44 rounded-lg font-medium "
+								onClick={() => setIsAddingNew(true)}
 							>
-								<input type="file" multiple className="hidden" id="fileInput" onChange={handleFileChange} />
-								<label htmlFor="fileInput" className="cursor-pointer text-blue-500">
-									Kéo thả file vào đây hoặc nhấn để chọn file <br></br>
-									<p className="text-sm text-red-500">(* .docx, .doc, .xlsx, .pdf)</p>
-								</label>
-								<div className="mt-4">
-									{files.map((file) => (
-										<div key={file.name} className="flex justify-between items-center border pl-2 w-full rounded-lg">
-											{/* Thêm lớp `break-words` hoặc `break-all` để nội dung xuống dòng */}
-											<span className="w-72 break-words text-start">{file.name}</span>
-
-											<button className="text-red-500 py-2 px-4" onClick={() => handleFileDelete(file.name)}>
-												X
-											</button>
-										</div>
-									))}
-								</div>
-								<div className="flex justify-end mt-8">
-									<button
-										className="bg-gray-500 text-white font-bold py-2 px-4 rounded mr-2"
-										onClick={handleCancelUpload}
-									>
-										Hủy bỏ
-									</button>
-									<button className="bg-blue-500 text-white font-bold py-2 px-4 rounded" onClick={handleConfirmUpload}>
-										Xác nhận
-									</button>
-									<button
-										className="bg-green-500 text-white font-bold py-2 px-4 rounded ml-2"
-										onClick={handleAddNewProtocolClick}
-									>
-										Nhập mới
-									</button>
-								</div>
-							</div>
+								Thêm mới
+							</button>
 						)}
 					</div>
 				</div>
@@ -1233,22 +1626,88 @@ const ProtocolInfor = () => {
 														</button>
 													)}
 											</div>
+										</td>{' '}
+										<td className="p-1 text-start">
+											<div className="flex flex-col gap-0.5 h-[70px]">
+												<div className="flex-1 flex items-center">
+													{newProtocol.protocol_file_id ? (
+														<div
+															className="text-xs text-green-600 font-medium break-words"
+															style={{ maxHeight: '2.5em', overflow: 'hidden' }}
+														>
+															{typeof newProtocol.protocol_file_id === 'object'
+																? newProtocol.protocol_file_id.fileName
+																: 'File đã tải'}
+														</div>
+													) : (
+														<div className="text-xs text-gray-500">Chưa có file</div>
+													)}
+												</div>
+												<div
+													className="w-full border-2 border-dashed border-blue-400 rounded flex flex-col items-center justify-center cursor-pointer bg-blue-50 py-1"
+													onClick={() => document.getElementById('new-protocol-file').click()}
+													onDragOver={(e) => e.preventDefault()}
+													onDrop={(e) => {
+														e.preventDefault();
+														const file = e.dataTransfer.files[0];
+														if (file) {
+															const syntheticEvent = { target: { files: [file] } };
+															handleNewProtocolFileChange(syntheticEvent, 'protocol');
+														}
+													}}
+												>
+													<input
+														type="file"
+														id="new-protocol-file"
+														className="hidden"
+														accept=".pdf,.xlsx,.csv,.docx,.doc"
+														onChange={(e) => handleNewProtocolFileChange(e, 'protocol')}
+													/>
+													<FaUpload className="text-blue-500 text-lg" />
+													<span className="text-xs text-blue-600">Tải file phương pháp</span>
+												</div>
+											</div>
 										</td>
 										<td className="p-1 text-start">
-											<input
-												type="text"
-												className="w-full border px-2 py-1 rounded bg-white"
-												value={newProtocol.protocol_file_id}
-												onChange={(e) => handleNewProtocolChange('protocol_file_id', e.target.value)}
-											/>
-										</td>
-										<td className="p-1 text-start">
-											<input
-												type="text"
-												className="w-full border px-2 py-1 rounded bg-white"
-												value={newProtocol.report_file_id}
-												onChange={(e) => handleNewProtocolChange('report_file_id', e.target.value)}
-											/>
+											<div className="flex flex-col gap-0.5 h-[70px]">
+												<div className="flex-1 flex items-center">
+													{newProtocol.report_file_id ? (
+														<div
+															className="text-xs text-green-600 font-medium break-words"
+															style={{ maxHeight: '2.5em', overflow: 'hidden' }}
+														>
+															{typeof newProtocol.report_file_id === 'object'
+																? newProtocol.report_file_id.fileName
+																: 'File đã tải'}
+														</div>
+													) : (
+														<div className="text-xs text-gray-500">Chưa có file</div>
+													)}
+												</div>
+												<div
+													className="w-full border-2 border-dashed border-blue-400 rounded flex flex-col items-center justify-center cursor-pointer bg-blue-50 py-1"
+													onClick={() => document.getElementById('new-report-file').click()}
+													onDragOver={(e) => e.preventDefault()}
+													onDrop={(e) => {
+														e.preventDefault();
+														const file = e.dataTransfer.files[0];
+														if (file) {
+															const syntheticEvent = { target: { files: [file] } };
+															handleNewProtocolFileChange(syntheticEvent, 'report');
+														}
+													}}
+												>
+													<input
+														type="file"
+														id="new-report-file"
+														className="hidden"
+														accept=".pdf,.xlsx,.csv,.docx,.doc"
+														onChange={(e) => handleNewProtocolFileChange(e, 'report')}
+													/>
+													<FaUpload className="text-blue-500 text-lg" />
+													<span className="text-xs text-blue-600">Tải file biên bản</span>
+												</div>
+											</div>
 										</td>
 										<td className="p-1 text-center">
 											<button
@@ -1259,7 +1718,19 @@ const ProtocolInfor = () => {
 											</button>
 											<button
 												className="text-red-500 px-2 ml-1 py-1 focus:outline-none focus:border-none"
-												onClick={() => setIsAddingNew(false)}
+												onClick={() => {
+													setIsAddingNew(false);
+													setNewProtocol({
+														protocol_name: '',
+														protocol_code: '',
+														protocol_description: '',
+														protocol_content: '',
+														protocol_source: 'IRDOP',
+														equipment: [],
+														protocol_file_id: '',
+														report_file_id: '',
+													});
+												}}
 											>
 												<GiCancel size={20} />
 											</button>
@@ -1408,96 +1879,125 @@ const ProtocolInfor = () => {
 													{formatEquipmentList(protocol.equipment)}
 												</span>
 											)}
-										</td>
+										</td>{' '}
 										<td className="p-1 text-start">
 											{editingRow === protocol.id ? (
-												<div
-													className="w-full h-16 border-2 border-dashed border-blue-400 rounded flex flex-col items-center justify-center cursor-pointer bg-blue-50"
-													onClick={() => handleFileColumnClick(protocol, 'protocol')}
-													onDragOver={(e) => e.preventDefault()}
-													onDrop={(e) => handleFileDrop(e, protocol, 'protocol')}
-												>
-													<input
-														type="file"
-														id={`protocol-file-${protocol.id}`}
-														className="hidden"
-														accept=".pdf,.xlsx,.csv,.docx,.doc"
-														onChange={(e) => handleProtocolFileChange(e, protocol, 'protocol')}
-													/>
-													<label
-														htmlFor={`protocol-file-${protocol.id}`}
-														className="cursor-pointer text-center flex flex-col items-center justify-center"
+												<div className="flex flex-col gap-0.5 h-[70px]">
+													{formatFileDisplay(
+														protocol.protocol_file_id,
+														protocol.id,
+														'protocol',
+														editingRow === protocol.id,
+													)}
+													<div
+														className="w-full flex-1 border-2 border-dashed border-blue-400 rounded flex flex-col items-center justify-center cursor-pointer bg-blue-50"
+														onClick={() => handleFileColumnClick(protocol, 'protocol')}
+														onDragOver={(e) => e.preventDefault()}
+														onDrop={(e) => handleFileDrop(e, protocol, 'protocol')}
 													>
-														<FaUpload className="text-blue-500 text-xl mb-1" />
-														<span className="text-xs text-blue-600">Tải file phương pháp</span>
-													</label>
+														<input
+															type="file"
+															id={`protocol-file-${protocol.id}`}
+															className="hidden"
+															accept=".pdf,.xlsx,.csv,.docx,.doc"
+															onChange={(e) => handleProtocolFileChange(e, protocol, 'protocol')}
+														/>
+														<label
+															htmlFor={`protocol-file-${protocol.id}`}
+															className="cursor-pointer text-center flex flex-col items-center justify-center"
+														>
+															<FaUpload className="text-blue-500 text-xl mb-1" />
+															<span className="text-xs text-blue-600">Tải file phương pháp</span>
+														</label>
+													</div>
 												</div>
 											) : (
 												<span className="block overflow-hidden" style={{ height: '60px' }}>
-													{protocol.protocol_file_id || ''}
+													{formatFileDisplay(
+														protocol.protocol_file_id,
+														protocol.id,
+														'protocol',
+														editingRow === protocol.id,
+													)}
 												</span>
 											)}
-										</td>
+										</td>{' '}
 										<td className="p-1 text-start">
 											{editingRow === protocol.id ? (
-												<div
-													className="w-full h-16 border-2 border-dashed border-blue-400 rounded flex flex-col items-center justify-center cursor-pointer bg-blue-50"
-													onClick={() => handleFileColumnClick(protocol, 'report')}
-													onDragOver={(e) => e.preventDefault()}
-													onDrop={(e) => handleFileDrop(e, protocol, 'report')}
-												>
-													<input
-														type="file"
-														id={`report-file-${protocol.id}`}
-														className="hidden"
-														accept=".pdf,.xlsx,.csv,.docx,.doc"
-														onChange={(e) => handleProtocolFileChange(e, protocol, 'report')}
-													/>
-													<label
-														htmlFor={`report-file-${protocol.id}`}
-														className="cursor-pointer text-center flex flex-col items-center justify-center"
+												<div className="flex flex-col gap-0.5 h-[70px]">
+													{formatFileDisplay(
+														protocol.report_file_id,
+														protocol.id,
+														'report',
+														editingRow === protocol.id,
+													)}
+													<div
+														className="w-full flex-1 border-2 border-dashed border-blue-400 rounded flex flex-col items-center justify-center cursor-pointer bg-blue-50"
+														onClick={() => handleFileColumnClick(protocol, 'report')}
+														onDragOver={(e) => e.preventDefault()}
+														onDrop={(e) => handleFileDrop(e, protocol, 'report')}
 													>
-														<FaUpload className="text-blue-500 text-xl mb-1" />
-														<span className="text-xs text-blue-600">Tải file biên bản</span>
-													</label>
+														<input
+															type="file"
+															id={`report-file-${protocol.id}`}
+															className="hidden"
+															accept=".pdf,.xlsx,.csv,.docx,.doc"
+															onChange={(e) => handleProtocolFileChange(e, protocol, 'report')}
+														/>
+														<label
+															htmlFor={`report-file-${protocol.id}`}
+															className="cursor-pointer text-center flex flex-col items-center justify-center"
+														>
+															<FaUpload className="text-blue-500 text-xl mb-1" />
+															<span className="text-xs text-blue-600">Tải file biên bản</span>
+														</label>
+													</div>
 												</div>
 											) : (
 												<span className="block overflow-hidden" style={{ height: '60px' }}>
-													{protocol.report_file_id || ''}
+													{formatFileDisplay(
+														protocol.report_file_id,
+														protocol.id,
+														'report',
+														editingRow === protocol.id,
+													)}
 												</span>
 											)}
-										</td>
-										<td className="p-0 text-center">
-											{editingRow === protocol.id ? (
-												<div>
-													<button
-														className="text-blue-500 px-2 py-1 mr-1 focus:outline-none focus:border-none"
-														onClick={() => handleSaveClick(protocol.id)}
-													>
-														<GiConfirmed size={20} />
-													</button>
-													<button
-														className="text-red-500 px-2 ml-1 py-1 focus:outline-none focus:border-none"
-														onClick={handleCancelClick}
-													>
-														<GiCancel size={20} />
-													</button>
-												</div>
+										</td>										<td className="p-0 text-center">
+											{(currentUser?.role?.staff_admin || currentUser?.role?.staff_superAdmin)? (
+												editingRow === protocol.id ? (
+													<div>
+														<button
+															className="text-blue-500 px-2 py-1 mr-1 focus:outline-none focus:border-none"
+															onClick={() => handleSaveClick(protocol.id)}
+														>
+															<GiConfirmed size={20} />
+														</button>
+														<button
+															className="text-red-500 px-2 ml-1 py-1 focus:outline-none focus:border-none"
+															onClick={handleCancelClick}
+														>
+															<GiCancel size={20} />
+														</button>
+													</div>
+												) : (
+													<div>
+														<button
+															className="text-blue-500 p-1 focus:outline-none focus:border-none"
+															onClick={() => setEditingRow(protocol.id)}
+														>
+															<RiEdit2Line size={20} />
+														</button>
+														<button
+															className="text-red-500 p-1 focus:outline-none focus:border-none"
+															onClick={() => handleDeleteClick(protocol.id)}
+														>
+															<GiTrashCan size={20} />
+														</button>
+													</div>
+												)
 											) : (
-												<div>
-													<button
-														className="text-blue-500 p-1 focus:outline-none focus:border-none"
-														onClick={() => setEditingRow(protocol.id)}
-													>
-														<RiEdit2Line size={20} />
-													</button>
-													<button
-														className="text-red-500 p-1 focus:outline-none focus:border-none"
-														onClick={() => handleDeleteClick(protocol.id)}
-													>
-														<GiTrashCan size={20} />
-													</button>
-												</div>
+												<div className="text-gray-400 text-sm">-</div>
 											)}
 										</td>
 									</tr>

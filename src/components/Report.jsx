@@ -885,7 +885,6 @@ export default function MultiPageEditor() {
 				refsArray = referenceValues;
 			}
 		}
-
 		// Add extra table header for reference if needed
 		const referenceHeader = showReference
 			? `
@@ -902,7 +901,17 @@ export default function MultiPageEditor() {
 					const parameterName = item.parameter_name || '--';
 					const result = item.result_value || '--';
 					const unit = item.result_unit || '--';
-					const protocol = item?.protocol_source + ' ' + item.protocol_code || '--';
+					const protocol = item.protocol_code || '--';
+
+					// Split accreditation by comma, trim whitespace, and combine with protocol_source
+					const accreditationParts = item.accreditation
+						? item.accreditation
+								.split(',')
+								.map((part) => part.trim())
+								.filter((part) => part.length > 0)
+						: [];
+					const protocolSource = item.protocol_source || '';
+					const scope = protocolSource + (accreditationParts.length > 0 ? ' ' + accreditationParts.join(' ') : '');
 
 					// Reference cell handling with improved logic
 					let referenceCell = '';
@@ -922,9 +931,7 @@ export default function MultiPageEditor() {
 							// Create default cell if no stored value exists
 							referenceCell = `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>`;
 						}
-					}
-
-					// Add unique row ID for measurements and data-row-index attribute
+					} // Add unique row ID for measurements and data-row-index attribute
 					const rowId = `analysis-row-${index}`;
 					return `
 				<tr id="${rowId}" class="table-row" data-row-index="${index}">
@@ -932,7 +939,8 @@ export default function MultiPageEditor() {
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${parameterName}</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${result}</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${unit}</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${protocol}</td>${referenceCell}
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${protocol}</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${scope}</td>${referenceCell}
 				</tr>`;
 				})
 				.join('');
@@ -945,6 +953,7 @@ export default function MultiPageEditor() {
 			analysisRows = `
 				<tr id="analysis-row-0" class="table-row" data-row-index="0">
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; ">1</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
@@ -969,9 +978,11 @@ export default function MultiPageEditor() {
                 </th>
                 <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:90px; text-align:left; font-size:12px;box-sizing: border-box;">
                     <strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box;">
+                </th>                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box;">
                     <strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
+                </th>
+                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box; max-width: 115px; ">
+                    <strong>Phạm vi công nhận</strong> <br> <span style="font-size: 12px; color: #444444;">/ Accreditation scope</span>
                 </th>${referenceHeader}
             </tr>
         </thead>
@@ -1047,13 +1058,14 @@ export default function MultiPageEditor() {
 		</div>
 		<div style="display: flex; flex-direction: column; gap: 2px;">
 			<p class="note test_note_detail print-text-paragraph" 
-			   style="font-size:11px; margin:0; padding:0; line-height: 1.2; text-align:left;">
+			style="font-size:11px; margin:0; padding:0; line-height: 1.2; text-align:left;">
 				KPH: Không phát hiện / Not detected.<br>
 				LOD: Giới hạn phát hiện / Limit of detection.<br>
 				LOQ: Giới hạn định lượng / Limit of quantification.<br>
-				IRDOP: Thử nghiệm thử do IRDOP thực hiện / Protocol conducted by IRDOP.<br>
-				VS: Phương pháp được công nhận theo VILAS / VILAS accredited items.<br>
-				(EX): Phép thử thực hiện bởi nhà thầu phụ / Tests conducted by subcontractors.<br>
+				IRDOP: Chỉ tiêu được thực hiện tại IRDOP / Parameters conducted by IRDOP.<br>
+				EX: Chỉ tiêu được thực hiện bởi nhà thầu phụ / Parameters conducted by subcontractors.<br>
+				VS: Chỉ tiêu được công nhận ISO/IEC 17025:2017 / Accredited per ISO/IEC 17025:2017.<br>
+				TĐC: Chỉ tiêu được công nhận đánh giá sự phù hợp theo NĐ 107/2016/NĐ-CP / Accredited per Decree 107/2016/ND-CP.<br>
 				Thông tin mẫu thử do khách hàng cung cấp / Sample information provided by the customer.<br>
 				Kết quả chỉ có giá trị với mẫu thử / The results are only valid for the tested sample(s).
 			</p>
@@ -1069,24 +1081,24 @@ export default function MultiPageEditor() {
 				<strong contenteditable="true" 
 						class="signature signer_second_title print-text-paragraph"
 						style="font-size:12px; line-height:1.2; margin:0;">
-					PHÒNG PHÂN TÍCH KIỂM NGHIỆM/<br>KIỂM SOÁT CHẤT LƯỢNG / Laboratory Manager
+					KIỂM SOÁT CHẤT LƯỢNG<br> / Quality Control
 				</strong>
 				<p contenteditable="true" 
 				   class="signature signer_second_name print-text-paragraph" 
 				   style="font-size:12px; margin:0; line-height:1.4;">
-					Trần Thị Oanh
-				</p>
+					Hà Anh Dũng
+				   </p>
 			</div>
 			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
 				<strong contenteditable="true" 
 						class="signature signer_fist_title print-text-paragraph"
 						style="font-size:12px; line-height:1.2; margin:0;">
-					KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President
+					QUẢN LÝ PHÒNG KIỂM NGHIỆM <br> / Laborator Manager
 				</strong>
 				<p contenteditable="true" 
 				   class="signature signer_first_name print-text-paragraph" 
 				   style="font-size:12px; margin:0; line-height:1.4;">
-					Nguyễn Bá Xuân Trường
+					Nguyễn Trung Kiên
 				</p>
 			</div>
 		</div>
@@ -1128,7 +1140,7 @@ export default function MultiPageEditor() {
 			<span class="" 
 				style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
 						width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
-				Phòng Phân tích - Kiểm nghiệm / Analysis Control Department
+				Trưởng Phòng Phân tích - Kiểm nghiệm / Analysis and Testing Dept.
 			</span>
 		</div>
 
@@ -1173,7 +1185,7 @@ export default function MultiPageEditor() {
 <div style="flex-grow: 1; text-align: left;">
 <p style="color: #0058a3; margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</p>
 <p style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">IRDOP.ORG</p>
-<p style="opacity: 0.5; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">Form: BM06-QT010-KN / Version: 05 / Effective date: 12/03/2025</p>
+<p style="opacity: 0.5; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">Form: BM06-QT010-KN / Version: 06 / Effective date: 02/06/2025</p>
 </div>
 <div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;">
 <div style="display: flex; align-items: center; height: 14px;"><span style="font-size: 11px; margin: 0; padding: 0; line-height: 1; margin-right: 2px;">Trang / Pages:</span>

@@ -276,6 +276,7 @@ const CreateReceiptFromCRM = () => {
 						fname: 'Ngày tiếp nhận / receipt date.',
 						fvalue: new Date().toLocaleDateString('vi-VN'),
 					},
+					{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
 					{
 						fname: 'Mô tả / desc.',
 						fvalue: sample?.sample_description || '',
