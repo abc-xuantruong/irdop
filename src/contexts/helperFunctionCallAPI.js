@@ -126,3 +126,34 @@ export const apiPost = async (url, body, customHeaders = {}) => {
 		return { status: 500, data: { message: error.message || 'Lỗi kết nối đến máy chủ' } };
 	}
 };
+
+export const apiPut = async (url, body, customHeaders = {}) => {
+	try {
+		const auth_token = getAuthHeader();
+
+		if (!auth_token) {
+			redirectToLogin('Bạn chưa đăng nhập! Chuyển hướng sau 1 giây...');
+			return { status: 401, data: { message: 'Unauthorized' } };
+		}
+
+		response = await axios.put(url, body, { headers: { ...headers, ...customHeaders } });
+		return response;
+	} catch (error) {
+		console.error('PUT request error:', error);
+		if (error.response) {
+			if (error.response.status === 403) {
+				forbidden('Bạn không có quyền truy cập vào chức năng này!');
+				return { status: 403, data: { message: error.response.data?.message || 'Forbidden' } };
+			} else if (error.response.status === 401) {
+				redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
+				return { status: 401, data: { message: error.response.data?.message || 'Unauthorized' } };
+			} else {
+				return {
+					status: error.response.status,
+					data: { message: error.response.data?.message || error.message || 'Lỗi không xác định' },
+				};
+			}
+		}
+		return { status: 500, data: { message: error.message || 'Lỗi kết nối đến máy chủ' } };
+	}
+};
