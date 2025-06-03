@@ -1082,7 +1082,7 @@ export default function MultiPageEditor() {
 				<strong contenteditable="true" 
 						class="signature signer_fist_title print-text-paragraph"
 						style="font-size:12px; line-height:1.2; margin:0;">
-					QUẢN LÝ PHÒNG KIỂM NGHIỆM <br> / Laborator Manager
+					TRƯỞNG PHÒNG PHÂN TÍCH - KIỂM NGHIỆM <br> / Laborator Manager
 				</strong>
 				<p contenteditable="true" 
 				   class="signature signer_first_name print-text-paragraph" 
@@ -1095,13 +1095,14 @@ export default function MultiPageEditor() {
 				<strong contenteditable="true" 
 						class="signature signer_second_title print-text-paragraph"
 						style="font-size:12px; line-height:1.2; margin:0;">
-					KIỂM SOÁT CHẤT LƯỢNG<br> / Quality Control
+					KT. VIỆN TRƯỞNG
+					<br>PHÓ VIỆN TRƯỞNG / Vice President
 				</strong>
 				<p contenteditable="true" 
 				   class="signature signer_second_name print-text-paragraph" 
 				   style="font-size:12px; margin:0; line-height:1.4;">
-					Hà Anh Dũng
-				   </p>
+					Nguyễn Bá Xuân Trường
+				</p>
 			</div>
 			
 		</div>
