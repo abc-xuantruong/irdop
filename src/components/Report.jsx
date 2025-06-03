@@ -1077,7 +1077,21 @@ export default function MultiPageEditor() {
 	const signatureSection = `
 	<div style="padding-top: 0; display: flex; ; margin:0;">
 		<div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
-			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
+		
+			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;width: 100%;">
+				<strong contenteditable="true" 
+						class="signature signer_fist_title print-text-paragraph"
+						style="font-size:12px; line-height:1.2; margin:0;">
+					QUẢN LÝ PHÒNG KIỂM NGHIỆM <br> / Laborator Manager
+				</strong>
+				<p contenteditable="true" 
+				   class="signature signer_first_name print-text-paragraph" 
+				   style="font-size:12px; margin:0; line-height:1.4;">
+					Nguyễn Trung Kiên
+				</p>
+			</div>	
+		
+			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between; width: 100%;">
 				<strong contenteditable="true" 
 						class="signature signer_second_title print-text-paragraph"
 						style="font-size:12px; line-height:1.2; margin:0;">
@@ -1089,18 +1103,7 @@ export default function MultiPageEditor() {
 					Hà Anh Dũng
 				   </p>
 			</div>
-			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-				<strong contenteditable="true" 
-						class="signature signer_fist_title print-text-paragraph"
-						style="font-size:12px; line-height:1.2; margin:0;">
-					QUẢN LÝ PHÒNG KIỂM NGHIỆM <br> / Laborator Manager
-				</strong>
-				<p contenteditable="true" 
-				   class="signature signer_first_name print-text-paragraph" 
-				   style="font-size:12px; margin:0; line-height:1.4;">
-					Nguyễn Trung Kiên
-				</p>
-			</div>
+			
 		</div>
 	</div>`;
 
@@ -1185,7 +1188,7 @@ export default function MultiPageEditor() {
 <div style="flex-grow: 1; text-align: left;">
 <p style="color: #0058a3; margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</p>
 <p style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">IRDOP.ORG</p>
-<p style="opacity: 0.5; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">Form: BM06-QT010-KN / Version: 06 / Effective date: 02/06/2025</p>
+<p style="opacity: 0.5; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">Form: BM06-QT010-KN / Version: 06 / Effective date: 03/06/2025</p>
 </div>
 <div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;">
 <div style="display: flex; align-items: center; height: 14px;"><span style="font-size: 11px; margin: 0; padding: 0; line-height: 1; margin-right: 2px;">Trang / Pages:</span>
