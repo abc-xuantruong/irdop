@@ -48,7 +48,6 @@ const ReceiptInfor = ({ receipt }) => {
 		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
 		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
 		{ fname: 'Nơi sản / mfr.', fvalue: '' },
-		{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
 	]);
 	const [checkConfirm, setCheckConfirm] = useState(false);
 	const defaultFields = sampleInformation;
@@ -696,6 +695,8 @@ const ReceiptInfor = ({ receipt }) => {
 					fname: 'Ngày tiếp nhận / receipt date.',
 					fvalue: formatDate(currentReceipt.receipt_date) || '',
 				},
+				
+		{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
 				{
 					fname: 'Mô tả / desc.',
 					fvalue: newSample?.sample_description || '',

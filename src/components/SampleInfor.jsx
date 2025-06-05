@@ -9,7 +9,6 @@ import TinyMceInput from './Input';
 import { RiEdit2Line } from 'react-icons/ri';
 import { GrDocumentText, GrPrint } from 'react-icons/gr';
 import { MdLibraryAdd, MdChevronLeft, MdChevronRight, MdCalendarMonth } from 'react-icons/md';
-import FilterBar from './FilterBar';
 import Swal from 'sweetalert2';
 
 import {
@@ -73,8 +72,6 @@ const SampleInfor = () => {
 	const [selectAll, setSelectAll] = useState(false); // Add state for select all checkbox
 	const [isTransferMultipleVisible, setIsTransferMultipleVisible] = useState(false);
 	const [selectedTechnician, setSelectedTechnician] = useState(null);
-	const [scrollPosition, setScrollPosition] = useState(0);
-	const [showScrollButtons, setShowScrollButtons] = useState(false);
 	const statusContainerRef = useRef(null);
 	const [isAddingNewParameter, setIsAddingNewParameter] = useState(false);
 	const [newParameter, setNewParameter] = useState({
@@ -137,45 +134,22 @@ const SampleInfor = () => {
 			</div>
 		);
 	}
+	// // Check if scroll buttons should be shown
+	// useEffect(() => {
+	// 	const checkOverflow = () => {
+	// 		if (statusContainerRef.current) {
+	// 			const isOverflowing = statusContainerRef.current.scrollWidth > statusContainerRef.current.clientWidth;
+	// 		}
+	// 	};
 
-	// Check if scroll buttons should be shown
-	useEffect(() => {
-		const checkOverflow = () => {
-			if (statusContainerRef.current) {
-				const isOverflowing = statusContainerRef.current.scrollWidth > statusContainerRef.current.clientWidth;
-				setShowScrollButtons(isOverflowing);
-			}
-		};
+	// 	checkOverflow();
+	// 	// Add event listener for window resize to recheck overflow
+	// 	window.addEventListener('resize', checkOverflow);
 
-		checkOverflow();
-		// Add event listener for window resize to recheck overflow
-		window.addEventListener('resize', checkOverflow);
-
-		return () => {
-			window.removeEventListener('resize', checkOverflow);
-		};
-	}, [sample, statusContainerRef.current]);
-
-	// Functions to handle status scrolling
-	const scrollLeft = () => {
-		if (statusContainerRef.current) {
-			statusContainerRef.current.scrollBy({
-				left: -100,
-				behavior: 'smooth',
-			});
-			setScrollPosition(statusContainerRef.current.scrollLeft - 100);
-		}
-	};
-
-	const scrollRight = () => {
-		if (statusContainerRef.current) {
-			statusContainerRef.current.scrollBy({
-				left: 100,
-				behavior: 'smooth',
-			});
-			setScrollPosition(statusContainerRef.current.scrollLeft + 100);
-		}
-	};
+	// 	return () => {
+	// 		window.removeEventListener('resize', checkOverflow);
+	// 	};
+	// }, [sample, statusContainerRef.current]);
 
 	// Add function to handle accreditation toggle
 	const handleAccreditationToggle = async (analysisId) => {
@@ -1171,42 +1145,27 @@ const SampleInfor = () => {
 
 				setSample(response.data);
 				setCurrentSample(response.data);
-				setListAnalytes(response.data.analysis);
-
-				// Split sample_information into customer and receipt info
+				setListAnalytes(response.data.analysis); // Split sample_information into customer and receipt info
 				if (response.data.sample_information && response.data.sample_information.length > 0) {
-					// Fix: Properly separate receipt and customer info
 					const sampleInfo = response.data.sample_information || [];
 
-					// Look for receipt info markers in the fname field
-					const receiptInfoItems = sampleInfo.filter(
-						(item) =>
-							item.fname.includes('Ngày tiếp nhận') ||
-							item.fname.includes('receipt date') ||
-							item.fname.includes('Mô tả') ||
-							item.fname.includes('desc') ||
-							item.fname.includes('Mã tiếp nhận') ||
-							item.fname.includes('receipt code') ||
-							item.fname.includes('Ngày hoàn thành') ||
-							item.fname.includes('deadline') ||
-							item.fname.includes('Nền mẫu') ||
-							item.fname.includes('matrix'),
+					// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
+					const receiptStartIndex = sampleInfo.findIndex(
+						(item) => item.fname.includes('Ngày tiếp nhận') || item.fname.includes('receipt date'),
 					);
 
-					// All other items are customer info
-					const customerInfoItems = sampleInfo.filter(
-						(item) =>
-							!item.fname.includes('Ngày tiếp nhận') &&
-							!item.fname.includes('receipt date') &&
-							!item.fname.includes('Mô tả') &&
-							!item.fname.includes('desc') &&
-							!item.fname.includes('Mã tiếp nhận') &&
-							!item.fname.includes('receipt code') &&
-							!item.fname.includes('Ngày hoàn thành') &&
-							!item.fname.includes('deadline') &&
-							!item.fname.includes('Nền mẫu') &&
-							!item.fname.includes('matrix'),
-					);
+					let customerInfoItems = [];
+					let receiptInfoItems = [];
+
+					if (receiptStartIndex !== -1) {
+						// Split the array at the found index
+						customerInfoItems = sampleInfo.slice(0, receiptStartIndex);
+						receiptInfoItems = sampleInfo.slice(receiptStartIndex);
+					} else {
+						// If no receipt marker found, all items go to customer info
+						customerInfoItems = sampleInfo;
+						receiptInfoItems = [];
+					}
 
 					setCustomerInfo(customerInfoItems);
 					setReceiptInfo(receiptInfoItems);
@@ -1542,28 +1501,31 @@ const SampleInfor = () => {
 			});
 		}
 	};
-
 	const handleCopySampleInfo = (sampleUid) => {
 		// Find the selected sample from listSampleByReceipt
 		const selectedSample = listSampleByReceipt.find((s) => s.sample_uid === sampleUid);
 
 		if (selectedSample && selectedSample.sample_information) {
-			// Split into customer and receipt info
+			// Split into customer and receipt info based on the index
 			const sampleInfo = selectedSample.sample_information || [];
-			const receiptInfoItems = sampleInfo.filter(
-				(item) =>
-					item.fname.includes('Ngày tiếp nhận') ||
-					item.fname.includes('receipt date') ||
-					item.fname.includes('Mô tả') ||
-					item.fname.includes('desc'),
+
+			// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
+			const receiptStartIndex = sampleInfo.findIndex(
+				(item) => item.fname.includes('Ngày tiếp nhận') || item.fname.includes('receipt date'),
 			);
-			const customerInfoItems = sampleInfo.filter(
-				(item) =>
-					!item.fname.includes('Ngày tiếp nhận') &&
-					!item.fname.includes('receipt date') &&
-					!item.fname.includes('Mô tả') &&
-					!item.fname.includes('desc'),
-			);
+
+			let customerInfoItems = [];
+			let receiptInfoItems = [];
+
+			if (receiptStartIndex !== -1) {
+				// Split the array at the found index
+				customerInfoItems = sampleInfo.slice(0, receiptStartIndex);
+				receiptInfoItems = sampleInfo.slice(receiptStartIndex);
+			} else {
+				// If no receipt marker found, all items go to customer info
+				customerInfoItems = sampleInfo;
+				receiptInfoItems = [];
+			}
 
 			// Set the customer and receipt info
 			setCustomerInfo(customerInfoItems);
@@ -1657,10 +1619,10 @@ const SampleInfor = () => {
 														</td>
 														<td>
 															<button
-																className="text-red-500 bg-white text-sm rounded-lg py-1 px-1 focus:outline-none text-center"
+																className="text-red-200 hover:text-red-500 bg-white text-lg rounded-lg py-0 px-1 focus:outline-none text-center"
 																onClick={() => handleDeleteCustomerField(index)}
 															>
-																<FaRegTimesCircle size={20} />
+																✕
 															</button>
 														</td>
 													</tr>
@@ -1734,10 +1696,10 @@ const SampleInfor = () => {
 														</td>
 														<td>
 															<button
-																className="text-red-500 bg-white text-sm rounded-lg py-1 px-1 focus:outline-none text-center"
+																className="text-red-200 hover:text-red-500 bg-white text-lg rounded-lg py-0 px-1 focus:outline-none text-center"
 																onClick={() => handleDeleteReceiptField(index)}
 															>
-																<FaRegTimesCircle size={20} />
+																✕{' '}
 															</button>
 														</td>
 													</tr>
@@ -1766,36 +1728,23 @@ const SampleInfor = () => {
 								if (currentSample && currentSample.sample_information) {
 									const sampleInfo = currentSample.sample_information || [];
 
-									// Fix: Properly separate receipt and customer info
-									// Look for receipt info markers in the fname field
-									const receiptInfoItems = sampleInfo.filter(
-										(item) =>
-											item.fname.includes('Ngày tiếp nhận') ||
-											item.fname.includes('receipt date') ||
-											item.fname.includes('Mô tả') ||
-											item.fname.includes('desc') ||
-											item.fname.includes('Mã tiếp nhận') ||
-											item.fname.includes('receipt code') ||
-											item.fname.includes('Ngày hoàn thành') ||
-											item.fname.includes('deadline') ||
-											item.fname.includes('Nền mẫu') ||
-											item.fname.includes('matrix'),
+									// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
+									const receiptStartIndex = sampleInfo.findIndex(
+										(item) => item.fname.includes('Ngày tiếp nhận') || item.fname.includes('receipt date'),
 									);
 
-									// All other items are customer info
-									const customerInfoItems = sampleInfo.filter(
-										(item) =>
-											!item.fname.includes('Ngày tiếp nhận') &&
-											!item.fname.includes('receipt date') &&
-											!item.fname.includes('Mô tả') &&
-											!item.fname.includes('desc') &&
-											!item.fname.includes('Mã tiếp nhận') &&
-											!item.fname.includes('receipt code') &&
-											!item.fname.includes('Ngày hoàn thành') &&
-											!item.fname.includes('deadline') &&
-											!item.fname.includes('Nền mẫu') &&
-											!item.fname.includes('matrix'),
-									);
+									let customerInfoItems = [];
+									let receiptInfoItems = [];
+
+									if (receiptStartIndex !== -1) {
+										// Split the array at the found index
+										customerInfoItems = sampleInfo.slice(0, receiptStartIndex);
+										receiptInfoItems = sampleInfo.slice(receiptStartIndex);
+									} else {
+										// If no receipt marker found, all items go to customer info
+										customerInfoItems = sampleInfo;
+										receiptInfoItems = [];
+									}
 
 									setCustomerInfo(customerInfoItems);
 									setReceiptInfo(receiptInfoItems);
@@ -2690,7 +2639,6 @@ const SampleInfor = () => {
 			</div>
 		</div>
 	);
-
 	// Add a new function to handle the review action
 	const handleReviewAnalyses = async () => {
 		if (selectedAnalytes.length === 0) {
@@ -2703,11 +2651,17 @@ const SampleInfor = () => {
 		}
 
 		try {
-			// Create array of objects with just id and reviewed_by fields
-			const analysesToConfirm = selectedAnalytes.map((id) => ({
-				id,
-				reviewed_by: currentUser.identity_uid,
-			}));
+			// Create array of objects with id and reviewed_by fields (toggle logic)
+			const analysesToConfirm = selectedAnalytes.map((id) => {
+				const analysis = listAnalytes.find((item) => item.id === id);
+				// If already reviewed, set to empty string, otherwise set to current user
+				const reviewed_by = analysis?.reviewed_by && analysis.reviewed_by.trim() !== '' ? '' : currentUser.identity_uid;
+
+				return {
+					id,
+					reviewed_by,
+				};
+			});
 
 			// Make a single API call with the array
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/confirm/analysis', analysesToConfirm);
@@ -2717,17 +2671,30 @@ const SampleInfor = () => {
 				const currentUserName = await getIdenByUid(currentUser.identity_uid);
 				const newAnalytesList = listAnalytes.map((analyte) => {
 					if (selectedAnalytes.includes(analyte.id)) {
+						const analysisToConfirm = analysesToConfirm.find((item) => item.id === analyte.id);
+						const newReviewedBy = analysisToConfirm.reviewed_by;
+
 						return {
 							...analyte,
-							reviewed_by: currentUser.identity_uid,
-							reviewerName: currentUserName ? currentUserName.identity_name : 'Unknown',
+							reviewed_by: newReviewedBy,
+							reviewerName: newReviewedBy ? (currentUserName ? currentUserName.identity_name : 'Unknown') : null,
 						};
 					}
 					return analyte;
 				});
 				setListAnalytes(newAnalytesList);
 
-				showToast(`Đã duyệt thành công ${selectedAnalytes.length} chỉ tiêu`, 'success');
+				// Count how many were reviewed vs unreviewed
+				const reviewedCount = analysesToConfirm.filter((item) => item.reviewed_by !== '').length;
+				const unreviewedCount = analysesToConfirm.length - reviewedCount;
+
+				if (reviewedCount > 0 && unreviewedCount > 0) {
+					showToast(`Đã duyệt ${reviewedCount} và bỏ duyệt ${unreviewedCount} chỉ tiêu`, 'success');
+				} else if (reviewedCount > 0) {
+					showToast(`Đã duyệt thành công ${reviewedCount} chỉ tiêu`, 'success');
+				} else {
+					showToast(`Đã bỏ duyệt ${unreviewedCount} chỉ tiêu`, 'success');
+				}
 
 				// Clear selection after successful review
 				setSelectedAnalytes([]);
@@ -3624,9 +3591,8 @@ const SampleInfor = () => {
 
 			<div className="bg-white rounded-lg w-full mt-4 p-4 pt-2 border overflow-auto ">
 				<div className="mb-1 flex justify-end">
-					<div className="min-w-80 whitespace-nowrap flex items-center flex-wrap py-1 pt-12 md:pt-0 md:pr-80 mr-0.5">
-						<div className="flex -translate-y-10 md:translate-y-0 md:pt-0 w-full justify-end">
-							{' '}
+					<div className="w-fit flex items-center flex-wrap py-1 mr-0.5">
+						<div className="flex -translate-y-0 md:translate-y-0 md:pt-0 w-full justify-end">
 							<button
 								className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
 									selectedAnalytes.length > 0 ? 'bg-green-500' : 'bg-gray-300 cursor-not-allowed'
@@ -3709,7 +3675,7 @@ const SampleInfor = () => {
 								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
 							</button>
 							{/* Modify the review button to check for admin role */}
-							{/* {isAdmin() && (
+							{isAdmin() && (
 								<button
 									className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
 										selectedAnalytes.length > 0 ? 'bg-green-500' : 'bg-gray-300 cursor-not-allowed'
@@ -3720,7 +3686,7 @@ const SampleInfor = () => {
 									<FaCheck className="mr-1" />
 									{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
 								</button>
-							)} */}
+							)}
 							{/* If not admin, show disabled review button with tooltip */}
 							{!isAdmin() && (
 								<button
@@ -3729,22 +3695,15 @@ const SampleInfor = () => {
 								>
 									<FaCheck className="mr-1" />0
 								</button>
-							)}
+							)}{' '}
 							<button
-								className="bg-white text-sky-500 border-gray-400 text-sm rounded-lg p-1 active:bg-teritary focus:outline-none flex-shrink-0 mr-2"
+								className="bg-white text-sky-500 border-gray-400 text-sm rounded-lg p-1 active:bg-teritary focus:outline-none flex-shrink-0"
 								onClick={() => {
 									setIsAddingParameter(true);
 								}}
 							>
 								<MdLibraryAdd size={24} />
 							</button>
-						</div>
-						<div className="absolute right-4">
-							<FilterBar
-								source={currentSample.analysis || []}
-								setCurrentList={setListAnalytes}
-								typeSearch={'analysis'}
-							/>
 						</div>
 					</div>
 					{isAddingParameter && renderNewParameter()}

@@ -4,7 +4,15 @@ import Swal from 'sweetalert2';
 
 const getAuthHeader = () => {
 	const authToken = Cookies.get('auth');
-	return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+	const identityUID = Cookies.get('identityUID');
+	const identityName = Cookies.get('identityName');
+	return authToken
+		? {
+				Authorization: `Bearer ${authToken}`,
+				'identity-uid': identityUID,
+				'identity-name': identityName,
+		  }
+		: {};
 };
 const headers = {
 	'Content-Type': 'application/json',
@@ -21,7 +29,7 @@ const redirectToLogin = (message) => {
 		timer: 2000, // Tự đóng sau 1.5 giây
 		showConfirmButton: false,
 	}).then(() => {
-		window.location.href = `${window.location.href.split('/').slice(0, -1).join('/')}/login`;
+		// window.location.href = `${window.location.href.split('/').slice(0, -1).join('/')}/login`;
 	});
 };
 
@@ -35,28 +43,34 @@ const forbidden = (message) => {
 	});
 };
 
-export const checkAuth = async () => {};
+export const checkAuth = async () => {
+	try {
+		if (Cookies.get('auth') && Cookies.get('auth') !== 'undefined') {
+			const auth = await axios.post('https://pink.irdop.org/ab4dg2/auth/me', {}, { headers: {...headers} });
+		}
+
+		return { status: 200, data: { message: 'Session valid' } };
+	} catch (error) {
+		console.error('Auth check error:', error);
+		redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
+		return { status: 401, data: { message: 'Session expired' } };
+	}
+};
 
 export const apiGet = async (url, customHeaders = {}) => {
 	try {
+	
+		// Kiểm tra authentication trước khi gọi API
+		const authCheck = await checkAuth();
+		if (authCheck.status !== 200) {
+			return authCheck;
+		}
+
 		let response = { status: 200 };
 		const auth_token = getAuthHeader();
 		if (!auth_token) {
 			redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
 			return { status: 401, data: { message: 'Unauthorized' } };
-		}
-
-		const auth = await axios.post('https://pink.irdop.org/ab4dg2/auth/me', {}, { headers });
-
-		const expiry_date = new Date(auth.data.session_expiry);
-
-		// Kiểm tra session hết hạn
-		if (auth.statusCode === 403) {
-			forbidden('Bạn không có quyền truy cập vào chức năng này!');
-			return { status: 403, data: { message: 'Forbidden' } };
-		} else if (expiry_date < Date.now() || auth.statusCode === 401) {
-			redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
-			return { status: 401, data: { message: 'Session expired' } };
 		}
 
 		response = await axios.get(url, { headers: { ...headers, ...customHeaders } });
@@ -85,22 +99,18 @@ export const apiGet = async (url, customHeaders = {}) => {
 
 export const apiPost = async (url, body, customHeaders = {}) => {
 	try {
+		// Kiểm tra authentication trước khi gọi API
+		const authCheck = await checkAuth();
+		if (authCheck.status !== 200) {
+			return authCheck;
+		}
+
 		let response = { status: 200 };
 		const auth_token = getAuthHeader();
 
 		if (!auth_token) {
 			redirectToLogin('Bạn chưa đăng nhập! Chuyển hướng sau 1 giây...');
 			return { status: 401, data: { message: 'Unauthorized' } };
-		}
-
-		const auth = await axios.post('https://pink.irdop.org/ab4dg2/auth/me', {}, { headers });
-
-		const expiry_date = new Date(auth.data.session_expiry);
-
-		// Kiểm tra session hết hạn
-		if (expiry_date < Date.now()) {
-			redirectToLogin('Phiên đăng nhập đã hết hạn! Chuyển hướng sau 1 giây...');
-			return { status: 401, data: { message: 'Session expired' } };
 		}
 
 		response = await axios.post(url, body, { headers: { ...headers, ...customHeaders } });
@@ -129,6 +139,13 @@ export const apiPost = async (url, body, customHeaders = {}) => {
 
 export const apiPut = async (url, body, customHeaders = {}) => {
 	try {
+		// Kiểm tra authentication trước khi gọi API
+		const authCheck = await checkAuth();
+		if (authCheck.status !== 200) {
+			return authCheck;
+		}
+
+		let response = { status: 200 };
 		const auth_token = getAuthHeader();
 
 		if (!auth_token) {

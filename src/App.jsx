@@ -38,7 +38,7 @@ const App = () => {
 						<Route path="/report" element={<Report />} />
 						<Route path="/result" element={<Result />} />
 						<Route path="/processing" element={<ProcessingSample />} />
-						<Route path="/processing/AAS" element={<ProcessingSampleMachine />} />
+						<Route path="/processing/machine" element={<ProcessingSampleMachine />} />
 						<Route path="/dashboard/receipt" element={<ReceiptInfor />} />
 						<Route path="/dashboard/receipt/print_sp" element={<PrintSampleTag />} />
 						<Route path="/dashboard/sample" element={<SampleInfor />} />

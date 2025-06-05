@@ -1982,8 +1982,8 @@ const ProcessingSampleMachine = () => {
 								className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
 							>
 								<option value="irdop">Tất cả file</option>
-								<option value="irdop/activities/lab">LAB</option>
-								<option value="irdop/SOP/protocol">Phương pháp</option>
+								<option value="activities/lab">LAB</option>
+								<option value="SOP/protocol">Phương pháp</option>
 							</select>
 							<input
 								type="text"

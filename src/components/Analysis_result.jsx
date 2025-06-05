@@ -324,20 +324,20 @@ export default function MultiPageEditor() {
 
 		return `
 <div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-    <div style="padding: 5pt 8pt;; flex-grow: 1; position: relative;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-            <p style="font-size: 11px; line-height: 1.2; margin: 0; text-align: left;">
-                Thông tin mẫu thử / Sample information:
-            </p>
-            <p style="font-size: 11px; line-height: 1.4; margin: 0; text-align: left;">
-                ${sampleId}
-            </p>
-        </div>
+	<div style="padding: 5pt 8pt;; flex-grow: 1; position: relative;">
+		<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+			<p style="font-size: 11px; line-height: 1.2; margin: 0; text-align: left;">
+				Thông tin mẫu thử / Sample information:
+			</p>
+			<p style="font-size: 11px; line-height: 1.4; margin: 0; text-align: left;">
+				${sampleId}
+			</p>
+		</div>
 
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-            ${infoRows}
-        </div>
-    </div>
+		<div style="display: flex; flex-direction: column; gap: 2px;">
+			${infoRows}
+		</div>
+	</div>
 </div>`;
 	};
 
@@ -386,30 +386,30 @@ export default function MultiPageEditor() {
 		// Create full table HTML
 		const tableHTML = `
 <div style="margin:0; padding:0;">
-    <table style="width: auto; min-width: 100% ; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
-        <thead>
-            <tr>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 50px; text-align:left; font-size:12px;box-sizing: border-box;">
-                    <strong>STT</strong> <br> <span style="font-size: 12px; color: #444444;">/ No.</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500;  text-align:left; font-size:12px; min-width: 20%;box-sizing: border-box;">
-                    <strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444;">/ Tests</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:100px; text-align:left; font-size:12px; box-sizing: border-box;">
-                    <strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444;">/ Test result</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:90px; text-align:left; font-size:12px;box-sizing: border-box;">
-                    <strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box;">
-                    <strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
-                </th>
-            </tr>
-        </thead>
-        <tbody>
-            ${analysisRows}
-        </tbody>
-    </table>
+	<table style="width: auto; min-width: 100% ; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
+		<thead>
+			<tr>
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 50px; text-align:left; font-size:12px;box-sizing: border-box;">
+					<strong>STT</strong> <br> <span style="font-size: 12px; color: #444444;">/ No.</span>
+				</th>
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500;  text-align:left; font-size:12px; min-width: 20%;box-sizing: border-box;">
+					<strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444;">/ Tests</span>
+				</th>
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:100px; text-align:left; font-size:12px; box-sizing: border-box;">
+					<strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444;">/ Test result</span>
+				</th>
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:90px; text-align:left; font-size:12px;box-sizing: border-box;">
+					<strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
+				</th>
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box;">
+					<strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
+				</th>
+			</tr>
+		</thead>
+		<tbody>
+			${analysisRows}
+		</tbody>
+	</table>
 </div>`;
 
 		// Schedule measurement after table is rendered
@@ -436,8 +436,8 @@ export default function MultiPageEditor() {
 	// Add notes and signature sections as constants with standardized styling
 	const notesSection = `
 <div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-    <div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+	<div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
+		<div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
 			<p class="note test_note_title" 
 			   style="font-weight:bold ; margin:0; font-size:11px; line-height:1.0; height: fit-content; ">
 				Ghi chú / Note:
@@ -488,13 +488,13 @@ export default function MultiPageEditor() {
 	const [content, setContent] = useState(initialContent);
 	const [header, setHeader] = useState(`
 <div class=" content_page_header_box" id="thead" style="position:relative; height: fit-content;">
-    <div class=" " style="position:relative; display:flex;  overflow:visible;">
-        <div>
-            <img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg" 
-                 loading="lazy" 
-                 class="OQtYGs6LmEKlbdTnVjZ4oA" 
-                 style="width:5cm;">
-        </div>
+	<div class=" " style="position:relative; display:flex;  overflow:visible;">
+		<div>
+			<img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg" 
+				 loading="lazy" 
+				 class="OQtYGs6LmEKlbdTnVjZ4oA" 
+				 style="width:5cm;">
+		</div>
 		<div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
 			<p class="" 
 			style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
@@ -511,27 +511,27 @@ export default function MultiPageEditor() {
 			</span>
 		</div>
 
-    </div>
-    <div class=" " 
-         style="padding-top:6mm; position:relative; ">
-        <div style="position:relative; text-align:left;">
-            <p contenteditable="true" class=" content-header-title" 
-               style="font-weight:700; font-size:24pt; color:#0058A3; height: 28px; padding-bottom: 2px;">
-                XÁC NHẬN KẾT QUẢ KIỂM NGHIỆM
-            </p>
-            <p class=" content-header-title_eng" 
-               style="font-weight:700; font-size:21pt; color:#0058A3; height: 28px; padding-top: 2px;">
-                / Confirmation of analysis results
-            </p>
-            <div class=" display-flex" 
-                 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px;; height: 28px;">
-                <span class="  published_date" 
-                      style="min-width:5pt; margin: 0;">
+	</div>
+	<div class=" " 
+		 style="padding-top:6mm; position:relative; ">
+		<div style="position:relative; text-align:left;">
+			<p contenteditable="true" class=" content-header-title" 
+			   style="font-weight:700; font-size:24pt; color:#0058A3; height: 28px; padding-bottom: 2px;">
+				XÁC NHẬN KẾT QUẢ KIỂM NGHIỆM
+			</p>
+			<p class=" content-header-title_eng" 
+			   style="font-weight:700; font-size:21pt; color:#0058A3; height: 28px; padding-top: 2px;">
+				/ Confirmation of analysis results
+			</p>
+			<div class=" display-flex" 
+				 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px;; height: 28px;">
+				<span class="  published_date" 
+					  style="min-width:5pt; margin: 0;">
 					  Ngày / Date: ${formatDate(new Date())}
-                </span>
-            </div>
-        </div>
-    </div>
+				</span>
+			</div>
+		</div>
+	</div>
 </div>
 	`);
 	const [footer, setFooter] = useState(`

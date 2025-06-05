@@ -9,6 +9,7 @@ import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import 'react-datepicker/dist/react-datepicker.css';
 import DatePicker from 'react-datepicker';
+import axios from 'axios';
 
 import {
 	FaMoneyBillWave,
@@ -68,7 +69,23 @@ const Dashboard = () => {
 		amount: '',
 		invoiceNumber: '',
 	});
-	const [transactionErrors, setTransactionErrors] = useState({});
+	const [transactionErrors, setTransactionErrors] = useState({}); // Add state variables for quick payment form functionality
+	const [showQuickPaymentForm, setShowQuickPaymentForm] = useState(false);
+	const [quickPaymentForm, setQuickPaymentForm] = useState({
+		order_code: '',
+		invoice_number: '', // Main invoice number for the payment
+		transactions: [
+			{
+				transactionDate: new Date(),
+				transactionType: 'TK viện',
+				amount: '',
+				invoiceNumber: '', // Transaction-specific invoice number
+			},
+		],
+	});
+	const [quickPaymentErrors, setQuickPaymentErrors] = useState({});
+	const [paymentsList, setPaymentsList] = useState([]);
+	const [loadingPayments, setLoadingPayments] = useState(false);
 
 	// Add state for user information
 	const [userInfo, setUserInfo] = useState({});
@@ -219,8 +236,7 @@ const Dashboard = () => {
 		}
 
 		return errors;
-	};
-	// Function to handle transaction form submission
+	}; // Function to handle transaction form submission
 	const handleTransactionFormSubmit = async () => {
 		const errors = validateTransactionForm();
 
@@ -255,7 +271,7 @@ const Dashboard = () => {
 			if (response.status === 200) {
 				showToast('Thêm giao dịch thành công!');
 				fetchReceipt(); // Refresh data
-				setShowTransactionModal(false); // Close modal
+				setShowTransactionModal(false);
 			} else {
 				Swal.fire({
 					icon: 'error',
@@ -269,6 +285,174 @@ const Dashboard = () => {
 				icon: 'error',
 				title: 'Lỗi',
 				text: error.message || 'Có lỗi xảy ra khi thêm giao dịch',
+			});
+		}
+	};
+	// Function to fetch all payments
+	const fetchAllPayments = async () => {
+		setLoadingPayments(true);
+		try {
+			const response = await apiGet('https://black.irdop.org/temporary/get/all_payment');
+
+			if (response.status === 200) {
+				setPaymentsList(response.data || []);
+			} else {
+				console.error('Error fetching payments:', response.data?.message);
+				setPaymentsList([]);
+			}
+		} catch (error) {
+			console.error('Error fetching payments:', error);
+			setPaymentsList([]);
+		} finally {
+			setLoadingPayments(false);
+		}
+	};
+
+	// Function to handle quick payment form changes
+	const handleQuickPaymentFormChange = (field, value) => {
+		setQuickPaymentForm((prev) => ({
+			...prev,
+			[field]: value,
+		}));
+
+		// Clear error for this field when user makes changes
+		if (quickPaymentErrors[field]) {
+			setQuickPaymentErrors((prev) => ({
+				...prev,
+				[field]: null,
+			}));
+		}
+	};
+
+	// Function to handle quick payment transaction changes
+	const handleQuickPaymentTransactionChange = (index, field, value) => {
+		setQuickPaymentForm((prev) => ({
+			...prev,
+			transactions: prev.transactions.map((transaction, i) =>
+				i === index ? { ...transaction, [field]: value } : transaction,
+			),
+		}));
+
+		// Clear transaction errors for this field
+		if (quickPaymentErrors[`transaction_${index}_${field}`]) {
+			setQuickPaymentErrors((prev) => ({
+				...prev,
+				[`transaction_${index}_${field}`]: null,
+			}));
+		}
+	};
+
+	// Function to add new transaction to quick payment form
+	const addQuickPaymentTransaction = () => {
+		setQuickPaymentForm((prev) => ({
+			...prev,
+			transactions: [
+				...prev.transactions,
+				{
+					transactionDate: new Date(),
+					transactionType: 'TK viện',
+					amount: '',
+					invoiceNumber: '',
+				},
+			],
+		}));
+	};
+
+	// Function to remove transaction from quick payment form
+	const removeQuickPaymentTransaction = (index) => {
+		if (quickPaymentForm.transactions.length > 1) {
+			setQuickPaymentForm((prev) => ({
+				...prev,
+				transactions: prev.transactions.filter((_, i) => i !== index),
+			}));
+		}
+	};
+	// Function to validate quick payment form
+	const validateQuickPaymentForm = () => {
+		const errors = {};
+
+		if (!quickPaymentForm.order_code || quickPaymentForm.order_code.trim() === '') {
+			errors.order_code = 'Vui lòng nhập mã đơn hàng';
+		}
+
+		// Validate each transaction
+		quickPaymentForm.transactions.forEach((transaction, index) => {
+			if (!transaction.transactionDate) {
+				errors[`transaction_${index}_transactionDate`] = 'Vui lòng chọn ngày thanh toán';
+			}
+
+			if (!transaction.transactionType) {
+				errors[`transaction_${index}_transactionType`] = 'Vui lòng chọn hình thức thanh toán';
+			}
+
+			if (!transaction.amount || transaction.amount <= 0) {
+				errors[`transaction_${index}_amount`] = 'Vui lòng nhập số tiền hợp lệ';
+			}
+		});
+
+		return errors;
+	};
+	// Function to handle quick payment form submission
+	const handleQuickPaymentFormSubmit = async () => {
+		const errors = validateQuickPaymentForm();
+
+		if (Object.keys(errors).length > 0) {
+			setQuickPaymentErrors(errors);
+			return;
+		}
+
+		try {
+			// Format transactions for API
+			const formattedTransactions = quickPaymentForm.transactions.map((transaction) => ({
+				transactionDate:
+					transaction.transactionDate instanceof Date
+						? transaction.transactionDate.toISOString().split('T')[0]
+						: transaction.transactionDate,
+				transactionType: transaction.transactionType,
+				amount: Number(transaction.amount),
+				invoiceNumber: transaction.invoiceNumber || '',
+			})); // Prepare payload
+			const payload = {
+				payment: {
+					order_code: quickPaymentForm.order_code,
+					invoice_number: quickPaymentForm.invoice_number,
+					transactions: formattedTransactions,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/temporary/create/payment', payload);
+
+			if (response.status === 200) {
+				showToast('Tạo thanh toán nhanh thành công!');
+				setShowQuickPaymentForm(false); // Close form				// Reset form
+				setQuickPaymentForm({
+					order_code: '',
+					invoice_number: '', // Main invoice number for the payment
+					transactions: [
+						{
+							transactionDate: new Date(),
+							transactionType: 'TK viện',
+							amount: '',
+							invoiceNumber: '', // Transaction-specific invoice number
+						},
+					],
+				});
+				setQuickPaymentErrors({});
+				// Optionally refresh the receipt list
+				fetchReceipt();
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi tạo thanh toán nhanh',
+				});
+			}
+		} catch (error) {
+			console.error('Error creating quick payment:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi tạo thanh toán nhanh',
 			});
 		}
 	};
@@ -1998,6 +2182,7 @@ const Dashboard = () => {
 	// Remove the handleMouseMove function to prevent tooltip from following the mouse
 
 	// Add function to handle mouse leave for tooltip
+
 	const handleTooltipLeave = () => {
 		setTooltipState({
 			...tooltipState,
@@ -2475,6 +2660,296 @@ const Dashboard = () => {
 				</div>
 			</div>
 		);
+	}; // Render quick payment form
+	const renderQuickPaymentForm = () => {
+		if (!showQuickPaymentForm) return null;
+
+		return (
+			<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+				<div className="bg-white p-6 rounded-lg shadow-lg max-w-7xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+					<div className="flex justify-between items-center mb-4">
+						<h2 className="text-xl font-semibold text-gray-800">Thanh toán nhanh</h2>
+						<button
+							onClick={() => setShowQuickPaymentForm(false)}
+							className="text-gray-500 hover:text-gray-700 text-xl"
+						>
+							<FaTimes />
+						</button>
+					</div>
+					<div className="space-y-4">
+						{/* Payment Information Row - All fields in one row */}
+						<div className="flex gap-2">
+							{/* Mã đơn hàng */}
+							<div className="w-1/6">
+								<label className="block  text-sm font-medium text-gray-700 mb-1">
+									Mã đơn hàng <span className="text-red-500">*</span>
+								</label>
+								<input
+									type="text"
+									value={quickPaymentForm.order_code}
+									onChange={(e) => handleQuickPaymentFormChange('order_code', e.target.value)}
+									className={`w-full p-2 border rounded-md text-sm bg-white ${
+										quickPaymentErrors.order_code ? 'border-red-500' : 'border-gray-300'
+									}`}
+									placeholder="Nhập mã đơn hàng"
+								/>
+								{quickPaymentErrors.order_code && (
+									<p className="text-red-500 text-xs mt-1">{quickPaymentErrors.order_code}</p>
+								)}
+							</div>
+							{/* Transaction Information - All fields in one row */}
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-1">
+									Thông tin giao dịch <span className="text-red-500">*</span>
+								</label>
+								<div className="space-y-2 ">
+									{quickPaymentForm.transactions.map((transaction, index) => (
+										<div key={index} className="border border-gray-200 rounded-md p-3 bg-gray-50 flex">
+											<div className="flex justify-between items-center">
+												<span className="text-sm font-medium text-gray-700 w-20">Giao dịch {index + 1}</span>
+												{quickPaymentForm.transactions.length > 1 && (
+													<button
+														onClick={() => removeQuickPaymentTransaction(index)}
+														className="text-red-500 hover:text-red-700 text-sm"
+														type="button"
+													>
+														<FaTimes />
+													</button>
+												)}
+											</div>
+
+											{/* All transaction fields in one row */}
+											<div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+												{/* Ngày thanh toán */}
+												<div>
+													<label className="block text-xs font-medium text-gray-600 mb-1">
+														Ngày thanh toán <span className="text-red-500">*</span>
+													</label>
+													<DatePicker
+														selected={transaction.transactionDate}
+														onChange={(date) => handleQuickPaymentTransactionChange(index, 'transactionDate', date)}
+														dateFormat="dd/MM/yyyy"
+														className={`w-full p-2 border rounded-md text-sm bg-white ${
+															quickPaymentErrors[`transaction_${index}_transactionDate`]
+																? 'border-red-500'
+																: 'border-gray-300'
+														}`}
+														placeholderText="Chọn ngày"
+														calendarStartDay={1}
+													/>
+													{quickPaymentErrors[`transaction_${index}_transactionDate`] && (
+														<p className="text-red-500 text-xs mt-1">
+															{quickPaymentErrors[`transaction_${index}_transactionDate`]}
+														</p>
+													)}
+												</div>
+
+												{/* Hình thức thanh toán */}
+												<div>
+													<label className="block text-xs font-medium text-gray-600 mb-1">
+														Hình thức TT <span className="text-red-500">*</span>
+													</label>
+													<select
+														value={transaction.transactionType}
+														onChange={(e) =>
+															handleQuickPaymentTransactionChange(index, 'transactionType', e.target.value)
+														}
+														className={`w-full p-2 border rounded-md text-sm bg-white ${
+															quickPaymentErrors[`transaction_${index}_transactionType`]
+																? 'border-red-500'
+																: 'border-gray-300'
+														}`}
+													>
+														<option value="TK viện">TK viện</option>
+														<option value="TK cá nhân">TK cá nhân</option>
+														<option value="Tiền mặt">Tiền mặt</option>
+														<option value="Hoàn trả">Hoàn trả</option>
+													</select>
+													{quickPaymentErrors[`transaction_${index}_transactionType`] && (
+														<p className="text-red-500 text-xs mt-1">
+															{quickPaymentErrors[`transaction_${index}_transactionType`]}
+														</p>
+													)}
+												</div>
+
+												{/* Số tiền thanh toán */}
+												<div>
+													<label className="block text-xs font-medium text-gray-600 mb-1">
+														Số tiền <span className="text-red-500">*</span>
+													</label>
+													<input
+														type="number"
+														value={transaction.amount}
+														onChange={(e) => handleQuickPaymentTransactionChange(index, 'amount', e.target.value)}
+														className={`w-full p-2 border rounded-md text-sm bg-white ${
+															quickPaymentErrors[`transaction_${index}_amount`] ? 'border-red-500' : 'border-gray-300'
+														}`}
+														placeholder="Số tiền (VNĐ)"
+														min="0"
+														step="1000"
+													/>
+													{quickPaymentErrors[`transaction_${index}_amount`] && (
+														<p className="text-red-500 text-xs mt-1">
+															{quickPaymentErrors[`transaction_${index}_amount`]}
+														</p>
+													)}
+													{transaction.amount && !quickPaymentErrors[`transaction_${index}_amount`] && (
+														<p className="text-gray-600 text-xs mt-1">
+															{Number(transaction.amount).toLocaleString('vi-VN')} ₫
+														</p>
+													)}
+												</div>
+
+												{/* Số hóa đơn giao dịch */}
+												<div>
+													<label className="block text-xs font-medium text-gray-600 mb-1">Số HĐ giao dịch</label>
+													<input
+														type="text"
+														value={transaction.invoiceNumber}
+														onChange={(e) =>
+															handleQuickPaymentTransactionChange(index, 'invoiceNumber', e.target.value)
+														}
+														className="w-full p-2 border border-gray-300 rounded-md text-sm bg-white"
+														placeholder="Số hóa đơn (tùy chọn)"
+													/>
+												</div>
+
+												{/* Spacer for alignment */}
+												<div className="flex items-end">
+													<div className="h-8"></div>
+												</div>
+											</div>
+										</div>
+									))}
+
+									{/* Nút thêm giao dịch */}
+									<button
+										type="button"
+										onClick={addQuickPaymentTransaction}
+										className="w-full p-2 border border-dashed border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center"
+									>
+										<FaMoneyBillWave className="mr-2" />
+										Thêm giao dịch
+									</button>
+								</div>
+							</div>{' '}
+							{/* Số hóa đơn chính */}
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-1">Số hóa đơn</label>
+								<input
+									type="text"
+									value={quickPaymentForm.invoice_number}
+									onChange={(e) => handleQuickPaymentFormChange('invoice_number', e.target.value)}
+									className="w-full p-2 border border-gray-300 rounded-md text-sm bg-white"
+									placeholder="Nhập số hóa đơn"
+								/>
+							</div>
+						</div>
+					</div>{' '}
+					{/* Payments List Section */}
+					{paymentsList.length > 0 && (
+						<div className="mt-6">
+							<div className="max-h-64 overflow-y-auto border border-gray-200 rounded-md">
+								<div className="space-y-2 p-3">
+									{paymentsList.map((payment, index) => (
+										<div key={index} className="border border-gray-300 rounded-lg p-3 bg-gray-50">
+											{/* Payment display - single row with all info */}
+											<div className="flex items-center gap-6">
+												{/* Mã đơn hàng */}
+												<div className="flex items-center gap-2">
+													<span className="font-medium text-gray-800 text-sm">Mã đơn hàng:</span>
+													<span className="text-blue-600 font-semibold">{payment.order_code || '--'}</span>
+												</div>
+												{/* Transactions info */}
+												<div className="flex items-center gap-2 flex-1">
+													<span className="font-medium text-gray-700 text-sm">Giao dịch:</span>
+													<div className="flex flex-wrap gap-2">
+														{payment.transactions && payment.transactions.length > 0 ? (
+															payment.transactions.map((transaction, transIndex) => (
+																<div
+																	key={transIndex}
+																	className="bg-white rounded px-2 py-1 border border-gray-200 text-xs"
+																>
+																	<span className="text-gray-600">
+																		{transaction.transactionDate
+																			? new Date(transaction.transactionDate).toLocaleDateString('vi-VN', {
+																					day: '2-digit',
+																					month: '2-digit',
+																			  })
+																			: '--'}
+																	</span>
+																	<span className="mx-1 text-gray-400">|</span>
+																	<span className="text-gray-700">{transaction.transactionType || '--'}</span>
+																	<span className="mx-1 text-gray-400">|</span>
+																	<span className="font-medium text-green-600">
+																		{transaction.amount
+																			? `${Number(transaction.amount).toLocaleString('vi-VN')} ₫`
+																			: '--'}
+																	</span>
+																	{transaction.invoiceNumber && (
+																		<>
+																			<span className="mx-1 text-gray-400">|</span>
+																			<span className="text-blue-600">HĐ: {transaction.invoiceNumber}</span>
+																		</>
+																	)}
+																</div>
+															))
+														) : (
+															<span className="text-gray-500 text-sm">Chưa có giao dịch</span>
+														)}
+													</div>
+													{/* Total amount */}
+													{payment.transactions && payment.transactions.length > 0 && (
+														<div className="flex items-center gap-1">
+															<span className="text-gray-600 text-sm">Tổng:</span>
+															<span className="text-green-600 font-semibold">
+																{`${payment.transactions
+																	.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+																	.toLocaleString('vi-VN')} ₫`}
+															</span>
+														</div>
+													)}
+												</div>{' '}
+												{/* Số hóa đơn chính */}
+												<div className="flex items-center gap-2">
+													<span className="font-medium text-gray-700 text-sm">Số HĐ:</span>
+													<span className="text-gray-600">{payment.invoice_number || '--'}</span>
+												</div>
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+						</div>
+					)}
+					{/* Loading indicator for payments */}
+					{loadingPayments && (
+						<div className="mt-6 text-center">
+							<div className="inline-flex items-center">
+								<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+								<span className="text-gray-600">Đang tải danh sách thanh toán...</span>
+							</div>
+						</div>
+					)}
+					{/* Action buttons */}
+					<div className="flex justify-end space-x-3 mt-6">
+						<button
+							onClick={() => setShowQuickPaymentForm(false)}
+							className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+						>
+							Hủy
+						</button>
+						<button
+							onClick={handleQuickPaymentFormSubmit}
+							className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center"
+						>
+							<FaMoneyBillWave className="mr-2" />
+							Xác nhận
+						</button>
+					</div>
+				</div>
+			</div>
+		);
 	};
 
 	return (
@@ -2536,7 +3011,6 @@ const Dashboard = () => {
 					}
 				}
 			`}</style>
-
 			{/* Add tooltip element that shows when hovering */}
 			{tooltipState.visible && (
 				<div
@@ -2550,7 +3024,6 @@ const Dashboard = () => {
 					<p>{tooltipState.content}</p>
 				</div>
 			)}
-
 			<Breadcrumb
 				paths={[{ name: 'Danh sách', link: '/' }]}
 				source={originalList}
@@ -2577,7 +3050,7 @@ const Dashboard = () => {
 			<div className="bg-white rounded-lg w-full pb-4 pt-2">
 				{/* Updated layout - buttons row */}
 				<div className="w-full flex justify-between items-center px-4 py-2">
-					{/* Left side - PPT and Payment buttons */}
+					{/* Left side - PPT and Payment buttons */}{' '}
 					<div className="flex items-center space-x-2">
 						{/* PPT button */}
 						<button
@@ -2590,7 +3063,6 @@ const Dashboard = () => {
 							<FaFileAlt size={18} />
 							<span className="font-normal">PPT</span>
 						</button>
-
 						{/* Payment button - hide for technicians */}
 						{!isTechnician() && (
 							<button
@@ -2601,11 +3073,26 @@ const Dashboard = () => {
 								title={isPaymentActive ? 'Ẩn cột ghi nhận doanh số' : 'Hiển thị cột ghi nhận doanh số'}
 							>
 								<FaMoneyBillWave size={18} />
-								<span className="font-normal">HC-KT</span>
+								<span className="font-normal">KT</span>
+							</button>
+						)}{' '}
+						{/* Quick Payment button - hide for technicians */}
+						{!isTechnician() && (
+							<button
+								className={`p-1 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 text-black`}
+								onClick={() => {
+									setShowQuickPaymentForm(!showQuickPaymentForm);
+									if (!showQuickPaymentForm) {
+										fetchAllPayments(); // Fetch payments when opening the form
+									}
+								}}
+								title="Tạo thanh toán nhanh"
+							>
+								<FaMoneyBillWave size={18} />
+								<span className="font-normal">TT</span>
 							</button>
 						)}
 					</div>
-
 					{/* Right side - Deadline and Overdue buttons */}
 					<div className="flex items-center space-x-2">
 						<button
@@ -2777,7 +3264,6 @@ const Dashboard = () => {
 											<>
 												<th
 													className={`p-1 border-b text-start w-[6%] min-w-20 cursor-pointer hover:text-[#103667] underline text-blue-700 relative`}
-													onClick={toggleRecordCodeSort}
 												>
 													HSL {recordCodeSort === 1 ? '↓' : recordCodeSort === 2 ? '∅' : ''}
 													{showRecordCodeDropdown && (
@@ -3271,9 +3757,7 @@ const Dashboard = () => {
 																			{!isTechnician() ? receipt.contact?.phone || '--' : '[Thông tin bị ẩn]'}
 																		</td>
 																		<td
-																			className={`p-1 text-start cursor-pointer align-top ${
-																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																			}`}
+																			className={`p-1 border-b text-start w-[10%] min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700`}
 																			rowSpan={samplesToShow.length}
 																			onClick={() => handleFieldClick(receipt.id, null, 'ppt_send_at')}
 																		>
@@ -3380,6 +3864,7 @@ const Dashboard = () => {
 																						setEditingField({ receiptId: null, sampleId: null, field: null })
 																					}
 																					className="p-1 border rounded-md w-full text-sm bg-white"
+																					placeholder="Mã đơn hàng"
 																					autoFocus
 																				/>
 																			) : (
@@ -3389,7 +3874,7 @@ const Dashboard = () => {
 																			)}
 																		</td>
 																		<td
-																			className={`p-1 text-start align-top ${
+																			className={`p-1 border-b text-start align-top ${
 																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
 																			}`}
 																			rowSpan={samplesToShow.length}
@@ -3647,7 +4132,9 @@ const Dashboard = () => {
 																											editingTransaction.field === 'invoiceNumber'
 																										) && (
 																											<>
-																												<span className="text-gray-400">|</span>
+																												<span class className="text-gray-400">
+																													|
+																												</span>
 																												<span
 																													className="cursor-pointer hover:bg-gray-100 p-1 rounded text-gray-500 text-xs"
 																													onClick={() =>
@@ -3691,23 +4178,23 @@ const Dashboard = () => {
 																					+ Thêm giao dịch
 																				</div>
 																			)}
-																		</td>
+																		</td>{' '}
 																		<td
 																			className={`p-1 text-start align-top ${
 																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
 																			}`}
 																			rowSpan={samplesToShow.length}
-																			onClick={() => handleFieldClick(receipt.id, null, 'invoiceNumber')}
+																			onClick={() => handleFieldClick(receipt.id, null, 'invoice_number')}
 																		>
 																			{editingField.receiptId === receipt.id &&
 																			editingField.sampleId === null &&
-																			editingField.field === 'invoiceNumber' ? (
+																			editingField.field === 'invoice_number' ? (
 																				<input
 																					type="text"
-																					value={receipt.invoiceNumber || ''}
-																					onChange={(e) => handleReceiptInputChange(e, receipt.id, 'invoiceNumber')}
+																					value={receipt.invoice_number || ''}
+																					onChange={(e) => handleReceiptInputChange(e, receipt.id, 'invoice_number')}
 																					onKeyDown={(e) =>
-																						handleReceiptInputKeyDown(e, receipt.id, 'invoiceNumber', e.target.value)
+																						handleReceiptInputKeyDown(e, receipt.id, 'invoice_number', e.target.value)
 																					}
 																					onBlur={() =>
 																						setEditingField({ receiptId: null, sampleId: null, field: null })
@@ -3718,7 +4205,7 @@ const Dashboard = () => {
 																				/>
 																			) : (
 																				<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
-																					{receipt.invoiceNumber || '--'}
+																					{receipt.invoice_number || '--'}
 																				</p>
 																			)}
 																		</td>{' '}
@@ -3949,10 +4436,11 @@ const Dashboard = () => {
 						))}
 					</div>
 				</div>
-			</div>
-
+			</div>{' '}
 			{/* Transaction modal - added at the end of the component */}
 			{renderTransactionModal()}
+			{/* Quick payment form - added at the end of the component */}
+			{renderQuickPaymentForm()}
 		</div>
 	);
 };
