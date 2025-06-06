@@ -5,9 +5,8 @@ import Swal from 'sweetalert2';
 const getAuthHeader = () => {
 	const authToken = Cookies.get('auth');
 	const identityUID = Cookies.get('identityUID');
-	const identityName = Cookies.get('identityName');
 
-	console.log('Retrieved cookies:', { authToken, identityUID, identityName });
+	console.log('Retrieved cookies:', { authToken, identityUID });
 
 	const headers = {};
 
@@ -16,9 +15,6 @@ const getAuthHeader = () => {
 	}
 	if (identityUID) {
 		headers['identity-uid'] = identityUID;
-	}
-	if (identityName) {
-		headers['identity-name'] = identityName;
 	}
 
 	return headers;
@@ -32,7 +28,7 @@ const redirectToLogin = (message) => {
 		timer: 2000,
 		showConfirmButton: false,
 	}).then(() => {
-		// window.location.href = `${window.location.href.split('/').slice(0, -1).join('/')}/login`;
+		window.location.href = '/login';
 	});
 };
 
@@ -90,20 +86,21 @@ export const apiGet = async (url, customHeaders = {}) => {
 		};
 
 		const response = await axios.get(url, { headers });
+		console.log('GET request successful:', response.data);
 		return response;
 	} catch (error) {
 		console.error('GET request error:', error.message, { url, response: error.response?.data });
 		if (error.response) {
-			if (error.response.status === 403) {
+			if (error.response?.status === 403) {
 				forbidden('Bạn không có quyền truy cập vào chức năng này!');
-				return { status: 403, data: { message: error.response.data?.message || 'Forbidden' } };
-			} else if (error.response.status === 401) {
+				return { status: 403, data: { message: error.response?.data?.message || 'Forbidden' } };
+			} else if (error.response?.status === 401) {
 				redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
-				return { status: 401, data: { message: error.response.data?.message || 'Unauthorized' } };
+				return { status: 401, data: { message: error.response?.data?.message || 'Unauthorized' } };
 			}
 			return {
-				status: error.response.status,
-				data: { message: error.response.data?.message || 'Lỗi không xác định' },
+				status: error.response?.status,
+				data: { message: error.response?.data?.message || 'Lỗi không xác định' },
 			};
 		}
 		return { status: 500, data: { message: error.message || 'Lỗi kết nối đến máy chủ' } };
@@ -129,20 +126,21 @@ export const apiPost = async (url, body, customHeaders = {}) => {
 		};
 
 		const response = await axios.post(url, body, { headers });
+
 		return response;
 	} catch (error) {
-		console.error('POST request error:', error.message, { url, response: error.response?.data });
+		console.error(error);
 		if (error.response) {
-			if (error.response.status === 403) {
+			if (error.response?.status === 403) {
 				forbidden('Bạn không có quyền truy cập vào chức năng này!');
-				return { status: 403, data: { message: error.response.data?.message || 'Forbidden' } };
-			} else if (error.response.status === 401) {
+				return { status: 403, data: { message: error.response?.data?.message || 'Forbidden' } };
+			} else if (error.response?.status === 401) {
 				redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
-				return { status: 401, data: { message: error.response.data?.message || 'Unauthorized' } };
+				return { status: 401, data: { message: error.response?.data?.message || 'Unauthorized' } };
 			}
 			return {
-				status: error.response.status,
-				data: { message: error.response.data?.message || 'Lỗi không xác định' },
+				status: error.response?.status,
+				data: { message: error.response?.data?.message || 'Lỗi không xác định' },
 			};
 		}
 		return { status: 500, data: { message: error.message || 'Lỗi kết nối đến máy chủ' } };
@@ -172,16 +170,16 @@ export const apiPut = async (url, body, customHeaders = {}) => {
 	} catch (error) {
 		console.error('PUT request error:', error.message, { url, response: error.response?.data });
 		if (error.response) {
-			if (error.response.status === 403) {
+			if (error.response?.status === 403) {
 				forbidden('Bạn không có quyền truy cập vào chức năng này!');
-				return { status: 403, data: { message: error.response.data?.message || 'Forbidden' } };
-			} else if (error.response.status === 401) {
+				return { status: 403, data: { message: error.response?.data?.message || 'Forbidden' } };
+			} else if (error.response?.status === 401) {
 				redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
-				return { status: 401, data: { message: error.response.data?.message || 'Unauthorized' } };
+				return { status: 401, data: { message: error.response?.data?.message || 'Unauthorized' } };
 			}
 			return {
-				status: error.response.status,
-				data: { message: error.response.data?.message || 'Lỗi không xác định' },
+				status: error.response?.status,
+				data: { message: error.response?.data?.message || 'Lỗi không xác định' },
 			};
 		}
 		return { status: 500, data: { message: error.message || 'Lỗi kết nối đến máy chủ' } };
@@ -213,16 +211,16 @@ export const apiGetBlob = async (url, customHeaders = {}) => {
 	} catch (error) {
 		console.error('GET blob request error:', error.message, { url, response: error.response?.data });
 		if (error.response) {
-			if (error.response.status === 403) {
+			if (error.response?.status === 403) {
 				forbidden('Bạn không có quyền truy cập vào chức năng này!');
-				return { status: 403, data: { message: error.response.data?.message || 'Forbidden' } };
-			} else if (error.response.status === 401) {
+				return { status: 403, data: { message: error.response?.data?.message || 'Forbidden' } };
+			} else if (error.response?.status === 401) {
 				redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
-				return { status: 401, data: { message: error.response.data?.message || 'Unauthorized' } };
+				return { status: 401, data: { message: error.response?.data?.message || 'Unauthorized' } };
 			}
 			return {
-				status: error.response.status,
-				data: { message: error.response.data?.message || 'Lỗi không xác định' },
+				status: error.response?.status,
+				data: { message: error.response?.data?.message || 'Lỗi không xác định' },
 			};
 		}
 		return { status: 500, data: { message: error.message || 'Lỗi kết nối đến máy chủ' } };
