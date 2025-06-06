@@ -46,11 +46,6 @@ export const checkAuth = async () => {
 	try {
 		const authHeaders = getAuthHeader();
 
-		// Chỉ gửi API khi có Authorization header
-		if (!authHeaders.Authorization) {
-			console.log('No Authorization header found, returning null');
-			return null;
-		}
 		const headers = {
 			'Content-Type': 'application/json',
 			...authHeaders,
@@ -77,6 +72,8 @@ export const apiGet = async (url, customHeaders = {}) => {
 			return null;
 		}
 
+		await checkAuth(); // Kiểm tra xác thực trước khi gửi yêu cầu
+
 		const headers = {
 			'Content-Type': 'application/json',
 			...authHeaders,
@@ -86,6 +83,7 @@ export const apiGet = async (url, customHeaders = {}) => {
 		};
 
 		const response = await axios.get(url, { headers });
+		
 		console.log('GET request successful:', response.data);
 		return response;
 	} catch (error) {
@@ -116,6 +114,8 @@ export const apiPost = async (url, body, customHeaders = {}) => {
 			console.log('No Authorization header found, returning null');
 			return null;
 		}
+
+		await checkAuth(); // Kiểm tra xác thực trước khi gửi yêu cầu
 
 		const headers = {
 			'Content-Type': 'application/json',
