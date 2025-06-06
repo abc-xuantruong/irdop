@@ -2748,7 +2748,7 @@ const Dashboard = () => {
 											</div>
 
 											{/* All transaction fields in one row */}
-											<div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+											<div className="grid grid-cols-1 md:grid-cols-4 gap-3">
 												{/* Ngày thanh toán */}
 												<div>
 													<label className="block text-xs font-medium text-gray-600 mb-1">
@@ -2841,10 +2841,6 @@ const Dashboard = () => {
 													/>
 												</div>
 
-												{/* Spacer for alignment */}
-												<div className="flex items-end">
-													<div className="h-8"></div>
-												</div>
 											</div>
 										</div>
 									))}
