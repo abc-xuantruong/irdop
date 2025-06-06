@@ -4,7 +4,6 @@ const { useContext, useState, useEffect } = React;
 import FilterBar from './FilterBar';
 import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
-import axios from 'axios';
 import { RiEdit2Line } from 'react-icons/ri';
 import { GiConfirmed, GiCancel, GiTrashCan, GiSave } from 'react-icons/gi';
 import { toast, ToastContainer } from 'react-toastify';
@@ -255,7 +254,8 @@ const ProtocolInfor = () => {
 				const completeResponse = await apiPost(
 					'https://red.irdop.org/v1/file/uplink/upload_complete',
 					uploadCompletePayload,
-				);				if (completeResponse.status === 200) {
+				);
+				if (completeResponse.status === 200) {
 					updatedProtocol.protocol_file_id = {
 						objectName: completeResponse.data.objectName,
 						fileName: completeResponse.data.fileInfo.fileName,
@@ -447,9 +447,8 @@ const ProtocolInfor = () => {
 			setFiles((prevFiles) => [...prevFiles, ...newFiles]);
 		}
 	};
-
 	const setContent = async (protocol_id, instance) => {
-		const content = await axios.post('https://black.irdop.org/db/set_content/protocol', {
+		const content = await apiPost('https://black.irdop.org/db/set_content/protocol', {
 			file_id: instance,
 			protocol_id: protocol_id,
 		});
@@ -684,7 +683,8 @@ const ProtocolInfor = () => {
 		const updatedEquipment = [...(newProtocol.equipment || [])];
 		updatedEquipment.splice(index, 1);
 		setNewProtocol({ ...newProtocol, equipment: updatedEquipment });
-	};	const handleSaveNewProtocol = async () => {
+	};
+	const handleSaveNewProtocol = async () => {
 		if (!newProtocol.protocol_name || !newProtocol.protocol_code) {
 			toast.error('Các trường Tên phương pháp, Mã phương pháp là bắt buộc');
 			return;
@@ -694,7 +694,11 @@ const ProtocolInfor = () => {
 			let protocolToSave = { ...newProtocol };
 
 			// Complete file uploads if they exist
-			if (newProtocol.protocol_file_id && typeof newProtocol.protocol_file_id === 'object' && newProtocol.protocol_file_id.uploadInfo) {
+			if (
+				newProtocol.protocol_file_id &&
+				typeof newProtocol.protocol_file_id === 'object' &&
+				newProtocol.protocol_file_id.uploadInfo
+			) {
 				const uploadCompletePayload = {
 					fileInfo: newProtocol.protocol_file_id.fileInfo,
 					...newProtocol.protocol_file_id.uploadInfo,
@@ -704,7 +708,8 @@ const ProtocolInfor = () => {
 				const completeResponse = await apiPost(
 					'https://red.irdop.org/v1/file/uplink/upload_complete',
 					uploadCompletePayload,
-				);				if (completeResponse.status === 200) {
+				);
+				if (completeResponse.status === 200) {
 					protocolToSave.protocol_file_id = {
 						objectName: completeResponse.data.objectName,
 						fileName: completeResponse.data.fileInfo.fileName,
@@ -712,7 +717,11 @@ const ProtocolInfor = () => {
 				}
 			}
 
-			if (newProtocol.report_file_id && typeof newProtocol.report_file_id === 'object' && newProtocol.report_file_id.uploadInfo) {
+			if (
+				newProtocol.report_file_id &&
+				typeof newProtocol.report_file_id === 'object' &&
+				newProtocol.report_file_id.uploadInfo
+			) {
 				const uploadCompletePayload = {
 					fileInfo: newProtocol.report_file_id.fileInfo,
 					...newProtocol.report_file_id.uploadInfo,
@@ -1034,7 +1043,7 @@ const ProtocolInfor = () => {
 
 			if (uploadResponse.status !== 200) {
 				throw new Error(`Failed to upload file: ${uploadResponse.data?.message || 'Unknown error'}`);
-			}			// Step 3: Store file info in newProtocol for completion later
+			} // Step 3: Store file info in newProtocol for completion later
 			const fileInfo = {
 				fileName: file.name,
 				fileSize: file.size,
@@ -1441,7 +1450,11 @@ const ProtocolInfor = () => {
 		}
 
 		// Check if fileInfo is empty, null, or doesn't have fileName
-		if (!fileInfo || (typeof fileInfo === 'object' && !fileInfo.fileName) || (typeof fileInfo === 'string' && fileInfo.trim() === '')) {
+		if (
+			!fileInfo ||
+			(typeof fileInfo === 'object' && !fileInfo.fileName) ||
+			(typeof fileInfo === 'string' && fileInfo.trim() === '')
+		) {
 			return (
 				<div className="flex flex-col gap-1">
 					<div className="text-xs text-gray-500">Chưa có file</div>
@@ -1513,7 +1526,8 @@ const ProtocolInfor = () => {
 			<div className={`w-full h-full mt-2 rounded-lg bg-white p-2 ${receivedData ? 'blur-sm' : ''}`}>
 				<div className="flex justify-between items-center">
 					<div className="relative"></div>
-					<h2 className="text-4xl text-primary font-semibold py-2">Danh sách phương pháp</h2>{' '}					<div className="relative z-10">
+					<h2 className="text-4xl text-primary font-semibold py-2">Danh sách phương pháp</h2>{' '}
+					<div className="relative z-10">
 						{currentUser?.role?.staff_admin && (
 							<button
 								className="bg-blue-500 text-white px-4 py-0 w-44 rounded-lg font-medium "
@@ -1963,8 +1977,9 @@ const ProtocolInfor = () => {
 													)}
 												</span>
 											)}
-										</td>										<td className="p-0 text-center">
-											{(currentUser?.role?.staff_admin || currentUser?.role?.staff_superAdmin)? (
+										</td>{' '}
+										<td className="p-0 text-center">
+											{currentUser?.role?.staff_admin || currentUser?.role?.staff_superAdmin ? (
 												editingRow === protocol.id ? (
 													<div>
 														<button

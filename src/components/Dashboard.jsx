@@ -74,12 +74,13 @@ const Dashboard = () => {
 	const [quickPaymentForm, setQuickPaymentForm] = useState({
 		order_code: '',
 		invoice_number: '', // Main invoice number for the payment
+		sale_recorder: '', // Sales recorder field
 		transactions: [
 			{
 				transactionDate: new Date(),
 				transactionType: 'TK viện',
 				amount: '',
-				invoiceNumber: '', // Transaction-specific invoice number
+				note: '', // Changed from invoiceNumber to note
 			},
 		],
 	});
@@ -323,7 +324,6 @@ const Dashboard = () => {
 			}));
 		}
 	};
-
 	// Function to handle quick payment transaction changes
 	const handleQuickPaymentTransactionChange = (index, field, value) => {
 		setQuickPaymentForm((prev) => ({
@@ -341,7 +341,6 @@ const Dashboard = () => {
 			}));
 		}
 	};
-
 	// Function to add new transaction to quick payment form
 	const addQuickPaymentTransaction = () => {
 		setQuickPaymentForm((prev) => ({
@@ -352,7 +351,7 @@ const Dashboard = () => {
 					transactionDate: new Date(),
 					transactionType: 'TK viện',
 					amount: '',
-					invoiceNumber: '',
+					note: '',
 				},
 			],
 		}));
@@ -400,7 +399,6 @@ const Dashboard = () => {
 			setQuickPaymentErrors(errors);
 			return;
 		}
-
 		try {
 			// Format transactions for API
 			const formattedTransactions = quickPaymentForm.transactions.map((transaction) => ({
@@ -410,7 +408,7 @@ const Dashboard = () => {
 						: transaction.transactionDate,
 				transactionType: transaction.transactionType,
 				amount: Number(transaction.amount),
-				invoiceNumber: transaction.invoiceNumber || '',
+				note: transaction.note || '',
 			})); // Prepare payload
 			const payload = {
 				payment: {
@@ -420,6 +418,11 @@ const Dashboard = () => {
 				},
 			};
 
+			// Add sale_recorder only if it's not empty
+			if (quickPaymentForm.sale_recorder && quickPaymentForm.sale_recorder.trim() !== '') {
+				payload.payment.sale_recorder = quickPaymentForm.sale_recorder.trim();
+			}
+
 			const response = await apiPost('https://black.irdop.org/temporary/create/payment', payload);
 
 			if (response.status === 200) {
@@ -427,13 +430,14 @@ const Dashboard = () => {
 				setShowQuickPaymentForm(false); // Close form				// Reset form
 				setQuickPaymentForm({
 					order_code: '',
-					invoice_number: '', // Main invoice number for the payment
+					invoice_number: '',
+					sale_recorder: '',
 					transactions: [
 						{
 							transactionDate: new Date(),
 							transactionType: 'TK viện',
 							amount: '',
-							invoiceNumber: '', // Transaction-specific invoice number
+							note: '',
 						},
 					],
 				});
@@ -2675,7 +2679,7 @@ const Dashboard = () => {
 						>
 							<FaTimes />
 						</button>
-					</div>
+					</div>{' '}
 					<div className="space-y-4">
 						{/* Payment Information Row - All fields in one row */}
 						<div className="flex gap-2">
@@ -2697,8 +2701,33 @@ const Dashboard = () => {
 									<p className="text-red-500 text-xs mt-1">{quickPaymentErrors.order_code}</p>
 								)}
 							</div>
+
+							{/* Số hóa đơn chính */}
+							<div className="w-1/6">
+								<label className="block text-sm font-medium text-gray-700 mb-1">Số hóa đơn</label>
+								<input
+									type="text"
+									value={quickPaymentForm.invoice_number}
+									onChange={(e) => handleQuickPaymentFormChange('invoice_number', e.target.value)}
+									className="w-full p-2 border border-gray-300 rounded-md text-sm bg-white"
+									placeholder="Nhập số hóa đơn"
+								/>
+							</div>
+
+							{/* Ghi nhận doanh số */}
+							<div className="w-1/5">
+								<label className="block text-sm font-medium text-gray-700 mb-1">Ghi nhận DS</label>
+								<input
+									type="text"
+									value={quickPaymentForm.sale_recorder}
+									onChange={(e) => handleQuickPaymentFormChange('sale_recorder', e.target.value)}
+									className="w-full p-2 border border-gray-300 rounded-md text-sm bg-white"
+									placeholder="Người ghi nhận"
+								/>
+							</div>
+
 							{/* Transaction Information - All fields in one row */}
-							<div>
+							<div className="flex-1">
 								<label className="block text-sm font-medium text-gray-700 mb-1">
 									Thông tin giao dịch <span className="text-red-500">*</span>
 								</label>
@@ -2723,7 +2752,7 @@ const Dashboard = () => {
 												{/* Ngày thanh toán */}
 												<div>
 													<label className="block text-xs font-medium text-gray-600 mb-1">
-														Ngày thanh toán <span className="text-red-500">*</span>
+														Ngày TT <span className="text-red-500">*</span>
 													</label>
 													<DatePicker
 														selected={transaction.transactionDate}
@@ -2800,17 +2829,15 @@ const Dashboard = () => {
 													)}
 												</div>
 
-												{/* Số hóa đơn giao dịch */}
+												{/* Ghi chú giao dịch */}
 												<div>
-													<label className="block text-xs font-medium text-gray-600 mb-1">Số HĐ giao dịch</label>
+													<label className="block text-xs font-medium text-gray-600 mb-1">Ghi chú</label>
 													<input
 														type="text"
-														value={transaction.invoiceNumber}
-														onChange={(e) =>
-															handleQuickPaymentTransactionChange(index, 'invoiceNumber', e.target.value)
-														}
+														value={transaction.note}
+														onChange={(e) => handleQuickPaymentTransactionChange(index, 'note', e.target.value)}
 														className="w-full p-2 border border-gray-300 rounded-md text-sm bg-white"
-														placeholder="Số hóa đơn (tùy chọn)"
+														placeholder="Ghi chú (tùy chọn)"
 													/>
 												</div>
 
@@ -2832,17 +2859,6 @@ const Dashboard = () => {
 										Thêm giao dịch
 									</button>
 								</div>
-							</div>{' '}
-							{/* Số hóa đơn chính */}
-							<div>
-								<label className="block text-sm font-medium text-gray-700 mb-1">Số hóa đơn</label>
-								<input
-									type="text"
-									value={quickPaymentForm.invoice_number}
-									onChange={(e) => handleQuickPaymentFormChange('invoice_number', e.target.value)}
-									className="w-full p-2 border border-gray-300 rounded-md text-sm bg-white"
-									placeholder="Nhập số hóa đơn"
-								/>
 							</div>
 						</div>
 					</div>{' '}
@@ -2864,6 +2880,7 @@ const Dashboard = () => {
 												<div className="flex items-center gap-2 flex-1">
 													<span className="font-medium text-gray-700 text-sm">Giao dịch:</span>
 													<div className="flex flex-wrap gap-2">
+														{' '}
 														{payment.transactions && payment.transactions.length > 0 ? (
 															payment.transactions.map((transaction, transIndex) => (
 																<div
@@ -2886,10 +2903,10 @@ const Dashboard = () => {
 																			? `${Number(transaction.amount).toLocaleString('vi-VN')} ₫`
 																			: '--'}
 																	</span>
-																	{transaction.invoiceNumber && (
+																	{transaction.note && (
 																		<>
 																			<span className="mx-1 text-gray-400">|</span>
-																			<span className="text-blue-600">HĐ: {transaction.invoiceNumber}</span>
+																			<span className="text-blue-600">Ghi chú: {transaction.note}</span>
 																		</>
 																	)}
 																</div>
@@ -4065,12 +4082,12 @@ const Dashboard = () => {
 																										) : (
 																											'--'
 																										)}
-																									</span>
-																									{/* Invoice Number */}
-																									{(transaction.invoiceNumber ||
+																									</span>{' '}
+																									{/* Note */}
+																									{(transaction.note ||
 																										(editingTransaction.receiptId === receipt.id &&
 																											editingTransaction.transactionIndex === index &&
-																											editingTransaction.field === 'invoiceNumber')) && (
+																											editingTransaction.field === 'note')) && (
 																										<>
 																											<span className="text-gray-400">|</span>
 																											<span
@@ -4079,30 +4096,25 @@ const Dashboard = () => {
 																													setEditingTransaction({
 																														receiptId: receipt.id,
 																														transactionIndex: index,
-																														field: 'invoiceNumber',
+																														field: 'note',
 																													})
 																												}
 																											>
 																												{editingTransaction.receiptId === receipt.id &&
 																												editingTransaction.transactionIndex === index &&
-																												editingTransaction.field === 'invoiceNumber' ? (
+																												editingTransaction.field === 'note' ? (
 																													<input
 																														type="text"
-																														value={transaction.invoiceNumber || ''}
+																														value={transaction.note || ''}
 																														onChange={(e) =>
-																															handleTransactionInputChange(
-																																e,
-																																receipt.id,
-																																index,
-																																'invoiceNumber',
-																															)
+																															handleTransactionInputChange(e, receipt.id, index, 'note')
 																														}
 																														onKeyDown={(e) =>
 																															handleTransactionKeyDown(
 																																e,
 																																receipt.id,
 																																index,
-																																'invoiceNumber',
+																																'note',
 																																e.target.value,
 																															)
 																														}
@@ -4114,38 +4126,36 @@ const Dashboard = () => {
 																															})
 																														}
 																														className="p-1 border rounded-md text-xs bg-white w-16"
-																														placeholder="Số HĐ"
+																														placeholder="Ghi chú"
 																														autoFocus
 																														onClick={(e) => e.stopPropagation()}
 																													/>
 																												) : (
-																													`HĐ: ${transaction.invoiceNumber}`
+																													`Ghi chú: ${transaction.note}`
 																												)}
 																											</span>
 																										</>
 																									)}
-																									{/* Add invoice button when no invoice exists */}
-																									{!transaction.invoiceNumber &&
+																									{/* Add note button when no note exists */}
+																									{!transaction.note &&
 																										!(
 																											editingTransaction.receiptId === receipt.id &&
 																											editingTransaction.transactionIndex === index &&
-																											editingTransaction.field === 'invoiceNumber'
+																											editingTransaction.field === 'note'
 																										) && (
 																											<>
-																												<span class className="text-gray-400">
-																													|
-																												</span>
+																												<span className="text-gray-400">|</span>
 																												<span
 																													className="cursor-pointer hover:bg-gray-100 p-1 rounded text-gray-500 text-xs"
 																													onClick={() =>
 																														setEditingTransaction({
 																															receiptId: receipt.id,
 																															transactionIndex: index,
-																															field: 'invoiceNumber',
+																															field: 'note',
 																														})
 																													}
 																												>
-																													+ HĐ
+																													+ Ghi chú
 																												</span>
 																											</>
 																										)}

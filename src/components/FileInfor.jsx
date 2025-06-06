@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
-import { apiPost } from '../contexts/helperFunctionCallAPI';
+import { apiPost, apiGet } from '../contexts/helperFunctionCallAPI';
 import { toast, ToastContainer } from 'react-toastify';
 import { FaEye, FaDownload, FaTrashAlt } from 'react-icons/fa';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -329,13 +329,8 @@ const FileInfor = () => {
 					autoClose: 1000,
 				});
 				return;
-			}
-
-			// Using fetch function with correct headers and responseType
-			const response = await fetch(linkResponse.data.url, {
-				method: 'GET',
-				headers: {},
-			});
+			} // Using fetch to get blob without headers
+			const response = await fetch(linkResponse.data.url);
 
 			if (response.ok) {
 				// Get the blob directly from the response

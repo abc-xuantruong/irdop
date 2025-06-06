@@ -1,6 +1,6 @@
-import axios from 'axios';
 import * as React from 'react';
 import { apiGet, apiPost } from './helperFunctionCallAPI';
+import axios from 'axios';
 import Cookies from 'js-cookie';
 
 const { createContext, useState, useEffect } = React;
@@ -101,10 +101,9 @@ export const GlobalProvider = ({ children }) => {
 				normalizeString(client.client_uid).includes(normalizedQuery),
 		);
 	};
-
 	const fetchTechnicians = async () => {
 		try {
-			const response = await axios.get('https://pink.irdop.org/db/get/techinician');
+			const response = await apiGet('https://pink.irdop.org/db/get/techinician');
 			setTechnicians(response.data);
 		} catch (error) {
 			console.error('Error fetching technicians:', error);
@@ -127,7 +126,6 @@ export const GlobalProvider = ({ children }) => {
 				identity_uid: response.data.identity_uid,
 				role: response.data.role,
 			});
-
 		} catch (error) {
 			console.error('Error fetching user:', error);
 		}

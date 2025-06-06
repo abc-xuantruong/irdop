@@ -1,7 +1,7 @@
 import * as React from 'react';
 const { useContext, useState, useEffect, useRef } = React;
 import { GlobalContext } from '../contexts/GlobalContext';
-import axios from 'axios';
+import { apiPost } from '../contexts/helperFunctionCallAPI';
 import { FiFilter } from 'react-icons/fi';
 import { FaSortAlphaDown, FaPlus, FaTrash } from 'react-icons/fa';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
@@ -209,17 +209,17 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 					} else if (typeSearch === 'client') {
 						processedData = searchClient(searchQuery, source);
 					} else if (typeSearch === 'receipt') {
-						const response = await axios.post('https://black.irdop.org/khsi19me/db/search/receipt', {
+						const response = await apiPost('https://black.irdop.org/khsi19me/db/search/receipt', {
 							query: searchQuery,
 						});
 						processedData = response.data;
 					} else if (typeSearch === 'processing_v1') {
-						const response = await axios.post('https://black.irdop.org/to82oe92i/sample/processing/search/v1', {
+						const response = await apiPost('https://black.irdop.org/to82oe92i/sample/processing/search/v1', {
 							query: searchQuery,
 						});
 						processedData = response.data;
 					} else if (typeSearch === 'processing_v2') {
-						const response = await axios.post('https://black.irdop.org/to82oe92i/sample/processing/search/v2', {
+						const response = await apiPost('https://black.irdop.org/to82oe92i/sample/processing/search/v2', {
 							query: searchQuery,
 						});
 						processedData = response.data;
@@ -475,7 +475,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			const mode = new URLSearchParams(location.mode);
 			if (typeSearch === 'processing_v1' && mode === 'v1') {
 				try {
-					const response = await axios.post('https://black.irdop.org/to82oe92i/sample/processing/search/v1', {
+					const response = await apiPost('https://black.irdop.org/to82oe92i/sample/processing/search/v1', {
 						query: searchTerm,
 					});
 					searchResults = response.data;
@@ -485,7 +485,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 				}
 			} else if (typeSearch === 'processing_v2' && mode === 'v2') {
 				try {
-					const response = await axios.post('https://black.irdop.org/to82oe92i/sample/processing/search/v2', {
+					const response = await apiPost('https://black.irdop.org/to82oe92i/sample/processing/search/v2', {
 						query: searchTerm,
 					});
 					searchResults = response.data;

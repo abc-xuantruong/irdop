@@ -2,7 +2,7 @@ import * as React from 'react';
 const { useContext, useState, useEffect } = React;
 import FilterBar from './FilterBar';
 import { GlobalContext } from '../contexts/GlobalContext';
-import axios from 'axios';
+import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import { RiEdit2Line } from 'react-icons/ri';
 import { GiConfirmed, GiCancel, GiTrashCan } from 'react-icons/gi';
 import { toast, ToastContainer } from 'react-toastify';
@@ -87,7 +87,7 @@ const AnalyteInfor = () => {
 
 	const fetchAnalytes = async () => {
 		try {
-			const response = await axios.get('https://black.irdop.org/ha8i0uw2/db/get/parameter');
+			const response = await apiGet('https://black.irdop.org/ha8i0uw2/db/get/parameter');
 			const data = response.data.map((analyte) => ({
 				...analyte,
 				tat_expected: analyte?.tat_expected?.days
@@ -106,7 +106,7 @@ const AnalyteInfor = () => {
 
 	const fetchMatricesList = async () => {
 		try {
-			const response = await axios.get('https://black.irdop.org/get/list_enum/matrix');
+			const response = await apiGet('https://black.irdop.org/get/list_enum/matrix');
 			if (response.data && Array.isArray(response.data)) {
 				setUniqueMatrices(response.data.filter(Boolean));
 			}
@@ -117,7 +117,7 @@ const AnalyteInfor = () => {
 
 	const fetchProtocolSourcesList = async () => {
 		try {
-			const response = await axios.get('https://black.irdop.org/get/list_enum/protocol_source');
+			const response = await apiGet('https://black.irdop.org/get/list_enum/protocol_source');
 			if (response.data && Array.isArray(response.data)) {
 				setProtocolSources(['--Chọn--', ...response.data.filter(Boolean)]);
 			}
@@ -128,7 +128,7 @@ const AnalyteInfor = () => {
 
 	const fetchUnitsList = async () => {
 		try {
-			const response = await axios.get('https://black.irdop.org/get/list_enum/unit');
+			const response = await apiGet('https://black.irdop.org/get/list_enum/unit');
 			if (response.data && Array.isArray(response.data)) {
 				setUniqueUnits(response.data.filter(Boolean));
 			}
@@ -304,7 +304,7 @@ const AnalyteInfor = () => {
 	const fetchProtocols = async (searchTerm) => {
 		try {
 			if (listProtocol.length === 0) {
-				const response = await axios.get('https://black.irdop.org/el9k24zah/db/get/protocol');
+				const response = await apiGet('https://black.irdop.org/el9k24zah/db/get/protocol');
 				setListProtocol(response.data || []);
 			}
 			const filteredProtocols = listProtocol.filter(
@@ -340,7 +340,7 @@ const AnalyteInfor = () => {
 			// Add modified_by_uid to the parameter object
 			updatedAnalyte.modified_by_uid = currentUser.identity_uid;
 
-			const response = await axios.post('https://black.irdop.org/ha8i0uw2/db/update/parameter', {
+			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/update/parameter', {
 				parameter: updatedAnalyte,
 			});
 			setEditingRow(null);
@@ -378,7 +378,7 @@ const AnalyteInfor = () => {
 		const confirmed = window.confirm(`Bạn chắc chắn muốn xóa chỉ tiêu: ${analyte.parameter_name} (ID: ${analyte.id})?`);
 		if (confirmed) {
 			try {
-				const response = await axios.post('https://black.irdop.org/ha8i0uw2/db/delete/parameter', {
+				const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/delete/parameter', {
 					id: analyte.id,
 					modified_by_uid: currentUser.identity_uid,
 				});
@@ -427,7 +427,7 @@ const AnalyteInfor = () => {
 		newAnalyte.modified_by_uid = currentUser.identity_uid;
 
 		try {
-			const response = await axios.post('https://black.irdop.org/ha8i0uw2/db/insert/bulk/parameter', {
+			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/insert/bulk/parameter', {
 				parameters: [newAnalyte],
 			});
 			if (response.status === 200) {

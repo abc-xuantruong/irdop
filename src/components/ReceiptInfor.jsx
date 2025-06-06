@@ -13,7 +13,7 @@ import { FaTrashAlt, FaEdit, FaCheck, FaMoneyBillWave, FaFilePdf, FaTag } from '
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import CreateReceipt from './CreateReceipt';
-import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
+import { apiGet, apiPost, apiGetBlob } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import axios from 'axios'; // Add axios import
 // Import the generateReportToHTML function
@@ -695,8 +695,8 @@ const ReceiptInfor = ({ receipt }) => {
 					fname: 'Ngày tiếp nhận / receipt date.',
 					fvalue: formatDate(currentReceipt.receipt_date) || '',
 				},
-				
-		{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
+
+				{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
 				{
 					fname: 'Mô tả / desc.',
 					fvalue: newSample?.sample_description || '',
@@ -1210,21 +1210,12 @@ const ReceiptInfor = ({ receipt }) => {
 			showToast('Đang tải xuống file Excel...', 'info');
 
 			// Specify Excel MIME type explicitly
-			const excelMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+			const excelMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; // Using apiGetBlob function with correct headers and responseType
+			const response = await apiGetBlob(`https://black.irdop.org/xlsx/download/${receipt_uid}`);
 
-			// Using apiGet function with correct headers and responseType
-			const response = await fetch(`https://black.irdop.org/xlsx/download/${receipt_uid}`, {
-				method: 'GET',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${localStorage.getItem('token')}`, // Ensure authentication if needed
-				},
-				// Don't set responseType here as fetch handles this differently
-			});
-
-			if (response.ok) {
+			if (response.status === 200) {
 				// Get the blob directly from the response
-				const blob = await response.blob();
+				const blob = response.data;
 
 				// Create a new blob with explicit type to ensure correct handling
 				const excelBlob = new Blob([blob], { type: excelMimeType });
@@ -1257,7 +1248,7 @@ const ReceiptInfor = ({ receipt }) => {
 				showToast('Tải xuống file Excel thành công!');
 			} else {
 				// Handle HTTP errors
-				console.error('Error downloading file:', response.status, response.statusText);
+				console.error('Error downloading file:', response.status, response.data?.message || 'Unknown error');
 				Swal.fire({
 					icon: 'error',
 					title: 'Lỗi',

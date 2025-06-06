@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { RiEdit2Line, RiAddCircleLine } from 'react-icons/ri';
 import { GlobalContext } from '../contexts/GlobalContext';
 import Swal from 'sweetalert2'; // Replace toast with Swal
-import { apiPost } from '../contexts/helperFunctionCallAPI';
+import { apiPost, apiGet } from '../contexts/helperFunctionCallAPI';
 
 const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) => {
 	const navigate = useNavigate();
@@ -42,13 +42,11 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 	const [validationErrors, setValidationErrors] = useState({});
 	const [clients, setClients] = useState([]);
 	const formRef = useRef(null);
-
 	useEffect(() => {
 		const fetchClients = async () => {
 			try {
-				const response = await fetch('https://black.irdop.org/hli1o7az/db/get/client');
-				const data = await response.json();
-				setClients(data);
+				const response = await apiGet('https://black.irdop.org/hli1o7az/db/get/client');
+				setClients(response.data);
 			} catch (error) {
 				console.error('Error fetching clients:', error);
 			}

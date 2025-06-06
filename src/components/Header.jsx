@@ -3,6 +3,7 @@ const { useContext } = React;
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../assets/IRDOP-LOGO .png';
 import { GlobalContext } from '../contexts/GlobalContext';
+import { apiGet } from '../contexts/helperFunctionCallAPI';
 import { useState, useEffect } from 'react';
 import Cookies from 'js-cookie';
 
@@ -28,15 +29,13 @@ const Header = () => {
 			fetchUser();
 		}
 	}, [navigate, setCurrentUser, fetchUser, currentUser]);
-
 	// Fetch notifications when on dashboard or home page
 	useEffect(() => {
 		const fetchNotifications = async () => {
 			try {
-				const response = await fetch('https://black.irdop.org/khsi19me/get/noti/payment');
-				if (response.ok) {
-					const data = await response.json();
-					setNotifications(data);
+				const response = await apiGet('https://black.irdop.org/khsi19me/get/noti/payment');
+				if (response.status === 200) {
+					setNotifications(response.data);
 				}
 			} catch (error) {
 				console.error('Failed to fetch notifications:', error);

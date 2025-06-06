@@ -176,12 +176,11 @@ export default function MultiPageEditor() {
 				throw new Error(`Report API request failed with status ${response.status}`);
 			}
 
-			const reportData = response.data;
-
-			// Update all relevant states with the fetched report data
+			const reportData = response.data; // Update all relevant states with the fetched report data
 			setPptUid(reportData.ppt_uid || '');
 			setShowVlas(reportData.is_vlas || false);
-			setShowComment(reportData.is_comment || false);
+			const hasCommentFromAPI = reportData.is_comment || false;
+			setShowComment(hasCommentFromAPI);
 			setShowReference(reportData.is_reference || false);
 
 			// Process the header content to replace the draft text with actual ppt_uid
@@ -254,9 +253,7 @@ export default function MultiPageEditor() {
 					console.error('Error fetching sample data for notes:', err);
 					// Continue with report data even if this fails
 				}
-			}
-
-			// Update the editor content
+			} // Update the editor content using the helper function
 			const combinedContent = generateCombinedContent(
 				reportData.customer_section || '',
 				reportData.sample_section || '',
@@ -268,8 +265,8 @@ export default function MultiPageEditor() {
 
 			setContent(combinedContent);
 
-			if (editorRef.current && window.tinymce) {
-				const editor = window.tinymce.get(editorRef.current.id);
+			if (contentRef.current && window.tinymce) {
+				const editor = window.tinymce.get(contentRef.current.id);
 				if (editor) {
 					editor.setContent(combinedContent);
 				}
@@ -300,9 +297,7 @@ export default function MultiPageEditor() {
 		} finally {
 			setLoading(false);
 		}
-	};
-
-	// Helper function to generate combined content
+	}; // Helper function to generate combined content
 	const generateCombinedContent = (
 		customerSection,
 		sampleInfoSection,
@@ -311,8 +306,9 @@ export default function MultiPageEditor() {
 		notesSection,
 		signatureSection,
 	) => {
-		const commentContent = showComment ? commentSection : '';
-		const commentSpacing = showComment ? spacing : '';
+		// Only include comment section if showComment is true AND commentSection has content
+		const commentContent = showComment && commentSection ? commentSection : '';
+		const commentSpacing = commentContent ? spacing : '';
 
 		return `${customerSection}${spacing}${sampleInfoSection}${spacing}${analysisSection}${spacing}${commentContent}${commentSpacing}${notesSection}${spacing}${signatureSection}`;
 	};
@@ -508,24 +504,30 @@ export default function MultiPageEditor() {
 		if (data.analysis && Array.isArray(data.analysis)) {
 			const refs = data.analysis.map((item) => `--`);
 			setReferenceValues(refs);
-		}
-
-		// Generate comment section if needed
-		const updatedCommentSection = showComment ? generateCommentSection() : '';
+		} // Generate comment section based on showComment state
+		// If showComment is false, we want to remove any existing comment section
+		const updatedCommentSection = showComment ? commentSectionHTML || generateCommentSection() : '';
 		setCommentSectionHTML(updatedCommentSection);
-		const commentSpacing = showComment ? spacing : '';
 
 		// Set notes and signature sections
 		setNotesSectionHTML(notesSection);
 		setSignatureSectionHTML(signatureSection);
 
-		// Default layout: all sections in sequential order with comment placed after analysis
-		const updatedContent = `${updatedCustomerSection}${spacing}${updatedSampleInfo}${spacing}${updatedAnalysisSection}${spacing}${updatedCommentSection}${commentSpacing}${notesSection}${spacing}${signatureSection}`;
-
-		// Update the editor content
+		// Use the generateCombinedContent helper function to ensure consistent content generation
+		const updatedContent = generateCombinedContent(
+			updatedCustomerSection,
+			updatedSampleInfo,
+			updatedAnalysisSection,
+			updatedCommentSection,
+			notesSection,
+			signatureSection,
+		); // Update the editor content
 		setContent(updatedContent);
-		if (editorRef.current) {
-			editorRef.current.setContent(updatedContent);
+		if (contentRef.current && window.tinymce) {
+			const editor = window.tinymce.get(contentRef.current.id);
+			if (editor) {
+				editor.setContent(updatedContent);
+			}
 		}
 
 		// Store sections separately for layout adjustments during printing
@@ -967,7 +969,7 @@ export default function MultiPageEditor() {
     <table style="width: auto; min-width: 100% ; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
         <thead>
             <tr>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 50px; text-align:left; font-size:12px;box-sizing: border-box;">
+                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 45px; text-align:left; font-size:12px;box-sizing: border-box;">
                     <strong>STT</strong> <br> <span style="font-size: 12px; color: #444444;">/ No.</span>
                 </th>
                 <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500;  text-align:left; font-size:12px; min-width: 20%;box-sizing: border-box;">
@@ -976,7 +978,7 @@ export default function MultiPageEditor() {
                 <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:100px; text-align:left; font-size:12px; box-sizing: border-box;">
                     <strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444;">/ Test result</span>
                 </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:90px; text-align:left; font-size:12px;box-sizing: border-box;">
+                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:60px; text-align:left; font-size:12px;box-sizing: border-box;">
                     <strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
                 </th>                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box;">
                     <strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
@@ -1077,30 +1079,34 @@ export default function MultiPageEditor() {
 	const signatureSection = `
 	<div style="padding-top: 0; display: flex; ; margin:0;">
 		<div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
-			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-				<strong contenteditable="true" 
-						class="signature signer_second_title print-text-paragraph"
-						style="font-size:12px; line-height:1.2; margin:0;">
-					KIỂM SOÁT CHẤT LƯỢNG<br> / Quality Control
-				</strong>
-				<p contenteditable="true" 
-				   class="signature signer_second_name print-text-paragraph" 
-				   style="font-size:12px; margin:0; line-height:1.4;">
-					Hà Anh Dũng
-				   </p>
-			</div>
-			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
+		
+			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;width: 100%;">
 				<strong contenteditable="true" 
 						class="signature signer_fist_title print-text-paragraph"
 						style="font-size:12px; line-height:1.2; margin:0;">
-					QUẢN LÝ PHÒNG KIỂM NGHIỆM <br> / Laborator Manager
+					TRƯỞNG PHÒNG PHÂN TÍCH - KIỂM NGHIỆM <br> / Laborator Manager
 				</strong>
 				<p contenteditable="true" 
 				   class="signature signer_first_name print-text-paragraph" 
 				   style="font-size:12px; margin:0; line-height:1.4;">
 					Nguyễn Trung Kiên
 				</p>
+			</div>	
+		
+			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between; width: 100%;">
+				<strong contenteditable="true" 
+						class="signature signer_second_title print-text-paragraph"
+						style="font-size:12px; line-height:1.2; margin:0;">
+					KT. VIỆN TRƯỞNG
+					<br>PHÓ VIỆN TRƯỞNG / Vice President
+				</strong>
+				<p contenteditable="true" 
+				   class="signature signer_second_name print-text-paragraph" 
+				   style="font-size:12px; margin:0; line-height:1.4;">
+					Nguyễn Bá Xuân Trường
+				</p>
 			</div>
+			
 		</div>
 	</div>`;
 

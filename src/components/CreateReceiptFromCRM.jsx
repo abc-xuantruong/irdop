@@ -341,18 +341,9 @@ const CreateReceiptFromCRM = () => {
 			});
 
 			// Specify Excel MIME type explicitly
-			const excelMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-			// Race between the actual request and the timeout
+			const excelMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; // Race between the actual request and the timeout
 			const response = await Promise.race([
-				fetch('https://black.irdop.org/xlsx/download/request_form', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						Authorization: `Bearer ${localStorage.getItem('token')}`,
-					},
-					body: JSON.stringify(requestData),
-				}),
+				apiPost('https://black.irdop.org/xlsx/download/request_form', requestData),
 				timeoutPromise,
 			]);
 
