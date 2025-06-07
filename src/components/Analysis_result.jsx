@@ -617,10 +617,9 @@ export default function MultiPageEditor() {
 				document.head.appendChild(link);
 			});
 		});
-
 		// Wait for fonts to load
 		Promise.all(fontPromises)
-			.then(() => console.log('All Gilroy fonts loaded successfully'))
+			.then(() => {})
 			.catch((err) => console.error('Error loading Gilroy fonts:', err));
 
 		return () => {
@@ -1077,11 +1076,7 @@ export default function MultiPageEditor() {
 		const paginateContent = () => {
 			const pages = [];
 			let currentPageContent = '';
-			let currentPageHeight = 0;
-
-			console.group('📄 Content Sections');
-
-			// Parse the content
+			let currentPageHeight = 0; // Parse the content
 			const contentDiv = document.createElement('div');
 			contentDiv.innerHTML = cleanHtmlContent(currentContent) || '';
 
@@ -1090,7 +1085,6 @@ export default function MultiPageEditor() {
 				.filter(isValidNode)
 				.forEach((node, index) => {
 					const nodeType = getElementTypeDescription(node);
-					console.group(`🔹 Content Section ${index + 1}: ${nodeType}`);
 
 					// If this is a table, we need to check if we need to split it
 					if (node.nodeName === 'DIV' && node.querySelector('table')) {
@@ -1108,7 +1102,6 @@ export default function MultiPageEditor() {
 						const tableHeaderHeight = measuringDiv.offsetHeight;
 
 						// Measure and log each row height
-						console.group('📊 Table Rows');
 						const rowHeights = rows.map((row, rowIndex) => {
 							const rowHeight = measureTableRowHeight(row);
 
@@ -1117,7 +1110,6 @@ export default function MultiPageEditor() {
 
 							return rowHeight;
 						});
-						console.groupEnd(); // Table Rows
 
 						// Calculate total table height
 						const totalTableHeight = tableHeaderHeight + rowHeights.reduce((sum, height) => sum + height, 0);
@@ -1211,8 +1203,6 @@ export default function MultiPageEditor() {
 							currentPageHeight += heightPx;
 						}
 					}
-
-					console.groupEnd(); // Content Section
 				});
 
 			// Add the final page if there's content
@@ -1222,10 +1212,6 @@ export default function MultiPageEditor() {
 
 			// Clean up
 			document.body.removeChild(measuringDiv);
-
-			console.log('📄 Total pages created:', pages.length);
-			console.groupEnd(); // Content Sections
-			console.groupEnd(); // Element Height Measurements
 
 			return pages;
 		};

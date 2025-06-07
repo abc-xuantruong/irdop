@@ -47,7 +47,7 @@ const CreateReceiptFromCRM = () => {
 	const sourceOptions = ['--', 'IRDOP', 'IRDOP VS', 'EX'];
 	const fieldOptions = ['--', 'Hóa Lý', 'Vi sinh'];
 
-	const { formatDate, currentUser, purposes } = useContext(GlobalContext);
+	const { formatDate, currentUser, purposes, hasAuthCookies } = useContext(GlobalContext);
 	const navigate = useNavigate();
 
 	// Add function to handle global matrix change
@@ -79,10 +79,14 @@ const CreateReceiptFromCRM = () => {
 			...crmData,
 			samples: updatedSamples,
 		});
-
 		// Then update analyses for each sample
 		for (let index = 0; index < updatedSamples.length; index++) {
 			try {
+				// Check auth cookies before making API call
+				if (!hasAuthCookies()) {
+					return; // hasAuthCookies will handle redirect
+				}
+
 				const sample = updatedSamples[index];
 				// Create list of analyses with their parameter names and the new matrix
 				const listAnalysis = sample.analysis.map((item) => ({
@@ -96,7 +100,7 @@ const CreateReceiptFromCRM = () => {
 				});
 
 				// Update the sample with the response data
-				if (response.data) {
+				if (response && response.data) {
 					updatedSamples[index] = {
 						...updatedSamples[index],
 						analysis: response.data,
@@ -127,20 +131,25 @@ const CreateReceiptFromCRM = () => {
 	const closeModal = () => {
 		setIsModalOpen(false);
 	};
-
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 		setIsLoading(true);
 		setError(null);
 
 		try {
+			// Check auth cookies before making API call
+			if (!hasAuthCookies()) {
+				setIsLoading(false);
+				return; // hasAuthCookies will handle redirect
+			}
+
 			const response = await apiPost('https://black.irdop.org/crm/generate_receipt', { code });
 
 			// Check if the response contains an error
-			if (response.data && response.data.error) {
+			if (response && response.data && response.data.error) {
 				setError(response.data.message || 'Đã xảy ra lỗi khi lấy dữ liệu từ CRM.');
 				setCrmData(null);
-			} else {
+			} else if (response && response.data) {
 				setCrmData(response.data);
 				setError(null);
 
@@ -286,8 +295,13 @@ const CreateReceiptFromCRM = () => {
 				purpose: selectedPurpose, // Add purpose to each sample
 			};
 		});
-
 		try {
+			// Check auth cookies before making API call
+			if (!hasAuthCookies()) {
+				setIsCreating(false);
+				return; // hasAuthCookies will handle redirect
+			}
+
 			const response = await apiPost('https://black.irdop.org/crm/create_receipt', {
 				client: crmData.client,
 				samples: samplesWithStatus,
@@ -299,12 +313,10 @@ const CreateReceiptFromCRM = () => {
 				total_amount: crmData.total_amount,
 				discount_summary: crmData.discount_summary,
 				deadline: deadline, // Add deadline to payload
-			});
-
-			// Check if the response contains an error
-			if (response.data && response.data.error) {
+			}); // Check if the response contains an error
+			if (response && response.data && response.data.error) {
 				setError(response.data.message || 'Đã xảy ra lỗi khi tạo tiếp nhận mẫu.');
-			} else {
+			} else if (response && response.data) {
 				// Close modal and show notification before navigation
 				closeModal();
 
@@ -767,8 +779,12 @@ const CreateReceiptFromCRM = () => {
 		const matrix = matrixParam !== undefined ? matrixParam : sample.matrix;
 
 		if (!matrix) return;
-
 		try {
+			// Check auth cookies before making API call
+			if (!hasAuthCookies()) {
+				return; // hasAuthCookies will handle redirect
+			}
+
 			// First ensure the sample matrix is correctly set in state
 			const updatedSamples = [...crmData.samples];
 			updatedSamples[index] = {
@@ -800,7 +816,7 @@ const CreateReceiptFromCRM = () => {
 			});
 
 			// Update the sample with the response data
-			if (response.data) {
+			if (response && response.data) {
 				updatedSamples[index] = {
 					...updatedSamples[index],
 					matrix: matrix, // Ensure matrix value is preserved
@@ -816,15 +832,21 @@ const CreateReceiptFromCRM = () => {
 			console.error('Error updating analyses based on matrix:', error);
 		}
 	};
-
 	// Search parameters
 	const searchParameters = async (query) => {
 		try {
+			// Check auth cookies before making API call
+			if (!hasAuthCookies()) {
+				return; // hasAuthCookies will handle redirect
+			}
+
 			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/search/parameter', {
 				query,
 				matrix: crmData.samples[currentSampleIndex]?.matrix || '',
 			});
-			setParameterList(response.data);
+			if (response && response.data) {
+				setParameterList(response.data);
+			}
 		} catch (error) {
 			console.error('Error searching parameters:', error);
 		}
@@ -901,14 +923,18 @@ const CreateReceiptFromCRM = () => {
 	const itemsPerPage = 10;
 	const [currentEditingMatrixIndex, setCurrentEditingMatrixIndex] = useState(null);
 	const skipBlurRef = useRef(false);
-
 	// Fetch matrices for dropdown
 	useEffect(() => {
 		const fetchMatrices = async () => {
 			try {
+				// Check auth cookies before making API call
+				if (!hasAuthCookies()) {
+					return; // hasAuthCookies will handle redirect
+				}
+
 				// Fetch matrices from API
 				const matricesResponse = await apiGet('https://black.irdop.org/get/list_enum/matrix');
-				if (matricesResponse.data && Array.isArray(matricesResponse.data)) {
+				if (matricesResponse && matricesResponse.data && Array.isArray(matricesResponse.data)) {
 					setUniqueMatrices(matricesResponse.data.filter(Boolean));
 				}
 			} catch (error) {

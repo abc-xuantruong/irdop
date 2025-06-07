@@ -112,31 +112,25 @@ const ProcessingSample = () => {
 					endDate,
 				});
 
-				// Set date range for display in the UI
-				setDateRange([startDate, endDate]);
+				// Set date range for display in the UI				setDateRange([startDate, endDate]);
 				setShowTodayDeadlines(true);
 
-				console.log(`Fetching data from: ${apiUrl}`);
 				const response = await apiPost(apiUrl, {
 					start_date: queryParams.get('deadline_start'),
 					end_date: queryParams.get('deadline_end'),
 				});
 				const data = Array.isArray(response?.data) ? response.data : [];
-				console.log(`Received ${data.length} items from API`);
 
 				// Update the main data source
 				setProcessingSample(data);
-			}
-			// If the urgent parameter exists, use urgent API
+			} // If the urgent parameter exists, use urgent API
 			else if (queryParams.has('urgent')) {
 				apiUrl = 'https://black.irdop.org/to82oe92i/db/filter/fast/processing_sample/v3';
 				setFilterUrgent(true);
 				setFilterNoResults(false);
 				setFilterOverdue(false); // Reset overdue filter state
-				console.log(`Fetching data from: ${apiUrl}`);
 				const response = await apiGet(apiUrl);
 				const data = Array.isArray(response?.data) ? response.data : [];
-				console.log(`Received ${data.length} items from API`);
 
 				// Update the main data source
 				setProcessingSample(data);

@@ -20,11 +20,9 @@ const Login = () => {
 				email,
 				password,
 			});
-			console.log('Login response:', response);
 
 			// Check if status code is >= 300, show error message
 			if (response.statusCode && response.statusCode >= 300) {
-				console.log('Error response:', response.message);
 				const errorMessage = response.message || 'Login failed. Please try again.';
 				Swal.fire({
 					icon: 'error',
@@ -78,7 +76,7 @@ const Login = () => {
 					{error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
 					<form onSubmit={handleSubmit} className="space-y-6">
 						<div>
-							<label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+							<label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2 text-start">
 								Email
 							</label>
 							<input
@@ -92,7 +90,7 @@ const Login = () => {
 							/>
 						</div>
 						<div>
-							<label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+							<label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2 text-start">
 								Password
 							</label>
 							<input

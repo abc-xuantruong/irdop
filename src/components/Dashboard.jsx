@@ -2840,7 +2840,6 @@ const Dashboard = () => {
 														placeholder="Ghi chú (tùy chọn)"
 													/>
 												</div>
-
 											</div>
 										</div>
 									))}
@@ -3038,16 +3037,7 @@ const Dashboard = () => {
 				</div>
 			)}
 			<Breadcrumb
-				paths={[{ name: 'Danh sách', link: '/' }]}
-				source={originalList}
-				setCurrentList={(newList) => {
-					setCurrentList(newList);
-					// Turn off deadline filter when changing the list through breadcrumb
-					if (showTodayDeadlines) {
-						setShowTodayDeadlines(false);
-					}
-				}}
-				setIsFilter={setIsFilter}
+				paths={[{ }]}
 			/>
 			<div className="justify-between items-center w-full mb-1 hidden md:flex">
 				<div className="px-2 mb-1 mt-1">
@@ -3059,144 +3049,146 @@ const Dashboard = () => {
 					<CreateReceiptFromCRM />
 					<CreateReceipt />
 				</div>
-			</div>
+			</div>{' '}
 			<div className="bg-white rounded-lg w-full pb-4 pt-2">
-				{/* Updated layout - buttons row */}
-				<div className="w-full flex justify-between items-center px-4 py-2">
-					{/* Left side - PPT and Payment buttons */}{' '}
-					<div className="flex items-center space-x-2">
-						{/* PPT button */}
-						<button
-							className={`p-1 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 ${
-								isPreliminaryActive ? 'text-white bg-blue-600' : 'text-black'
-							}`}
-							onClick={togglePreliminaryView}
-							title={isPreliminaryActive ? 'Hiển thị chế độ bình thường' : 'Hiển thị danh sách kết quả sơ bộ'}
-						>
-							<FaFileAlt size={18} />
-							<span className="font-normal">PPT</span>
-						</button>
-						{/* Payment button - hide for technicians */}
-						{!isTechnician() && (
+				{/* Updated layout - buttons row with horizontal scrolling */}
+				<div className="w-full overflow-x-auto px-4 py-2">
+					<div className="flex justify-between items-center min-w-fit">
+						{/* Left side - PPT and Payment buttons */}{' '}
+						<div className="flex items-center space-x-2 flex-shrink-0">
+							{/* PPT button */}
 							<button
-								className={`p-1 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2  ${
-									isPaymentActive ? 'text-white bg-blue-600' : 'text-black'
+								className={`p-1 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 ${
+									isPreliminaryActive ? 'text-white bg-blue-600' : 'text-black'
 								}`}
-								onClick={togglePaymentColumn}
-								title={isPaymentActive ? 'Ẩn cột ghi nhận doanh số' : 'Hiển thị cột ghi nhận doanh số'}
+								onClick={togglePreliminaryView}
+								title={isPreliminaryActive ? 'Hiển thị chế độ bình thường' : 'Hiển thị danh sách kết quả sơ bộ'}
 							>
-								<FaMoneyBillWave size={18} />
-								<span className="font-normal">KT</span>
+								<FaFileAlt size={18} />
+								<span className="font-normal">PPT</span>
 							</button>
-						)}{' '}
-						{/* Quick Payment button - hide for technicians */}
-						{!isTechnician() && (
-							<button
-								className={`p-1 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 text-black`}
-								onClick={() => {
-									setShowQuickPaymentForm(!showQuickPaymentForm);
-									if (!showQuickPaymentForm) {
-										fetchAllPayments(); // Fetch payments when opening the form
-									}
-								}}
-								title="Tạo thanh toán nhanh"
-							>
-								<FaMoneyBillWave size={18} />
-								<span className="font-normal">TT</span>
-							</button>
-						)}
-					</div>
-					{/* Right side - Deadline and Overdue buttons */}
-					<div className="flex items-center space-x-2">
-						<button
-							className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
-								showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black'
-							}`}
-							onClick={(e) => filterTodayDeadlines(e)}
-							title={
-								showTodayDeadlines
-									? 'Click outside the date picker to cancel'
-									: 'Chọn khoảng thời gian để lọc theo deadline'
-							}
-						>
-							<FaCalendarDay size={18} />
-							<span className="font-normal">Deadline</span>
-							{showTodayDeadlines && (
-								<div
-									className="relative z-1000 text-black datepicker-container flex"
-									onClick={(e) => e.stopPropagation()}
+							{/* Payment button - hide for technicians */}
+							{!isTechnician() && (
+								<button
+									className={`p-1 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2  ${
+										isPaymentActive ? 'text-white bg-blue-600' : 'text-black'
+									}`}
+									onClick={togglePaymentColumn}
+									title={isPaymentActive ? 'Ẩn cột ghi nhận doanh số' : 'Hiển thị cột ghi nhận doanh số'}
 								>
-									<DatePicker
-										ref={datePickerRef}
-										selected={startDate}
-										onChange={handleDateRangeChange}
-										startDate={startDate}
-										endDate={endDate}
-										selectsRange
-										dateFormat="dd/MM/yyyy"
-										placeholderText="Chọn khoảng thời gian"
-										className="p-2 py-0 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-52 cursor-pointer"
-										open={isCalendarOpen}
-										onInputClick={() => setIsCalendarOpen(true)}
-										onClickOutside={() => {
-											// Only close if both dates are selected or clicked outside the calendar
-											if (startDate && endDate) {
-												setIsCalendarOpen(false);
-											}
-										}}
-										// Remove the onBlur handler that causes premature closing
-										shouldCloseOnSelect={false} // Don't close automatically on selection
-										popperModifiers={{
-											preventOverflow: {
-												enabled: true,
-											},
-											hide: {
-												enabled: true,
-											},
-										}}
-									/>
-									<button
-										className="ml-1 p-1 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
-										onClick={(e) => {
-											e.stopPropagation();
-											// Close the deadline filter
-											setShowTodayDeadlines(false);
-											setShowDateRangePicker(false);
-											setIsCalendarOpen(false);
-
-											// Reset to original list if no other filters are active
-											if (!searchTerm) {
-												setCurrentList(originalList);
-												setIsFilter(false);
-
-												// Reset filter info
-												setFilterInfo({
-													isFilterActive: false,
-													count: 0,
-													startDate: null,
-													endDate: null,
-												});
-											}
-										}}
-										title="Đóng bộ lọc deadline"
-									>
-										<FaTimes size={14} />
-									</button>
-								</div>
+									<FaMoneyBillWave size={18} />
+									<span className="font-normal">KT</span>
+								</button>
+							)}{' '}
+							{/* Quick Payment button - hide for technicians */}
+							{!isTechnician() && (
+								<button
+									className={`p-1 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 text-black`}
+									onClick={() => {
+										setShowQuickPaymentForm(!showQuickPaymentForm);
+										if (!showQuickPaymentForm) {
+											fetchAllPayments(); // Fetch payments when opening the form
+										}
+									}}
+									title="Tạo thanh toán nhanh"
+								>
+									<FaMoneyBillWave size={18} />
+									<span className="font-normal">TT</span>
+								</button>
 							)}
-						</button>
+						</div>{' '}
+						{/* Right side - Deadline and Overdue buttons */}
+						<div className="flex items-center space-x-2 flex-shrink-0">
+							<button
+								className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+									showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black'
+								}`}
+								onClick={(e) => filterTodayDeadlines(e)}
+								title={
+									showTodayDeadlines
+										? 'Click outside the date picker to cancel'
+										: 'Chọn khoảng thời gian để lọc theo deadline'
+								}
+							>
+								<FaCalendarDay size={18} />
+								<span className="font-normal">Deadline</span>
+								{showTodayDeadlines && (
+									<div
+										className="relative z-1000 text-black datepicker-container flex"
+										onClick={(e) => e.stopPropagation()}
+									>
+										<DatePicker
+											ref={datePickerRef}
+											selected={startDate}
+											onChange={handleDateRangeChange}
+											startDate={startDate}
+											endDate={endDate}
+											selectsRange
+											dateFormat="dd/MM/yyyy"
+											placeholderText="Chọn khoảng thời gian"
+											className="p-2 py-0 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-52 cursor-pointer"
+											open={isCalendarOpen}
+											onInputClick={() => setIsCalendarOpen(true)}
+											onClickOutside={() => {
+												// Only close if both dates are selected or clicked outside the calendar
+												if (startDate && endDate) {
+													setIsCalendarOpen(false);
+												}
+											}}
+											// Remove the onBlur handler that causes premature closing
+											shouldCloseOnSelect={false} // Don't close automatically on selection
+											popperModifiers={{
+												preventOverflow: {
+													enabled: true,
+												},
+												hide: {
+													enabled: true,
+												},
+											}}
+										/>
+										<button
+											className="ml-1 p-1 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
+											onClick={(e) => {
+												e.stopPropagation();
+												// Close the deadline filter
+												setShowTodayDeadlines(false);
+												setShowDateRangePicker(false);
+												setIsCalendarOpen(false);
 
-						{/* Overdue button */}
-						<button
-							className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
-								showOverdueFilter ? 'text-white bg-blue-600' : 'text-black'
-							}`}
-							onClick={toggleOverdueFilter}
-							title={showOverdueFilter ? 'Hiển thị danh sách bình thường' : 'Hiển thị danh sách quá hạn'}
-						>
-							<FaCalendarDay size={18} />
-							<span className="font-normal">Overdue</span>
-						</button>
+												// Reset to original list if no other filters are active
+												if (!searchTerm) {
+													setCurrentList(originalList);
+													setIsFilter(false);
+
+													// Reset filter info
+													setFilterInfo({
+														isFilterActive: false,
+														count: 0,
+														startDate: null,
+														endDate: null,
+													});
+												}
+											}}
+											title="Đóng bộ lọc deadline"
+										>
+											<FaTimes size={14} />
+										</button>
+									</div>
+								)}
+							</button>
+
+							{/* Overdue button */}
+							<button
+								className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+									showOverdueFilter ? 'text-white bg-blue-600' : 'text-black'
+								}`}
+								onClick={toggleOverdueFilter}
+								title={showOverdueFilter ? 'Hiển thị danh sách bình thường' : 'Hiển thị danh sách quá hạn'}
+							>
+								<FaCalendarDay size={18} />
+								<span className="font-normal">Overdue</span>
+							</button>
+						</div>
 					</div>
 				</div>
 

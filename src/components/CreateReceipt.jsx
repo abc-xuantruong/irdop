@@ -9,7 +9,7 @@ import { apiPost, apiGet } from '../contexts/helperFunctionCallAPI';
 
 const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) => {
 	const navigate = useNavigate();
-	const { formatDate, currentUser } = useContext(GlobalContext);
+	const { formatDate, currentUser, hasAuthCookies } = useContext(GlobalContext);
 	const [isFormVisible, setIsFormVisible] = useState(false);
 	const [isDisplayCustomer, setIsDisplayCustomer] = useState(false);
 	const [isDisplayContact, setIsDisplayContact] = useState(false);
@@ -45,8 +45,15 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 	useEffect(() => {
 		const fetchClients = async () => {
 			try {
+				// Check auth cookies before making API call
+				if (!hasAuthCookies()) {
+					return; // hasAuthCookies will handle redirect
+				}
+
 				const response = await apiGet('https://black.irdop.org/hli1o7az/db/get/client');
-				setClients(response.data);
+				if (response && response.data) {
+					setClients(response.data);
+				}
 			} catch (error) {
 				console.error('Error fetching clients:', error);
 			}
@@ -227,6 +234,11 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 			? 'https://black.irdop.org/khsi19me/db/update/receipt'
 			: 'https://black.irdop.org/khsi19me/db/insert/receipt';
 		try {
+			// Check auth cookies before making API call
+			if (!hasAuthCookies()) {
+				return; // hasAuthCookies will handle redirect
+			}
+
 			// Add authentication info based on operation type
 			const receiptWithAuth = initialReceipt
 				? {
@@ -241,7 +253,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 				  };
 
 			const newReceipt = await apiPost(apiUrl, { receipt: receiptWithAuth });
-			if (initialReceipt && setUpdatedReceipt && newReceipt.status === 200) {
+			if (initialReceipt && setUpdatedReceipt && newReceipt && newReceipt.status === 200) {
 				const fullReceipt = { ...initialReceipt, ...newReceipt.data };
 				setUpdatedReceipt(fullReceipt);
 
@@ -249,7 +261,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 				const successMessage = 'Cập nhật thành công!';
 				await showBriefNotification(successMessage);
 				navigate(`/dashboard/receipt?receipt_uid=${newReceipt.data.receipt_uid}`);
-			} else if (newReceipt.status === 200) {
+			} else if (newReceipt && newReceipt.status === 200) {
 				// Show brief notification and navigate after delay
 				const successMessage = 'Tiếp nhận mẫu thành công!';
 				await showBriefNotification(successMessage);

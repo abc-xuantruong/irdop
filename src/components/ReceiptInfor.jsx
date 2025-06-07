@@ -291,7 +291,6 @@ const ReceiptInfor = ({ receipt }) => {
 	const fetchReceipt = async () => {
 		try {
 			const response = await apiGet(`https://black.irdop.org/khsi19me/db/get/receipt_full/${receipt_uid}`);
-			console.log(response.status);
 			if (response.status === 200) {
 				// Adjust timezone for dates before setting state
 				const receiptData = response.data;
@@ -705,7 +704,6 @@ const ReceiptInfor = ({ receipt }) => {
 			created_by_uid: currentUser.identity_uid,
 			modified_by_uid: currentUser.identity_uid,
 		};
-		console.log(newSampleData);
 		try {
 			const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/sample', { sample: newSampleData });
 			if (response.status === 200) {
@@ -1126,7 +1124,6 @@ const ReceiptInfor = ({ receipt }) => {
 				id: deleteItemId,
 				modified_by_uid: currentUser.identity_uid,
 			});
-			console.log(deleteItemId);
 			if (response.status === 200) {
 				showToast('Xóa mẫu thành công!');
 				fetchReceipt(); // Fetch updated data
@@ -1148,9 +1145,7 @@ const ReceiptInfor = ({ receipt }) => {
 			setDeleteItemId(null);
 		}
 	};
-
 	const handleDeleteAnalysisConfirmAction = async () => {
-		console.log(deleteItemId);
 		try {
 			// Replace axios.post with apiPost to match the rest of the codebase
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/delete/analysis', {
@@ -2030,10 +2025,8 @@ const ReceiptInfor = ({ receipt }) => {
 		const allReports = getAllReports(reports);
 		return allReports.length > 0 ? allReports[0] : null;
 	};
-
 	// Helper function to check if all analyses in a sample have been reviewed
 	const allAnalysesReviewed = (sample) => {
-		console.log(sample);
 		if (!sample.analysis || sample.analysis.length === 0) return false;
 		const allReviewed = sample.analysis.every((analysis) => analysis.reviewed_by);
 		return allReviewed ? true : false;

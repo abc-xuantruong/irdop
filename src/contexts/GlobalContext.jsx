@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { apiGet, apiPost } from './helperFunctionCallAPI';
-import axios from 'axios';
 import Cookies from 'js-cookie';
 
 const { createContext, useState, useEffect } = React;
@@ -22,6 +21,12 @@ export const GlobalProvider = ({ children }) => {
 	const [currentUser, setCurrentUser] = useState(null);
 	const status = ['Đang chờ', 'Khẩn', 'Thường', 'Hoàn thành', 'Hủy bỏ'];
 	const purposes = ['Chất lượng', 'Dự án', 'Đề tài', 'Công bố', 'Thầu phụ'];
+
+	// Helper function để kiểm tra auth cookies
+	const hasAuthCookies = () => {
+		const authToken = Cookies.get('auth');
+		return authToken && authToken !== 'undefined';
+	};
 
 	const normalizeString = (str) => {
 		if (!str) return ''; // Xử lý trường hợp str null hoặc undefined
@@ -103,29 +108,38 @@ export const GlobalProvider = ({ children }) => {
 	};
 	const fetchTechnicians = async () => {
 		try {
+			// Kiểm tra auth cookies trước khi gọi API
+			if (!hasAuthCookies()) {
+				console.log('No auth cookies found, skipping fetchTechnicians');
+				return;
+			}
+
 			const response = await apiGet('https://pink.irdop.org/db/get/techinician');
-			setTechnicians(response.data);
+			// Kiểm tra response trước khi đọc thuộc tính
+			if (response && response.data) {
+				setTechnicians(response.data);
+			}
 		} catch (error) {
 			console.error('Error fetching technicians:', error);
 		}
 	};
-
 	const fetchUser = async () => {
 		try {
-			const authToken = Cookies.get('auth');
-			const response = await axios.post(
-				'https://pink.irdop.org/ab4dg2/auth/me',
-				{},
-				{
-					headers: { Authorization: `Bearer ${authToken}` },
-				},
-			);
-			// const response = await apiPost('https://pink.irdop.org/ab4dg2/auth/me');
-			setCurrentUser({
-				identity_name: response.data.identity_name,
-				identity_uid: response.data.identity_uid,
-				role: response.data.role,
-			});
+			// Kiểm tra auth cookies trước khi gọi API
+			if (!hasAuthCookies()) {
+				console.log('No auth cookies found, skipping fetchUser');
+				return;
+			}
+
+			const response = await apiPost('https://pink.irdop.org/ab4dg2/auth/me', {});
+			// Kiểm tra response trước khi đọc thuộc tính
+			if (response && response.data) {
+				setCurrentUser({
+					identity_name: response.data.identity_name,
+					identity_uid: response.data.identity_uid,
+					role: response.data.role,
+				});
+			}
 		} catch (error) {
 			console.error('Error fetching user:', error);
 		}
@@ -211,29 +225,42 @@ export const GlobalProvider = ({ children }) => {
 			return '';
 		}
 	};
-
 	const updateAnalysisDeadline = async (analysisId, newDeadline) => {
 		try {
-			const response = await axios.post('http://127.0.0.1:1880/db/update/analysis', {
+			// Kiểm tra auth cookies trước khi gọi API
+			if (!hasAuthCookies()) {
+				console.log('No auth cookies found, skipping updateAnalysisDeadline');
+				return;
+			}
+
+			const response = await apiPost('http://127.0.0.1:1880/db/update/analysis', {
 				id: analysisId,
 				deadline: newDeadline,
 			});
-			if (response.status === 200) {
-				toast.success('Deadline updated successfully!');
-			} else {
-				toast.error('Failed to update deadline.');
+			// Kiểm tra response trước khi đọc thuộc tính
+			if (response && response.status === 200) {
+				// toast.success('Deadline updated successfully!');
+				console.log('Deadline updated successfully!');
+			} else if (response) {
+				// toast.error('Failed to update deadline.');
+				console.error('Failed to update deadline.');
 			}
 		} catch (error) {
 			console.error('Error updating deadline:', error);
-			toast.error('An error occurred while updating deadline.');
+			// toast.error('An error occurred while updating deadline.');
 		}
 	};
 
 	// Add identity cache to avoid redundant API calls
 	const [identityCache, setIdentityCache] = useState({});
-
 	const getIdenByUid = async (identity_uid) => {
 		try {
+			// Kiểm tra auth cookies trước khi gọi API
+			if (!hasAuthCookies()) {
+				console.log('No auth cookies found, skipping getIdenByUid');
+				return null;
+			}
+
 			// Check if we already have this identity in cache
 			if (identityCache[identity_uid]) {
 				return identityCache[identity_uid];
@@ -244,7 +271,8 @@ export const GlobalProvider = ({ children }) => {
 				identity_uid: identity_uid,
 			});
 
-			if (response?.status === 200 && response?.data) {
+			// Kiểm tra response trước khi đọc thuộc tính
+			if (response && response.status === 200 && response.data) {
 				// Update cache with new identity data
 				setIdentityCache((prevCache) => ({
 					...prevCache,
@@ -301,6 +329,7 @@ export const GlobalProvider = ({ children }) => {
 				getIdenByUid,
 				identityCache,
 				searchAnalysis,
+				hasAuthCookies,
 			}}
 		>
 			{children}

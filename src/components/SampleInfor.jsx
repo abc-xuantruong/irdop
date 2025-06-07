@@ -2970,8 +2970,6 @@ const SampleInfor = () => {
 					return analyte;
 				});
 
-				console.log('Updated Analytes:', updatedAnalytes);
-
 				// Update the UI first for better UX
 				setListAnalytes(updatedAnalytes);
 

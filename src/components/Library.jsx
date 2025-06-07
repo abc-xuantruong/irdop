@@ -22,7 +22,6 @@ const Library = () => {
 
 	// Helper function to check if user is a superAdmin
 	const isSuperAdmin = () => {
-		console.log('currentUser', currentUser);
 		return currentUser?.role?.staff_superAdmin === true;
 	};
 
@@ -75,7 +74,7 @@ const Library = () => {
 			<div className="w-full h-full flex justify-between items-center rounded-lg mb-2">
 				<div>
 					<button
-						className={`w-40 p-1 ml-1 text-sm font-medium active:bg-sky-400 focus:outline-none ${
+						className={`w-40 p-1 m-1 text-sm font-medium active:bg-sky-400 focus:outline-none ${
 							activeTab === 'analyte' ? 'bg-teritary' : 'bg-gray-200'
 						}`}
 						onClick={() => handleTabChange('analyte')}
@@ -83,7 +82,7 @@ const Library = () => {
 						Chỉ tiêu
 					</button>
 					<button
-						className={`w-40 p-1 ml-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
+						className={`w-40 p-1 m-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
 							activeTab === 'protocol' ? 'bg-teritary' : 'bg-gray-200'
 						}`}
 						onClick={() => handleTabChange('protocol')}
@@ -92,7 +91,7 @@ const Library = () => {
 					</button>
 					{!isTechnician() && (
 						<button
-							className={`w-40 p-1 ml-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
+							className={`w-40 p-1 m-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
 								activeTab === 'client' ? 'bg-teritary' : 'bg-gray-200'
 							}`}
 							onClick={() => handleTabChange('client')}
@@ -102,7 +101,7 @@ const Library = () => {
 					)}
 					{isSuperAdmin() && (
 						<button
-							className={`w-40 p-1 ml-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
+							className={`w-40 p-1 m-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
 								activeTab === 'account' ? 'bg-teritary' : 'bg-gray-200'
 							}`}
 							onClick={() => handleTabChange('account')}
