@@ -110,6 +110,10 @@ const SampleInfor = () => {
 	const [protocolCodePage, setProtocolCodePage] = useState(1);
 	const [unitPage, setUnitPage] = useState(1);
 	const itemsPerPage = 6; // 6 items per page for all dropdowns
+	// Add state to store original values for comparison
+	const [originalValues, setOriginalValues] = useState({});
+	// Add state to store original sample values
+	const [originalSampleValues, setOriginalSampleValues] = useState({});
 
 	let isFetch = false;
 	const [copied, setCopied] = useState(false);
@@ -335,16 +339,20 @@ const SampleInfor = () => {
 				text: error.message || 'Đã xảy ra lỗi khi cập nhật nền mẫu cho chỉ tiêu.',
 			});
 		}
-	};
-
-	// Modified to update all analyses matrices when sample matrix changes
+	}; // Modified to update all analyses matrices when sample matrix changes
 	const handleFieldBlur = (field, value, originalValue) => {
+		// Check if value has actually changed
+		if (value === originalValue) {
+			// No change, just return without API call
+			return;
+		}
+
 		// If matrix field is changing, update all analyses too
 		if (field === 'matrix') {
 			updateAllAnalysesMatrices(value);
 		}
 
-		// Always save on blur, without checking if value changed
+		// Save if value has changed
 		handleSaveField(field, value);
 	};
 
@@ -1142,10 +1150,21 @@ const SampleInfor = () => {
 						}
 					}
 				}
-
 				setSample(response.data);
 				setCurrentSample(response.data);
-				setListAnalytes(response.data.analysis); // Split sample_information into customer and receipt info
+				setListAnalytes(response.data.analysis);
+
+				// Store original sample values for comparison
+				setOriginalSampleValues({
+					sample_name: response.data.sample_name || '',
+					sample_description: response.data.sample_description || '',
+					matrix: response.data.matrix || '',
+					sample_volume: response.data.sample_volume || '',
+					purpose: response.data.purpose || '',
+					additional_request: response.data.additional_request || '',
+				});
+
+				// Split sample_information into customer and receipt info
 				if (response.data.sample_information && response.data.sample_information.length > 0) {
 					const sampleInfo = response.data.sample_information || [];
 
@@ -1186,28 +1205,62 @@ const SampleInfor = () => {
 	const handleSampleSelect = (sampleUid) => {
 		navigate(`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sampleUid}`);
 	};
-
 	const handleResultValueClick = (order) => {
-		setEditingField(`result_value-${order.sample_id}-${order.id}`);
-		setInputValue(order.result_value ? String(order.result_value) : '');
+		const fieldKey = `result_value-${order.sample_id}-${order.id}`;
+		setEditingField(fieldKey);
+		const originalValue = order.result_value ? String(order.result_value) : '';
+		setInputValue(originalValue);
+		// Store original value for comparison
+		setOriginalValues((prev) => ({
+			...prev,
+			[fieldKey]: originalValue,
+		}));
 		setIsEditorVisible(true);
 	};
 
 	const handleResultUnitClick = (order) => {
-		setEditingField(`result_unit-${order.sample_id}-${order.id}`);
-		setInputValue(order.result_unit ? String(order.result_unit) : '');
+		const fieldKey = `result_unit-${order.sample_id}-${order.id}`;
+		setEditingField(fieldKey);
+		const originalValue = order.result_unit ? String(order.result_unit) : '';
+		setInputValue(originalValue);
+		// Store original value for comparison
+		setOriginalValues((prev) => ({
+			...prev,
+			[fieldKey]: originalValue,
+		}));
 		setIsEditorVisible(true);
 	};
-
 	const handleSaveContent = async (newValue) => {
+		const currentField = editingField;
+		const fieldParts = currentField.split('-');
+		const fieldType = fieldParts[0];
+		const analysisId = parseInt(fieldParts[2]);
+
+		// Get original value for comparison
+		const originalValue = originalValues[currentField] || '';
+
+		// Check if value has changed
+		if (newValue === originalValue) {
+			// No change, just close editor without API call
+			setIsEditorVisible(false);
+			setEditingField(null);
+			// Clear the original value
+			setOriginalValues((prev) => {
+				const newValues = { ...prev };
+				delete newValues[currentField];
+				return newValues;
+			});
+			return;
+		}
+
 		setInputValue(newValue);
 		const updatedAnalytes = listAnalytes.map((item) => {
-			if (item.id === parseInt(editingField.split('-')[2])) {
-				if (editingField.startsWith('result_value')) {
+			if (item.id === analysisId) {
+				if (fieldType === 'result_value') {
 					return { ...item, result_value: newValue };
-				} else if (editingField.startsWith('result_unit')) {
+				} else if (fieldType === 'result_unit') {
 					return { ...item, result_unit: newValue };
-				} else if (editingField.startsWith('technician_uid')) {
+				} else if (fieldType === 'technician_uid') {
 					return { ...item, technician_uid: newValue };
 				}
 			}
@@ -1218,7 +1271,7 @@ const SampleInfor = () => {
 		setEditingField(null);
 
 		try {
-			const analysis = updatedAnalytes.find((item) => item.id === parseInt(editingField.split('-')[2]));
+			const analysis = updatedAnalytes.find((item) => item.id === analysisId);
 
 			// Create minimal update object with only required fields
 			const updateData = {
@@ -1229,14 +1282,14 @@ const SampleInfor = () => {
 			};
 
 			// Add only the field being updated
-			if (editingField.startsWith('result_value')) {
+			if (fieldType === 'result_value') {
 				updateData.result_value = newValue;
 				// Add submission information when updating result value
 				updateData.submit_result_by = currentUser?.identity_name;
 				updateData.submit_result_at = new Date().toISOString();
-			} else if (editingField.startsWith('result_unit')) {
+			} else if (fieldType === 'result_unit') {
 				updateData.result_unit = newValue;
-			} else if (editingField.startsWith('technician_uid')) {
+			} else if (fieldType === 'technician_uid') {
 				updateData.technician_uid = newValue;
 			}
 
@@ -1246,9 +1299,9 @@ const SampleInfor = () => {
 
 			if (response.status === 200) {
 				// Show more specific toast message based on what was updated
-				if (editingField.startsWith('result_value')) {
+				if (fieldType === 'result_value') {
 					showToast(`Đã cập nhật kết quả thành công!`);
-				} else if (editingField.startsWith('result_unit')) {
+				} else if (fieldType === 'result_unit') {
 					showToast(`Đã cập nhật đơn vị thành công!`);
 				} else {
 					showToast(`Đã cập nhật thông tin thành công!`);
@@ -1262,6 +1315,13 @@ const SampleInfor = () => {
 				text: error.message || 'An error occurred while updating analysis.',
 			});
 		}
+
+		// Clear the original value after processing
+		setOriginalValues((prev) => {
+			const newValues = { ...prev };
+			delete newValues[currentField];
+			return newValues;
+		});
 	};
 
 	const handleKeyDown = async (e, newValue) => {
@@ -2077,13 +2137,25 @@ const SampleInfor = () => {
 		}
 		setShowUnitDropdown(false);
 	};
-
 	const handleParameterNameClick = (id) => {
 		setEditingParameterField(id);
+		// Store original value when starting to edit
+		const analysis = listAnalytes.find((item) => item.id === id);
+		const originalKey = `parameter_name_${id}`;
+		setOriginalValues((prev) => ({
+			...prev,
+			[originalKey]: analysis?.parameter_name || '',
+		}));
 	};
-
 	const handleMatrixClick = (id) => {
 		setEditingMatrixField(id);
+		// Store original value when starting to edit
+		const analysis = listAnalytes.find((item) => item.id === id);
+		const originalKey = `matrix_${id}`;
+		setOriginalValues((prev) => ({
+			...prev,
+			[originalKey]: analysis?.matrix || '',
+		}));
 	};
 	const handleParameterNameChange = (index, newValue) => {
 		// Remove dropdown functionality
@@ -2112,6 +2184,16 @@ const SampleInfor = () => {
 	const handleMatrixBlur = async (index) => {
 		setEditingMatrixField(null);
 		const analysis = listAnalytes.find((item) => item.id === index);
+
+		// Check if value has changed by comparing with original value
+		const originalKey = `matrix_${index}`;
+		const originalValue = originalValues[originalKey];
+
+		if (analysis.matrix === originalValue) {
+			// No change, don't call API
+			return;
+		}
+
 		const updatedAnalysis = await updateAnalysis(analysis);
 
 		// Update the list with the returned analysis
@@ -2123,11 +2205,27 @@ const SampleInfor = () => {
 		});
 
 		setListAnalytes(updatedAnalytes);
-	};
 
+		// Clear the original value
+		setOriginalValues((prev) => {
+			const newValues = { ...prev };
+			delete newValues[originalKey];
+			return newValues;
+		});
+	};
 	const handleParameterBlur = async (index) => {
 		setEditingParameterField(null);
 		const analysis = listAnalytes.find((item) => item.id === index);
+
+		// Check if value has changed by comparing with original value
+		const originalKey = `parameter_name_${index}`;
+		const originalValue = originalValues[originalKey];
+
+		if (analysis.parameter_name === originalValue) {
+			// No change, don't call API
+			return;
+		}
+
 		const updatedAnalysis = await updateAnalysis(analysis);
 
 		// Update the list with the returned analysis
@@ -2139,6 +2237,13 @@ const SampleInfor = () => {
 		});
 
 		setListAnalytes(updatedAnalytes);
+
+		// Clear the original value
+		setOriginalValues((prev) => {
+			const newValues = { ...prev };
+			delete newValues[originalKey];
+			return newValues;
+		});
 	};
 
 	const handleMatrixKeyDown = async (e, index) => {
@@ -2156,9 +2261,15 @@ const SampleInfor = () => {
 			e.target.blur();
 		}
 	};
-
 	const handleProtocolClick = (id) => {
 		setEditingProtocolField(id);
+		// Store original value when starting to edit
+		const analysis = listAnalytes.find((item) => item.id === id);
+		const originalKey = `protocol_code_${id}`;
+		setOriginalValues((prev) => ({
+			...prev,
+			[originalKey]: analysis?.protocol_code || '',
+		}));
 	};
 
 	const handleProtocolChange = (index, newValue) => {
@@ -2173,6 +2284,15 @@ const SampleInfor = () => {
 	const handleProtocolBlur = async (index) => {
 		setEditingProtocolField(null);
 		const analysis = listAnalytes.find((item) => item.id === index);
+
+		// Check if value has changed by comparing with original value
+		const originalKey = `protocol_code_${index}`;
+		const originalValue = originalValues[originalKey];
+
+		if (analysis.protocol_code === originalValue) {
+			// No change, don't call API
+			return;
+		}
 
 		try {
 			// Create minimal update object with only required fields
@@ -2206,6 +2326,13 @@ const SampleInfor = () => {
 				text: error.message || 'Có lỗi xảy ra khi cập nhật phương pháp',
 			});
 		}
+
+		// Clear the original value
+		setOriginalValues((prev) => {
+			const newValues = { ...prev };
+			delete newValues[originalKey];
+			return newValues;
+		});
 	};
 
 	const handleProtocolKeyDown = async (e, index) => {
@@ -2249,14 +2376,20 @@ const SampleInfor = () => {
 			});
 		}
 	};
-
 	// Add handlers for external lab info
 	const [editingExNameField, setEditingExNameField] = useState(null);
 	const [editingExDateField, setEditingExDateField] = useState(null);
 	const [exDateSelected, setExDateSelected] = useState(new Date());
+	const [exOriginalValues, setExOriginalValues] = useState({});
 
 	const handleExNameClick = (id) => {
 		setEditingExNameField(id);
+		const analysis = listAnalytes.find((item) => item.id === id);
+		const originalKey = `ex_name_${id}`;
+		setExOriginalValues((prev) => ({
+			...prev,
+			[originalKey]: analysis?.ex_info?.ex_name || '',
+		}));
 	};
 
 	const handleExNameChange = (index, newValue) => {
@@ -3334,7 +3467,7 @@ const SampleInfor = () => {
 													})
 												}
 												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_name', e.target.value)}
-												onBlur={(e) => handleFieldBlur('sample_name', e.target.value, sample?.sample_name)}
+												onBlur={(e) => handleFieldBlur('sample_name', e.target.value, originalSampleValues.sample_name)}
 											/>
 										</td>
 									</tr>{' '}
@@ -3364,7 +3497,7 @@ const SampleInfor = () => {
 												onBlur={(e) => {
 													setTimeout(() => {
 														setShowMatrixDropdown(false);
-														handleFieldBlur('matrix', e.target.value, sample?.matrix);
+														handleFieldBlur('matrix', e.target.value, originalSampleValues.matrix);
 													}, 200);
 												}}
 											/>
@@ -3392,7 +3525,7 @@ const SampleInfor = () => {
 																		...sample,
 																		matrix: matrix,
 																	});
-																	handleFieldBlur('matrix', matrix, sample?.matrix);
+																	handleFieldBlur('matrix', matrix, originalSampleValues.matrix);
 																	setShowMatrixDropdown(false);
 																}}
 															>
@@ -3442,7 +3575,7 @@ const SampleInfor = () => {
 												}
 												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_description', e.target.value)}
 												onBlur={(e) =>
-													handleFieldBlur('sample_description', e.target.value, sample?.sample_description)
+													handleFieldBlur('sample_description', e.target.value, originalSampleValues.sample_description)
 												}
 											/>
 										</td>
@@ -3467,7 +3600,9 @@ const SampleInfor = () => {
 													})
 												}
 												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_volume', e.target.value)}
-												onBlur={(e) => handleFieldBlur('sample_volume', e.target.value, sample?.sample_volume)}
+												onBlur={(e) =>
+													handleFieldBlur('sample_volume', e.target.value, originalSampleValues.sample_volume)
+												}
 											/>
 										</td>
 									</tr>
@@ -3523,7 +3658,7 @@ const SampleInfor = () => {
 												}
 												onKeyDown={(e) => handleFieldKeyDown(e, 'additional_request', e.target.value)}
 												onBlur={(e) =>
-													handleFieldBlur('additional_request', e.target.value, sample?.additional_request)
+													handleFieldBlur('additional_request', e.target.value, originalSampleValues.additional_request)
 												}
 											/>
 										</td>
@@ -4162,8 +4297,15 @@ const SampleInfor = () => {
 											<div
 												className="hover:border-purple-500 hover:border rounded"
 												onClick={() => {
-													setEditingField(`result_unit-${order.sample_id}-${order.id}`);
-													setInputValue(order.result_unit || '');
+													const fieldKey = `result_unit-${order.sample_id}-${order.id}`;
+													setEditingField(fieldKey);
+													const originalValue = order.result_unit || '';
+													setInputValue(originalValue);
+													// Store original value for comparison
+													setOriginalValues((prev) => ({
+														...prev,
+														[fieldKey]: originalValue,
+													}));
 												}}
 											>
 												<div

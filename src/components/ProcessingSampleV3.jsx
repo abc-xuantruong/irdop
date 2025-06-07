@@ -142,10 +142,8 @@ const ProcessingSample = () => {
 				setFilterNoResults(true);
 				setFilterUrgent(false);
 				setFilterOverdue(false); // Reset overdue filter state
-				console.log(`Fetching data from: ${apiUrl}`);
 				const response = await apiGet(apiUrl);
 				const data = Array.isArray(response?.data) ? response.data : [];
-				console.log(`Received ${data.length} items from API`);
 
 				// Update the main data source
 				setProcessingSample(data);
@@ -156,10 +154,8 @@ const ProcessingSample = () => {
 				setFilterOverdue(true);
 				setFilterUrgent(false);
 				setFilterNoResults(false);
-				console.log(`Fetching data from: ${apiUrl}`);
 				const response = await apiGet(apiUrl);
 				const data = Array.isArray(response?.data) ? response.data : [];
-				console.log(`Received ${data.length} items from API`);
 
 				// Update the main data source
 				setProcessingSample(data);
@@ -168,10 +164,8 @@ const ProcessingSample = () => {
 				setFilterUrgent(false);
 				setFilterNoResults(false);
 				setFilterOverdue(false); // Reset overdue filter state
-				console.log(`Fetching data from: ${apiUrl}`);
 				const response = await apiGet(apiUrl);
 				const data = Array.isArray(response?.data) ? response.data : [];
-				console.log(`Received ${data.length} items from API`);
 
 				// Update the main data source
 				setProcessingSample(data);
@@ -342,7 +336,6 @@ const ProcessingSample = () => {
 		isFetch = true;
 
 		// Log URL changes for debugging
-		console.log(`URL search params changed: ${location.search}`);
 	}, [location.search]); // This will run whenever the URL query parameters change
 
 	// Update the interval for periodic refresh
@@ -1237,7 +1230,6 @@ const ProcessingSample = () => {
 				}
 
 				const uploadInfo = linkResponse.data;
-				console.log('Received upload info:', uploadInfo);
 				if (!uploadInfo || !uploadInfo.url) {
 					throw new Error('Không nhận được URL upload từ API');
 				}
@@ -1421,7 +1413,6 @@ const ProcessingSample = () => {
 			updated[index] = { ...updated[index], [field]: value };
 
 			// Log the edited object
-			console.log('Uploaded file edited:', updated[index]);
 
 			return updated;
 		});
@@ -1432,7 +1423,6 @@ const ProcessingSample = () => {
 		setUploadedFiles((prev) => {
 			const updated = [...prev];
 			const deletedFile = updated[index];
-			console.log('Uploaded file deleted:', deletedFile);
 			updated.splice(index, 1);
 			return updated;
 		});
@@ -1473,7 +1463,6 @@ const ProcessingSample = () => {
 			}
 
 			// Log the edited object
-			console.log('Uploaded file edited:', updated[fileIndex]);
 			return updated;
 		});
 	};

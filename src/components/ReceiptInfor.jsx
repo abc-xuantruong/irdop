@@ -71,9 +71,11 @@ const ReceiptInfor = ({ receipt }) => {
 	const [isReceiptDateFocused, setIsReceiptDateFocused] = useState(false);
 	const [tempReceiptDate, setTempReceiptDate] = useState(null);
 	const [receiptDateInput, setReceiptDateInput] = useState('');
-
 	// Add state to track which field is currently being edited
 	const [editingGeneralField, setEditingGeneralField] = useState(null);
+
+	// Add state to store original values for comparison
+	const [originalValues, setOriginalValues] = useState({});
 
 	// State to track report generation progress
 	const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
@@ -317,6 +319,27 @@ const ReceiptInfor = ({ receipt }) => {
 				setCurrentReceipt(receiptData);
 				setListAnalytes(receiptData.samples.flatMap((sample) => sample.analysis));
 
+				// Store original values for comparison
+				setOriginalValues({
+					record_code: receiptData.record_code || '',
+					request_number: receiptData.request_number || '',
+					receipt_uid: receiptData.receipt_uid || '',
+					receipt_date: receiptData.receipt_date || null,
+					deadline: receiptData.deadline || null,
+					note: receiptData.note || '',
+					quote_code: receiptData.quote_code || '',
+					order_code: receiptData.order_code || '',
+					total_amount: receiptData.total_amount || '',
+					sale_recorder: receiptData.sale_recorder || '',
+					'client.client_name': receiptData.client?.client_name || '',
+					'client.client_uid': receiptData.client?.client_uid || '',
+					'client.client_address': receiptData.client?.client_address || '',
+					'client.legal_id': receiptData.client?.legal_id || '',
+					'contact.name': receiptData.contact?.name || '',
+					'contact.phone': receiptData.contact?.phone || '',
+					'contact.email': receiptData.contact?.email || '',
+				});
+
 				// Fetch user information for created_by_uid and modified_by_uid
 				if (receiptData.created_by_uid) {
 					fetchUserIdentity(receiptData.created_by_uid);
@@ -501,10 +524,19 @@ const ReceiptInfor = ({ receipt }) => {
 			}
 		}
 	};
-
 	// Add handleTextareaBlur function to handle blur events
 	const handleTextareaBlur = (sampleId, field, value) => {
-		// Call API update when field loses focus
+		// Get original value for comparison
+		const sample = currentReceipt?.samples.find((s) => s.id === sampleId);
+		const originalValue = sample?.[field] || '';
+
+		// Check if value has changed
+		if (value === originalValue) {
+			// No change, just return without API call
+			return;
+		}
+
+		// Call API update when field loses focus and value has changed
 		handleSampleApiUpdate(sampleId, field, value);
 	};
 
@@ -514,17 +546,19 @@ const ReceiptInfor = ({ receipt }) => {
 		handleSampleChange(sampleId, field, newValue);
 		handleSampleApiUpdate(sampleId, field, newValue);
 	};
-
 	const handleResultValueClick = (order) => {
-		setEditingField(`result_value-${order.sample_id}-${order.id}`);
-
-		setInputValue(order.result_value ? String(order.result_value) : ''); // Đảm bảo giá trị là chuỗi
+		const fieldKey = `result_value-${order.sample_id}-${order.id}`;
+		setEditingField(fieldKey);
+		const originalValue = order.result_value ? String(order.result_value) : '';
+		setInputValue(originalValue);
 		setIsEditorVisible(true);
 	};
 
 	const handleResultUnitClick = (order) => {
-		setEditingField(`result_unit-${order.sample_id}-${order.id}`);
-		setInputValue(order.result_unit ? String(order.result_unit) : ''); // Đảm bảo giá trị là chuỗi
+		const fieldKey = `result_unit-${order.sample_id}-${order.id}`;
+		setEditingField(fieldKey);
+		const originalValue = order.result_unit ? String(order.result_unit) : '';
+		setInputValue(originalValue);
 		setIsEditorVisible(true);
 	};
 
@@ -574,9 +608,33 @@ const ReceiptInfor = ({ receipt }) => {
 			return analysis;
 		}
 	};
-
-	// Replace the existing handleSaveContent function
+	// Add this new function to handle API updates for analysis with value comparison
 	const handleSaveContent = async (newValue) => {
+		const currentField = editingField;
+		const fieldParts = currentField.split('-');
+		const fieldType = fieldParts[0];
+		const sampleId = fieldParts[1];
+		const analysisId = parseInt(fieldParts[2]);
+
+		// Get original value for comparison
+		const analysis = listAnalytes.find((item) => item.id === analysisId && item.sample_id.toString() === sampleId);
+		let originalValue;
+
+		if (fieldType === 'result_value') {
+			originalValue = analysis?.result_value || '';
+		} else if (fieldType === 'result_unit') {
+			originalValue = analysis?.result_unit || '';
+		}
+
+		// Check if value has changed
+		if (newValue === originalValue) {
+			// No change, just close editor without API call
+			setInputValue(newValue);
+			setIsEditorVisible(false);
+			setEditingField(null);
+			return;
+		}
+
 		setInputValue(newValue);
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (
@@ -1568,9 +1626,19 @@ const ReceiptInfor = ({ receipt }) => {
 	const handleFieldClick = (fieldName) => {
 		setEditingGeneralField(fieldName);
 	};
-
 	// Handle field blur to save changes and exit edit mode
 	const handleFieldBlur = (field, value) => {
+		// Get original value for comparison
+		const originalValue = originalValues[field];
+
+		// Check if value has changed
+		if (value === originalValue) {
+			// No change, just exit edit mode without API call
+			setEditingGeneralField(null);
+			return;
+		}
+
+		// Value has changed, proceed with API update
 		if (field.startsWith('client.')) {
 			const actualField = field.split('.')[1];
 			handleClientApiUpdate(actualField, value);

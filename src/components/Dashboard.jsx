@@ -60,6 +60,9 @@ const Dashboard = () => {
 		field: null,
 	});
 
+	// Add state to store original values for comparison
+	const [originalValues, setOriginalValues] = useState({});
+
 	// Add state for transaction modal
 	const [showTransactionModal, setShowTransactionModal] = useState(false);
 	const [transactionForm, setTransactionForm] = useState({
@@ -1621,7 +1624,6 @@ const Dashboard = () => {
 			setShowTodayDeadlines(false);
 		}
 	}, [searchTerm]);
-
 	const fetchReceipt = async () => {
 		try {
 			const response = await apiGet('https://black.irdop.org/khsi19me/db/get/recent_receipt');
@@ -1654,13 +1656,62 @@ const Dashboard = () => {
 		}
 	};
 
+	const fetchSearchResults = async (query) => {
+		try {
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/search/receipt', {
+				query: query,
+			});
+			if (response.status === 200) {
+				// Store search results in current list
+				setCurrentList(response.data);
+				setIsFilter(true);
+
+				// Also store in originalList if we don't have original data yet
+				if (originalList.length === 0) {
+					setOriginalList(response.data);
+				}
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi tìm kiếm',
+				});
+			}
+		} catch (error) {
+			console.error('Error searching receipts:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi tìm kiếm',
+			});
+		}
+	};
 	useEffect(() => {
 		const queryParams = new URLSearchParams(location.search);
-		if (!isFetch && !queryParams.has('search')) {
-			fetchReceipt();
+		const searchParam = queryParams.get('search');
+
+		if (!isFetch) {
+			if (searchParam) {
+				// If there's a search parameter, perform search
+				fetchSearchResults(searchParam);
+			} else {
+				// Otherwise fetch all receipts
+				fetchReceipt();
+			}
 			isFetch = true;
 		}
 	}, []);
+
+	// Add useEffect to handle search term changes
+	useEffect(() => {
+		if (searchTerm) {
+			fetchSearchResults(searchTerm);
+		} else if (!searchTerm && isFilter) {
+			// If search term is cleared, reset to original data
+			setCurrentList(originalList);
+			setIsFilter(false);
+		}
+	}, [searchTerm]);
 
 	useEffect(() => {
 		const intervalId = setInterval(() => {
@@ -1755,13 +1806,33 @@ const Dashboard = () => {
 		if (editingField.field === 'deadline') return;
 		setHoveredSampleId(null);
 	};
-
 	// Handle clicking on a field to make it editable - this should be specific to a row
 	const handleFieldClick = (receiptId, sampleId, field) => {
 		// Prevent technicians from editing fields except for sample status
 		if (isTechnician() && !(sampleId && field === 'status')) {
 			return;
 		}
+
+		// Store original value when starting to edit
+		const originalKey = `${receiptId}_${sampleId || 'null'}_${field}`;
+		let originalValue = '';
+
+		if (sampleId) {
+			// For sample fields
+			const receipt = currentList.find((r) => r.id === receiptId);
+			const sample = receipt?.samples?.find((s) => s.id === sampleId);
+			originalValue = sample?.[field] || '';
+		} else {
+			// For receipt fields
+			const receipt = currentList.find((r) => r.id === receiptId);
+			originalValue = receipt?.[field] || '';
+		}
+
+		setOriginalValues((prev) => ({
+			...prev,
+			[originalKey]: originalValue,
+		}));
+
 		setEditingField({ receiptId, sampleId, field });
 	};
 	// Update this function to properly handle input changes
@@ -1786,12 +1857,21 @@ const Dashboard = () => {
 			});
 		});
 	};
-
 	// Handle sample field updates (status, sample_volume, purpose)
 	const handleSampleChange = async (receiptId, sampleId, field, newValue) => {
 		// Prevent technicians from updating data
 		if (isTechnician()) {
 			showToast('Bạn không có quyền cập nhật thông tin này', 'error');
+			return;
+		}
+
+		// Check if value has actually changed
+		const originalKey = `${receiptId}_${sampleId}_${field}`;
+		const originalValue = originalValues[originalKey];
+
+		if (newValue === originalValue) {
+			// No change, just clear editing state
+			setEditingField({ receiptId: null, sampleId: null, field: null });
 			return;
 		}
 
@@ -1824,8 +1904,13 @@ const Dashboard = () => {
 				text: error.message || 'Có lỗi xảy ra khi cập nhật thông tin mẫu',
 			});
 		} finally {
-			// Clear the editing state
+			// Clear the editing state and original value
 			setEditingField({ receiptId: null, sampleId: null, field: null });
+			setOriginalValues((prev) => {
+				const newValues = { ...prev };
+				delete newValues[originalKey];
+				return newValues;
+			});
 		}
 	};
 	// Handle key down event for inputs
@@ -1837,11 +1922,15 @@ const Dashboard = () => {
 			setEditingField({ receiptId: null, sampleId: null, field: null });
 		}
 	};
-
 	// Handle select change - immediately update API
 	const handleSelectChange = (e, receiptId, sampleId, field) => {
 		const newValue = e.target.value;
 		handleSampleChange(receiptId, sampleId, field, newValue);
+	};
+
+	// Handle select blur - reset editing state without API call
+	const handleSelectBlur = () => {
+		setEditingField({ receiptId: null, sampleId: null, field: null });
 	};
 
 	// Handle payment status update
@@ -1899,12 +1988,21 @@ const Dashboard = () => {
 			});
 		});
 	};
-
 	// Add this function to handle receipt field updates
 	const handleReceiptChange = async (receiptId, field, newValue) => {
 		// Prevent technicians from updating data
 		if (isTechnician()) {
 			showToast('Bạn không có quyền cập nhật thông tin này', 'error');
+			return;
+		}
+
+		// Check if value has actually changed
+		const originalKey = `${receiptId}_null_${field}`;
+		const originalValue = originalValues[originalKey];
+
+		if (newValue === originalValue) {
+			// No change, just clear editing state
+			setEditingField({ receiptId: null, sampleId: null, field: null });
 			return;
 		}
 
@@ -1937,7 +2035,13 @@ const Dashboard = () => {
 				text: error.message || 'Có lỗi xảy ra khi cập nhật thông tin',
 			});
 		} finally {
+			// Clear the editing state and original value
 			setEditingField({ receiptId: null, sampleId: null, field: null });
+			setOriginalValues((prev) => {
+				const newValues = { ...prev };
+				delete newValues[originalKey];
+				return newValues;
+			});
 		}
 	};
 
@@ -2041,11 +2145,16 @@ const Dashboard = () => {
 			title: message,
 		});
 	};
-
 	// Add this function to check if user is a technician
 	const isTechnician = () => {
 		// Admin users bypass technician restrictions
 		return currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin;
+	};
+
+	// Add this function to check if user is an accountant
+	const isAccountant = () => {
+		// Admin users have accountant permissions, accountants have permissions
+		return currentUser?.role?.staff_admin || currentUser?.role?.staff_accountant;
 	};
 	// Add function to handle note icon click
 	const handleNoteClick = (receipt) => {
@@ -3036,9 +3145,7 @@ const Dashboard = () => {
 					<p>{tooltipState.content}</p>
 				</div>
 			)}
-			<Breadcrumb
-				paths={[{ }]}
-			/>
+			<Breadcrumb paths={[{}]} />
 			<div className="justify-between items-center w-full mb-1 hidden md:flex">
 				<div className="px-2 mb-1 mt-1">
 					<div className="flex width-fit space-x-2">
@@ -3080,8 +3187,8 @@ const Dashboard = () => {
 									<span className="font-normal">KT</span>
 								</button>
 							)}{' '}
-							{/* Quick Payment button - hide for technicians */}
-							{!isTechnician() && (
+							{/* Quick Payment button - hide for technicians and non-accountants */}
+							{!isTechnician() && isAccountant() && (
 								<button
 									className={`p-1 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 text-black`}
 									onClick={() => {
@@ -3896,17 +4003,20 @@ const Dashboard = () => {
 																			>
 																				{receipt.total_amount ? `${receipt.total_amount.toLocaleString()} ₫` : '--'}
 																			</p>
-																		</td>
+																		</td>{' '}
 																		<td
 																			className={`p-1 text-start align-top ${
 																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
 																			}`}
 																			rowSpan={samplesToShow.length}
-																			onClick={() => handleFieldClick(receipt.id, null, 'sale_recorder')}
+																			onClick={() =>
+																				isAccountant() && handleFieldClick(receipt.id, null, 'sale_recorder')
+																			}
 																		>
 																			{editingField.receiptId === receipt.id &&
 																			editingField.sampleId === null &&
-																			editingField.field === 'sale_recorder' ? (
+																			editingField.field === 'sale_recorder' &&
+																			isAccountant() ? (
 																				<input
 																					type="text"
 																					value={receipt.sale_recorder || ''}
@@ -3921,7 +4031,11 @@ const Dashboard = () => {
 																					autoFocus
 																				/>
 																			) : (
-																				<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
+																				<p
+																					className={`p-1 rounded ${
+																						isAccountant() ? 'cursor-pointer hover:bg-gray-100' : 'cursor-default'
+																					}`}
+																				>
 																					{receipt.sale_recorder || '--'}
 																				</p>
 																			)}
@@ -3944,9 +4058,15 @@ const Dashboard = () => {
 																							<div className="flex items-center justify-between space-x-1">
 																								{/* All transaction info on one line with separators */}
 																								<div className="flex items-center space-x-1 text-xs flex-1">
+																									{' '}
 																									<span
-																										className="cursor-pointer hover:bg-gray-100 p-1 rounded"
+																										className={`${
+																											isAccountant()
+																												? 'cursor-pointer hover:bg-gray-100'
+																												: 'cursor-default'
+																										} p-1 rounded`}
 																										onClick={() =>
+																											isAccountant() &&
 																											setEditingTransaction({
 																												receiptId: receipt.id,
 																												transactionIndex: index,
@@ -3956,7 +4076,8 @@ const Dashboard = () => {
 																									>
 																										{editingTransaction.receiptId === receipt.id &&
 																										editingTransaction.transactionIndex === index &&
-																										editingTransaction.field === 'transactionDate' ? (
+																										editingTransaction.field === 'transactionDate' &&
+																										isAccountant() ? (
 																											<div onClick={(e) => e.stopPropagation()}>
 																												<DatePicker
 																													selected={
@@ -3980,10 +4101,15 @@ const Dashboard = () => {
 																											'--'
 																										)}
 																									</span>
-																									<span className="text-gray-400">|</span>
+																									<span className="text-gray-400">|</span>{' '}
 																									<span
-																										className="cursor-pointer hover:bg-gray-100 p-1 rounded"
+																										className={`${
+																											isAccountant()
+																												? 'cursor-pointer hover:bg-gray-100'
+																												: 'cursor-default'
+																										} p-1 rounded`}
 																										onClick={() =>
+																											isAccountant() &&
 																											setEditingTransaction({
 																												receiptId: receipt.id,
 																												transactionIndex: index,
@@ -3993,7 +4119,8 @@ const Dashboard = () => {
 																									>
 																										{editingTransaction.receiptId === receipt.id &&
 																										editingTransaction.transactionIndex === index &&
-																										editingTransaction.field === 'transactionType' ? (
+																										editingTransaction.field === 'transactionType' &&
+																										isAccountant() ? (
 																											<select
 																												value={transaction.transactionType || 'TK viện'}
 																												onChange={(e) =>
@@ -4026,8 +4153,13 @@ const Dashboard = () => {
 																									</span>
 																									<span className="text-gray-400">|</span>{' '}
 																									<span
-																										className="cursor-pointer hover:bg-gray-100 p-1 rounded font-medium text-green-600"
+																										className={`${
+																											isAccountant()
+																												? 'cursor-pointer hover:bg-gray-100'
+																												: 'cursor-default'
+																										} p-1 rounded font-medium text-green-600`}
 																										onClick={() =>
+																											isAccountant() &&
 																											setEditingTransaction({
 																												receiptId: receipt.id,
 																												transactionIndex: index,
@@ -4037,7 +4169,8 @@ const Dashboard = () => {
 																									>
 																										{editingTransaction.receiptId === receipt.id &&
 																										editingTransaction.transactionIndex === index &&
-																										editingTransaction.field === 'amount' ? (
+																										editingTransaction.field === 'amount' &&
+																										isAccountant() ? (
 																											<input
 																												type="number"
 																												value={transaction.amount || ''}
@@ -4077,10 +4210,15 @@ const Dashboard = () => {
 																											editingTransaction.transactionIndex === index &&
 																											editingTransaction.field === 'note')) && (
 																										<>
-																											<span className="text-gray-400">|</span>
+																											<span className="text-gray-400">|</span>{' '}
 																											<span
-																												className="cursor-pointer hover:bg-gray-100 p-1 rounded text-blue-600"
+																												className={`${
+																													isAccountant()
+																														? 'cursor-pointer hover:bg-gray-100'
+																														: 'cursor-default'
+																												} p-1 rounded text-blue-600`}
 																												onClick={() =>
+																													isAccountant() &&
 																													setEditingTransaction({
 																														receiptId: receipt.id,
 																														transactionIndex: index,
@@ -4090,7 +4228,8 @@ const Dashboard = () => {
 																											>
 																												{editingTransaction.receiptId === receipt.id &&
 																												editingTransaction.transactionIndex === index &&
-																												editingTransaction.field === 'note' ? (
+																												editingTransaction.field === 'note' &&
+																												isAccountant() ? (
 																													<input
 																														type="text"
 																														value={transaction.note || ''}
@@ -4132,10 +4271,15 @@ const Dashboard = () => {
 																											editingTransaction.field === 'note'
 																										) && (
 																											<>
-																												<span className="text-gray-400">|</span>
+																												<span className="text-gray-400">|</span>{' '}
 																												<span
-																													className="cursor-pointer hover:bg-gray-100 p-1 rounded text-gray-500 text-xs"
+																													className={`${
+																														isAccountant()
+																															? 'cursor-pointer hover:bg-gray-100'
+																															: 'cursor-default'
+																													} p-1 rounded text-gray-500 text-xs`}
 																													onClick={() =>
+																														isAccountant() &&
 																														setEditingTransaction({
 																															receiptId: receipt.id,
 																															transactionIndex: index,
@@ -4159,22 +4303,26 @@ const Dashboard = () => {
 																								</span>
 																							</div>
 																						</div>
-																					))}
+																					))}{' '}
 																					{/* Add new transaction button */}
+																					{isAccountant() && (
+																						<div
+																							className="text-xs text-blue-600 cursor-pointer hover:underline mt-1"
+																							onClick={() => handleOpenTransactionModal(receipt.id)}
+																						>
+																							+ Thêm giao dịch
+																						</div>
+																					)}
+																				</div>
+																			) : (
+																				isAccountant() && (
 																					<div
-																						className="text-xs text-blue-600 cursor-pointer hover:underline mt-1"
+																						className="cursor-pointer text-gray-500 hover:text-blue-600 text-sm"
 																						onClick={() => handleOpenTransactionModal(receipt.id)}
 																					>
 																						+ Thêm giao dịch
 																					</div>
-																				</div>
-																			) : (
-																				<div
-																					className="cursor-pointer text-gray-500 hover:text-blue-600 text-sm"
-																					onClick={() => handleOpenTransactionModal(receipt.id)}
-																				>
-																					+ Thêm giao dịch
-																				</div>
+																				)
 																			)}
 																		</td>{' '}
 																		<td
@@ -4182,11 +4330,14 @@ const Dashboard = () => {
 																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
 																			}`}
 																			rowSpan={samplesToShow.length}
-																			onClick={() => handleFieldClick(receipt.id, null, 'invoice_number')}
+																			onClick={() =>
+																				isAccountant() && handleFieldClick(receipt.id, null, 'invoice_number')
+																			}
 																		>
 																			{editingField.receiptId === receipt.id &&
 																			editingField.sampleId === null &&
-																			editingField.field === 'invoice_number' ? (
+																			editingField.field === 'invoice_number' &&
+																			isAccountant() ? (
 																				<input
 																					type="text"
 																					value={receipt.invoice_number || ''}
@@ -4202,7 +4353,11 @@ const Dashboard = () => {
 																					autoFocus
 																				/>
 																			) : (
-																				<p className="cursor-pointer hover:bg-gray-100 p-1 rounded">
+																				<p
+																					className={`p-1 rounded ${
+																						isAccountant() ? 'cursor-pointer hover:bg-gray-100' : 'cursor-default'
+																					}`}
+																				>
 																					{receipt.invoice_number || '--'}
 																				</p>
 																			)}
@@ -4307,7 +4462,7 @@ const Dashboard = () => {
 																				)}
 																			</div>
 																		)}
-																	</td>
+																	</td>{' '}
 																	<td
 																		className="p-1 text-start align-top cursor-pointer hover:bg-gray-100"
 																		onClick={() => handleFieldClick(receipt.id, sample.id, 'purpose')}
@@ -4318,6 +4473,7 @@ const Dashboard = () => {
 																			<select
 																				value={sample.purpose || ''}
 																				onChange={(e) => handleSelectChange(e, receipt.id, sample.id, 'purpose')}
+																				onBlur={handleSelectBlur}
 																				className="p-1 border rounded-md w-full text-sm bg-white"
 																				autoFocus
 																			>
@@ -4333,7 +4489,7 @@ const Dashboard = () => {
 																				{sample.purpose || '--'}
 																			</div>
 																		)}
-																	</td>
+																	</td>{' '}
 																	<td
 																		className="p-1 text-start align-top cursor-pointer hover:bg-gray-100"
 																		onClick={() => handleFieldClick(receipt.id, sample.id, 'status')}
@@ -4344,6 +4500,7 @@ const Dashboard = () => {
 																			<select
 																				value={sample.status || 0}
 																				onChange={(e) => handleSelectChange(e, receipt.id, sample.id, 'status')}
+																				onBlur={handleSelectBlur}
 																				className="p-1 border rounded-md w-full text-sm bg-white"
 																				autoFocus
 																			>
