@@ -233,7 +233,6 @@ const SampleInfor = () => {
 				updatedSample.sample_information = [...updatedCustomerInfo, ...receiptInfo];
 				setCustomerInfo(updatedCustomerInfo);
 			}
-
 			if (field === 'sample_description') {
 				// Update the "Mô tả / desc." field in receiptInfo
 				const updatedReceiptInfo = receiptInfo.map((item) => {
@@ -262,8 +261,8 @@ const SampleInfor = () => {
 					sample_uid: sample.sample_uid,
 					[field]: value,
 					modified_by_uid: currentUser.identity_uid,
-					...(field === 'sample_name' && { sample_information: [...customerInfo, ...receiptInfo] }),
-					...(field === 'sample_description' && { sample_information: [...customerInfo, ...receiptInfo] }),
+					...(field === 'sample_name' && { sample_information: updatedSample.sample_information }),
+					...(field === 'sample_description' && { sample_information: updatedSample.sample_information }),
 				},
 			});
 
@@ -485,7 +484,6 @@ const SampleInfor = () => {
 			setTypingTimeout(timeout);
 		}
 	};
-
 	const handleSampleSelectFromDropdown = async (sampleUid) => {
 		// Find the sample in receiptFull with the matching sample_uid
 		let analyses = receiptFull.samples.find((sample) => sample.sample_uid === sampleUid).analysis;
@@ -493,7 +491,7 @@ const SampleInfor = () => {
 		// Create a clone of the analyses without result values and review info
 		analyses = analyses.map((analysis) => {
 			// Create a new object without the specific fields we want to exclude
-			const { id, result_value, reviewed_by, ...cleanAnalysis } = analysis;
+			const { id, reviewed_by, ...cleanAnalysis } = analysis;
 			// Return the cleaned analysis with a temporary id for UI rendering
 			return {
 				...cleanAnalysis,
@@ -501,13 +499,7 @@ const SampleInfor = () => {
 			};
 		});
 
-		// Check for duplicate parameters that already exist in the current sample
-		const existingParameterNames = listAnalytes.map((a) => a.parameter_name.toLowerCase().trim());
-		const filteredAnalyses = analyses.filter(
-			(analysis) => !existingParameterNames.includes(analysis.parameter_name.toLowerCase().trim()),
-		);
-
-		setSelectedParameters(filteredAnalyses);
+		setSelectedParameters(analyses);
 		setIsDropdownVisible(false);
 	};
 
@@ -548,7 +540,6 @@ const SampleInfor = () => {
 		const updatedParameters = selectedParameters.filter((_, i) => i !== index);
 		setSelectedParameters(updatedParameters);
 	};
-
 	const handleConfirmAddParameter = async () => {
 		try {
 			if (selectedParameters.length === 0) {
@@ -556,20 +547,9 @@ const SampleInfor = () => {
 				return;
 			}
 
-			// Filter out any parameters that have the same name as existing ones
-			const existingParameterNames = listAnalytes.map((a) => a.parameter_name.toLowerCase().trim());
-			const filteredParameters = selectedParameters.filter(
-				(param) => !existingParameterNames.includes(param.parameter_name.toLowerCase().trim()),
-			);
+			console.log('Selected Parameters:', selectedParameters);
 
-			if (filteredParameters.length === 0) {
-				showToast('Tất cả chỉ tiêu đã tồn tại trong mẫu này', 'warning');
-				setIsAddingParameter(false);
-				setSelectedParameters([]);
-				return;
-			}
-
-			const parameters = filteredParameters.map((parameter) => ({
+			const parameters = selectedParameters.map((parameter) => ({
 				receipt_id: currentSample.receipt_id,
 				sample_id: currentSample.id,
 				parameter_id: parameter.parameter_id || 0,
@@ -583,6 +563,7 @@ const SampleInfor = () => {
 					: new Date(Date.now() + parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0),
 				protocol_code: parameter.protocol_code,
 				result_unit: parameter.default_unit || parameter.result_unit,
+				result_value: parameter.result_value || '',
 				protocol_source: parameter.protocol_source,
 				created_by_uid: currentUser.identity_uid,
 				modified_by_uid: currentUser.identity_uid,

@@ -1,0 +1,905 @@
+import React, { useState, useContext, useEffect } from 'react';
+import { apiPost, apiGet } from '../contexts/helperFunctionCallAPI';
+import { GlobalContext } from '../contexts/GlobalContext';
+import { FaBox, FaUser, FaTruck } from 'react-icons/fa';
+
+const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
+	console.log('Receipt data:', receipt);
+	const { currentUser } = useContext(GlobalContext);
+	const [formData, setFormData] = useState({
+		clientAddress: receipt?.client?.client_address || '',
+		clientContactName: receipt?.contact?.name || '',
+		clientContactPhone: receipt?.contact?.phone || '',
+		clientContactEmail: receipt?.contact?.email || '',
+		notes: '',
+		// Thông tin người gửi mặc định
+		senderName: 'VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN',
+		senderAddress: '12 Phùng Khoang 2',
+		senderPhone: '0868872578',
+		senderEmail: 'kiemnghiem@irdop.org',
+		// Thông tin hàng hóa - format mặc định: <số lượng sample_uid> x PPT tiếp nhận <receipt_uid> <client_name> Bao gồm các mã: <Danh sách sample_uid>
+		productName: `${receipt?.samples?.length || 0} x PPT tiếp nhận ${receipt?.receipt_uid || ''} ${
+			receipt?.client?.client_name || ''
+		}${receipt?.samples?.length ? ` Bao gồm các mã: ${receipt?.samples.map((s) => s.sample_uid).join(', ')}` : ''}`,
+		productQuantity: 1,
+		productWeight: 100,
+		productType: 'HH',
+	});
+
+	const [addressMessage, setAddressMessage] = useState('');
+	const [isCheckingAddress, setIsCheckingAddress] = useState(false);
+	const [addressData, setAddressData] = useState({
+		address: '',
+		province_id: '',
+		district_id: '',
+		wards_id: '',
+	});
+	// Thông tin địa chỉ người gửi mặc định
+	const [senderAddressData, setSenderAddressData] = useState({
+		address: '12 Phùng Khoang 2',
+		province_id: '1',
+		district_id: '25',
+		wards_id: '497',
+	});
+	// State to store province names
+	const [provinceNames, setProvinceNames] = useState({});
+	// State to store district names
+	const [districtNames, setDistrictNames] = useState({});
+	// State to store wards names
+	const [wardsNames, setWardsNames] = useState({});
+
+	// Function to fetch province name by ID
+	const fetchProvinceName = async (provinceId) => {
+		if (!provinceId || provinceNames[provinceId]) return;
+
+		try {
+			const response = await fetch(
+				`https://partner.viettelpost.vn/v2/categories/listProvinceById?provinceId=${provinceId}`,
+			);
+			const data = await response.json();
+
+			if (data.status === 200 && data.data && data.data.length > 0) {
+				setProvinceNames((prev) => ({
+					...prev,
+					[provinceId]: data.data[0].PROVINCE_NAME,
+				}));
+			}
+		} catch (error) {
+			console.error('Error fetching province name:', error);
+		}
+	};
+
+	// Function to fetch district name by ID
+	const fetchDistrictName = async (provinceId, districtId) => {
+		if (!provinceId || !districtId || districtNames[districtId]) return;
+
+		try {
+			const response = await fetch(
+				`https://partner.viettelpost.vn/v2/categories/listDistrict?provinceId=${provinceId}`,
+			);
+			const data = await response.json();
+
+			if (data.status === 200 && data.data && data.data.length > 0) {
+				const district = data.data.find((d) => d.DISTRICT_ID.toString() === districtId.toString());
+				if (district) {
+					setDistrictNames((prev) => ({
+						...prev,
+						[districtId]: district.DISTRICT_NAME,
+					}));
+				}
+			}
+		} catch (error) {
+			console.error('Error fetching district name:', error);
+		}
+	};
+
+	// Function to fetch wards name by ID
+	const fetchWardsName = async (districtId, wardsId) => {
+		if (!districtId || !wardsId || wardsNames[wardsId]) return;
+
+		try {
+			const response = await fetch(`https://partner.viettelpost.vn/v2/categories/listWards?districtId=${districtId}`);
+			const data = await response.json();
+
+			if (data.status === 200 && data.data && data.data.length > 0) {
+				const wards = data.data.find((w) => w.WARDS_ID.toString() === wardsId.toString());
+				if (wards) {
+					setWardsNames((prev) => ({
+						...prev,
+						[wardsId]: wards.WARDS_NAME,
+					}));
+				}
+			}
+		} catch (error) {
+			console.error('Error fetching wards name:', error);
+		}
+	};
+	// Fetch province and district names when component mounts or IDs change
+	useEffect(() => {
+		if (senderAddressData.province_id) {
+			fetchProvinceName(senderAddressData.province_id);
+		}
+		if (senderAddressData.province_id && senderAddressData.district_id) {
+			fetchDistrictName(senderAddressData.province_id, senderAddressData.district_id);
+		}
+		if (senderAddressData.district_id && senderAddressData.wards_id) {
+			fetchWardsName(senderAddressData.district_id, senderAddressData.wards_id);
+		}
+		if (addressData.province_id) {
+			fetchProvinceName(addressData.province_id);
+		}
+		if (addressData.province_id && addressData.district_id) {
+			fetchDistrictName(addressData.province_id, addressData.district_id);
+		}
+		if (addressData.district_id && addressData.wards_id) {
+			fetchWardsName(addressData.district_id, addressData.wards_id);
+		}
+	}, [
+		senderAddressData.province_id,
+		senderAddressData.district_id,
+		senderAddressData.wards_id,
+		addressData.province_id,
+		addressData.district_id,
+		addressData.wards_id,
+	]);
+
+	// Function to format the full address from components
+	const getFormattedFullAddress = () => {
+		if (!addressData.address) return '';
+
+		const parts = [
+			addressData.address,
+			wardsNames[addressData.wards_id],
+			districtNames[addressData.district_id],
+			provinceNames[addressData.province_id],
+		];
+
+		// Filter out empty parts and join with commas
+		return parts.filter((part) => part).join(', ');
+	};
+
+	// Function to display province with name
+	const displayProvinceWithName = (provinceId) => {
+		if (!provinceId) return '';
+		const provinceName = provinceNames[provinceId];
+		return provinceName ? (
+			<span
+				dangerouslySetInnerHTML={{
+					__html: `<b>${provinceId}:</b> ${provinceName}`,
+				}}
+			/>
+		) : (
+			provinceId
+		);
+	};
+
+	// Function to display district with name
+	const displayDistrictWithName = (districtId) => {
+		if (!districtId) return '';
+		const districtName = districtNames[districtId];
+		return districtName ? (
+			<span
+				dangerouslySetInnerHTML={{
+					__html: `<b>${districtId}:</b> ${districtName}`,
+				}}
+			/>
+		) : (
+			districtId
+		);
+	};
+
+	// Function to display wards with name
+	const displayWardsWithName = (wardsId) => {
+		if (!wardsId) return '';
+		const wardsName = wardsNames[wardsId];
+		return wardsName ? (
+			<span
+				dangerouslySetInnerHTML={{
+					__html: `<b>${wardsId}:</b> ${wardsName}`,
+				}}
+			/>
+		) : (
+			wardsId
+		);
+	};
+
+	const handleInputChange = (e) => {
+		const { name, value } = e.target;
+		setFormData((prev) => ({
+			...prev,
+			[name]: value,
+		}));
+	}; // Tính toán các từ khóa liên quan
+	const getRelatedKeywords = () => {
+		const sampleUIDs = receipt?.samples?.map((sample) => sample.sample_uid) || [];
+		const receiptUID = receipt?.receipt_uid ? [receipt.receipt_uid] : [];
+
+		return {
+			sampleUIDs,
+			receiptUID,
+		};
+	};
+
+	const { sampleUIDs, receiptUID } = getRelatedKeywords();
+
+	// State để quản lý các UID bị loại bỏ
+	const [removedUIDs, setRemovedUIDs] = useState(new Set());
+
+	// Handle remove UID
+	const handleRemoveUID = (uid) => {
+		setRemovedUIDs((prev) => new Set([...prev, uid]));
+	};
+
+	// Handle restore UID
+	const handleRestoreUID = (uid) => {
+		setRemovedUIDs((prev) => {
+			const newSet = new Set(prev);
+			newSet.delete(uid);
+			return newSet;
+		});
+	};
+	// Tính toán lại foreignkeyUIDS với các UID không bị loại bỏ
+	const getCurrentForeignkeyUIDS = () => {
+		const allUIDs = [...sampleUIDs, ...receiptUID];
+		return allUIDs.filter((uid) => !removedUIDs.has(uid));
+	};
+	// Cập nhật tên hàng hóa với danh sách UIDs
+	useEffect(() => {
+		const foreignKeyUIDs = getCurrentForeignkeyUIDS();
+		const sampleList = sampleUIDs.filter((uid) => !removedUIDs.has(uid));
+
+		if (foreignKeyUIDs.length > 0) {
+			// Format mới: <số lượng sample_uid> x PPT tiếp nhận <receipt_uid> <client_name> Bao gồm các mã: <Danh sách sample_uid>
+			const receiptId = receiptUID.length > 0 && !removedUIDs.has(receiptUID[0]) ? receiptUID[0] : '';
+			const productNameFormat = `${sampleList.length || 0} x PPT tiếp nhận ${receiptId} ${
+				receipt?.client?.client_name || ''
+			} Bao gồm các mã: ${sampleList.join(', ')}`;
+
+			setFormData((prev) => ({
+				...prev,
+				productName: productNameFormat,
+			}));
+		}
+	}, [removedUIDs, sampleUIDs, receiptUID]);
+	const checkAddress = async () => {
+		if (!formData.clientAddress.trim()) {
+			setAddressMessage('Vui lòng nhập địa chỉ');
+			return;
+		}
+
+		setIsCheckingAddress(true);
+		setAddressMessage('');
+		try {
+			const response = await apiPost('https://red.irdop.org/v1/postal/map/check_address', {
+				address: formData.clientAddress,
+			});
+
+			if (response.data && response.data.data && !response.data.error) {
+				const newAddressData = {
+					address: response.data.data.address || '',
+					province_id: response.data.data.province_id || '',
+					district_id: response.data.data.district_id || '',
+					wards_id: response.data.data.wards_id || '',
+				};
+				setAddressData(newAddressData);
+
+				// Fetch names for the new IDs
+				if (newAddressData.province_id) {
+					fetchProvinceName(newAddressData.province_id);
+				}
+				if (newAddressData.province_id && newAddressData.district_id) {
+					fetchDistrictName(newAddressData.province_id, newAddressData.district_id);
+				}
+				if (newAddressData.district_id && newAddressData.wards_id) {
+					fetchWardsName(newAddressData.district_id, newAddressData.wards_id);
+				}
+
+				setAddressMessage(response.data.message || 'Đã kiểm tra địa chỉ');
+			} else if (response.data && response.data.error) {
+				setAddressMessage('Lỗi: ' + (response.data.message || 'Không thể kiểm tra địa chỉ'));
+			} else {
+				setAddressMessage('Lỗi: Không thể kiểm tra địa chỉ');
+			}
+		} catch (error) {
+			setAddressMessage('Lỗi khi kiểm tra địa chỉ');
+		} finally {
+			setIsCheckingAddress(false);
+		}
+	};
+	// Xử lý gửi đơn hàng
+	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [orderData, setOrderData] = useState(null);
+	const [hasExistingOrder, setHasExistingOrder] = useState(false);
+
+	// Load existing order data if tracking number exists
+	useEffect(() => {
+		if (receipt?.tracking_number) {
+			loadExistingOrder(receipt.tracking_number);
+		}
+	}, [receipt?.tracking_number]);
+
+	const loadExistingOrder = async (trackingNumber) => {
+		try {
+			const response = await apiGet(`https://red.irdop.org/v1/postal/vietel/get_order/${trackingNumber}`);
+			if (response.success || response.data) {
+				const orderInfo = response.data || response;
+				setOrderData(orderInfo);
+				setHasExistingOrder(true);
+
+				// Load data into form if available
+				if (orderInfo.sender) {
+					setFormData((prev) => ({
+						...prev,
+						senderName: orderInfo.sender.name || prev.senderName,
+						senderAddress: orderInfo.sender.address || prev.senderAddress,
+						senderPhone: orderInfo.sender.phone || prev.senderPhone,
+						senderEmail: orderInfo.sender.email || prev.senderEmail,
+					}));
+				}
+
+				if (orderInfo.receiver) {
+					setFormData((prev) => ({
+						...prev,
+						clientContactName: orderInfo.receiver.name || prev.clientContactName,
+						clientAddress: orderInfo.receiver.address || prev.clientAddress,
+						clientContactPhone: orderInfo.receiver.phone || prev.clientContactPhone,
+						clientContactEmail: orderInfo.receiver.email || prev.clientContactEmail,
+					}));
+
+					// Set address data for receiver
+					setAddressData({
+						address: orderInfo.receiver.address || '',
+						province_id: orderInfo.receiver.province_id || '',
+						district_id: orderInfo.receiver.district_id || '',
+						wards_id: orderInfo.receiver.wards_id || '',
+					});
+				}
+
+				if (orderInfo.product) {
+					setFormData((prev) => ({
+						...prev,
+						productName: orderInfo.product.name || prev.productName,
+						productQuantity: orderInfo.product.quantity || prev.productQuantity,
+						productWeight: orderInfo.product.weight || prev.productWeight,
+						productType: orderInfo.product.type || prev.productType,
+					}));
+				}
+
+				if (orderInfo.order) {
+					setFormData((prev) => ({
+						...prev,
+						notes: orderInfo.order.note || prev.notes,
+					}));
+				}
+			}
+		} catch (error) {
+			console.error('Error loading existing order:', error);
+		}
+	};
+
+	// Handle cancel order
+	const handleCancelOrder = async () => {
+		if (!receipt?.tracking_number) return;
+
+		if (window.confirm('Bạn có chắc chắn muốn hủy đơn hàng này?')) {
+			try {
+				setIsSubmitting(true);
+
+				// Cancel order via API
+				const response = await apiPost('https://red.irdop.org/v1/postal/status/cancel', {
+					trackingNumber: receipt.tracking_number,
+				});
+				if (response.success || response.data) {
+					// Update receipt to clear tracking info
+					const payload = {
+						receipt: {
+							id: receipt.id,
+							receipt_uid: receipt.receipt_uid,
+							ppt_send_by: '',
+							tracking_number: '',
+						},
+					};
+					await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+					alert('Đã hủy đơn hàng thành công!');
+
+					// Call onOrderUpdate to refresh dashboard data
+					if (onOrderUpdate) {
+						const updatedReceipt = {
+							...receipt,
+							ppt_send_by: '',
+							tracking_number: '',
+						};
+						onOrderUpdate(updatedReceipt);
+					}
+
+					onClose && onClose();
+				} else {
+					alert('Có lỗi xảy ra khi hủy đơn hàng');
+				}
+			} catch (error) {
+				console.error('Error canceling order:', error);
+				alert('Có lỗi xảy ra khi hủy đơn hàng: ' + (error.message || 'Lỗi không xác định'));
+			} finally {
+				setIsSubmitting(false);
+			}
+		}
+	};
+
+	const handleSubmitOrder = async () => {
+		try {
+			setIsSubmitting(true);
+
+			// Validation
+			if (!formData.senderName.trim()) {
+				alert('Vui lòng nhập tên người gửi');
+				return;
+			}
+			if (!formData.senderAddress.trim()) {
+				alert('Vui lòng nhập địa chỉ người gửi');
+				return;
+			}
+			if (!formData.senderPhone.trim()) {
+				alert('Vui lòng nhập số điện thoại người gửi');
+				return;
+			}
+			if (!formData.senderEmail.trim()) {
+				alert('Vui lòng nhập email người gửi');
+				return;
+			}
+			if (!formData.clientContactName.trim()) {
+				alert('Vui lòng nhập tên người nhận');
+				return;
+			}
+			if (!formData.clientAddress.trim()) {
+				alert('Vui lòng nhập địa chỉ người nhận');
+				return;
+			}
+			if (!formData.clientContactPhone.trim()) {
+				alert('Vui lòng nhập số điện thoại người nhận');
+				return;
+			}
+			if (!addressData.address) {
+				alert('Vui lòng kiểm tra địa chỉ người nhận để có địa chỉ chuẩn hóa');
+				return;
+			}
+			if (!formData.productName.trim()) {
+				alert('Vui lòng nhập tên hàng hóa');
+				return;
+			} // Tạo body request theo validation
+			const requestBody = {
+				sender: {
+					name: formData.senderName,
+					address: senderAddressData.address || formData.senderAddress,
+					phone: formData.senderPhone,
+					email: formData.senderEmail,
+					wards_id: senderAddressData.wards_id,
+					district_id: senderAddressData.district_id,
+					province_id: senderAddressData.province_id,
+				},
+				receiver: {
+					name: formData.clientContactName,
+					address: addressData.address || formData.clientAddress,
+					phone: formData.clientContactPhone,
+					email: formData.clientContactEmail || '',
+					...(addressData.wards_id && { wards_id: addressData.wards_id }),
+					...(addressData.district_id && { district_id: addressData.district_id }),
+					...(addressData.province_id && { province_id: addressData.province_id }),
+				},
+				product: {
+					name: formData.productName,
+					description: formData.productName, // Sử dụng productName làm description
+					quantity: formData.productQuantity || 1,
+					weight: formData.productWeight || 100,
+					type: formData.productType || 'HH',
+				},
+				order: {
+					payment: 3, // COD
+					service: 'VTK', // Vận chuyển tiết kiệm
+					serviceAddress: '',
+					voucher: '',
+					note: formData.notes || 'Gửi phiếu phân tích',
+				},
+				foreignKeyUIDs: getCurrentForeignkeyUIDS(),
+			};
+			console.log('Sending order:', requestBody);
+
+			const response = await apiPost('https://red.irdop.org/v1/postal/vietel/new-order', requestBody);
+			if (response.success || response.data) {
+				// Lấy trackingNumber từ response
+				const trackingNumber = response.data?.trackingNumber || response.trackingNumber;
+
+				if (trackingNumber && receipt?.id && receipt?.receipt_uid) {
+					// Update receipt với tracking number theo format handlePptSendChangeAPI
+					try {
+						// Add 7 hours to account for GMT+7
+						const adjustedDate = new Date();
+						adjustedDate.setHours(adjustedDate.getHours() + 7);
+						const formattedDate = adjustedDate.toISOString().split('T')[0];
+						const payload = {
+							receipt: {
+								id: receipt.id,
+								receipt_uid: receipt.receipt_uid,
+								ppt_send_at: formattedDate,
+								ppt_send_by: currentUser?.identity_uid,
+								tracking_number: trackingNumber,
+							},
+						};
+
+						const updateResponse = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+						if (updateResponse.status === 200) {
+							console.log('Receipt updated successfully with tracking number:', trackingNumber);
+
+							// Call onOrderUpdate to refresh dashboard data
+							if (onOrderUpdate) {
+								const updatedReceipt = {
+									...receipt,
+									ppt_send_at: formattedDate,
+									ppt_send_by: currentUser?.identity_uid,
+									tracking_number: trackingNumber,
+								};
+								onOrderUpdate(updatedReceipt);
+							}
+						} else {
+							console.error('Error updating receipt:', updateResponse.data?.message);
+						}
+					} catch (updateError) {
+						console.error('Error updating receipt:', updateError);
+						// Vẫn hiển thị thành công vì đơn hàng đã được tạo
+					}
+				}
+
+				alert(`Tạo đơn hàng thành công! ${trackingNumber ? `Mã vận đơn: ${trackingNumber}` : ''}`);
+				onClose && onClose();
+			} else {
+				alert('Có lỗi xảy ra khi tạo đơn hàng');
+			}
+		} catch (error) {
+			console.error('Error submitting order:', error);
+			alert('Có lỗi xảy ra khi tạo đơn hàng: ' + (error.message || 'Lỗi không xác định'));
+		} finally {
+			setIsSubmitting(false);
+		}
+	};
+	return (
+		<div className="shipment-form p-6 bg-gray-50 rounded-lg max-w-7xl mx-auto relative mt-16">
+			{' '}
+			{/* Grid layout for sender and receiver info */}
+			<div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+				{' '}
+				{/* Thông tin hàng hóa */}
+				<div className="p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+					<div className="flex items-center mb-4 p-2 bg-gray-100 text-gray-800 -mx-2 -mt-2">
+						<FaBox className="mr-3 text-xl" />
+						<h4 className="text-xl font-semibold">Hàng hóa</h4>
+					</div>
+					<div className="grid grid-cols-4 gap-2 items-center">
+						{/* Từ khóa liên quan */}
+						<div className="text-sm font-medium text-gray-700 text-left flex items-start h-fit pt-2">
+							Từ khóa liên quan:
+						</div>
+						<div className="col-span-3">
+							{/* Combined UIDs (sample + receipt) */}
+							{(sampleUIDs.length > 0 || receiptUID.length > 0) && (
+								<div className="mb-2">
+									<div className="flex flex-wrap gap-2">
+										{/* Sample UIDs */}
+										{sampleUIDs.map((uid, index) => (
+											<div
+												key={`sample-${index}`}
+												className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${
+													removedUIDs.has(uid)
+														? 'bg-gray-100 text-gray-400 border-gray-300'
+														: 'bg-blue-100 text-blue-800 border-blue-300'
+												}`}
+											>
+												<span>{uid}</span>
+												<button
+													type="button"
+													onClick={() => (removedUIDs.has(uid) ? handleRestoreUID(uid) : handleRemoveUID(uid))}
+													className={`ml-1 text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center hover:bg-opacity-80 ${
+														removedUIDs.has(uid)
+															? 'text-gray-500 hover:text-gray-700'
+															: 'text-red-600 hover:text-red-800'
+													}`}
+													title={removedUIDs.has(uid) ? 'Khôi phục' : 'Xóa'}
+												>
+													{removedUIDs.has(uid) ? '↶' : '×'}
+												</button>
+											</div>
+										))}
+
+										{/* Receipt UID */}
+										{receiptUID.map((uid, index) => (
+											<div
+												key={`receipt-${index}`}
+												className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${
+													removedUIDs.has(uid)
+														? 'bg-gray-100 text-gray-400 border-gray-300'
+														: 'bg-green-100 text-green-800 border-green-300'
+												}`}
+											>
+												<span>{uid}</span>
+												<button
+													type="button"
+													onClick={() => (removedUIDs.has(uid) ? handleRestoreUID(uid) : handleRemoveUID(uid))}
+													className={`ml-1 text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center hover:bg-opacity-80 ${
+														removedUIDs.has(uid)
+															? 'text-gray-500 hover:text-gray-700'
+															: 'text-red-600 hover:text-red-800'
+													}`}
+													title={removedUIDs.has(uid) ? 'Khôi phục' : 'Xóa'}
+												>
+													{removedUIDs.has(uid) ? '↶' : '×'}
+												</button>
+											</div>
+										))}
+									</div>
+								</div>
+							)}
+
+							{/* Hiển thị thông báo nếu không có UID nào */}
+							{sampleUIDs.length === 0 && receiptUID.length === 0 && (
+								<div className="text-gray-500 text-xs italic">Không có từ khóa liên quan</div>
+							)}
+						</div>
+
+						{/* Product name field spanning all 4 columns */}
+						<label
+							htmlFor="productName"
+							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+						>
+							Tên hàng hóa:
+						</label>
+						<textarea
+							id="productName"
+							name="productName"
+							value={formData.productName}
+							onChange={handleInputChange}
+							rows="3"
+							className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+						/>
+
+						{/* Số lượng và Trọng lượng trên cùng 1 hàng */}
+						<label
+							htmlFor="productQuantity"
+							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+						>
+							Số lượng:
+						</label>
+						<input
+							type="number"
+							id="productQuantity"
+							name="productQuantity"
+							value={formData.productQuantity}
+							onChange={handleInputChange}
+							className="col-span-1 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+						/>
+
+						<label
+							htmlFor="productWeight"
+							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+						>
+							Trọng lượng (gram):
+						</label>
+						<input
+							type="number"
+							id="productWeight"
+							name="productWeight"
+							value={formData.productWeight}
+							onChange={handleInputChange}
+							className="col-span-1 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+						/>
+
+						{/* Hidden product type - not visible but still used for API */}
+						<input type="hidden" id="productType" name="productType" value={formData.productType || 'HH'} />
+					</div>
+				</div>{' '}
+				{/* Thông tin người nhận */}
+				<div className="p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+					<div className="flex items-center mb-4 p-2 bg-gray-100 text-gray-800 -mx-2 -mt-2">
+						<FaUser className="mr-3 text-xl" />
+						<h4 className="text-xl font-semibold">Người nhận</h4>
+					</div>
+					<div className="grid grid-cols-4 gap-2 items-center">
+						{/* Họ tên người nhận */}
+						<label
+							htmlFor="clientContactName"
+							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+						>
+							Họ tên người nhận:
+						</label>
+						<input
+							type="text"
+							id="clientContactName"
+							name="clientContactName"
+							value={formData.clientContactName}
+							onChange={handleInputChange}
+							className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+						/>
+						{/* Số điện thoại */}
+						<label
+							htmlFor="clientContactPhone"
+							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+						>
+							Số điện thoại:
+						</label>
+						<input
+							type="text"
+							id="clientContactPhone"
+							name="clientContactPhone"
+							value={formData.clientContactPhone}
+							onChange={handleInputChange}
+							className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+						/>
+						{/* Email */}
+						<label
+							htmlFor="clientContactEmail"
+							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+						>
+							Email:
+						</label>
+						<input
+							type="email"
+							id="clientContactEmail"
+							name="clientContactEmail"
+							value={formData.clientContactEmail}
+							onChange={handleInputChange}
+							className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+						/>
+						{/* Địa chỉ nhận */}
+						<label
+							htmlFor="clientAddress"
+							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+						>
+							Địa chỉ nhận:
+						</label>
+						<input
+							type="text"
+							id="clientAddress"
+							name="clientAddress"
+							value={formData.clientAddress}
+							onChange={handleInputChange}
+							className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+						/>
+						{/* Nút kiểm tra địa chỉ và thông báo trên cùng 1 hàng */}
+						<button
+							type="button"
+							onClick={checkAddress}
+							disabled={isCheckingAddress}
+							className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm h-fit outline-none"
+						>
+							{isCheckingAddress ? 'Đang kiểm tra...' : 'Kiểm tra địa chỉ'}
+						</button>
+						<div className="col-span-3">
+							{addressMessage && (
+								<div
+									className={`p-1.5 rounded text-sm border text-left ${
+										addressMessage.includes('Lỗi') || addressMessage.includes('Không thể')
+											? 'bg-red-100 text-red-700 border-red-300'
+											: 'bg-green-100 text-green-700 border-green-300'
+									}`}
+								>
+									{addressMessage}
+								</div>
+							)}
+						</div>
+						{/* 4 ô address fields - 2 hàng x 2 cột */}
+						<input
+							type="text"
+							value={addressData.address}
+							onChange={(e) => setAddressData((prev) => ({ ...prev, address: e.target.value }))}
+							placeholder="Địa chỉ chuẩn hóa (bắt buộc)"
+							className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+							required
+						/>
+						<div className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed text-left">
+							{displayProvinceWithName(addressData.province_id) || 'Mã tỉnh/thành'}
+						</div>{' '}
+						<div className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed text-left">
+							{displayDistrictWithName(addressData.district_id) || 'Mã quận/huyện'}
+						</div>
+						<div className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed text-left">
+							{displayWardsWithName(addressData.wards_id) || 'Mã phường/xã'}
+						</div>
+						{/* Combined full address row (spans all 4 columns) */}
+						<div className="col-span-4 p-1.5 text-gray-700 text-left">
+							{addressData.address ? (
+								<i className="text-gray-600">{getFormattedFullAddress() || 'Chưa có địa chỉ chuẩn hóa'}</i>
+							) : (
+								<i className="text-amber-500">Chú ý: địa chỉ phải được ngăn cách bởi dấu phẩy ( , ).</i>
+							)}
+						</div>
+					</div>
+				</div>
+			</div>{' '}
+			{/* Thông tin người gửi - full width */}
+			<div className="mt-4 p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+				{' '}
+				<div className="flex items-center mb-4 p-2 bg-gray-100 text-gray-800 -mx-2 -mt-2">
+					<FaTruck className="mr-3 text-xl" />
+					<h4 className="text-xl font-semibold">Thông tin gửi</h4>
+				</div>
+				<div className="space-y-4">
+					{/* Hiển thị thông tin người gửi dạng text */}
+					<div className="form-group">
+						<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
+							Đơn vị gửi: <span className="font-normal">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</span>
+						</div>
+						<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
+							Địa chỉ:{' '}
+							<span className="font-normal">
+								{`${senderAddressData.address}, 
+								${wardsNames[senderAddressData.wards_id] || ''}, 
+								${districtNames[senderAddressData.district_id] || ''}, 
+								${provinceNames[senderAddressData.province_id] || ''}`}
+							</span>
+						</div>
+						<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
+							Số điện thoại: <span className="font-normal">{formData.senderPhone}</span> - Email:{' '}
+							<span className="font-normal">{formData.senderEmail}</span>
+						</div>
+					</div>
+
+					{/* Giữ lại các input ẩn để lưu giá trị mặc định */}
+					<input type="hidden" id="senderName" name="senderName" value={formData.senderName} />
+					<input type="hidden" id="senderAddress" name="senderAddress" value={formData.senderAddress} />
+					<input type="hidden" id="senderPhone" name="senderPhone" value={formData.senderPhone} />
+					<input type="hidden" id="senderEmail" name="senderEmail" value={formData.senderEmail} />
+
+					{/* Phần ghi chú chuyển vào đây */}
+					<div className="form-group mt-4">
+						<label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2 text-left">
+							Ghi chú:
+						</label>
+						<textarea
+							id="notes"
+							name="notes"
+							value={formData.notes}
+							onChange={handleInputChange}
+							rows="2"
+							className="w-full p-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+							placeholder="Nhập ghi chú thêm..."
+						/>
+					</div>
+				</div>
+			</div>{' '}
+			{/* Action buttons */}
+			<div className="flex justify-between mt-6 pt-4 border-t border-gray-200">
+				{hasExistingOrder ? (
+					<button
+						type="button"
+						onClick={handleCancelOrder}
+						disabled={isSubmitting}
+						className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+					>
+						{isSubmitting ? 'Đang hủy...' : 'Hủy đơn hàng'}
+					</button>
+				) : (
+					<div></div>
+				)}
+				<div className="flex space-x-3">
+					<button
+						type="button"
+						onClick={onClose}
+						className="px-6 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+					>
+						Đóng
+					</button>
+					{!hasExistingOrder && (
+						<button
+							type="button"
+							onClick={handleSubmitOrder}
+							disabled={isSubmitting}
+							className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+						>
+							{isSubmitting ? 'Đang gửi...' : 'Tạo vận đơn'}
+						</button>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+};
+
+export default ShipmentForm;

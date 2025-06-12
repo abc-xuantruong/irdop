@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
 import { MdLibraryAdd } from 'react-icons/md';
 import { FaTrashAlt } from 'react-icons/fa';
+import { AiOutlinePlus } from 'react-icons/ai';
 
 const CreateReceiptFromCRM = () => {
 	const [isModalOpen, setIsModalOpen] = useState(false);
@@ -42,13 +43,37 @@ const CreateReceiptFromCRM = () => {
 		field: null,
 	});
 	const [editAnalysisValue, setEditAnalysisValue] = useState('');
-
 	// Define options for select fields
 	const sourceOptions = ['--', 'IRDOP', 'IRDOP VS', 'EX'];
-	const fieldOptions = ['--', 'Hóa Lý', 'Vi sinh'];
+	const fieldOptions = ['--', 'Hóa Lý', 'Vi sinh']; // Add states for sample information editing
+	const [editingSampleInfo, setEditingSampleInfo] = useState({
+		sampleIndex: null,
+		isEditing: false,
+	});
+	const [customerInfo, setCustomerInfo] = useState({});
+	const [newField, setNewField] = useState({ fname: '', fvalue: '' });
+	const [defaultSampleInformation, setDefaultSampleInformation] = useState(true);
 
 	const { formatDate, currentUser, purposes, hasAuthCookies } = useContext(GlobalContext);
 	const navigate = useNavigate();
+
+	// Default customer and receipt fields
+	const defaultCustomerFields = [
+		{ fname: 'Tên mẫu thử / name.', fvalue: '' },
+		{ fname: 'Số lô / LOT no.', fvalue: '' },
+		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
+		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
+		{ fname: 'Nơi sản xuất / mfr.', fvalue: '' },
+	];
+
+	const defaultReceiptFields = [
+		{ fname: 'Ngày tiếp nhận / receipt date.', fvalue: '' },
+		{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
+		{ fname: 'Mô tả / desc.', fvalue: '' },
+		{ fname: 'Mã tiếp nhận / receipt code.', fvalue: '' },
+		{ fname: 'Ngày hoàn thành / deadline.', fvalue: '' },
+		{ fname: 'Nền mẫu / matrix.', fvalue: '' },
+	];
 
 	// Add function to handle global matrix change
 	const handleGlobalMatrixChange = (value) => {
@@ -136,6 +161,22 @@ const CreateReceiptFromCRM = () => {
 		setIsLoading(true);
 		setError(null);
 
+		// Reset all states to default values
+		setCrmData(null);
+		setUrgentSamples({});
+		setAllUrgent(false);
+		setSelectedPurpose('');
+		setDeadline('');
+		setCustomerInfo({});
+		setDefaultSampleInformation(true);
+		setEditingField({ type: null, field: null, index: null });
+		setEditingAnalysis({ sampleIndex: null, analysisIndex: null, field: null });
+		setEditingSampleInfo({ sampleIndex: null, isEditing: false });
+		setMatrixInput('');
+		setShowMatrixDropdown(false);
+		setMatrixPage(1);
+		setCurrentEditingMatrixIndex(null);
+
 		try {
 			// Check auth cookies before making API call
 			if (!hasAuthCookies()) {
@@ -143,26 +184,84 @@ const CreateReceiptFromCRM = () => {
 				return; // hasAuthCookies will handle redirect
 			}
 
-			const response = await apiPost('https://black.irdop.org/crm/generate_receipt', { code });
+			// Convert code to uppercase before sending to API
+			let response;
+			let dataFound = false;
 
-			// Check if the response contains an error
-			if (response && response.data && response.data.error) {
-				setError(response.data.message || 'Đã xảy ra lỗi khi lấy dữ liệu từ CRM.');
-				setCrmData(null);
-			} else if (response && response.data) {
-				setCrmData(response.data);
-				setError(null);
+			// First try the database API
+			try {
+				response = await apiPost('https://black.irdop.org/db/generate_receipt', { code: code.toUpperCase() });
 
-				// Initialize urgent samples state
-				const initialUrgentState = {};
-				response.data.samples.forEach((_, index) => {
-					initialUrgentState[index] = false;
-				});
-				setUrgentSamples(initialUrgentState);
+				// Check if the response contains data
+				if (
+					response &&
+					response.data &&
+					!response.data.error &&
+					response.data.samples &&
+					response.data.samples.length > 0
+				) {
+					dataFound = true;
+					setCrmData(response.data);
+					setError(null);
+
+					// Set deadline if it exists in the response
+					if (response.data.deadline) {
+						setDeadline(new Date(response.data.deadline).toISOString().split('T')[0]);
+					}
+
+					// Set defaultSampleInformation based on response
+					if (response.data.default_information !== undefined) {
+						setDefaultSampleInformation(response.data.default_information);
+					}
+
+					// Load existing sample information if default_information is false
+					if (response.data.default_information === false && response.data.samples) {
+						const loadedCustomerInfo = {};
+						response.data.samples.forEach((sample, index) => {
+							if (sample.sample_information && Array.isArray(sample.sample_information)) {
+								loadedCustomerInfo[index] = sample.sample_information.map((info) => ({
+									fname: info.fname || '',
+									fvalue: info.fvalue || '',
+								}));
+							}
+						});
+						setCustomerInfo(loadedCustomerInfo);
+					}
+
+					// Initialize urgent samples state
+					const initialUrgentState = {};
+					response.data.samples.forEach((_, index) => {
+						initialUrgentState[index] = false;
+					});
+					setUrgentSamples(initialUrgentState);
+				}
+			} catch (dbError) {
+				console.log('Database API failed, trying CRM API:', dbError);
+			}
+
+			// If no data found from database API, try CRM API
+			if (!dataFound) {
+				response = await apiPost('https://black.irdop.org/crm/generate_receipt', { code: code.toUpperCase() });
+
+				// Check if the response contains an error
+				if (response && response.data && response.data.error) {
+					setError(response.data.message || 'Đã xảy ra lỗi khi lấy dữ liệu từ CRM.');
+					setCrmData(null);
+				} else if (response && response.data) {
+					setCrmData(response.data);
+					setError(null);
+
+					// Initialize urgent samples state
+					const initialUrgentState = {};
+					response.data.samples.forEach((_, index) => {
+						initialUrgentState[index] = false;
+					});
+					setUrgentSamples(initialUrgentState);
+				}
 			}
 		} catch (error) {
-			console.error('Error fetching CRM data:', error);
-			setError(error.response?.data?.message || 'Không thể lấy dữ liệu từ CRM. Vui lòng kiểm tra mã đơn hàng.');
+			console.error('Error fetching data:', error);
+			setError(error.response?.data?.message || 'Không thể lấy dữ liệu. Vui lòng kiểm tra mã đơn hàng.');
 			setCrmData(null);
 		} finally {
 			setIsLoading(false);
@@ -252,9 +351,7 @@ const CreateReceiptFromCRM = () => {
 			return;
 		}
 
-		setIsCreating(true);
-
-		// Add status property to samples based on urgentSamples state and ensure all analysis items have required properties
+		setIsCreating(true); // Add status property to samples based on urgentSamples state and ensure all analysis items have required properties
 		const samplesWithStatus = crmData.samples.map((sample, index) => {
 			// Make sure each analysis has all required properties
 			const updatedAnalysis = sample.analysis.map((item) => ({
@@ -268,29 +365,43 @@ const CreateReceiptFromCRM = () => {
 				...item,
 			}));
 
+			// Prepare sample information by combining custom customer and receipt info
+			let sampleInformation = [];
+
+			// Add customer information if exists
+			if (customerInfo[index] && customerInfo[index].length > 0) {
+				const processedCustomerInfo = customerInfo[index].map((field) => ({
+					fname: field.fname === 'Khác' ? field.other || '' : field.fname,
+					fvalue: field.fvalue || '',
+				}));
+				sampleInformation = [...sampleInformation, ...processedCustomerInfo];
+			} else {
+				// Default customer information if none provided
+				sampleInformation.push({
+					fname: 'Tên mẫu thử / name.',
+					fvalue: sample?.sample_name || '',
+				});
+			}
+
+			// Always add default receipt information
+			sampleInformation.push(
+				{
+					fname: 'Ngày tiếp nhận / receipt date.',
+					fvalue: new Date().toLocaleDateString('vi-VN'),
+				},
+				{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
+				{
+					fname: 'Mô tả / desc.',
+					fvalue: sample?.sample_description || '',
+				},
+			);
+
 			return {
 				...sample,
 				// Update the analysis array with the complete objects
 				analysis: updatedAnalysis,
-				sample_information: [
-					{
-						fname: 'Tên mẫu thử / name.',
-						fvalue: sample?.sample_name || '',
-					},
-					// { fname: 'Số lô / LOT no.', fvalue: '' },
-					// { fname: 'Ngày sản xuất / mfg.', fvalue: '' },
-					// { fname: 'Hạn sử dụng / exp.', fvalue: '' },
-					// { fname: 'Nơi sản xuất / mfr.', fvalue: '' },
-					{
-						fname: 'Ngày tiếp nhận / receipt date.',
-						fvalue: new Date().toLocaleDateString('vi-VN'),
-					},
-					{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
-					{
-						fname: 'Mô tả / desc.',
-						fvalue: sample?.sample_description || '',
-					},
-				],
+				// Add sample_information to each sample
+				sample_information: sampleInformation,
 				status: urgentSamples[index] ? 1 : 0,
 				purpose: selectedPurpose, // Add purpose to each sample
 			};
@@ -320,6 +431,10 @@ const CreateReceiptFromCRM = () => {
 				// Close modal and show notification before navigation
 				closeModal();
 
+				// Reset customer info after successful creation
+				setCustomerInfo({});
+				setEditingSampleInfo({ sampleIndex: null, isEditing: false });
+
 				// Show brief notification and navigate after delay
 				await showBriefNotification('Tạo tiếp nhận mẫu thành công!');
 				navigate(`/dashboard/receipt?receipt_uid=${response.data.receipt_uid}`);
@@ -339,12 +454,50 @@ const CreateReceiptFromCRM = () => {
 
 			// Show loading notification
 			showBriefNotification('Đang tạo phiếu yêu cầu...', 'info');
+			// Prepare request data with sample_information included in each sample
+			const samplesWithInfo = crmData.samples.map((sample, index) => {
+				// Prepare sample information by combining custom customer and receipt info
+				let sampleInformation = [];
 
-			// Prepare request data
+				// Add customer information if exists
+				if (customerInfo[index] && customerInfo[index].length > 0) {
+					const processedCustomerInfo = customerInfo[index].map((field) => ({
+						fname: field.fname === 'Khác' ? field.other || '' : field.fname,
+						fvalue: field.fvalue || '',
+					}));
+					sampleInformation = [...sampleInformation, ...processedCustomerInfo];
+				} else {
+					// Default customer information if none provided
+					sampleInformation.push({
+						fname: 'Tên mẫu thử / name.',
+						fvalue: sample?.sample_name || '',
+					});
+				}
+
+				// Always add default receipt information
+				sampleInformation.push(
+					{
+						fname: 'Ngày tiếp nhận / receipt date.',
+						fvalue: new Date().toLocaleDateString('vi-VN'),
+					},
+					{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
+					{
+						fname: 'Mô tả / desc.',
+						fvalue: sample?.sample_description || '',
+					},
+				);
+
+				return {
+					...sample,
+					sample_information: sampleInformation,
+				};
+			});
 			const requestData = {
 				...crmData,
+				samples: samplesWithInfo,
 				created_at: new Date().toISOString(),
 				created_by_uid: currentUser.identity_uid,
+				...(deadline && { deadline: deadline }), // Add deadline if selected
 			};
 
 			// Create a promise that will be rejected after timeout
@@ -397,10 +550,13 @@ const CreateReceiptFromCRM = () => {
 						document.body.removeChild(link);
 						window.URL.revokeObjectURL(url);
 					}, 200);
-				}
-
-				// Show success message and close modal
+				} // Show success message and close modal
 				await showBriefNotification('Đã tạo phiếu yêu cầu thành công!');
+
+				// Reset customer info after successful creation
+				setCustomerInfo({});
+				setEditingSampleInfo({ sampleIndex: null, isEditing: false });
+
 				closeModal();
 			} else {
 				// Handle HTTP errors
@@ -956,12 +1112,200 @@ const CreateReceiptFromCRM = () => {
 		const filtered = filterMatrices(input);
 		return filtered.slice((matrixPage - 1) * itemsPerPage, matrixPage * itemsPerPage);
 	};
-
 	// Pagination handler
 	const handleMatrixPageChange = (pageNumber) => {
 		setMatrixPage(pageNumber);
 	};
 
+	// Functions to handle sample information editing
+	const handleAddCustomerField = (sampleIndex) => {
+		const updatedCustomerInfo = { ...customerInfo };
+		if (!updatedCustomerInfo[sampleIndex]) {
+			updatedCustomerInfo[sampleIndex] = [
+				{
+					fname: 'Tên mẫu thử / name.',
+					fvalue: crmData?.samples[sampleIndex]?.sample_name || '',
+				},
+			];
+		}
+		updatedCustomerInfo[sampleIndex] = [...updatedCustomerInfo[sampleIndex], { fname: '', fvalue: '' }];
+		setCustomerInfo(updatedCustomerInfo);
+	};
+
+	const handleCustomerFieldChange = (sampleIndex, fieldIndex, field, value) => {
+		const updatedCustomerInfo = { ...customerInfo };
+		if (!updatedCustomerInfo[sampleIndex]) {
+			updatedCustomerInfo[sampleIndex] = [];
+		}
+
+		if (field === 'fname') {
+			const selectedField = defaultCustomerFields.find((item) => item.fname === value);
+			if (selectedField) {
+				updatedCustomerInfo[sampleIndex][fieldIndex] = { ...selectedField };
+			} else {
+				updatedCustomerInfo[sampleIndex][fieldIndex] = {
+					...updatedCustomerInfo[sampleIndex][fieldIndex],
+					fname: value,
+				};
+			}
+		} else {
+			updatedCustomerInfo[sampleIndex][fieldIndex] = {
+				...updatedCustomerInfo[sampleIndex][fieldIndex],
+				[field]: value,
+			};
+		}
+		setCustomerInfo(updatedCustomerInfo);
+	};
+	const handleDeleteCustomerField = (sampleIndex, fieldIndex) => {
+		const updatedCustomerInfo = { ...customerInfo };
+		if (updatedCustomerInfo[sampleIndex]) {
+			updatedCustomerInfo[sampleIndex] = updatedCustomerInfo[sampleIndex].filter((_, i) => i !== fieldIndex);
+		}
+		setCustomerInfo(updatedCustomerInfo);
+	}; // Function to toggle sample information mode
+	const handleAddSampleInfoToAll = () => {
+		if (!crmData || !crmData.samples) return;
+
+		if (defaultSampleInformation) {
+			// Switch to full sample information mode
+			const updatedCustomerInfo = { ...customerInfo };
+
+			crmData.samples.forEach((sample, index) => {
+				const defaultFields = defaultCustomerFields.map((field) => ({
+					...field,
+					fvalue: field.fname === 'Tên mẫu thử / name.' ? sample.sample_name || '' : field.fvalue,
+				}));
+				updatedCustomerInfo[index] = [...defaultFields];
+			});
+			setCustomerInfo(updatedCustomerInfo);
+			setDefaultSampleInformation(false);
+			showBriefNotification('Đã bật đầy đủ thông tin mẫu cho tất cả các mẫu!', 'success');
+		} else {
+			// Switch back to default mode
+			setCustomerInfo({});
+			setDefaultSampleInformation(true);
+			showBriefNotification('Đã chuyển về thông tin mặc định!', 'success');
+		}
+	};
+
+	// Function to handle loading from CRM
+	const handleLoadFromCRM = async () => {
+		if (!code.trim()) {
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Vui lòng nhập mã đơn hàng!',
+			});
+			return;
+		}
+
+		setIsLoading(true);
+		setError(null);
+
+		// Reset all states to default values
+		setCrmData(null);
+		setUrgentSamples({});
+		setAllUrgent(false);
+		setSelectedPurpose('');
+		setDeadline('');
+		setCustomerInfo({});
+		setDefaultSampleInformation(true);
+		setEditingField({ type: null, field: null, index: null });
+		setEditingAnalysis({ sampleIndex: null, analysisIndex: null, field: null });
+		setEditingSampleInfo({ sampleIndex: null, isEditing: false });
+		setMatrixInput('');
+		setShowMatrixDropdown(false);
+		setMatrixPage(1);
+		setCurrentEditingMatrixIndex(null);
+
+		try {
+			// Check auth cookies before making API call
+			if (!hasAuthCookies()) {
+				setIsLoading(false);
+				return; // hasAuthCookies will handle redirect
+			}
+
+			// Load data from CRM API
+			const response = await apiPost('https://black.irdop.org/crm/generate_receipt', { code: code.toUpperCase() });
+
+			// Check if the response contains an error
+			if (response && response.data && response.data.error) {
+				setError(response.data.message || 'Đã xảy ra lỗi khi lấy dữ liệu từ CRM.');
+				setCrmData(null);
+			} else if (response && response.data) {
+				setCrmData(response.data);
+				setError(null);
+
+				// Initialize urgent samples state
+				const initialUrgentState = {};
+				response.data.samples.forEach((_, index) => {
+					initialUrgentState[index] = false;
+				});
+				setUrgentSamples(initialUrgentState);
+
+				showBriefNotification('Load từ CRM thành công!', 'success');
+			}
+		} catch (error) {
+			console.error('Error loading CRM data:', error);
+			setError(error.response?.data?.message || 'Không thể lấy dữ liệu từ CRM. Vui lòng kiểm tra mã đơn hàng.');
+			setCrmData(null);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	// Function to handle test save
+	const handleTestSave = async () => {
+		if (!crmData) {
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Không có dữ liệu để lưu!',
+			});
+			return;
+		}
+
+		setIsCreating(true);
+
+		try {
+			// Check auth cookies before making API call
+			if (!hasAuthCookies()) {
+				setIsCreating(false);
+				return; // hasAuthCookies will handle redirect
+			} // Prepare the order data
+			const orderData = {
+				order_code: crmData.order_code || '',
+				quote_code: crmData.quote_code || '',
+				sale_recorder: crmData.sale_recorder || '',
+				client: crmData.client,
+				total_amount: crmData.total_amount || 0,
+				samples: crmData.samples.map((sample, index) => {
+					// Include sample_information if it exists for this sample
+					const sampleData = { ...sample };
+					if (customerInfo[index] && customerInfo[index].length > 0) {
+						sampleData.sample_information = customerInfo[index];
+					}
+					return sampleData;
+				}),
+				...(deadline && { deadline: deadline }),
+				default_information: defaultSampleInformation,
+			};
+
+			const response = await apiPost('https://black.irdop.org/db/save/order', { order: orderData });
+
+			// Check if the response contains an error
+			if (response && response.data && response.data.error) {
+				setError(response.data.message || 'Đã xảy ra lỗi khi lưu dữ liệu.');
+			} else if (response && response.data) {
+				showBriefNotification('Lưu thử nghiệm thành công!', 'success');
+			}
+		} catch (error) {
+			console.error('Error saving test data:', error);
+			setError(error.response?.data?.message || 'Không thể lưu dữ liệu. Vui lòng thử lại sau.');
+		} finally {
+			setIsCreating(false);
+		}
+	};
 	return (
 		<>
 			<button
@@ -969,15 +1313,15 @@ const CreateReceiptFromCRM = () => {
 				className="border-gray-300 font-medium py-0 px-2 rounded-lg w-fit bg-background text-primary"
 			>
 				<div>Tạo TNM từ CRM</div>
-			</button>
-
+			</button>{' '}
 			{isModalOpen && (
 				<div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden">
 					<div className="absolute inset-0 bg-black bg-opacity-50 " onClick={closeModal}></div>
-					<div className="bg-white rounded-lg p-6 max-w-7xl w-11/12 z-10 max-h-[90vh] min-h-72 relative flex flex-col justify-between">
+					<div className="bg-white rounded-lg p-6 w-[90vw] h-[95vh] z-10 relative flex flex-col justify-between">
 						<div>
 							<h2 className="text-xl font-bold mb-4">Tạo tiếp nhận mẫu từ CRM</h2>
 							<form onSubmit={handleSubmit} className="mb-4">
+								{' '}
 								<div className="flex items-center gap-2">
 									<input
 										type="text"
@@ -1121,9 +1465,31 @@ const CreateReceiptFromCRM = () => {
 									{/* Right Column: Sample List */}
 									<div className="lg:w-2/3">
 										<div className="w-full">
+											{' '}
 											<div className="flex justify-between items-center mb-2">
-												<h3 className="font-semibold text-lg">Danh sách mẫu</h3>
+												<h3 className="font-semibold text-lg">Danh sách mẫu</h3>{' '}
 												<div className="flex items-center gap-4">
+													<div className="flex items-center gap-2">
+														<button
+															onClick={handleAddSampleInfoToAll}
+															className={`text-white text-sm rounded-lg px-3 py-1 ${
+																!defaultSampleInformation
+																	? 'bg-sky-500 hover:bg-sky-600'
+																	: 'bg-gray-400 hover:bg-gray-500'
+															}`}
+															title="Bật/tắt thông tin đầy đủ cho tất cả mẫu"
+														>
+															Đầy đủ thông tin mẫu
+														</button>
+														<button
+															type="button"
+															onClick={handleLoadFromCRM}
+															className="bg-orange-500 text-white text-sm rounded-lg px-3 py-1 hover:bg-orange-600"
+															disabled={isLoading}
+														>
+															Load từ CRM
+														</button>
+													</div>
 													<div className="flex items-center">
 														<input
 															type="checkbox"
@@ -1310,7 +1676,6 @@ const CreateReceiptFromCRM = () => {
 																✕
 															</button>
 														</div>
-
 														<div className="mb-2 flex items-center justify-between">
 															<div className="relative">
 																<label htmlFor={`matrix-${index}`} className="text-sm font-medium w-20 mr-2">
@@ -1425,9 +1790,107 @@ const CreateReceiptFromCRM = () => {
 																<label htmlFor={`urgent-${index}`} className="text-sm font-medium">
 																	Mẫu khẩn
 																</label>
+															</div>{' '}
+														</div>{' '}
+														{/* Sample Information Section - Moved above analysis table */}
+														{customerInfo[index]?.length > 0 && (
+															<div className="mb-4 border-t pt-4">
+																<div className="border py-2 mt-2 rounded-lg">
+																	{/* Customer Information Section */}
+																	<div className="w-full">
+																		<div className="flex justify-between items-center px-4 mb-2">
+																			<h5 className="font-medium text-sm">Thông tin khách hàng cung cấp</h5>
+																			<button
+																				className="bg-white text-sky-500 rounded-full p-1"
+																				onClick={() => handleAddCustomerField(index)}
+																				title="Thêm thông tin khách hàng"
+																			>
+																				<AiOutlinePlus size={16} />
+																			</button>
+																		</div>
+																		<div className="w-full overflow-hidden hover:overflow-auto mb-1">
+																			<div className="flex flex-wrap">
+																				{customerInfo[index].map((field, fieldIndex) => (
+																					<div key={fieldIndex} className="mb-1 w-full px-2">
+																						<table className="w-full">
+																							<tbody>
+																								<tr>
+																									<td className="w-1/3 text-start p-1 font-medium min-w-32 flex justify-between items-center">
+																										<select
+																											value={field?.fname || ''}
+																											onChange={(e) =>
+																												handleCustomerFieldChange(
+																													index,
+																													fieldIndex,
+																													'fname',
+																													e.target.value,
+																												)
+																											}
+																											className={`p-1 ${
+																												field.fname === 'Khác' ? 'w-1/2 mr-1' : 'w-full'
+																											} border min-w-16 rounded-md bg-white text-xs`}
+																										>
+																											<option value={field.fname}>
+																												{field.fname || 'Chọn thông tin'}
+																											</option>
+																											{defaultCustomerFields.map((selectField) => (
+																												<option key={selectField.fname} value={selectField.fname}>
+																													{selectField.fname}
+																												</option>
+																											))}
+																											<option value="Khác">Khác</option>
+																										</select>
+																										{field.fname === 'Khác' && (
+																											<input
+																												type="text"
+																												value={field?.other || ''}
+																												onChange={(e) =>
+																													handleCustomerFieldChange(
+																														index,
+																														fieldIndex,
+																														'other',
+																														e.target.value,
+																													)
+																												}
+																												className="p-1 w-full border rounded-md bg-white text-xs"
+																												placeholder="Nhập tên khác"
+																											/>
+																										)}
+																									</td>
+																									<td className="w-full text-start p-1">
+																										<input
+																											type="text"
+																											value={field?.fvalue || ''}
+																											onChange={(e) =>
+																												handleCustomerFieldChange(
+																													index,
+																													fieldIndex,
+																													'fvalue',
+																													e.target.value,
+																												)
+																											}
+																											className="p-1 w-full border rounded-md bg-white text-xs"
+																										/>
+																									</td>
+																									<td>
+																										<button
+																											className="text-red-200 hover:text-red-500 bg-white text-sm rounded-lg py-0 px-1 focus:outline-none"
+																											onClick={() => handleDeleteCustomerField(index, fieldIndex)}
+																										>
+																											✕
+																										</button>
+																									</td>
+																								</tr>
+																							</tbody>
+																						</table>
+																					</div>
+																				))}
+																			</div>
+																		</div>
+																	</div>
+																</div>
 															</div>
-														</div>
-
+														)}
 														<div className="overflow-x-auto">
 															<table className="w-full">
 																<thead>
@@ -1600,9 +2063,8 @@ const CreateReceiptFromCRM = () => {
 																		</tr>
 																	))}
 																</tbody>
-															</table>
+															</table>{' '}
 														</div>
-
 														<div className="mt-2 flex justify-end">
 															<button
 																onClick={() => handleOpenAddParameter(index)}
@@ -1628,25 +2090,37 @@ const CreateReceiptFromCRM = () => {
 							disabled={isCreating}
 						>
 							✕
-						</button>
+						</button>{' '}
 						{/* Action buttons at bottom */}
-						<div className="flex justify-end mt-4 gap-3 absolute bottom-6 right-6">
+						<div className="flex justify-between mt-4 gap-3 absolute bottom-6 left-6 right-6">
 							{crmData && (
 								<>
+									{' '}
+									{/* Left side button */}
 									<button
-										onClick={handleCreateRequestForm}
+										onClick={handleTestSave}
 										disabled={isCreating}
-										className="bg-primary text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+										className="bg-gray-500 border border-gray-500 text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-gray-600 hover:border-gray-600 disabled:bg-gray-300 disabled:border-gray-300 disabled:cursor-not-allowed"
 									>
-										Tạo phiếu yêu cầu
+										Lưu phiếu
 									</button>
-									<button
-										onClick={handleCreateReceipt}
-										disabled={isCreating}
-										className="bg-primary text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
-									>
-										{isCreating ? 'Đang tạo...' : 'Tạo tiếp nhận mẫu'}
-									</button>
+									{/* Right side buttons */}
+									<div className="flex gap-3">
+										<button
+											onClick={handleCreateRequestForm}
+											disabled={isCreating}
+											className="bg-primary text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+										>
+											Tạo phiếu gửi mẫu
+										</button>
+										<button
+											onClick={handleCreateReceipt}
+											disabled={isCreating}
+											className="bg-primary text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+										>
+											{isCreating ? 'Đang tạo...' : 'Tạo tiếp nhận mẫu'}
+										</button>
+									</div>
 								</>
 							)}
 						</div>

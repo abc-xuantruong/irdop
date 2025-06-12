@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { FiRefreshCcw } from 'react-icons/fi';
 import Breadcrumb from './Breadcrumb';
@@ -10,6 +11,7 @@ import Swal from 'sweetalert2';
 import 'react-datepicker/dist/react-datepicker.css';
 import DatePicker from 'react-datepicker';
 import axios from 'axios';
+import ShipmentForm from './ShipmentForm';
 
 import {
 	FaMoneyBillWave,
@@ -90,9 +92,12 @@ const Dashboard = () => {
 	const [quickPaymentErrors, setQuickPaymentErrors] = useState({});
 	const [paymentsList, setPaymentsList] = useState([]);
 	const [loadingPayments, setLoadingPayments] = useState(false);
-
 	// Add state for user information
 	const [userInfo, setUserInfo] = useState({});
+
+	// Add state for shipment form
+	const [showShipmentForm, setShowShipmentForm] = useState(false);
+	const [selectedReceipt, setSelectedReceipt] = useState(null);
 
 	const [showRelativeTime, setShowRelativeTime] = useState(true); // Toggle between date format and relative time
 	const receiptsPerPage = 50;
@@ -1255,13 +1260,22 @@ const Dashboard = () => {
 			// Remove the code that turns off deadline filter
 			// No longer resetting showTodayDeadlines
 		}
-	};
-
-	// Add a new function to fetch receipts filtered by deadline
+	}; // Add a new function to fetch receipts filtered by deadline
 	const fetchReceiptsByDeadline = async (start, end) => {
 		try {
-			const formattedStartDate = start ? start.toISOString().split('T')[0] : null;
-			const formattedEndDate = end ? end.toISOString().split('T')[0] : null;
+			// Format dates properly to avoid timezone issues
+			const formattedStartDate = start
+				? `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(
+						2,
+						'0',
+				  )}`
+				: null;
+			const formattedEndDate = end
+				? `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(
+						2,
+						'0',
+				  )}`
+				: null;
 
 			if (!formattedStartDate || !formattedEndDate) {
 				showToast('Vui lòng chọn khoảng thời gian', 'error');
@@ -1308,9 +1322,14 @@ const Dashboard = () => {
 						'info',
 					);
 				} else {
-					showToast('Không tìm thấy dữ liệu', 'info');
+					// Handle case where API returns empty array or no data
+					setCurrentList([]);
+					setIsFilter(true);
+					setCurrentPage(1);
 
-					// Also update filter info in this case
+					showToast('Không tìm thấy tiếp nhận nào trong khoảng thời gian này', 'info');
+
+					// Update filter info for empty result
 					setFilterInfo({
 						isFilterActive: true,
 						count: 0,
@@ -1388,21 +1407,20 @@ const Dashboard = () => {
 			setIsCalendarOpen(true);
 		}
 	};
-
 	// Modify the handleDateRangeChange function to properly handle date selection and maintain focus on today's date
 	const handleDateRangeChange = (update) => {
 		setDateRange(update);
 
 		// Only close calendar and send API request when both dates are selected
 		if (update[0] && update[1]) {
-			// Give a longer delay to allow the UI to update before sending API request
+			// Use a shorter delay and ensure state is properly updated
 			setTimeout(() => {
-				// Close the calendar after a sufficient delay to ensure the selection is registered
+				// Close the calendar
 				setIsCalendarOpen(false);
 
-				// Send API request with selected date range
+				// Send API request with selected date range - ensure we're using the update values
 				fetchReceiptsByDeadline(update[0], update[1]);
-			}, 300); // Increased timeout for better UI experience
+			}, 100); // Reduced timeout for better responsiveness
 		}
 	};
 
@@ -2591,14 +2609,12 @@ const Dashboard = () => {
 				});
 			}
 		});
-	};
-
-	// Modified function to handle PPT send date click when no date is present
+	}; // Modified function to handle PPT send date click when no date is present
 	const handlePptSendCheckbox = (receiptId) => {
 		// Confirm before setting the date
 		Swal.fire({
 			title: 'Xác nhận',
-			text: 'Bạn có muốn cập nhật trạng thái gửi phiếu phân tích không?',
+			text: 'Bạn có muốn cập nhật trạng thái gửi PPT không?',
 			icon: 'question',
 			showCancelButton: true,
 			confirmButtonColor: '#3085d6',
@@ -2615,11 +2631,7 @@ const Dashboard = () => {
 				setCurrentList((prevList) => {
 					return prevList.map((receipt) => {
 						if (receipt.id === receiptId) {
-							return {
-								...receipt,
-								ppt_send_at: today,
-								ppt_send_by: currentUser?.identity_uid,
-							};
+							return { ...receipt, ppt_send_at: today, ppt_send_by: currentUser?.identity_uid };
 						}
 						return receipt;
 					});
@@ -3206,6 +3218,7 @@ const Dashboard = () => {
 						</div>{' '}
 						{/* Right side - Deadline and Overdue buttons */}
 						<div className="flex items-center space-x-2 flex-shrink-0">
+							{' '}
 							<button
 								className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
 									showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black'
@@ -3237,19 +3250,30 @@ const Dashboard = () => {
 											open={isCalendarOpen}
 											onInputClick={() => setIsCalendarOpen(true)}
 											onClickOutside={() => {
-												// Only close if both dates are selected or clicked outside the calendar
+												// If both dates are selected, close calendar and fetch data
 												if (startDate && endDate) {
 													setIsCalendarOpen(false);
+													// Ensure we fetch the data when closing
+													fetchReceiptsByDeadline(startDate, endDate);
 												}
 											}}
 											// Remove the onBlur handler that causes premature closing
 											shouldCloseOnSelect={false} // Don't close automatically on selection
+											popperContainer={({ children }) => createPortal(children, document.body)}
+											popperProps={{
+												positionFixed: true,
+											}}
 											popperModifiers={{
 												preventOverflow: {
 													enabled: true,
+													boundariesElement: 'viewport',
 												},
-												hide: {
+												flip: {
 													enabled: true,
+												},
+												offset: {
+													enabled: true,
+													offset: '0, 5',
 												},
 											}}
 										/>
@@ -3283,7 +3307,6 @@ const Dashboard = () => {
 									</div>
 								)}
 							</button>
-
 							{/* Overdue button */}
 							<button
 								className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
@@ -3351,10 +3374,11 @@ const Dashboard = () => {
 											Hạn trả KQ
 										</th>
 										<th className="p-1 border-b text-start min-w-[200px]">Địa chỉ</th>
-										<th className="p-1 border-b text-start min-w-[150px]">Người liên hệ</th>
+										<th className="p-1 border-b text-start min-w-[150px]">Người liên hệ</th>{' '}
 										<th className="p-1 border-b text-start min-w-[120px]">Điện thoại</th>
 										<th className="p-1 border-b text-start max-w-28 min-w-[100px]">Gửi PPT</th>
 										<th className="p-1 border-b text-start min-w-[110px]">Người gửi</th>
+										<th className="p-1 border-b text-start min-w-[120px]">Mã vận đơn</th>
 										<th className="p-1 border-b text-start min-w-[100px] w-[10%]">Mã mẫu</th>
 										<th className="p-1 border-b text-start w-[15%] min-w-40">Mã PPT</th>
 									</>
@@ -3867,7 +3891,7 @@ const Dashboard = () => {
 																			title="Click để copy số điện thoại"
 																		>
 																			{!isTechnician() ? receipt.contact?.phone || '--' : '[Thông tin bị ẩn]'}
-																		</td>
+																		</td>{' '}
 																		<td
 																			className={`p-1 border-b text-start w-[10%] min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700`}
 																			rowSpan={samplesToShow.length}
@@ -3908,14 +3932,16 @@ const Dashboard = () => {
 																					{receipt.ppt_send_at ? (
 																						formatDate(receipt.ppt_send_at)
 																					) : (
-																						<div className="flex items-center">
-																							<span
-																								className="cursor-pointer text-gray-500 hover:text-blue-600"
-																								onClick={() => handlePptSendCheckbox(receipt.id)}
-																							>
-																								Chưa gửi
-																							</span>
-																						</div>
+																						<span
+																							className="cursor-pointer text-gray-500 hover:text-blue-600"
+																							onClick={(e) => {
+																								e.stopPropagation();
+																								// Just set editing field for normal date picker
+																								handleFieldClick(receipt.id, null, 'ppt_send_at');
+																							}}
+																						>
+																							Chưa gửi
+																						</span>
 																					)}
 																				</div>
 																			)}
@@ -3927,6 +3953,37 @@ const Dashboard = () => {
 																			rowSpan={samplesToShow.length}
 																		>
 																			{receipt.ppt_send_by ? getUserName(receipt.ppt_send_by) : '--'}
+																		</td>{' '}
+																		<td
+																			className={`p-1 text-start align-top cursor-pointer hover:bg-gray-100 ${
+																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																			onClick={() => {
+																				setSelectedReceipt(receipt);
+																				setShowShipmentForm(true);
+																			}}
+																		>
+																			{receipt.tracking_number ? (
+																				<div className="flex flex-col items-start">
+																					<span className="text-blue-600 hover:text-blue-800 hover:underline">
+																						{receipt.tracking_number}
+																					</span>
+																					<a
+																						href={`https://viettelpost.vn/thong-tin-don-hang?peopleTracking=sender&orderNumber=${receipt.tracking_number}&orderType=1`}
+																						target="_blank"
+																						rel="noopener noreferrer"
+																						className="mt-1 text-green-600 hover:text-green-800 flex items-center text-xs"
+																						onClick={(e) => e.stopPropagation()}
+																						title="Theo dõi đơn hàng trên Viettel Post"
+																					>
+																						<FaExternalLinkAlt size={12} className="mr-1" />
+																						Theo dõi
+																					</a>
+																				</div>
+																			) : (
+																				<span className="text-gray-500 hover:text-blue-600">Tạo vận đơn</span>
+																			)}
 																		</td>
 																	</>
 																)}{' '}
@@ -4595,7 +4652,49 @@ const Dashboard = () => {
 			{/* Transaction modal - added at the end of the component */}
 			{renderTransactionModal()}
 			{/* Quick payment form - added at the end of the component */}
-			{renderQuickPaymentForm()}
+			{renderQuickPaymentForm()} {/* Shipment form - added at the end of the component */}
+			{showShipmentForm && selectedReceipt && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+					<div className="bg-white rounded-lg shadow-lg  w-fit mx-4  overflow-y-auto relative">
+						{' '}
+						{/* Fixed header */}
+						<div className="absolute top-0 left-0 right-0 flex justify-between items-center p-2 bg-white border-b border-gray-200 rounded-t-lg z-10">
+							<h2 className="text-xl font-semibold text-gray-800">
+								{selectedReceipt.tracking_number
+									? `Thông tin vận đơn ${selectedReceipt.tracking_number}${
+											selectedReceipt.ppt_send_at ? ` - Ngày ${formatDate(selectedReceipt.ppt_send_at)}` : ''
+									  }`
+									: 'Tạo vận đơn'}
+							</h2>
+							<button
+								onClick={() => {
+									setShowShipmentForm(false);
+									setSelectedReceipt(null);
+								}}
+								className="text-gray-500 hover:text-gray-700 text-xl"
+							>
+								<FaTimes />
+							</button>
+						</div>
+						{/* Content with top padding to account for fixed header */}{' '}
+						<div className="max-w-[80vw] max-h-[90vh] overflow-y-auto p-0">
+							<ShipmentForm
+								receipt={selectedReceipt}
+								onClose={() => {
+									setShowShipmentForm(false);
+									setSelectedReceipt(null);
+								}}
+								onOrderUpdate={(updatedReceipt) => {
+									// Update currentList with new receipt data
+									setCurrentList((prevList) =>
+										prevList.map((receipt) => (receipt.id === updatedReceipt.id ? updatedReceipt : receipt)),
+									);
+								}}
+							/>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };
