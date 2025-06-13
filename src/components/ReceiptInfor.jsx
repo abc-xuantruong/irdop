@@ -34,7 +34,6 @@ const ReceiptInfor = ({ receipt }) => {
 
 	// Keep editingRevenueField state but remove showRevenueSection
 	const [editingRevenueField, setEditingRevenueField] = useState(null);
-
 	const [newSample, setNewSample] = useState({
 		sample_name: '',
 		matrix: '',
@@ -42,7 +41,9 @@ const ReceiptInfor = ({ receipt }) => {
 		sample_volume: '',
 		purpose: '',
 		additional_request: '',
+		copiedFromSampleUid: '',
 	});
+	const [copyCount, setCopyCount] = useState(1);
 	const [sampleInformation, setSampleInformation] = useState([
 		{ fname: 'Số lô / LOT no.', fvalue: '' },
 		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
@@ -724,83 +725,157 @@ const ReceiptInfor = ({ receipt }) => {
 	const handleAddSample = () => {
 		setIsAddingSample(true);
 	};
-
 	const handleSaveNewSample = async () => {
 		setCheckConfirm(true);
-		const requiredFields = ['sample_name', 'matrix', 'sample_description', 'sample_volume', 'purpose'];
-		const isValid = requiredFields.every((field) => newSample[field].trim() !== '');
 
-		if (!isValid) {
+		// Check if any required field is empty (but only check if they have been modified/touched)
+		const requiredFields = ['sample_name', 'matrix', 'sample_description', 'sample_volume', 'purpose'];
+		const hasAnyContent = requiredFields.some((field) => newSample[field].trim() !== '');
+
+		if (!hasAnyContent) {
 			Swal.fire({
 				icon: 'error',
 				title: 'Lỗi',
-				text: 'Vui lòng nhập đầy đủ thông tin bắt buộc',
+				text: 'Vui lòng nhập ít nhất một thông tin cơ bản',
 			});
 			return;
 		}
 
-		const newSampleData = {
-			receipt_id: currentReceipt.id,
-			...newSample,
-			sample_information: JSON.stringify([
-				{
-					fname: 'Tên mẫu thử / name.',
-					fvalue: newSample?.sample_name || '',
-				},
-				...sampleInformation,
-				{
-					fname: 'Ngày tiếp nhận / receipt date.',
-					fvalue: formatDate(currentReceipt.receipt_date) || '',
-				},
+		// Create samples sequentially based on copyCount
+		for (let i = 0; i < copyCount; i++) {
+			const sampleNameSuffix = copyCount > 1 ? ` - Bản sao ${i + 1}` : '';
+			const newSampleData = {
+				receipt_id: currentReceipt.id,
+				...newSample,
+				sample_name: (newSample.sample_name || '') + sampleNameSuffix,
+				sample_information: JSON.stringify([
+					{
+						fname: 'Tên mẫu thử / name.',
+						fvalue: (newSample?.sample_name || '') + sampleNameSuffix,
+					},
+					...sampleInformation,
+					{
+						fname: 'Ngày tiếp nhận / receipt date.',
+						fvalue: formatDate(currentReceipt.receipt_date) || '',
+					},
+					{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
+					{
+						fname: 'Mô tả / desc.',
+						fvalue: newSample?.sample_description || '',
+					},
+				]),
+				created_by_uid: currentUser.identity_uid,
+				modified_by_uid: currentUser.identity_uid,
+			};
 
-				{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
-				{
-					fname: 'Mô tả / desc.',
-					fvalue: newSample?.sample_description || '',
-				},
-			]),
-			created_by_uid: currentUser.identity_uid,
-			modified_by_uid: currentUser.identity_uid,
-		};
-		try {
-			const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/sample', { sample: newSampleData });
-			if (response.status === 200) {
-				showToast('Thêm mẫu mới thành công!', {
-					autoClose: 1000,
-				});
-				setNewSample({
-					sample_name: '',
-					matrix: '',
-					sample_description: '',
-					sample_volume: '',
-					purpose: '',
-					additional_request: '',
-				});
-				setSampleInformation((informations) => {
-					return informations.map((info) => {
-						return { ...info, fvalue: '' };
+			try {
+				const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/sample', { sample: newSampleData });
+				if (response.status === 200) {
+					const newSampleId = response.data.id; // Use 'id' field from the response
+
+					// Check if we have a copied sample UID to copy analyses from
+					const copiedSampleUid = newSample.copiedFromSampleUid;
+					if (copiedSampleUid) {
+						// Find the sample that was copied from
+						const sampleToCopy = currentReceipt.samples.find((sample) => sample.sample_uid === copiedSampleUid);
+
+						if (sampleToCopy && sampleToCopy.analysis && sampleToCopy.analysis.length > 0) {
+							// Create analyses based on the copied sample
+							const analysesToCopy = sampleToCopy.analysis.map((analysis) => {
+								// Create the analysis object
+								const analysisData = {
+									receipt_id: currentReceipt.id,
+									sample_id: newSampleId,
+									parameter_id: analysis.parameter_id || 0,
+									parameter_name: analysis.parameter_name,
+									parameter_uid: analysis.parameter_uid || '',
+									accreditation: analysis.accreditation,
+									protocol_id: analysis.protocol_id,
+									technician_uid: analysis.technician_uid,
+									deadline: analysis.deadline
+										? analysis.deadline
+										: new Date(Date.now() + (analysis?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0)),
+									protocol_code: analysis.protocol_code,
+									result_unit: analysis.result_unit || '',
+									result_value: '', // Don't copy result values
+									protocol_source: analysis.protocol_source,
+									matrix: newSample.matrix || analysis.matrix,
+									field: analysis.field,
+									created_by_uid: currentUser.identity_uid,
+									modified_by_uid: currentUser.identity_uid,
+								};
+
+								// Remove keys with empty string values
+								return Object.fromEntries(Object.entries(analysisData).filter(([key, value]) => value !== ''));
+							});
+
+							// Add analyses in bulk
+							try {
+								const analysisResponse = await apiPost('https://black.irdop.org/trelw82ki/db/insert/bulk/analysis', {
+									analyses: analysesToCopy,
+								});
+
+								if (analysisResponse.status !== 200) {
+									console.error(`Error copying analyses for sample ${i + 1}:`, analysisResponse);
+								}
+							} catch (analysisError) {
+								console.error(`Error copying analyses for sample ${i + 1}:`, analysisError);
+							}
+						}
+					}
+				} else {
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: response.data?.message || `Thêm mẫu ${i + 1} thất bại. Vui lòng thử lại`,
 					});
-				});
-				setCheckConfirm(false);
-				fetchReceipt(); // Fetch updated data
-			} else {
+					return; // Stop creating more samples if one fails
+				}
+			} catch (error) {
 				Swal.fire({
 					icon: 'error',
 					title: 'Lỗi',
-					text: response.data?.message || 'Thêm mẫu mới thất bại. Vui lòng thử lại',
+					text: error.message || `Có lỗi xảy ra khi tạo mẫu ${i + 1}. Vui lòng thử lại`,
 				});
+				return; // Stop creating more samples if one fails
 			}
-		} catch (error) {
-			Swal.fire({
-				icon: 'error',
-				title: 'Lỗi',
-				text: error.message || 'Có lỗi xảy ra. Vui lòng thử lại',
-			});
 		}
 
+		// Show success message after all samples are created
+		const copiedSampleUid = newSample.copiedFromSampleUid;
+		const hasAnalyses =
+			copiedSampleUid &&
+			currentReceipt.samples.find((sample) => sample.sample_uid === copiedSampleUid)?.analysis?.length > 0;
+
+		if (copyCount > 1) {
+			showToast(
+				hasAnalyses
+					? `Đã tạo thành công ${copyCount} mẫu và sao chép chỉ tiêu!`
+					: `Đã tạo thành công ${copyCount} mẫu!`,
+			);
+		} else {
+			showToast(hasAnalyses ? 'Thêm mẫu mới và sao chép chỉ tiêu thành công!' : 'Thêm mẫu mới thành công!');
+		}
+
+		setNewSample({
+			sample_name: '',
+			matrix: '',
+			sample_description: '',
+			sample_volume: '',
+			purpose: '',
+			additional_request: '',
+			copiedFromSampleUid: '', // Reset copied sample UID
+		});
+		setCopyCount(1); // Reset copy count
+		setSampleInformation((informations) => {
+			return informations.map((info) => {
+				return { ...info, fvalue: '' };
+			});
+		});
+		setCheckConfirm(false);
+		fetchReceipt(); // Fetch updated data
 		setIsAddingSample(false);
 	};
-
 	const handleCancelAddSample = () => {
 		setIsAddingSample(false);
 		setNewSample({
@@ -810,6 +885,7 @@ const ReceiptInfor = ({ receipt }) => {
 			sample_volume: '',
 			purpose: '',
 			additional_request: '',
+			copiedFromSampleUid: '',
 		});
 		setSampleInformation((informations) => {
 			return informations.map((info) => {
@@ -977,7 +1053,6 @@ const ReceiptInfor = ({ receipt }) => {
 			// Implement search logic here
 		}
 	};
-
 	// Add this new handler function before renderAddSampleForm
 	const handleCopySample = (sampleUid) => {
 		// If default option ("Sao chép") is selected, do nothing
@@ -987,7 +1062,7 @@ const ReceiptInfor = ({ receipt }) => {
 		const sampleToCopy = currentReceipt.samples.find((sample) => sample.sample_uid === sampleUid);
 
 		if (sampleToCopy) {
-			// Copy sample data to the form
+			// Copy sample data to the form and store the source sample UID
 			setNewSample({
 				sample_name: sampleToCopy.sample_name || '',
 				matrix: sampleToCopy.matrix || '',
@@ -995,8 +1070,8 @@ const ReceiptInfor = ({ receipt }) => {
 				sample_volume: sampleToCopy.sample_volume || '',
 				purpose: sampleToCopy.purpose || '',
 				additional_request: sampleToCopy.additional_request || '',
+				copiedFromSampleUid: sampleUid, // Store the source sample UID
 			});
-
 			// Try to parse sample_information if it exists
 			try {
 				if (sampleToCopy.sample_information) {
@@ -1005,13 +1080,12 @@ const ReceiptInfor = ({ receipt }) => {
 							? JSON.parse(sampleToCopy.sample_information)
 							: sampleToCopy.sample_information;
 
-					// Filter out entries we're already copying elsewhere using case-insensitive check
-					// Also exclude "Tên mẫu thử / name." as requested
 					const filteredInfo = parsedInfo.filter(
 						(item) =>
 							!item.fname.toLowerCase().includes('tên mẫu') &&
 							!item.fname.toLowerCase().includes('name.') &&
 							!item.fname.toLowerCase().includes('ngày tiếp nhận / receipt date') &&
+							!item.fname.toLowerCase().includes('ngày thử nghiệm / test date') &&
 							!item.fname.toLowerCase().includes('mô tả / desc'),
 					);
 
@@ -1138,11 +1212,11 @@ const ReceiptInfor = ({ receipt }) => {
 					>
 						Thêm thông tin
 					</button>
-				</div>
+				</div>{' '}
 				<div className="flex justify-end mt-4">
-					<div className="flex-1">
+					<div className="flex-1 flex items-center space-x-2">
 						<select
-							className="bg-white border rounded p-1 mr-2"
+							className="bg-white border rounded p-1"
 							onChange={(e) => handleCopySample(e.target.value)}
 							defaultValue="copy"
 						>
@@ -1153,6 +1227,22 @@ const ReceiptInfor = ({ receipt }) => {
 								</option>
 							))}
 						</select>
+						<div className="flex items-center">
+							<label className="text-sm font-medium mr-2">Số lượng:</label>
+							<input
+								type="number"
+								min="1"
+								max="10"
+								value={copyCount}
+								onChange={(e) => {
+									const value = parseInt(e.target.value);
+									if (value >= 1 && value <= 10) {
+										setCopyCount(value);
+									}
+								}}
+								className="bg-white border rounded p-1 w-16 text-center"
+							/>
+						</div>
 					</div>
 					<button className="bg-gray-500 text-white text-sm rounded-lg p-1 mr-2 w-20" onClick={handleCancelAddSample}>
 						Hủy bỏ
