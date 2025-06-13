@@ -3164,7 +3164,7 @@ const Dashboard = () => {
 						{/* Remove the preliminary buttons, they will no longer be shown */}
 					</div>
 				</div>
-				<div className="flex space-x-2 items-center">
+				<div className="flex space-x-2 items-center overflow-auto">
 					<CreateReceiptFromCRM />
 					<CreateReceipt />
 				</div>

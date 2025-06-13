@@ -17,23 +17,24 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 		senderAddress: '12 Phùng Khoang 2',
 		senderPhone: '0868872578',
 		senderEmail: 'kiemnghiem@irdop.org',
-		// Thông tin hàng hóa - format mặc định: <số lượng sample_uid> x PPT tiếp nhận <receipt_uid> <client_name> Bao gồm các mã: <Danh sách sample_uid>
-		productName: `${receipt?.samples?.length || 0} x PPT tiếp nhận ${receipt?.receipt_uid || ''} ${
-			receipt?.client?.client_name || ''
-		}${receipt?.samples?.length ? ` Bao gồm các mã: ${receipt?.samples.map((s) => s.sample_uid).join(', ')}` : ''}`,
+		// Thông tin hàng hóa - format mới: <số lượng sample_uid> x PPT tiếp nhận <receipt_uid> Bao gồm các mã: \n <Danh sách sample_uid xuống dòng> \n <client_name>
+		productName: `${receipt?.samples?.length || 0} x PPT tiếp nhận ${receipt?.receipt_uid || ''} Bao gồm các mã:${
+			receipt?.samples?.length ? `\n${receipt?.samples.map((s) => s.sample_uid).join('\n')}` : ''
+		}${receipt?.client?.client_name ? `\n${receipt?.client?.client_name}` : ''}`,
 		productQuantity: 1,
 		productWeight: 100,
 		productType: 'HH',
 	});
-
 	const [addressMessage, setAddressMessage] = useState('');
 	const [isCheckingAddress, setIsCheckingAddress] = useState(false);
+	const [addressError, setAddressError] = useState(false);
 	const [addressData, setAddressData] = useState({
 		address: '',
 		province_id: '',
 		district_id: '',
 		wards_id: '',
 	});
+	const [serviceType, setServiceType] = useState('VTK');
 	// Thông tin địa chỉ người gửi mặc định
 	const [senderAddressData, setSenderAddressData] = useState({
 		address: '12 Phùng Khoang 2',
@@ -242,18 +243,24 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 	const getCurrentForeignkeyUIDS = () => {
 		const allUIDs = [...sampleUIDs, ...receiptUID];
 		return allUIDs.filter((uid) => !removedUIDs.has(uid));
-	};
-	// Cập nhật tên hàng hóa với danh sách UIDs
+	}; // Cập nhật tên hàng hóa với danh sách UIDs
 	useEffect(() => {
 		const foreignKeyUIDs = getCurrentForeignkeyUIDS();
 		const sampleList = sampleUIDs.filter((uid) => !removedUIDs.has(uid));
 
 		if (foreignKeyUIDs.length > 0) {
-			// Format mới: <số lượng sample_uid> x PPT tiếp nhận <receipt_uid> <client_name> Bao gồm các mã: <Danh sách sample_uid>
+			// Format mới: <số lượng sample_uid> x PPT tiếp nhận <receipt_uid> Bao gồm các mã: \n <Danh sách sample_uid xuống dòng> \n <client_name>
 			const receiptId = receiptUID.length > 0 && !removedUIDs.has(receiptUID[0]) ? receiptUID[0] : '';
-			const productNameFormat = `${sampleList.length || 0} x PPT tiếp nhận ${receiptId} ${
-				receipt?.client?.client_name || ''
-			} Bao gồm các mã: ${sampleList.join(', ')}`;
+			const sampleListFormatted = sampleList.length > 0 ? sampleList.join('\n') : '';
+			const clientName = receipt?.client?.client_name || '';
+
+			let productNameFormat = `${sampleList.length || 0} x PPT tiếp nhận ${receiptId} Bao gồm các mã:`;
+			if (sampleListFormatted) {
+				productNameFormat += `\n${sampleListFormatted}`;
+			}
+			if (clientName) {
+				productNameFormat += `\n${clientName}`;
+			}
 
 			setFormData((prev) => ({
 				...prev,
@@ -264,17 +271,20 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 	const checkAddress = async () => {
 		if (!formData.clientAddress.trim()) {
 			setAddressMessage('Vui lòng nhập địa chỉ');
+			setAddressError(true);
 			return;
 		}
 
 		setIsCheckingAddress(true);
 		setAddressMessage('');
+		setAddressError(false);
 		try {
 			const response = await apiPost('https://red.irdop.org/v1/postal/map/check_address', {
 				address: formData.clientAddress,
 			});
 
-			if (response.data && response.data.data && !response.data.error) {
+			if (response.data && response.data.data) {
+				// Always use the returned data, even if there's an error
 				const newAddressData = {
 					address: response.data.data.address || '',
 					province_id: response.data.data.province_id || '',
@@ -283,7 +293,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 				};
 				setAddressData(newAddressData);
 
-				// Fetch names for the new IDs
+				// Fetch names for the available IDs
 				if (newAddressData.province_id) {
 					fetchProvinceName(newAddressData.province_id);
 				}
@@ -292,15 +302,29 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 				}
 				if (newAddressData.district_id && newAddressData.wards_id) {
 					fetchWardsName(newAddressData.district_id, newAddressData.wards_id);
+				} // Show appropriate message and set error state based on API response
+				setAddressError(response.data.error || false);
+				if (response.data.error) {
+					setAddressMessage('Cảnh báo: ' + (response.data.message || 'Địa chỉ không hoàn chỉnh'));
+				} else {
+					setAddressMessage(response.data.message || 'Đã kiểm tra địa chỉ');
 				}
 
-				setAddressMessage(response.data.message || 'Đã kiểm tra địa chỉ');
+				// Auto-set service type based on province_id
+				if (newAddressData.province_id === '1') {
+					setServiceType('VCN');
+				} else {
+					setServiceType('VTK');
+				}
 			} else if (response.data && response.data.error) {
+				setAddressError(true);
 				setAddressMessage('Lỗi: ' + (response.data.message || 'Không thể kiểm tra địa chỉ'));
 			} else {
+				setAddressError(true);
 				setAddressMessage('Lỗi: Không thể kiểm tra địa chỉ');
 			}
 		} catch (error) {
+			setAddressError(true);
 			setAddressMessage('Lỗi khi kiểm tra địa chỉ');
 		} finally {
 			setIsCheckingAddress(false);
@@ -364,12 +388,16 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 						productType: orderInfo.product.type || prev.productType,
 					}));
 				}
-
 				if (orderInfo.order) {
 					setFormData((prev) => ({
 						...prev,
 						notes: orderInfo.order.note || prev.notes,
 					}));
+
+					// Set service type from existing order
+					if (orderInfo.order.service) {
+						setServiceType(orderInfo.order.service);
+					}
 				}
 			}
 		} catch (error) {
@@ -495,7 +523,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 				},
 				order: {
 					payment: 3, // COD
-					service: 'VTK', // Vận chuyển tiết kiệm
+					service: serviceType, // Use dynamic service type
 					serviceAddress: '',
 					voucher: '',
 					note: formData.notes || 'Gửi phiếu phân tích',
@@ -505,7 +533,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 			console.log('Sending order:', requestBody);
 
 			const response = await apiPost('https://red.irdop.org/v1/postal/vietel/new-order', requestBody);
-			if (response.success || response.data) {
+
+			// Check for successful response (status 200-299) and valid data
+			if (response.status && response.status >= 200 && response.status < 300 && (response.success || response.data)) {
 				// Lấy trackingNumber từ response
 				const trackingNumber = response.data?.trackingNumber || response.trackingNumber;
 
@@ -552,7 +582,10 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 				alert(`Tạo đơn hàng thành công! ${trackingNumber ? `Mã vận đơn: ${trackingNumber}` : ''}`);
 				onClose && onClose();
 			} else {
-				alert('Có lỗi xảy ra khi tạo đơn hàng');
+				// Handle error cases including status 500
+				const errorMessage = response.data?.message || response.message || 'Lỗi không xác định';
+				const statusCode = response.status ? `(${response.status})` : '';
+				alert(`Có lỗi xảy ra khi tạo đơn hàng ${statusCode}: ${errorMessage}`);
 			}
 		} catch (error) {
 			console.error('Error submitting order:', error);
@@ -770,16 +803,10 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 							className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm h-fit outline-none"
 						>
 							{isCheckingAddress ? 'Đang kiểm tra...' : 'Kiểm tra địa chỉ'}
-						</button>
+						</button>{' '}
 						<div className="col-span-3">
 							{addressMessage && (
-								<div
-									className={`p-1.5 rounded text-sm border text-left ${
-										addressMessage.includes('Lỗi') || addressMessage.includes('Không thể')
-											? 'bg-red-100 text-red-700 border-red-300'
-											: 'bg-green-100 text-green-700 border-green-300'
-									}`}
-								>
+								<div className={`p-1.5 text-sm text-left ${addressError ? 'text-red-700' : 'text-green-700'}`}>
 									{addressMessage}
 								</div>
 							)}
@@ -834,10 +861,21 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 								${districtNames[senderAddressData.district_id] || ''}, 
 								${provinceNames[senderAddressData.province_id] || ''}`}
 							</span>
-						</div>
+						</div>{' '}
 						<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
 							Số điện thoại: <span className="font-normal">{formData.senderPhone}</span> - Email:{' '}
 							<span className="font-normal">{formData.senderEmail}</span>
+						</div>
+						<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
+							Hình thức vận chuyển:{' '}
+							<select
+								value={serviceType}
+								onChange={(e) => setServiceType(e.target.value)}
+								className="ml-2 p-1 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+							>
+								<option value="VTK">VTK - Vận chuyển tiết kiệm</option>
+								<option value="VCN">VCN - Vận chuyển nhanh</option>
+							</select>
 						</div>
 					</div>
 

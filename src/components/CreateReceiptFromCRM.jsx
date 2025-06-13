@@ -56,13 +56,12 @@ const CreateReceiptFromCRM = () => {
 
 	const { formatDate, currentUser, purposes, hasAuthCookies } = useContext(GlobalContext);
 	const navigate = useNavigate();
-
 	// Default customer and receipt fields
 	const defaultCustomerFields = [
 		{ fname: 'Tên mẫu thử / name.', fvalue: '' },
 		{ fname: 'Số lô / LOT no.', fvalue: '' },
-		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
 		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
+		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
 		{ fname: 'Nơi sản xuất / mfr.', fvalue: '' },
 	];
 
@@ -1339,7 +1338,7 @@ const CreateReceiptFromCRM = () => {
 										{isLoading ? 'Đang tìm...' : 'Tìm'}
 									</button>
 								</div>
-							</form>
+							</form>{' '}
 							{error && (
 								<div className="text-red-500 mb-4 p-3 bg-red-50 border border-red-200 rounded">
 									<p className="font-medium">Lỗi:</p>
@@ -1347,7 +1346,7 @@ const CreateReceiptFromCRM = () => {
 								</div>
 							)}
 							{crmData && (
-								<div className="flex flex-col lg:flex-row gap-4">
+								<div className="flex flex-col lg:flex-row gap-4 overflow-y-auto max-h-[calc(95vh-200px)]">
 									{/* Left Column: Order and Customer Information */}
 									<div className="lg:w-1/3 space-y-4">
 										<div className="border rounded-lg p-4 text-start w-full h-fit">
@@ -1643,7 +1642,7 @@ const CreateReceiptFromCRM = () => {
 													/>
 												</div>
 											</div>
-											<div className="overflow-y-auto max-h-[50vh] pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 mb-10">
+											<div className="overflow-y-auto max-h-[calc(95vh-400px)] lg:max-h-[50vh] pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 mb-10">
 												{crmData.samples.map((sample, index) => (
 													<div key={index} className="mb-4 p-2 border rounded w-full">
 														<div className="flex justify-between items-center">
