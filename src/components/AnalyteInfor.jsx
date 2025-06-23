@@ -60,6 +60,15 @@ const AnalyteInfor = () => {
 	const [editingProtocolCode, setEditingProtocolCode] = useState(null);
 	const [editingUnit, setEditingUnit] = useState(null); // Added for default_unit
 
+	// Add filter states
+	const [fieldFilter, setFieldFilter] = useState('');
+	const [matrixFilter, setMatrixFilter] = useState('');
+	const [sourceFilter, setSourceFilter] = useState('');
+	const [showFieldDropdown, setShowFieldDropdown] = useState(false);
+	const [showMatrixFilterDropdown, setShowMatrixFilterDropdown] = useState(false);
+	const [showSourceDropdown, setShowSourceDropdown] = useState(false);
+	const [filteredAnalytes, setFilteredAnalytes] = useState([]);
+
 	const protocolsPerPage = 5;
 	const analytesPerPage = 100; // Changed to show 10 rows per page
 	let isFetch = false;
@@ -75,6 +84,22 @@ const AnalyteInfor = () => {
 		setCurrentTitlePage('Chỉ tiêu');
 	}, [setCurrentTitlePage]);
 
+	// Add effect to handle clicks outside dropdowns
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			if (!event.target.closest('.filter-dropdown')) {
+				setShowFieldDropdown(false);
+				setShowMatrixFilterDropdown(false);
+				setShowSourceDropdown(false);
+			}
+		};
+
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside);
+		};
+	}, []);
+
 	useEffect(() => {
 		if (technicians.length > 0 && !isFetch) {
 			isFetch = true;
@@ -84,6 +109,25 @@ const AnalyteInfor = () => {
 			fetchUnitsList();
 		}
 	}, [technicians]);
+
+	// Add effect to apply filters
+	useEffect(() => {
+		let filtered = analytes;
+
+		if (fieldFilter) {
+			filtered = filtered.filter((analyte) => analyte.field === fieldFilter);
+		}
+
+		if (matrixFilter) {
+			filtered = filtered.filter((analyte) => analyte.matrix === matrixFilter);
+		}
+
+		if (sourceFilter) {
+			filtered = filtered.filter((analyte) => analyte.protocol_source === sourceFilter);
+		}
+
+		setFilteredAnalytes(filtered);
+	}, [analytes, fieldFilter, matrixFilter, sourceFilter]);
 
 	const fetchAnalytes = async () => {
 		try {
@@ -145,6 +189,63 @@ const AnalyteInfor = () => {
 		setUniqueParameterNames(parameterNames);
 		setUniqueProtocolCodes(protocolCodes);
 		// Note: uniqueMatrices and uniqueUnits are now fetched from API
+	};
+
+	// Add filter helper functions
+	const getUniqueFields = () => {
+		const currentList = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
+		return [...new Set(currentList.map((analyte) => analyte.field).filter(Boolean))];
+	};
+
+	const getUniqueMatricesFromCurrent = () => {
+		const currentList = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
+		return [...new Set(currentList.map((analyte) => analyte.matrix).filter(Boolean))];
+	};
+
+	const getUniqueSourcesFromCurrent = () => {
+		const currentList = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
+		return [...new Set(currentList.map((analyte) => analyte.protocol_source).filter(Boolean))];
+	};
+
+	// Add filter handlers
+	const handleFieldFilter = (field) => {
+		setFieldFilter(fieldFilter === field ? '' : field);
+		setShowFieldDropdown(false);
+	};
+
+	const handleMatrixFilter = (matrix) => {
+		setMatrixFilter(matrixFilter === matrix ? '' : matrix);
+		setShowMatrixFilterDropdown(false);
+	};
+
+	const handleSourceFilter = (source) => {
+		setSourceFilter(sourceFilter === source ? '' : source);
+		setShowSourceDropdown(false);
+	};
+
+	// Add toggle handlers for header clicks
+	const toggleFieldDropdown = () => {
+		if (fieldFilter) {
+			setFieldFilter('');
+			return;
+		}
+		setShowFieldDropdown(!showFieldDropdown);
+	};
+
+	const toggleMatrixDropdown = () => {
+		if (matrixFilter) {
+			setMatrixFilter('');
+			return;
+		}
+		setShowMatrixFilterDropdown(!showMatrixFilterDropdown);
+	};
+
+	const toggleSourceDropdown = () => {
+		if (sourceFilter) {
+			setSourceFilter('');
+			return;
+		}
+		setShowSourceDropdown(!showSourceDropdown);
 	};
 
 	// Modified filter functions with minimum character requirement
@@ -328,26 +429,26 @@ const AnalyteInfor = () => {
 
 	const handleSaveClick = async (id) => {
 		const updatedAnalyte = analytes.find((analyte) => analyte.id === id);
-		const days = parseInt(updatedAnalyte?.tat_expected.split(' ')[0]);
-		if (isNaN(days)) {
-			delete updatedAnalyte.tat_expected;
-		} else {
-			updatedAnalyte.tat_expected = `${days} ${days > 1 ? 'days' : 'day'}`;
-		}
-		updatedAnalyte.matrix = updatedAnalyte.matrix === 'Khác' ? customMatrix[id] : updatedAnalyte.matrix;
+		// Temporarily remove tat_expected from the object to avoid database errors
+		const { tat_expected, ...analyteWithoutTat } = updatedAnalyte;
+		const finalAnalyte = analyteWithoutTat;
+		finalAnalyte.matrix = finalAnalyte.matrix === 'Khác' ? customMatrix[id] : finalAnalyte.matrix;
 
 		try {
 			// Add modified_by_uid to the parameter object
-			updatedAnalyte.modified_by_uid = currentUser.identity_uid;
+			finalAnalyte.modified_by_uid = currentUser.identity_uid;
 
 			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/update/parameter', {
-				parameter: updatedAnalyte,
+				parameter: finalAnalyte,
 			});
 			setEditingRow(null);
 			if (response.status === 200) {
 				toast.success('Analyte updated successfully');
 				setOriginalAnalytes(analytes);
-				await fetchAnalytes(); // Refresh data
+				// Update unique lists with new data
+				extractUniqueLists(analytes);
+				// Reset current page when filters change
+				setCurrentPage(1);
 			} else {
 				toast.error('Analyte update failed');
 			}
@@ -384,7 +485,13 @@ const AnalyteInfor = () => {
 				});
 				if (response.status === 200) {
 					toast.success('Analyte deleted successfully');
-					setAnalytes(analytes.filter((analyte) => analyte.id !== id));
+					const updatedAnalytes = analytes.filter((analyte) => analyte.id !== id);
+					setAnalytes(updatedAnalytes);
+					setOriginalAnalytes(updatedAnalytes);
+					// Update unique lists with new data
+					extractUniqueLists(updatedAnalytes);
+					// Reset current page when data changes
+					setCurrentPage(1);
 				} else {
 					toast.error('Analyte deletion failed');
 				}
@@ -414,25 +521,26 @@ const AnalyteInfor = () => {
 	};
 
 	const handleSaveNewAnalyte = async () => {
-		const days = parseInt(newAnalyte?.tat_expected.split(' ')[0]);
-		if (isNaN(days)) {
-			delete newAnalyte.tat_expected;
-		} else {
-			newAnalyte.tat_expected = `${days} ${days > 1 ? 'days' : 'day'}`;
-		}
-		newAnalyte.matrix = newAnalyte.matrix === 'Khác' ? customMatrix['new'] : newAnalyte.matrix;
+		// Temporarily remove tat_expected from the object to avoid database errors
+		const { tat_expected, ...analyteWithoutTat } = newAnalyte;
+		const finalAnalyte = analyteWithoutTat;
+		finalAnalyte.matrix = finalAnalyte.matrix === 'Khác' ? customMatrix['new'] : finalAnalyte.matrix;
 
-		// Add created_by_uid and modified_by_uid to the newAnalyte object
-		newAnalyte.created_by_uid = currentUser.identity_uid;
-		newAnalyte.modified_by_uid = currentUser.identity_uid;
+		// Add created_by_uid and modified_by_uid to the finalAnalyte object
+		finalAnalyte.created_by_uid = currentUser.identity_uid;
+		finalAnalyte.modified_by_uid = currentUser.identity_uid;
 
 		try {
 			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/insert/bulk/parameter', {
-				parameters: [newAnalyte],
+				parameters: [finalAnalyte],
 			});
 			if (response.status === 200) {
 				toast.success('New analyte added successfully');
-				setAnalytes([...analytes, newAnalyte]);
+				// Update states directly instead of refetching
+				const newAnalyteWithId = { ...finalAnalyte, id: response.data?.insertedIds?.[0] || Date.now() };
+				const updatedAnalytes = [...analytes, newAnalyteWithId];
+				setAnalytes(updatedAnalytes);
+				setOriginalAnalytes(updatedAnalytes);
 				setIsAddingNew(false);
 				setNewAnalyte({
 					parameter_name: '',
@@ -449,7 +557,10 @@ const AnalyteInfor = () => {
 					threshold_limit: '',
 					price: '', // Added price field
 				});
-				await fetchAnalytes(); // Refresh data
+				// Update unique lists with new data
+				extractUniqueLists(updatedAnalytes);
+				// Reset current page when data changes
+				setCurrentPage(1);
 			} else {
 				toast.error('Failed to add new analyte');
 			}
@@ -619,9 +730,10 @@ const AnalyteInfor = () => {
 		setExpandedRow(expandedRow === id ? null : id);
 	};
 
-	const totalPages = Math.ceil(analytes.length / analytesPerPage);
+	const totalPages = Math.ceil((filteredAnalytes.length > 0 ? filteredAnalytes : analytes).length / analytesPerPage);
 	const totalProtocolPages = Math.ceil(protocols.length / protocolsPerPage);
-	const paginatedAnalytes = analytes.slice((currentPage - 1) * analytesPerPage, currentPage * analytesPerPage);
+	const currentAnalytes = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
+	const paginatedAnalytes = currentAnalytes.slice((currentPage - 1) * analytesPerPage, currentPage * analytesPerPage);
 	const paginatedProtocols = protocols.slice((protocolPage - 1) * protocolsPerPage, protocolPage * protocolsPerPage);
 
 	const renderPageNumbers = (totalPages, currentPage, handlePageChange) => {
@@ -697,9 +809,96 @@ const AnalyteInfor = () => {
 							<tr>
 								<th className="py-2 text-start pl-2 min-w-24 w-24">UID</th>
 								<th className="py-2 text-start pl-2 min-w-48 w-1/5 ">Tên chỉ tiêu</th>
-								<th className="py-2 text-start pl-2 min-w-32 w-32">Lĩnh vực</th>
-								<th className="py-2 text-start pl-2 min-w-44 w-1/5 ">Nền mẫu</th>
-								<th className="py-2 text-start pl-2 min-w-24 w-24">Nguồn </th>
+								<th className="py-2 text-start pl-2 min-w-32 w-32 relative filter-dropdown">
+									<div
+										className="cursor-pointer flex items-center justify-between p-1 rounded text-blue-600 underline"
+										onClick={toggleFieldDropdown}
+									>
+										<span>Lĩnh vực</span>
+										{fieldFilter && <span className="text-xs bg-blue-500 text-white px-1 rounded">✓</span>}
+									</div>
+									{showFieldDropdown && (
+										<div className="absolute top-full left-0 w-full bg-white border rounded shadow-lg z-10">
+											<div
+												className="p-2 cursor-pointer hover:bg-gray-200 text-start border-b"
+												onClick={() => handleFieldFilter('')}
+											>
+												<span className="text-gray-500">Tất cả</span>
+											</div>
+											{getUniqueFields().map((field, index) => (
+												<div
+													key={index}
+													className={`p-2 cursor-pointer hover:bg-gray-200 text-start border-b ${
+														fieldFilter === field ? 'bg-blue-100' : ''
+													}`}
+													onClick={() => handleFieldFilter(field)}
+												>
+													{field}
+												</div>
+											))}
+										</div>
+									)}
+								</th>
+								<th className="py-2 text-start pl-2 min-w-44 w-1/5 relative filter-dropdown">
+									<div
+										className="cursor-pointer flex items-center justify-between p-1 rounded text-blue-600 underline"
+										onClick={toggleMatrixDropdown}
+									>
+										<span>Nền mẫu</span>
+										{matrixFilter && <span className="text-xs bg-blue-500 text-white px-1 rounded">✓</span>}
+									</div>
+									{showMatrixFilterDropdown && (
+										<div className="absolute top-full left-0 w-full bg-white border rounded shadow-lg z-10 max-h-60 overflow-y-auto">
+											<div
+												className="p-2 cursor-pointer hover:bg-gray-200 text-start border-b"
+												onClick={() => handleMatrixFilter('')}
+											>
+												<span className="text-gray-500">Tất cả</span>
+											</div>
+											{getUniqueMatricesFromCurrent().map((matrix, index) => (
+												<div
+													key={index}
+													className={`p-2 cursor-pointer hover:bg-gray-200 text-start border-b ${
+														matrixFilter === matrix ? 'bg-blue-100' : ''
+													}`}
+													onClick={() => handleMatrixFilter(matrix)}
+												>
+													{matrix}
+												</div>
+											))}
+										</div>
+									)}
+								</th>
+								<th className="py-2 text-start pl-2 min-w-24 w-24 relative filter-dropdown">
+									<div
+										className="cursor-pointer flex items-center justify-between p-1 rounded text-blue-600 underline"
+										onClick={toggleSourceDropdown}
+									>
+										<span>Nguồn</span>
+										{sourceFilter && <span className="text-xs bg-blue-500 text-white px-1 rounded">✓</span>}
+									</div>
+									{showSourceDropdown && (
+										<div className="absolute top-full left-0 w-full bg-white border rounded shadow-lg z-10">
+											<div
+												className="p-2 cursor-pointer hover:bg-gray-200 text-start border-b"
+												onClick={() => handleSourceFilter('')}
+											>
+												<span className="text-gray-500">Tất cả</span>
+											</div>
+											{getUniqueSourcesFromCurrent().map((source, index) => (
+												<div
+													key={index}
+													className={`p-2 cursor-pointer hover:bg-gray-200 text-start border-b ${
+														sourceFilter === source ? 'bg-blue-100' : ''
+													}`}
+													onClick={() => handleSourceFilter(source)}
+												>
+													{source}
+												</div>
+											))}
+										</div>
+									)}
+								</th>
 								<th className="py-2 text-start pl-2 min-w-44 w-44">Code</th>
 								<th className="py-2 text-start pl-2 min-w-20 w-20">Đơn vị</th>
 								<th className="py-2 text-start pl-2 min-w-40 w-40">Ngưỡng giới hạn</th>

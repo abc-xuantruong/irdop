@@ -1,1364 +1,1353 @@
-import axios from 'axios';
+const axios = global.get('axios');
+const { chromium } = global.get('playwright');
 
-const getDraftWatermark = () => {
-	return `
-	<div class="draft-watermark" style="
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		pointer-events: none;
-		z-index: 10;
-		opacity: 0.15;
-		transform: rotate(-45deg);
-		font-family: 'Gilroy', sans-serif;
-	">
-		<div style="
-			font-size: 90px;
-			font-weight: bold;
-			color: #888;
-			text-transform: uppercase;
-			letter-spacing: 8px;
-		">SƠ BỘ-DRAFT</div>
-	</div>`;
-};
-
-// Helper function to make API calls using axios instead of fetch
-const apiGet = async (url) => {
+/**
+ * Main function to generate print page
+ */
+async function generatePrintPage(sample_uid, ppt_uid, is_save = false, is_publish = false) {
+	let browser;
+	let context;
 	try {
-		const response = await axios.get(url, {
-			headers: {
-				'Content-Type': 'application/json',
-				Accept: 'application/json',
-			},
+		if (!sample_uid && !ppt_uid) {
+			throw new Error('Invalid input: sample_uid and ppt_uid are both missing');
+		}
+
+		// Step 1: Generate sections from API response
+		const sectionsData = await generateSectionsFromAPI(sample_uid, ppt_uid, is_save, is_publish);
+
+		// Step 2: Initialize browser for rendering and measuring
+		browser = await chromium.connect('ws://playwright:3000');
+
+		context = await browser.newContext({
+			viewport: { width: 795, height: 1123 },
 		});
 
-		return { status: response.status, data: response.data };
-	} catch (error) {
-		console.error('API Get Error:', error);
-		throw error;
+		// Step 3: Render sections in browser and get computed styles
+		const measurementData = await renderAndMeasureSections(context, sectionsData);
+
+		// Step 4: Apply pagination logic
+		const paginatedContent = applyPaginationLogic(sectionsData, measurementData);
+
+		// Step 5: Generate final HTML with arranged content (FIXED: Pass measurements)
+		const finalHTML = generateFinalHTML(sectionsData, paginatedContent, measurementData);
+
+		return finalHTML;
+	} catch (err) {
+		node.warn(`Error rendering print page for sample_uid=${sample_uid}, ppt_uid=${ppt_uid}: ${err.message}`);
+		throw err;
+	} finally {
+		if (context) {
+			try {
+				await context.close();
+			} catch (closeErr) {
+				node.warn(`Error closing context: ${closeErr.message}`);
+			}
+		}
+		if (browser) {
+			try {
+				await browser.close();
+			} catch (closeErr) {
+				node.warn(`Error closing browser: ${closeErr.message}`);
+			}
+		}
+		if (global.gc) {
+			global.gc();
+		}
 	}
-};
+}
 
-// Helper function for POST requests using axios
-const apiPost = async (url, data) => {
-	try {
-		const response = await axios.post(url, data, {
-			headers: {
-				'Content-Type': 'application/json',
-				Accept: 'application/json',
-			},
-		});
-
-		return { status: response.status, data: response.data };
-	} catch (error) {
-		console.error('API Post Error:', error);
-		throw error;
-	}
-};
-
-export const generateReportToHTML = async (params) => {
-	// Extract basic params directly
-	const {
+/**
+ * Step 1: Generate sections from API response
+ */
+async function generateSectionsFromAPI(sample_uid, ppt_uid, is_save, is_publish) {
+	let sectionsData = {
+		// Metadata
 		sample_uid,
 		ppt_uid,
-		showVlas = false,
-		showComment = false,
-		showReference = false,
-		// Optional custom spacing
-		spacing = '<div style="height: 4mm; margin:0; padding:0;"></div>',
-		nextPageNotification = '<div style="padding: 10px 0; text-align: center; font-size: 12px; font-style: italic; color: #666;">- Xem kết quả ở trang tiếp theo / See the results on the following page -</div>',
-		// Extract additional parameters for sections
-		header: headerParam,
-		footer: footerParam,
-		customerSectionHTML: customerSectionParam,
-		sampleInfoSectionHTML: sampleInfoParam,
-		analysisSectionHTML: analysisParam,
-		commentSectionHTML: commentParam,
-		notesSectionHTML: notesParam,
-		signatureSectionHTML: signatureParam,
-		referenceValues: referenceParam = [],
-		currentUser = null,
-	} = params;
+		is_save,
+		is_publish,
+		isDraft: ppt_uid && ppt_uid.includes('DRAFT'),
+		showComment: false,
+		showVlas: false,
+		showReference: false,
+		referenceValues: [],
+		apiResponsePptUid: null,
 
-	// Variables to store section content
-	let header,
-		footer,
-		customerSectionHTML,
-		sampleInfoSectionHTML,
-		analysisSectionHTML,
-		commentSectionHTML,
-		notesSectionHTML,
-		signatureSectionHTML,
-		referenceValues = [];
+		// Generated sections
+		headerHTML: '',
+		footerHTML: '',
+		customerSection: '',
+		sampleInfoSection: '',
+		analysisSection: '',
+		commentSection: '',
+		notesSection: '',
+		signatureSection: '',
 
-	// Flag to track if the report is a draft
-	let isDraftMode = ppt_uid ? ppt_uid.includes('DRAFT') : true;
-	let currentVlasState = showVlas;
-
-	// Use provided sections if available, otherwise fetch from API
-	if (headerParam && footerParam && customerSectionParam) {
-		// If section data is provided via params, use it directly
-		header = headerParam;
-		footer = footerParam;
-		customerSectionHTML = customerSectionParam;
-		sampleInfoSectionHTML = sampleInfoParam || '';
-		analysisSectionHTML = analysisParam || '';
-		commentSectionHTML = commentParam || '';
-		notesSectionHTML = notesParam || getDefaultNotesSection();
-		signatureSectionHTML = signatureParam || getDefaultSignatureSection();
-		referenceValues = referenceParam || [];
-	} else {
-		// Get data either from report or sample
-		try {
-			if (ppt_uid) {
-				// Fetch report data if ppt_uid is provided
-				const reportResponse = await apiGet(`https://black.irdop.org/to82oe92i/db/get/report/${ppt_uid}`);
-
-				if (reportResponse.status !== 200) {
-					throw new Error(`Report API request failed with status ${reportResponse.status}`);
-				}
-
-				const reportData = reportResponse.data;
-
-				// Update draft mode based on ppt_uid
-				isDraftMode = ppt_uid.includes('DRAFT');
-
-				// Update VLAS state from report data
-				currentVlasState = reportData.is_vlas || showVlas;
-
-				// Extract section HTML from report data
-				header = reportData.header_section || getDefaultHeader(currentVlasState);
-				footer = reportData.footer_section || getDefaultFooter();
-				customerSectionHTML = reportData.customer_section || getDefaultCustomerSection();
-				sampleInfoSectionHTML = reportData.sample_section || '';
-				analysisSectionHTML = reportData.analysis_section || '';
-				commentSectionHTML = reportData.comment_section || '';
-				notesSectionHTML = reportData.note_section || getDefaultNotesSection();
-				signatureSectionHTML = reportData.signature_section || getDefaultSignatureSection();
-
-				// Extract reference values if available
-				if (reportData.reference && Array.isArray(reportData.reference)) {
-					// Convert reference array to reference cell HTML elements
-					referenceValues = reportData.reference.map(
-						(refValue) =>
-							`<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:90px;">${refValue}</span></td>`,
-					);
-				}
-			} else if (sample_uid) {
-				// Fetch sample data if only sample_uid is provided
-				const sampleResponse = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
-
-				if (sampleResponse.status !== 200) {
-					throw new Error(`Sample API request failed with status ${sampleResponse.status}`);
-				}
-
-				const sampleData = sampleResponse.data;
-
-				// Set draft mode to true when generating from sample data
-				isDraftMode = true;
-
-				// Get client data if receipt_id is available
-				if (sampleData && sampleData.receipt_id) {
-					try {
-						const clientResponse = await apiGet(
-							`https://black.irdop.org/hli1o7az/db/receipt/get/client/${sampleData.receipt_id}`,
-						);
-
-						if (clientResponse.status !== 200) {
-							throw new Error(`Client API request failed with status ${clientResponse.status}`);
-						}
-
-						sampleData.client = clientResponse.data;
-					} catch (clientErr) {
-						console.error('Error fetching client data:', clientErr);
-						// Continue with sample data even if client data fails
-						sampleData.client = {};
-					}
-				} else {
-					sampleData.client = {};
-				}
-
-				// Check if any analysis has protocol_source = 'IRDOP VS' and set showVlas to true if found
-				if (sampleData.analysis && Array.isArray(sampleData.analysis)) {
-					const hasVlasProtocol = sampleData.analysis.some((item) => item.protocol_source === 'IRDOP VS');
-					if (hasVlasProtocol) {
-						currentVlasState = true;
-					}
-				}
-
-				// Set default values
-				header = getDefaultHeader(currentVlasState);
-				footer = getDefaultFooter();
-				customerSectionHTML = generateCustomerSection(sampleData.client);
-				sampleInfoSectionHTML = generateSampleInfoSection(sampleData);
-				analysisSectionHTML = generateAnalysisSection(sampleData, showReference);
-				commentSectionHTML = showComment ? generateCommentSection() : '';
-				notesSectionHTML = getDefaultNotesSection();
-				signatureSectionHTML = getDefaultSignatureSection();
-
-				// Generate reference values if needed
-				if (sampleData.analysis && Array.isArray(sampleData.analysis)) {
-					referenceValues = sampleData.analysis.map(
-						() =>
-							`<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:90px;">--</span></td>`,
-					);
-				}
-			} else {
-				// If neither ppt_uid nor sample_uid is provided, use default values
-				isDraftMode = true;
-				header = getDefaultHeader(currentVlasState);
-				footer = getDefaultFooter();
-				customerSectionHTML = getDefaultCustomerSection();
-				sampleInfoSectionHTML = '';
-				analysisSectionHTML = '';
-				commentSectionHTML = showComment ? generateCommentSection() : '';
-				notesSectionHTML = getDefaultNotesSection();
-				signatureSectionHTML = getDefaultSignatureSection();
-			}
-		} catch (error) {
-			console.error('Error fetching data:', error);
-			// Use default values if API calls fail
-			isDraftMode = true;
-			header = getDefaultHeader(currentVlasState);
-			footer = getDefaultFooter();
-			customerSectionHTML = getDefaultCustomerSection();
-			sampleInfoSectionHTML = '';
-			analysisSectionHTML = '';
-			commentSectionHTML = showComment ? generateCommentSection() : '';
-			notesSectionHTML = getDefaultNotesSection();
-			signatureSectionHTML = getDefaultSignatureSection();
-		}
-	}
-
-	// Similar to Report.jsx, send the sections to createReport API
-	try {
-		// Extract reference values from HTML for API
-		const extractReferenceValues = () => {
-			if (!referenceValues || referenceValues.length === 0) return [];
-
-			// Extract the text content from reference cells
-			return referenceValues.map((cellHtml) => {
-				const tempDiv = document.createElement('div');
-				tempDiv.innerHTML = cellHtml;
-				// Try to find span inside the cell first
-				const span = tempDiv.querySelector('span');
-				return span ? span.textContent.trim() : tempDiv.textContent.trim();
-			});
-		};
-
-		// Prepare the request body similar to Report.jsx
-		const requestBody = {
-			report: {
-				sample_uid: sample_uid,
-				header_section: header,
-				footer_section: footer,
-				customer_section: customerSectionHTML,
-				analysis_section: analysisSectionHTML,
-				sample_section: sampleInfoSectionHTML,
-				note_section: notesSectionHTML,
-				signature_section: signatureSectionHTML,
-				comment_section: commentSectionHTML || '',
-				reference: extractReferenceValues(),
-				is_vlas: currentVlasState,
-				is_comment: showComment,
-				is_reference: showReference,
-				created_by_uid: currentUser?.identity_uid || 'system',
-			},
-			type: 'save',
-		};
-
-		// Send the data to the API
-		const createReportResponse = await apiPost('https://black.irdop.org/to82oe92i/db/insert/ppt', requestBody);
-
-		if (createReportResponse.status === 200) {
-		}
-	} catch (error) {
-		console.error('Error sending report data to API:', error);
-		// Continue with report generation even if API fails
-	}
-
-	// Function to format date
-	const formatDate = (date) => {
-		return date.toLocaleDateString('vi-VN', {
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-		});
+		// Helper sections
+		nextPageNotification: `
+            <div style="padding: 10px 0; text-align: center; font-size: 12px; font-style: italic; color: #666;">
+                - Xem kết quả ở trang tiếp theo / The results are on the next page -
+            </div>`,
+		spacing: `<div style="height: 4mm; margin:0; padding:0;"></div>`,
 	};
 
-	// A4 dimensions in mm with spacing adjustments
+	let type = 'view';
+	if (is_save) type = 'save';
+	else if (is_publish) type = 'publish';
+
+	// Generate sections based on ppt_uid or sample_uid
+	if (ppt_uid) {
+		await generateSectionsFromReport(sectionsData, ppt_uid);
+	} else {
+		await generateSectionsFromSample(sectionsData, sample_uid);
+	}
+
+	// Handle save/publish logic
+	if (is_save || is_publish) {
+		await handleSavePublishLogic(sectionsData, type);
+	}
+
+	return sectionsData;
+}
+
+/**
+ * Generate sections from existing report
+ */
+async function generateSectionsFromReport(sectionsData, ppt_uid) {
+	try {
+		const reportResponse = await axios.get(`https://black.irdop.org/to82oe92i/db/get/report/${ppt_uid}`);
+		if (reportResponse.status !== 200) {
+			throw new Error(
+				`Failed to fetch report: status=${reportResponse.status}, message=${reportResponse.data?.message || 'Unknown'}`,
+			);
+		}
+
+		const reportData = reportResponse.data;
+
+		sectionsData.headerHTML = reportData.header_section || '';
+		sectionsData.footerHTML = reportData.footer_section || '';
+		sectionsData.customerSection = reportData.customer_section || '';
+		sectionsData.sampleInfoSection = reportData.sample_section || '';
+		sectionsData.analysisSection = reportData.analysis_section || '';
+		sectionsData.commentSection = reportData.comment_section || '';
+		sectionsData.notesSection = reportData.note_section || '';
+		sectionsData.signatureSection = reportData.signature_section || '';
+		sectionsData.showComment = reportData.is_comment || false;
+		sectionsData.showVlas = reportData.is_vlas || false;
+		sectionsData.showReference = reportData.is_reference || false;
+
+		// Process analysis section for fixed width
+		if (sectionsData.analysisSection) {
+			sectionsData.analysisSection = processAnalysisSection(sectionsData.analysisSection);
+		}
+
+		// Process reference values
+		if (reportData.reference && Array.isArray(reportData.reference)) {
+			sectionsData.referenceValues = reportData.reference.map(
+				(refValue) =>
+					`<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${refValue}</td>`,
+			);
+		}
+
+		// Clean up reportData
+		Object.keys(reportData).forEach((key) => (reportData[key] = null));
+	} catch (err) {
+		node.warn(`Error fetching report for ppt_uid=${ppt_uid}: ${err.message}`);
+		throw err;
+	}
+}
+
+/**
+ * Generate sections from sample data
+ */
+async function generateSectionsFromSample(sectionsData, sample_uid) {
+	try {
+		const sampleResponse = await axios.get(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
+		if (sampleResponse.status !== 200) {
+			throw new Error(
+				`Failed to fetch sample: status=${sampleResponse.status}, message=${sampleResponse.data?.message || 'Unknown'}`,
+			);
+		}
+
+		const sampleData = sampleResponse.data;
+
+		// Check for VLAS
+		if (sampleData.analysis && Array.isArray(sampleData.analysis)) {
+			sectionsData.showVlas = sampleData.analysis.some((item) => item.protocol_source === 'IRDOP VS');
+		}
+
+		// Fetch client data
+		try {
+			if (sampleData.receipt_id) {
+				const clientResponse = await axios.get(
+					`https://black.irdop.org/hli1o7az/db/receipt/get/client/${sampleData.receipt_id}`,
+				);
+				if (clientResponse.status === 200) {
+					sampleData.client = clientResponse.data;
+				} else {
+					node.warn(
+						`Failed to fetch client data for receipt_id=${sampleData.receipt_id}: status=${clientResponse.status}`,
+					);
+				}
+			}
+		} catch (clientErr) {
+			node.warn(`Error fetching client data: ${clientErr.message}`);
+		}
+
+		// Generate all sections
+		sectionsData.customerSection = generateCustomerSection(sampleData.client);
+		sectionsData.sampleInfoSection = generateSampleInfoSection(sampleData);
+		sectionsData.analysisSection = generateAnalysisSection(
+			sampleData,
+			sectionsData.showReference,
+			sectionsData.referenceValues,
+		);
+		sectionsData.commentSection = sectionsData.showComment ? generateCommentSection() : '';
+		sectionsData.notesSection = generateNotesSection();
+		sectionsData.signatureSection = generateSignatureSection();
+		sectionsData.headerHTML = generateHeaderHTML(sectionsData.showVlas, sectionsData.ppt_uid); // FIXED: Pass ppt_uid
+		sectionsData.footerHTML = generateFooterHTML();
+
+		// Clean up sampleData
+		Object.keys(sampleData).forEach((key) => {
+			if (key !== 'client' && key !== 'analysis' && key !== 'sample_information') {
+				sampleData[key] = null;
+			}
+		});
+		sampleData.client = sampleData.client || null;
+		sampleData.analysis = null;
+		sampleData.sample_information = null;
+	} catch (err) {
+		node.warn(`Error fetching sample for sample_uid=${sample_uid}: ${err.message}`);
+		throw err;
+	}
+}
+
+/**
+ * Handle save/publish API calls
+ */
+async function handleSavePublishLogic(sectionsData, type) {
+	try {
+		let created_by_uid = 'TranTu02'; // Current user from context
+
+		try {
+			const userResponse = await axios.get('https://black.irdop.org/to82oe92i/db/get/current_user');
+			if (userResponse.status === 200 && userResponse.data && userResponse.data.identity_uid) {
+				created_by_uid = userResponse.data.identity_uid;
+			}
+		} catch (userError) {
+			node.warn(`Could not get current user: ${userError.message}`);
+		}
+
+		const extractTextFromHtml = (html) =>
+			html
+				.replace(/<[^>]*>/g, ' ')
+				.replace(/\s+/g, ' ')
+				.trim();
+		const processedReferenceValues = sectionsData.referenceValues.map((ref) => extractTextFromHtml(ref));
+
+		const requestBody = {
+			sample_uid: sectionsData.sample_uid,
+			header_section: sectionsData.headerHTML,
+			footer_section: sectionsData.footerHTML,
+			customer_section: sectionsData.customerSection,
+			analysis_section: sectionsData.analysisSection,
+			sample_section: sectionsData.sampleInfoSection,
+			note_section: sectionsData.notesSection,
+			signature_section: sectionsData.signatureSection,
+			comment_section: sectionsData.commentSection || '',
+			reference: processedReferenceValues,
+			is_vlas: sectionsData.showVlas,
+			is_comment: sectionsData.showComment,
+			is_reference: sectionsData.showReference,
+			created_by_uid,
+			receipt_note: '',
+			additional_request: '',
+			is_save: sectionsData.is_save,
+			is_publish: sectionsData.is_publish,
+		};
+
+		const response = await axios.post('https://black.irdop.org/to82oe92i/db/insert/ppt', {
+			report: requestBody,
+			type,
+		});
+
+		if (response.status === 200 && response.data.ppt_uid) {
+			sectionsData.apiResponsePptUid = response.data.ppt_uid;
+			sectionsData.ppt_uid = sectionsData.apiResponsePptUid;
+			sectionsData.isDraft = sectionsData.ppt_uid.includes('DRAFT');
+		}
+	} catch (apiError) {
+		node.warn(`Error sending ${type} request for ppt_uid=${sectionsData.ppt_uid || 'new'}: ${apiError.message}`);
+	}
+}
+
+/**
+ * Step 2: Render sections in browser and get computed styles
+ * FIXED: Updated with Nunito Sans font
+ */
+async function renderAndMeasureSections(context, sectionsData) {
+	const page = await context.newPage();
+	page.setDefaultTimeout(180000);
+
+	// Page event listeners
+	page.on('console', (logMsg) => {
+		if (logMsg.type() === 'error') {
+			node.warn(`Page ERROR: ${logMsg.text()}`);
+		} else if (logMsg.type() === 'warning') {
+			node.warn(`Page WARNING: ${logMsg.text()}`);
+		}
+	});
+
 	const A4 = {
 		width: 210,
 		height: 297,
-		topMargin: 15, // 1.5cm
-		bottomMargin: 8, // 0.8cm
-		sideMargin: 10, // 1cm
-		headerSpacing: 8, // spacing between header and content
-		footerSpacing: 3, // spacing between content and footer
+		topMargin: 15,
+		bottomMargin: 8,
+		sideMargin: 10,
+		headerSpacing: 5,
+		footerSpacing: 2,
 	};
 
-	// Get DPI for pixel to mm conversion
-	const getDPI = () => {
-		const div = document.createElement('div');
-		div.style.width = '1in';
-		div.style.height = '1in';
-		div.style.position = 'absolute';
-		div.style.left = '-100%';
-		div.style.top = '-100%';
-		document.body.appendChild(div);
-		const dpi = div.offsetWidth;
-		document.body.removeChild(div);
-		return dpi;
-	};
+	// Helper function for mm to px conversion
+	const mmToPx = (mm) => mm * 3.78;
 
-	const dpi = getDPI();
-	const pxToMm = (px) => (px * 25.4) / dpi;
-	const mmToPx = (mm) => (mm * dpi) / 25.4;
+	// Get base CSS with fonts included
+	const basePrintCss = getPrintCSSWithFonts(A4, false);
 
-	// Pagination function with detailed logging
-	const paginateContent = () => {
-		// Create temporary measuring elements
-		const measureArea = document.createElement('div');
-		measureArea.style.position = 'absolute';
-		measureArea.style.visibility = 'hidden';
-		measureArea.style.width = `${A4.width - 2 * A4.sideMargin}mm`;
-		measureArea.style.left = '-9999px';
-		document.body.appendChild(measureArea);
+	// First, measure header and footer independently
+	const headerFooterMeasurementHTML = `
+        <html>
+        <head>
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet">
+            <style>${basePrintCss}</style>
+        </head>
+        <body>
+            <div style="width: 794px; position: relative; padding: ${A4.topMargin}mm ${A4.sideMargin}mm;">
+                <div class="header" id="header-measure" style="position: static; width: 100%; border: 2px solid red;">${sectionsData.headerHTML}</div>
+            </div>
+            <div style="width: 794px; position: relative; margin-top: 20px; padding: 0 ${A4.sideMargin}mm;">
+                <div class="footer" id="footer-measure" style="position: static; width: 100%; border: 2px solid blue;">${sectionsData.footerHTML}</div>
+            </div>
+        </body>
+        </html>
+    `;
 
-		// Measure header height
-		measureArea.innerHTML = header;
-		const headerHeightPx = measureArea.offsetHeight;
-		const headerHeightMm = pxToMm(headerHeightPx);
+	await page.setContent(headerFooterMeasurementHTML, { waitUntil: 'networkidle' });
 
-		// Measure footer height
-		measureArea.innerHTML = footer;
-		const footerHeightPx = measureArea.offsetHeight;
-		const footerHeightMm = pxToMm(footerHeightPx);
+	// Wait for fonts to load and elements to be rendered
+	await page.waitForSelector('#header-measure');
+	await page.waitForSelector('#footer-measure');
 
-		// CORRECTED: Proper content height calculation formula for ALL pages
-		// A4 height - top margin - bottom margin - header height - footer height - header spacing - footer spacing
-		const availableContentHeightMm =
-			A4.height -
-			A4.topMargin -
-			A4.bottomMargin -
-			headerHeightMm -
-			footerHeightMm -
-			A4.headerSpacing -
-			A4.footerSpacing;
+	// Wait for fonts to load
+	await page.evaluate(() => {
+		return document.fonts.ready;
+	});
 
-		const availableContentHeightPx = mmToPx(availableContentHeightMm);
+	// Get header and footer heights first
+	const headerFooterMeasurements = await page.evaluate(() => {
+		const headerElement = document.querySelector('#header-measure');
+		const footerElement = document.querySelector('#footer-measure');
 
-		// Helper function to safely parse numeric style values
-		const safeParseFloat = (value) => {
-			if (!value) return 0;
-			const strValue = String(value || '0');
-			const numericPart = strValue.replace(/[^\d.-]/g, '');
-			const result = parseFloat(numericPart);
-			return isNaN(result) ? 0 : result;
+		const headerRect = headerElement.getBoundingClientRect();
+		const footerRect = footerElement.getBoundingClientRect();
+
+		return {
+			headerHeight: headerElement ? headerElement.offsetHeight : 0,
+			footerHeight: footerElement ? footerElement.offsetHeight : 0,
+			headerRect: {
+				width: headerRect.width,
+				height: headerRect.height,
+				top: headerRect.top,
+				left: headerRect.left,
+			},
+			footerRect: {
+				width: footerRect.width,
+				height: footerRect.height,
+				top: footerRect.top,
+				left: footerRect.left,
+			},
 		};
+	});
 
-		// First, let's measure all sections individually with comprehensive style calculations
-		const measureSection = (sectionHtml, sectionName) => {
-			measureArea.innerHTML = sectionHtml;
+	// Calculate positioning values
+	const marginTopPx = mmToPx(A4.topMargin);
+	const marginBottomPx = mmToPx(A4.bottomMargin);
+	const headerSpacingPx = mmToPx(A4.headerSpacing);
+	const footerSpacingPx = mmToPx(A4.footerSpacing);
 
-			// Get the element's computed style
-			const computedStyle = window.getComputedStyle(measureArea);
+	// FIXED: Calculate content area position with proper footer space reservation
+	const contentTopPosition = marginTopPx + headerFooterMeasurements.headerHeight + headerSpacingPx;
+	const footerStartPosition = 1122 - marginBottomPx - headerFooterMeasurements.footerHeight;
+	const contentBottomPosition = footerStartPosition - footerSpacingPx;
+	const availableContentHeight = contentBottomPosition - contentTopPosition;
 
-			// Calculate full height including margins, borders, and padding
-			const marginTop = safeParseFloat(computedStyle.marginTop);
-			const marginBottom = safeParseFloat(computedStyle.marginBottom);
-			const borderTopWidth = safeParseFloat(computedStyle.borderTopWidth);
-			const borderBottomWidth = safeParseFloat(computedStyle.borderBottomWidth);
-			const paddingTop = safeParseFloat(computedStyle.paddingTop);
-			const paddingBottom = safeParseFloat(computedStyle.paddingBottom);
+	// Validate content area
+	if (availableContentHeight <= 0) {
+		throw new Error(`Invalid content area: available height is ${availableContentHeight}px`);
+	}
 
-			// Base height
-			let heightPx = measureArea.offsetHeight;
+	// Create measurement HTML for all sections with proper positioning and constraints
+	const sectionsMeasurementHTML = `
+        <html>
+        <head>
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet">
+            <style>
+                ${basePrintCss}
+                .debug-page {
+                    width: 794px;
+                    height: 1122px;
+                    position: relative;
+                    margin: 0 auto;
+                    background: white;
+                    border: 1px solid #ccc;
+                }
+                .debug-header {
+                    position: absolute;
+                    top: ${A4.topMargin}mm;
+                    left: ${A4.sideMargin}mm;
+                    right: ${A4.sideMargin}mm;
+                    width: calc(100% - ${2 * A4.sideMargin}mm);
+                    background: rgba(255, 0, 0, 0.1);
+                    border: 1px solid red;
+                }
+                .debug-content {
+                    position: absolute;
+                    top: ${contentTopPosition}px;
+                    left: ${A4.sideMargin}mm;
+                    right: ${A4.sideMargin}mm;
+                    width: calc(100% - ${2 * A4.sideMargin}mm);
+                    height: ${availableContentHeight}px;
+                    max-height: ${availableContentHeight}px;
+                    overflow: hidden;
+                    background: rgba(0, 255, 0, 0.1);
+                    border: 1px solid green;
+                    box-sizing: border-box;
+                }
+                .debug-footer {
+                    position: absolute;
+                    top: ${footerStartPosition}px;
+                    left: ${A4.sideMargin}mm;
+                    right: ${A4.sideMargin}mm;
+                    width: calc(100% - ${2 * A4.sideMargin}mm);
+                    background: rgba(0, 0, 255, 0.1);
+                    border: 1px solid blue;
+                }
+                .section-wrapper {
+                    margin-bottom: 4mm;
+                    border: 1px dashed #999;
+                    padding: 2px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="debug-page">
+                <!-- Header positioned -->
+                <div class="debug-header">
+                    <div id="header-final">${sectionsData.headerHTML}</div>
+                </div>
+                
+                <!-- Content area positioned below header with height constraints -->
+                <div class="debug-content">
+                    <div class="section-wrapper">
+                        <div id="customer-section">${sectionsData.customerSection}</div>
+                    </div>
+                    <div class="section-wrapper">
+                        <div id="sample-info-section">${sectionsData.sampleInfoSection}</div>
+                    </div>
+                    <div class="section-wrapper">
+                        <div id="analysis-section">${sectionsData.analysisSection}</div>
+                    </div>
+                    ${
+											sectionsData.showComment
+												? `
+                    <div class="section-wrapper">
+                        <div id="comment-section">${sectionsData.commentSection}</div>
+                    </div>`
+												: ''
+										}
+                    <div class="section-wrapper">
+                        <div id="notes-section">${sectionsData.notesSection}</div>
+                    </div>
+                    <div class="section-wrapper">
+                        <div id="signature-section">${sectionsData.signatureSection}</div>
+                    </div>
+                </div>
+                
+                <!-- Footer positioned -->
+                <div class="debug-footer">
+                    <div id="footer-final">${sectionsData.footerHTML}</div>
+                </div>
+                
+                <!-- Measurement elements outside main layout -->
+                <div style="position: absolute; top: 2000px; width: calc(100% - ${2 * A4.sideMargin}mm); left: ${
+		A4.sideMargin
+	}mm;">
+                    <div id="spacing-measure">${sectionsData.spacing}</div>
+                    <div id="notification-measure">${sectionsData.nextPageNotification}</div>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
 
-			// Adjust based on box-sizing
-			const boxSizing = computedStyle.boxSizing;
-			if (boxSizing !== 'border-box') {
-				// For content-box, we need to add padding and border explicitly
-				heightPx += paddingTop + paddingBottom + borderTopWidth + borderBottomWidth;
-			}
+	await page.setContent(sectionsMeasurementHTML, { waitUntil: 'networkidle' });
 
-			// Margins are always added regardless of box-sizing
-			heightPx += marginTop + marginBottom;
+	// Wait for all section elements to be rendered and fonts to load
+	await page.waitForSelector('#customer-section');
+	await page.waitForSelector('#sample-info-section');
+	await page.waitForSelector('#analysis-section');
 
-			return heightPx;
-		};
+	// Wait for fonts to load
+	await page.evaluate(() => {
+		return document.fonts.ready;
+	});
 
-		const sectionHeights = {
-			customerSection: measureSection(customerSectionHTML, 'CUSTOMER SECTION'),
-			sampleInfoSection: measureSection(sampleInfoSectionHTML, 'SAMPLE INFO SECTION'),
-			analysisSection: measureSection(analysisSectionHTML, 'ANALYSIS TABLE'),
-			commentSection: showComment ? measureSection(commentSectionHTML || '', 'COMMENT SECTION') : 0,
-			notesSection: measureSection(notesSectionHTML, 'NOTES SECTION'),
-			signatureSection: measureSection(signatureSectionHTML, 'SIGNATURE SECTION'),
-			spacing: measureSection(spacing, 'SPACING'),
-			nextPageNotification: measureSection(nextPageNotification, 'PAGE BREAK NOTIFICATION'),
-		};
+	// FIXED: Get computed measurements with single object parameter
+	const measurements = await page.evaluate(
+		(params) => {
+			const { expectedContentHeight, contentTop, footerStart } = params;
 
-		// Calculate total content height including spacing and optional comment section
-		let totalContentHeight =
-			sectionHeights.customerSection +
-			sectionHeights.spacing +
-			sectionHeights.sampleInfoSection +
-			sectionHeights.spacing +
-			sectionHeights.analysisSection +
-			sectionHeights.spacing +
-			sectionHeights.notesSection +
-			sectionHeights.spacing +
-			sectionHeights.signatureSection;
+			const getElementDimensions = (selector, label) => {
+				const element = document.querySelector(selector);
+				if (!element) return { height: 0, width: 0, top: 0, left: 0, found: false };
 
-		// Add comment section height if it's enabled
-		if (showComment && commentSectionHTML) {
-			totalContentHeight += sectionHeights.commentSection + sectionHeights.spacing;
-		}
+				const rect = element.getBoundingClientRect();
+				const computed = window.getComputedStyle(element);
 
-		// Calculate height of page 1 in special layout
-		let page1SpecialLayoutHeight =
-			sectionHeights.customerSection +
-			sectionHeights.spacing +
-			sectionHeights.sampleInfoSection +
-			sectionHeights.spacing +
-			sectionHeights.nextPageNotification +
-			sectionHeights.spacing +
-			sectionHeights.notesSection;
+				const result = {
+					height: element.offsetHeight,
+					width: element.offsetWidth,
+					top: rect.top,
+					left: rect.left,
+					found: true,
+					computedMarginTop: computed.marginTop,
+					computedPaddingTop: computed.paddingTop,
+					offsetTop: element.offsetTop,
+					scrollTop: element.scrollTop,
+				};
 
-		// Calculate height of page 2 in special layout
-		// Include comment section on page 2 with analysis section
-		const page2SpecialLayoutHeight =
-			sectionHeights.analysisSection +
-			sectionHeights.spacing +
-			(showComment ? sectionHeights.commentSection + sectionHeights.spacing : 0) +
-			sectionHeights.signatureSection;
-
-		// Determine if content should use special 2-page layout
-		// Criteria:
-		// 1. Total content exceeds 1 page
-		// 2. Page 2 of special layout fits within 1 page
-		// 3. Page 1 of special layout fits within 1 page
-		const totalExceedsOnePage = totalContentHeight > availableContentHeightPx;
-		const page2FitsOnePage = page2SpecialLayoutHeight <= availableContentHeightPx;
-		const page1FitsOnePage = page1SpecialLayoutHeight <= availableContentHeightPx;
-
-		const useSpecialLayout = totalExceedsOnePage && page2FitsOnePage && page1FitsOnePage;
-
-		// Decide which layout to use based on our analysis
-		let contentPages = [];
-
-		if (useSpecialLayout) {
-			// Use the custom 2-page layout
-			// Page 1: customerSection + sampleInfoSection + notification + notesSection
-			const page1Elements = [
-				customerSectionHTML,
-				spacing,
-				sampleInfoSectionHTML,
-				spacing,
-				nextPageNotification,
-				spacing,
-				notesSectionHTML,
-			];
-
-			const page1Content = page1Elements.join('');
-
-			// Page 2: analysisSection + commentSection (if enabled) + signatureSection
-			const page2Elements = [analysisSectionHTML, spacing];
-
-			// Add comment section to page 2 after analysis section if enabled
-			if (showComment && commentSectionHTML) {
-				page2Elements.push(commentSectionHTML);
-				page2Elements.push(spacing);
-			}
-
-			page2Elements.push(signatureSectionHTML);
-			const page2Content = page2Elements.join('');
-
-			contentPages = [page1Content, page2Content];
-		} else {
-			// Use standard sequential layout
-			// Create standard content with sequential sections
-			const contentElements = [];
-			contentElements.push(customerSectionHTML);
-			contentElements.push(spacing);
-			contentElements.push(sampleInfoSectionHTML);
-			contentElements.push(spacing);
-			contentElements.push(analysisSectionHTML);
-			contentElements.push(spacing);
-
-			if (showComment && commentSectionHTML) {
-				contentElements.push(commentSectionHTML);
-				contentElements.push(spacing);
-			}
-
-			contentElements.push(notesSectionHTML);
-			contentElements.push(spacing);
-			contentElements.push(signatureSectionHTML);
-
-			// Parse content into elements for standard pagination
-			measureArea.innerHTML = contentElements.join('');
-			const htmlElements = Array.from(measureArea.childNodes);
-
-			// Standard pagination logic
-			let currentPage = [];
-			let currentPageHeightPx = 0;
-			let pageContentHeights = [];
-			let tableBreakCounts = 0;
-
-			// Enhanced function to process elements with more accurate height calculation
-			const processElement = (element) => {
-				// Skip empty text nodes
-				if (element.nodeType === 3 && element.textContent.trim() === '') {
-					return;
-				}
-
-				// Create a clone to measure with enhanced accuracy
-				const clone = element.cloneNode(true);
-				measureArea.innerHTML = '';
-				measureArea.appendChild(clone);
-
-				// Get computed style for more accurate measurements
-				const computedStyle = window.getComputedStyle(measureArea);
-
-				// Calculate element height including margins, borders, padding
-				const marginTop = safeParseFloat(computedStyle.marginTop);
-				const marginBottom = safeParseFloat(computedStyle.marginBottom);
-				const borderTopWidth = safeParseFloat(computedStyle.borderTopWidth);
-				const borderBottomWidth = safeParseFloat(computedStyle.borderBottomWidth);
-				const paddingTop = safeParseFloat(computedStyle.paddingTop);
-				const paddingBottom = safeParseFloat(computedStyle.paddingBottom);
-
-				// Base height from offsetHeight
-				let elementHeightPx = measureArea.offsetHeight;
-
-				// Adjust based on box-sizing
-				const boxSizing = computedStyle.boxSizing;
-				if (boxSizing !== 'border-box') {
-					// For content-box, add padding and border
-					elementHeightPx += paddingTop + paddingBottom + borderTopWidth + borderBottomWidth;
-				}
-
-				// Always add margins
-				elementHeightPx += marginTop + marginBottom;
-
-				const elementHeightMm = pxToMm(elementHeightPx);
-
-				// Check if this element is a table
-				const isTable = element.tagName === 'TABLE' || (element.querySelector && element.querySelector('table'));
-
-				// Check if this element fits on the current page
-				// Ensure we maintain minimum spacing from footer
-				if (currentPageHeightPx + elementHeightPx <= availableContentHeightPx) {
-					// Element fits on current page
-					currentPage.push(element.outerHTML || element.textContent);
-					currentPageHeightPx += elementHeightPx;
-				} else if (isTable) {
-					// Table doesn't fit - needs to be split across pages
-					splitTableAcrossPages(element);
-				} else if (elementHeightPx > availableContentHeightPx && currentPage.length === 0) {
-					// Non-table element larger than a full page and we're at the start of a page
-					// Force onto a page
-					currentPage.push(element.outerHTML || element.textContent);
-					contentPages.push(currentPage.join(''));
-					pageContentHeights.push(currentPageHeightPx);
-
-					// Start new page
-					currentPage = [];
-					currentPageHeightPx = 0;
-				} else {
-					// Element doesn't fit on current page - start a new page
-					contentPages.push(currentPage.join(''));
-					pageContentHeights.push(currentPageHeightPx);
-
-					// Start new page with this element
-					currentPage = [element.outerHTML || element.textContent];
-					currentPageHeightPx = elementHeightPx;
-				}
+				console.log(`${label}: height=${result.height}px, top=${result.top}px, offsetTop=${result.offsetTop}px`);
+				return result;
 			};
 
-			// Enhanced function to split tables across pages with comprehensive row height calculations
-			const splitTableAcrossPages = (tableElement, recursionDepth = 0) => {
-				// Add recursion depth counter to prevent stack overflow
-				if (recursionDepth > 10) {
-					return;
-				}
+			const measureTableInfo = (selector) => {
+				const element = document.querySelector(selector);
+				if (!element) return null;
 
-				tableBreakCounts++;
+				const table = element.querySelector('table');
+				if (!table) return null;
 
-				// Extract table structure
-				const hasHeader = !!tableElement.querySelector('thead');
-				const tableHeader = hasHeader ? tableElement.querySelector('thead').outerHTML : '';
-				const rows = Array.from(tableElement.querySelectorAll('tbody tr')) || [];
+				const header = table.querySelector('thead');
+				const headerHeight = header ? header.offsetHeight : 0;
 
-				// Exit early if no rows to process
-				if (!rows.length) {
-					return;
-				}
+				const rows = Array.from(table.querySelectorAll('tbody tr'));
+				const rowHeights = rows.map((row) => row.offsetHeight);
+				const rowsHtml = rows.map((row) => row.outerHTML);
 
-				console.log(`Table pagination: processing table with ${rows.length} rows`);
-
-				// Extract all attributes and styles from the original table
-				const tableAttributes = Array.from(tableElement.attributes)
+				const tableAttributes = Array.from(table.attributes)
 					.map((attr) => `${attr.name}="${attr.value}"`)
 					.join(' ');
 
-				// If there's no space left on the current page for even the header + 1 row,
-				// we need to start a new page
-				if (currentPage.length > 0) {
-					const headerHeight = hasHeader ? measureSection(`<table ${tableAttributes}>${tableHeader}</table>`) : 0;
-					const minTableHeight = headerHeight + (rows.length > 0 ? 50 : 0); // Min height for header + one row
+				const avgRowHeight = rows.length > 0 ? rowHeights.reduce((sum, h) => sum + h, 0) / rows.length : 30;
 
-					console.log(`Table header height: ${headerHeight}px, Min table height: ${minTableHeight}px`);
-					console.log(`Current page height: ${currentPageHeightPx}px, Available height: ${availableContentHeightPx}px`);
-
-					if (currentPageHeightPx + minTableHeight > availableContentHeightPx) {
-						console.log('Not enough space for table header + 1 row, moving to next page');
-						contentPages.push(currentPage.join(''));
-						pageContentHeights.push(currentPageHeightPx);
-						currentPage = [];
-						currentPageHeightPx = 0;
-					}
-				}
-
-				// Create a table structure for the first part (header + rows that fit)
-				let firstPartHTML = `<table ${tableAttributes}>`;
-				if (hasHeader) firstPartHTML += tableHeader;
-				firstPartHTML += '<tbody>';
-
-				// Keep track of remaining height on current page
-				let remainingHeightPx = availableContentHeightPx - currentPageHeightPx;
-				console.log(
-					`Remaining height on current page: ${remainingHeightPx}px (${pxToMm(remainingHeightPx).toFixed(2)}mm)`,
-				);
-
-				// Measure header height if header exists
-				if (hasHeader) {
-					const headerHTML = `<table ${tableAttributes}>${tableHeader}</table>`;
-					measureArea.innerHTML = headerHTML;
-					const headerComputedStyle = window.getComputedStyle(measureArea);
-					const headerMarginTop = safeParseFloat(headerComputedStyle.marginTop);
-					const headerMarginBottom = safeParseFloat(headerComputedStyle.marginBottom);
-					const headerHeightPx = measureArea.offsetHeight + headerMarginTop + headerMarginBottom;
-					remainingHeightPx -= headerHeightPx;
-					console.log(
-						`After header, remaining height: ${remainingHeightPx}px (${pxToMm(remainingHeightPx).toFixed(2)}mm)`,
-					);
-				}
-
-				// Improved row height measurement: Create a complete table with all rows
-				// to accurately measure each row in context
-				const fullTableHTML = `<table ${tableAttributes}>${hasHeader ? tableHeader : ''}<tbody>${rows
-					.map((row) => row.outerHTML)
-					.join('')}</tbody></table>`;
-				measureArea.innerHTML = fullTableHTML;
-
-				// Get all rendered rows to measure actual heights
-				const renderedRows = Array.from(measureArea.querySelectorAll('tbody tr'));
-
-				// LOG: Direct DOM row heights - this will output raw DOM measurements
-				console.log('=== DIRECT DOM ROW HEIGHTS ===');
-				renderedRows.forEach((row, idx) => {
-					const rect = row.getBoundingClientRect();
-					console.log(
-						`Row ${idx + 1}: ClientRect height=${rect.height}px, offsetHeight=${row.offsetHeight}px, scrollHeight=${
-							row.scrollHeight
-						}px`,
-					);
-				});
-
-				// Detailed logging function to show computed styles that affect height
-				const logRowComputedStyles = (row, index) => {
-					const style = window.getComputedStyle(row);
-					console.log(`Row ${index + 1} computed styles:
-						height: ${style.height},
-						minHeight: ${style.minHeight},
-						lineHeight: ${style.lineHeight},
-						boxSizing: ${style.boxSizing},
-						borderTopWidth: ${style.borderTopWidth},
-						borderBottomWidth: ${style.borderBottomWidth},
-						paddingTop: ${style.paddingTop},
-						paddingBottom: ${style.paddingBottom},
-						marginTop: ${style.marginTop},
-						marginBottom: ${style.marginBottom}`);
-
-					// Also log any content that might be affecting row height
-					const cellContents = Array.from(row.querySelectorAll('td')).map((cell) => {
-						return cell.textContent.trim().length > 20
-							? cell.textContent.trim().substring(0, 20) + '...'
-							: cell.textContent.trim();
+				// Get column widths
+				const headerRow = header ? header.querySelector('tr') : null;
+				const columnWidths = [];
+				if (headerRow) {
+					const headerCells = headerRow.querySelectorAll('th');
+					headerCells.forEach((cell) => {
+						const computedStyle = window.getComputedStyle(cell);
+						columnWidths.push({
+							width: cell.style.width || cell.getAttribute('width') || computedStyle.width,
+							minWidth: cell.style.minWidth || cell.getAttribute('min-width') || computedStyle.minWidth,
+							actualWidth: cell.offsetWidth,
+						});
 					});
-					console.log(`Row ${index + 1} content: ${cellContents.join(' | ')}`);
-
-					// Check if any cell has multiple lines
-					const multiLineCells = Array.from(row.querySelectorAll('td')).filter((cell) => {
-						const content = cell.textContent.trim();
-						return content.includes('\n') || content.includes('<br');
-					}).length;
-					if (multiLineCells > 0) {
-						console.log(`Row ${index + 1} has ${multiLineCells} cells with multiple lines of text`);
-					}
-				};
-
-				// Display detailed computed styles for each row
-				console.log('=== ROW COMPUTED STYLES ===');
-				renderedRows.forEach((row, idx) => {
-					logRowComputedStyles(row, idx);
-				});
-
-				// Measure each row using computed styles for accurate height
-				const rowHeights = renderedRows.map((row, index) => {
-					const rowComputedStyle = window.getComputedStyle(row);
-
-					// Calculate row height including all box model properties
-					const rowMarginTop = safeParseFloat(rowComputedStyle.marginTop);
-					const rowMarginBottom = safeParseFloat(rowComputedStyle.marginBottom);
-					const rowBorderTopWidth = safeParseFloat(rowComputedStyle.borderTopWidth);
-					const rowBorderBottomWidth = safeParseFloat(rowComputedStyle.borderBottomWidth);
-					const rowPaddingTop = safeParseFloat(rowComputedStyle.paddingTop);
-					const rowPaddingBottom = safeParseFloat(rowComputedStyle.paddingBottom);
-
-					// Get base height from bounding client rect for most accurate measurement
-					const rect = row.getBoundingClientRect();
-					let rowHeightPx = rect.height;
-
-					// Adjust based on box-sizing if needed
-					if (rowComputedStyle.boxSizing !== 'border-box') {
-						rowHeightPx += rowPaddingTop + rowPaddingBottom + rowBorderTopWidth + rowBorderBottomWidth;
-					}
-
-					// Always add margins
-					rowHeightPx += rowMarginTop + rowMarginBottom;
-
-					// Reduce height slightly to prevent footer overlap
-					const adjustedHeight = rowHeightPx * 0.999;
-					console.log(
-						`Row ${index + 1}: Raw height=${rect.height.toFixed(2)}px, Final calculated height=${adjustedHeight.toFixed(
-							2,
-						)}px (${pxToMm(adjustedHeight).toFixed(2)}mm)`,
-					);
-
-					return adjustedHeight;
-				});
-
-				// Log summary of all row heights
-				console.log('=== ROW HEIGHTS SUMMARY ===');
-				rowHeights.forEach((height, idx) => {
-					console.log(`Row ${idx + 1}: ${height.toFixed(2)}px (${pxToMm(height).toFixed(2)}mm)`);
-				});
-
-				// Calculate total height if all rows were included
-				const totalRowsHeight = rowHeights.reduce((sum, height) => sum + height, 0);
-				console.log(
-					`Total height of all rows: ${totalRowsHeight.toFixed(2)}px (${pxToMm(totalRowsHeight).toFixed(2)}mm)`,
-				);
-				console.log(
-					`Remaining page height: ${remainingHeightPx.toFixed(2)}px (${pxToMm(remainingHeightPx).toFixed(2)}mm)`,
-				);
-
-				// Reset measurement area
-				measureArea.innerHTML = '';
-
-				// Use measured heights to determine how many rows fit
-				let rowsInFirstPart = [];
-				let remainingRows = [...rows];
-				let totalUsedHeight = 0;
-				let totalRemainingHeight = remainingHeightPx;
-
-				console.log('=== ROW DISTRIBUTION ===');
-				// Try to fit as many rows as possible in the first part using measured heights
-				for (let i = 0; i < rows.length && i < rowHeights.length; i++) {
-					const rowHeightPx = rowHeights[i];
-
-					console.log(
-						`Checking Row ${i + 1}: height=${rowHeightPx.toFixed(2)}px, remaining space=${totalRemainingHeight.toFixed(
-							2,
-						)}px`,
-					);
-
-					if (rowHeightPx <= totalRemainingHeight) {
-						// This row fits
-						rowsInFirstPart.push(rows[i]);
-						totalRemainingHeight -= rowHeightPx;
-						totalUsedHeight += rowHeightPx;
-						remainingRows.shift();
-						console.log(`Row ${i + 1} FITS on current page. Remaining height: ${totalRemainingHeight.toFixed(2)}px`);
-					} else {
-						// This row doesn't fit
-						console.log(`Row ${i + 1} DOES NOT FIT on current page. Moving to next page.`);
-						break;
-					}
 				}
 
-				console.log(`Rows that fit on current page: ${rowsInFirstPart.length} of ${rows.length}`);
-
-				// ...existing code for finalizing the table split...
+				return {
+					headerHeight,
+					headerHTML: header ? header.outerHTML : '',
+					rowHeights,
+					rowsHtml,
+					tableAttributes,
+					avgRowHeight,
+					columnWidths,
+					totalTableHeight: element.offsetHeight,
+					tableWidth: table.offsetWidth,
+				};
 			};
 
-			// Process all content elements in order
-			htmlElements.forEach((element) => {
-				processElement(element);
-			});
+			// Validate layout positioning
+			const contentContainer = document.querySelector('.debug-content');
+			const footerContainer = document.querySelector('.debug-footer');
 
-			// Add the last page if not empty
-			if (currentPage.length > 0) {
-				contentPages.push(currentPage.join(''));
-				pageContentHeights.push(currentPageHeightPx);
-			}
-		}
+			const contentRect = contentContainer ? contentContainer.getBoundingClientRect() : null;
+			const footerRect = footerContainer ? footerContainer.getBoundingClientRect() : null;
 
-		// Clean up
-		document.body.removeChild(measureArea);
+			console.log(`=== LAYOUT VALIDATION ===`);
+			console.log(`Expected content height: ${expectedContentHeight}px`);
+			console.log(`Expected content top: ${contentTop}px`);
+			console.log(`Expected footer start: ${footerStart}px`);
+			console.log(`Actual content top: ${contentRect ? contentRect.top : 'NOT FOUND'}px`);
+			console.log(`Actual footer top: ${footerRect ? footerRect.top : 'NOT FOUND'}px`);
+			console.log(
+				`Content-Footer gap: ${
+					footerRect && contentRect ? footerRect.top - (contentRect.top + contentRect.height) : 'CANNOT CALCULATE'
+				}px`,
+			);
 
-		return {
-			pages: contentPages,
-			headerHeightPx,
-			headerHeightMm,
-			footerHeightPx,
-			footerHeightMm,
-			availableContentHeightPx,
-			availableContentHeightMm,
-			contentTopPx: headerHeightPx + mmToPx(A4.headerSpacing),
-			contentTopMm: headerHeightMm + A4.headerSpacing,
-			is2PageLayout: useSpecialLayout,
-		};
+			return {
+				// Layout validation
+				contentContainerTop: contentRect ? contentRect.top : 0,
+				contentContainerHeight: contentRect ? contentRect.height : 0,
+				footerContainerTop: footerRect ? footerRect.top : 0,
+				layoutValid: contentRect && footerRect ? contentRect.top + contentRect.height <= footerRect.top : false,
+
+				// Section measurements
+				customerSection: getElementDimensions('#customer-section', 'Customer'),
+				sampleInfoSection: getElementDimensions('#sample-info-section', 'Sample Info'),
+				analysisSection: getElementDimensions('#analysis-section', 'Analysis'),
+				commentSection: getElementDimensions('#comment-section', 'Comment'),
+				notesSection: getElementDimensions('#notes-section', 'Notes'),
+				signatureSection: getElementDimensions('#signature-section', 'Signature'),
+
+				// Helper measurements
+				spacingHeight: getElementDimensions('#spacing-measure', 'Spacing').height,
+				notificationHeight: getElementDimensions('#notification-measure', 'Notification').height,
+
+				// Table-specific measurements
+				analysisTableInfo: measureTableInfo('#analysis-section'),
+			};
+		},
+		{
+			expectedContentHeight: availableContentHeight,
+			contentTop: contentTopPosition,
+			footerStart: footerStartPosition,
+		},
+	);
+
+	await page.close();
+
+	// FIXED: Validate layout and add comprehensive measurements
+	const finalMeasurements = {
+		headerHeight: headerFooterMeasurements.headerHeight,
+		footerHeight: headerFooterMeasurements.footerHeight,
+
+		customerSectionHeight: measurements.customerSection.height,
+		sampleInfoSectionHeight: measurements.sampleInfoSection.height,
+		analysisSectionHeight: measurements.analysisSection.height,
+		commentSectionHeight: measurements.commentSection.height,
+		notesSectionHeight: measurements.notesSection.height,
+		signatureSectionHeight: measurements.signatureSection.height,
+		spacingHeight: measurements.spacingHeight,
+		notificationHeight: measurements.notificationHeight,
+
+		// FIXED: Use properly calculated values
+		availableContentHeight: availableContentHeight,
+		contentTopPosition: contentTopPosition,
+		contentBottomPosition: contentBottomPosition,
+		footerStartPosition: footerStartPosition,
+
+		A4: A4,
+		analysisTableInfo: measurements.analysisTableInfo,
+
+		// Layout validation
+		layoutValid: measurements.layoutValid,
 	};
 
-	// Execute pagination
-	const paginationResult = paginateContent();
+	if (!measurements.layoutValid) {
+		node.warn(`WARNING: Layout validation failed - content may overlap with footer!`);
+	}
 
-	// Prepare custom font support
-	const fontFaces = `
-    @font-face {
-      font-family: 'Gilroy';
-      src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
-      font-weight: 400;
-      font-style: normal;
-      font-display: swap;
-    }
-    
-    @font-face {
-      font-family: 'Gilroy';
-      src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-      font-weight: 500;
-      font-style: normal;
-      font-display: swap;
-    }
-    
-    @font-face {
-      font-family: 'Gilroy';
-      src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-      font-weight: 700;
-      font-style: normal;
-      font-display: swap;
-    }
-  `;
+	const totalContentHeight =
+		finalMeasurements.customerSectionHeight +
+		finalMeasurements.spacingHeight +
+		finalMeasurements.sampleInfoSectionHeight +
+		finalMeasurements.spacingHeight +
+		finalMeasurements.analysisSectionHeight +
+		finalMeasurements.spacingHeight +
+		(sectionsData.showComment ? finalMeasurements.commentSectionHeight + finalMeasurements.spacingHeight : 0) +
+		finalMeasurements.notesSectionHeight +
+		finalMeasurements.spacingHeight +
+		finalMeasurements.signatureSectionHeight;
 
-	// Format current date as DD-MM-YYYY for document title
-	const today = new Date();
-	const day = String(today.getDate()).padStart(2, '0');
-	const month = String(today.getMonth() + 1).padStart(2, '0');
-	const year = today.getFullYear();
-	const formattedDate = `${day}-${month}-${year}`;
-	const documentTitle = `PPT-${sample_uid || ''} ${formattedDate}`;
+	return finalMeasurements;
+}
 
-	// Create all page elements HTML
-	let pagesHTML = '';
-	paginationResult.pages.forEach((pageContent, index) => {
-		const pageNumber = (index + 1).toString().padStart(2, '0');
-		const totalPages = paginationResult.pages.length.toString().padStart(2, '0');
+/**
+ * Step 3: Apply pagination logic based on measurements
+ * FIXED: Improved pagination with better space management
+ */
+function applyPaginationLogic(sectionsData, measurements) {
+	const pages = [];
+	const { availableContentHeight } = measurements;
 
-		// Replace page numbers in footer
-		const pageFooter = footer
-			.replace(`>00</span>`, `>${pageNumber}</span>`)
-			.replace(`>00</span>`, `>${totalPages}</span>`);
+	// Add safety margin to prevent footer overlap
+	const SAFETY_MARGIN = 20; // 20px safety margin
+	const safeContentHeight = availableContentHeight - SAFETY_MARGIN;
 
-		// Replace pptUid in header
-		const pageHeader = header.replace(/-- SƠ BỘ \/ DRAFT --/g, ppt_uid || '-- SƠ BỘ / DRAFT --');
+	// Calculate total content height
+	let totalContentHeight =
+		measurements.customerSectionHeight +
+		measurements.spacingHeight +
+		measurements.sampleInfoSectionHeight +
+		measurements.spacingHeight +
+		measurements.analysisSectionHeight +
+		measurements.spacingHeight;
 
-		// Add draft watermark if in draft mode, matching the logic in Report.jsx
-		const draftWatermarkHTML = isDraftMode ? getDraftWatermark() : '';
+	if (sectionsData.showComment) {
+		totalContentHeight += measurements.commentSectionHeight + measurements.spacingHeight;
+	}
 
-		// Create the page element with watermark when appropriate
-		pagesHTML += `
-      <div class="page">
-	  	${draftWatermarkHTML}
-        <div class="header">${pageHeader}</div>
-        <div class="content">${pageContent}</div>
-        <div class="footer">${pageFooter}</div>
-      </div>
+	totalContentHeight +=
+		measurements.notesSectionHeight + measurements.spacingHeight + measurements.signatureSectionHeight;
+
+	// Decide pagination strategy
+	if (totalContentHeight <= safeContentHeight) {
+		// Single page layout
+		return createSinglePageLayout(sectionsData, measurements);
+	} else {
+		// Check for special two-page layout
+		const specialLayoutResult = checkSpecialTwoPageLayout(sectionsData, measurements, safeContentHeight);
+		if (specialLayoutResult.canUse) {
+			return specialLayoutResult.pages;
+		} else {
+			// Complex multi-page layout
+			return createComplexMultiPageLayout(sectionsData, measurements, safeContentHeight);
+		}
+	}
+}
+
+/**
+ * Create single page layout
+ */
+function createSinglePageLayout(sectionsData, measurements) {
+	const contentElements = [
+		{ type: 'section', content: sectionsData.customerSection },
+		{ type: 'spacing', content: sectionsData.spacing },
+		{ type: 'section', content: sectionsData.sampleInfoSection },
+		{ type: 'spacing', content: sectionsData.spacing },
+		{ type: 'section', content: sectionsData.analysisSection },
+		{ type: 'spacing', content: sectionsData.spacing },
+	];
+
+	if (sectionsData.showComment && sectionsData.commentSection) {
+		contentElements.push(
+			{ type: 'section', content: sectionsData.commentSection },
+			{ type: 'spacing', content: sectionsData.spacing },
+		);
+	}
+
+	contentElements.push(
+		{ type: 'section', content: sectionsData.notesSection },
+		{ type: 'spacing', content: sectionsData.spacing },
+		{ type: 'section', content: sectionsData.signatureSection },
+	);
+
+	return [
+		{
+			pageNumber: 1,
+			elements: contentElements,
+			totalHeight:
+				measurements.customerSectionHeight +
+				measurements.spacingHeight +
+				measurements.sampleInfoSectionHeight +
+				measurements.spacingHeight +
+				measurements.analysisSectionHeight +
+				measurements.spacingHeight +
+				(sectionsData.showComment ? measurements.commentSectionHeight + measurements.spacingHeight : 0) +
+				measurements.notesSectionHeight +
+				measurements.spacingHeight +
+				measurements.signatureSectionHeight,
+		},
+	];
+}
+
+/**
+ * Check if special two-page layout is possible
+ * FIXED: Use safe content height
+ */
+function checkSpecialTwoPageLayout(sectionsData, measurements, safeContentHeight) {
+	const page1Height =
+		measurements.customerSectionHeight +
+		measurements.spacingHeight +
+		measurements.sampleInfoSectionHeight +
+		measurements.spacingHeight +
+		measurements.notificationHeight +
+		measurements.spacingHeight +
+		measurements.notesSectionHeight;
+
+	const page2Height =
+		measurements.analysisSectionHeight +
+		measurements.spacingHeight +
+		(sectionsData.showComment ? measurements.commentSectionHeight + measurements.spacingHeight : 0) +
+		measurements.signatureSectionHeight;
+
+	if (page1Height <= safeContentHeight && page2Height <= safeContentHeight) {
+		const page1Elements = [
+			{ type: 'section', content: sectionsData.customerSection },
+			{ type: 'spacing', content: sectionsData.spacing },
+			{ type: 'section', content: sectionsData.sampleInfoSection },
+			{ type: 'spacing', content: sectionsData.spacing },
+			{ type: 'notification', content: sectionsData.nextPageNotification },
+			{ type: 'spacing', content: sectionsData.spacing },
+			{ type: 'section', content: sectionsData.notesSection },
+		];
+
+		const page2Elements = [
+			{ type: 'section', content: sectionsData.analysisSection },
+			{ type: 'spacing', content: sectionsData.spacing },
+		];
+
+		if (sectionsData.showComment && sectionsData.commentSection) {
+			page2Elements.push(
+				{ type: 'section', content: sectionsData.commentSection },
+				{ type: 'spacing', content: sectionsData.spacing },
+			);
+		}
+
+		page2Elements.push({ type: 'section', content: sectionsData.signatureSection });
+
+		return {
+			canUse: true,
+			pages: [
+				{ pageNumber: 1, elements: page1Elements, totalHeight: page1Height },
+				{ pageNumber: 2, elements: page2Elements, totalHeight: page2Height },
+			],
+		};
+	}
+
+	return { canUse: false };
+}
+
+/**
+ * Create complex multi-page layout with table splitting
+ * FIXED: Improved table pagination with proper height management
+ */
+function createComplexMultiPageLayout(sectionsData, measurements, safeContentHeight) {
+	const pages = [];
+
+	// First page with customer and sample info
+	const firstPageElements = [
+		{ type: 'section', content: sectionsData.customerSection },
+		{ type: 'spacing', content: sectionsData.spacing },
+		{ type: 'section', content: sectionsData.sampleInfoSection },
+	];
+
+	let firstPageHeight =
+		measurements.customerSectionHeight + measurements.spacingHeight + measurements.sampleInfoSectionHeight;
+
+	// Check if we can fit some analysis table rows on first page
+	const remainingFirstPageSpace = safeContentHeight - firstPageHeight - measurements.spacingHeight;
+
+	if (measurements.analysisTableInfo && remainingFirstPageSpace >= measurements.analysisTableInfo.headerHeight + 60) {
+		// Split table across pages with improved logic
+		const tablePaginationResult = paginateAnalysisTable(
+			measurements.analysisTableInfo,
+			safeContentHeight,
+			remainingFirstPageSpace,
+		);
+
+		// Add first table part to first page if exists
+		if (tablePaginationResult.firstPageTable) {
+			firstPageElements.push(
+				{ type: 'spacing', content: sectionsData.spacing },
+				{ type: 'table', content: tablePaginationResult.firstPageTable },
+			);
+			firstPageHeight += measurements.spacingHeight + tablePaginationResult.firstPageTableHeight;
+		}
+
+		pages.push({ pageNumber: 1, elements: firstPageElements, totalHeight: firstPageHeight });
+
+		// Add remaining table pages
+		tablePaginationResult.remainingPages.forEach((tablePage, index) => {
+			pages.push({
+				pageNumber: pages.length + 1,
+				elements: [{ type: 'table', content: tablePage.content }],
+				totalHeight: tablePage.height,
+			});
+		});
+	} else {
+		// Put entire analysis on separate pages
+		pages.push({ pageNumber: 1, elements: firstPageElements, totalHeight: firstPageHeight });
+
+		// Check if analysis fits on single page
+		if (measurements.analysisSectionHeight <= safeContentHeight) {
+			pages.push({
+				pageNumber: 2,
+				elements: [{ type: 'section', content: sectionsData.analysisSection }],
+				totalHeight: measurements.analysisSectionHeight,
+			});
+		} else {
+			// Split large analysis table
+			const tablePaginationResult = paginateAnalysisTable(
+				measurements.analysisTableInfo,
+				safeContentHeight,
+				safeContentHeight,
+			);
+
+			tablePaginationResult.remainingPages.forEach((tablePage, index) => {
+				pages.push({
+					pageNumber: pages.length + 1,
+					elements: [{ type: 'table', content: tablePage.content }],
+					totalHeight: tablePage.height,
+				});
+			});
+		}
+	}
+
+	// Add final elements (comment, notes, signature)
+	const finalElements = [];
+	let finalHeight = 0;
+
+	if (sectionsData.showComment && sectionsData.commentSection) {
+		finalElements.push(
+			{ type: 'section', content: sectionsData.commentSection },
+			{ type: 'spacing', content: sectionsData.spacing },
+		);
+		finalHeight += measurements.commentSectionHeight + measurements.spacingHeight;
+	}
+
+	finalElements.push(
+		{ type: 'section', content: sectionsData.notesSection },
+		{ type: 'spacing', content: sectionsData.spacing },
+		{ type: 'section', content: sectionsData.signatureSection },
+	);
+	finalHeight += measurements.notesSectionHeight + measurements.spacingHeight + measurements.signatureSectionHeight;
+
+	// Check if final elements can fit on last page
+	const lastPage = pages[pages.length - 1];
+	const spaceNeededForFinalElements = measurements.spacingHeight + finalHeight;
+
+	if (lastPage.totalHeight + spaceNeededForFinalElements <= safeContentHeight) {
+		// Add to last page
+		lastPage.elements.push({ type: 'spacing', content: sectionsData.spacing }, ...finalElements);
+		lastPage.totalHeight += spaceNeededForFinalElements;
+	} else {
+		// Create new page for final elements
+		pages.push({
+			pageNumber: pages.length + 1,
+			elements: finalElements,
+			totalHeight: finalHeight,
+		});
+	}
+
+	return pages;
+}
+
+/**
+ * Paginate analysis table across multiple pages
+ * FIXED: Better height validation and row distribution
+ */
+function paginateAnalysisTable(tableInfo, availableContentHeight, firstPageRemainingSpace) {
+	const result = {
+		firstPageTable: null,
+		firstPageTableHeight: 0,
+		remainingPages: [],
+	};
+
+	if (!tableInfo || !tableInfo.rowsHtml || tableInfo.rowsHtml.length === 0) {
+		return result;
+	}
+
+	const { headerHTML, headerHeight, rowsHtml, rowHeights, tableAttributes, columnWidths } = tableInfo;
+
+	// Add safety margin for table pagination
+	const TABLE_SAFETY_MARGIN = 10;
+	const safeFirstPageSpace = Math.max(0, firstPageRemainingSpace - TABLE_SAFETY_MARGIN);
+	const safePageHeight = Math.max(0, availableContentHeight - TABLE_SAFETY_MARGIN);
+
+	// Check if we can fit rows on first page
+	const canFitOnFirstPage = safeFirstPageSpace >= headerHeight + 30; // Header + at least one row
+
+	let currentPageRows = [];
+	let currentHeight = 0;
+	let maxHeightForCurrentPage = canFitOnFirstPage ? safeFirstPageSpace : safePageHeight;
+	let isFirstPage = canFitOnFirstPage;
+	let rowsProcessed = 0;
+
+	for (let i = 0; i < rowsHtml.length; i++) {
+		const rowHeight = rowHeights[i] || 30;
+		const neededHeight = (currentPageRows.length === 0 ? headerHeight : 0) + rowHeight;
+
+		if (currentHeight + neededHeight > maxHeightForCurrentPage) {
+			// Current page is full, save it and start new page
+			if (currentPageRows.length > 0) {
+				const pageTableHTML = createTableWithConsistentColumnWidths(
+					tableAttributes,
+					headerHTML,
+					currentPageRows.join(''),
+					columnWidths,
+				);
+
+				const actualPageHeight =
+					headerHeight + currentPageRows.length * (rowHeights.reduce((sum, h) => sum + h, 0) / rowHeights.length);
+
+				if (isFirstPage) {
+					result.firstPageTable = pageTableHTML;
+					result.firstPageTableHeight = Math.min(actualPageHeight, safeFirstPageSpace);
+					isFirstPage = false;
+				} else {
+					result.remainingPages.push({
+						content: pageTableHTML,
+						height: Math.min(actualPageHeight, safePageHeight),
+					});
+				}
+
+				rowsProcessed += currentPageRows.length;
+			}
+
+			// Start new page
+			currentPageRows = [rowsHtml[i]];
+			currentHeight = headerHeight + rowHeight;
+			maxHeightForCurrentPage = safePageHeight;
+		} else {
+			// Add row to current page
+			if (currentPageRows.length === 0) {
+				currentHeight = headerHeight + rowHeight;
+			} else {
+				currentHeight += rowHeight;
+			}
+			currentPageRows.push(rowsHtml[i]);
+		}
+	}
+
+	// Handle last page
+	if (currentPageRows.length > 0) {
+		const pageTableHTML = createTableWithConsistentColumnWidths(
+			tableAttributes,
+			headerHTML,
+			currentPageRows.join(''),
+			columnWidths,
+		);
+
+		const actualPageHeight =
+			headerHeight + currentPageRows.length * (rowHeights.reduce((sum, h) => sum + h, 0) / rowHeights.length);
+
+		if (isFirstPage) {
+			result.firstPageTable = pageTableHTML;
+			result.firstPageTableHeight = Math.min(actualPageHeight, safeFirstPageSpace);
+		} else {
+			result.remainingPages.push({
+				content: pageTableHTML,
+				height: Math.min(actualPageHeight, safePageHeight),
+			});
+		}
+
+		rowsProcessed += currentPageRows.length;
+	}
+
+	return result;
+}
+
+/**
+ * Step 4: Generate final HTML with arranged content
+ * FIXED: Remove blank page generation and properly handle ppt_uid display
+ */
+function generateFinalHTML(sectionsData, paginatedContent, measurements) {
+	// FIXED: Properly handle ppt_uid display in header
+	let finalHeaderHTML = sectionsData.headerHTML;
+
+	// Priority: apiResponsePptUid > original ppt_uid > keep original content
+	const displayPptUid = sectionsData.apiResponsePptUid || sectionsData.ppt_uid;
+
+	if (displayPptUid) {
+		try {
+			// Replace the ref_code content with the actual ppt_uid
+			finalHeaderHTML = finalHeaderHTML.replace(
+				/(<p[^>]*class=["']ref_code["'][^>]*>)([^<]*)(<\/p>)/i,
+				`$1${displayPptUid}$3`,
+			);
+		} catch (err) {
+			node.warn(`Error updating header ref code: ${err.message}`);
+		}
+	} else {
+		node.warn(`No ppt_uid to display, keeping original header content`);
+	}
+
+	const getDraftWatermark = () =>
+		sectionsData.isDraft ? `<div class="draft-watermark"><div>SƠ BỘ-DRAFT</div></div>` : '';
+
+	// FIXED: Use Nunito Sans CSS with actual header height
+	const printCSS = getImprovedPrintCSSWithFonts(
+		{
+			width: 210,
+			height: 297,
+			topMargin: 15,
+			bottomMargin: 8,
+			sideMargin: 10,
+			headerSpacing: 7,
+			footerSpacing: 2,
+		},
+		true,
+		measurements.headerHeight,
+	);
+
+	let finalHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Certificate of Analysis</title>
+            <meta charset="utf-8">
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet">
+            <style>${printCSS}</style>
+        </head>
+        <body>
+            <div class="print-container">
     `;
+
+	// Generate pages
+	paginatedContent.forEach((pageData, index) => {
+		const pageNumber = (index + 1).toString().padStart(2, '0');
+		const totalPages = paginatedContent.length.toString().padStart(2, '0');
+		const pageFooter = sectionsData.footerHTML
+			.replace(/>\d{2}<\/span>/g, `>${pageNumber}</span>`)
+			.replace(/>\d{2}<\/span>/g, `>${totalPages}</span>`);
+
+		const pageContent = pageData.elements.map((element) => element.content).join('');
+
+		finalHTML += `
+            <div class="page">
+                ${getDraftWatermark()}
+                <div class="header">${finalHeaderHTML}</div>
+                <div class="content">${pageContent}</div>
+                <div class="footer">${pageFooter}</div>
+            </div>
+        `;
+
+		// Clean up page content
+		pageData.elements.forEach((element) => (element.content = null));
 	});
 
-	// Create a single complete HTML document with all pages
-	const completeHTML = `<!DOCTYPE html>
-<html>
-<head>
-  <title>${documentTitle}</title>
-  <meta charset="utf-8">
-  <style>
-    ${fontFaces}
-    
-    @page {
-      size: A4;
-      margin: ${A4.topMargin}mm ${A4.sideMargin}mm ${A4.bottomMargin}mm ${A4.sideMargin}mm;
-    }
-    
-    html, body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Gilroy', sans-serif !important;
-      background-color: #f0f0f0;
-    }
-    
-    .print-container {
-      width: 720px; /* Exact width: 210mm - 2*10mm margins at 96 DPI */
-      margin: 20px auto;
-      background-color: white;
-      font-family: 'Gilroy', sans-serif !important;
-      padding: 0 1px; /* Add 1px padding on left and right */
-    }
-    
-    .page {
-      position: relative;
-      width: 100%;
-      height: ${A4.height - A4.topMargin - A4.bottomMargin}mm;
-      overflow: hidden;
-      box-sizing: border-box;
-      page-break-after: always;
-      background-color: white;
-      border-bottom: 1px dashed #ccc;
-      font-family: 'Gilroy', sans-serif !important;
-      padding: 0 1px; /* Add 1px padding on left and right */
-    }
+	// REMOVED: Blank page generation for odd number of pages
+	// No longer adding unnecessary blank pages
 
-    /* Draft watermark styling for proper visibility */
-    .draft-watermark {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      pointer-events: none;
-      z-index: 10;
-      opacity: 0.15;
-      overflow: visible;
-    }
+	finalHTML += `</div></body></html>`;
 
-    /* Allow VLAS icon to overflow the container */
-    .vlas_icon {
-      overflow: visible !important;
-      z-index: 10;
-    }
-    .vlas_icon img {
-      transform: translateX(-5mm);
-    }
-    
-    /* Additional styles for table rows to preserve height */
-    table {
-      border-collapse: collapse;
-      width: 100% !important;
-      min-width: 100% !important;
-      max-width: 100% !important;
-      font-family: 'Gilroy', sans-serif !important;
-      table-layout: auto; /* Changed from fixed to auto */
-    }
-    
-    table tr {
-      height: auto !important; /* Allow rows to grow with content */
-      page-break-inside: avoid; /* Try to avoid breaking rows across pages */
-    }
-    
-    table td, table th {
-      padding: 4px 8px !important; /* Changed from 6px to 4px */
-      border: 1px solid black;
-      vertical-align: middle; /* Better alignment for multi-line content */
-      height: auto !important; /* Allow cells to grow with content */
-      line-height: 1.2; /* Ensure consistent line height */
-    }
-    
-    /* Fix paragraph styling in table cells */
-    table td span, table th span {
-      margin: 0 !important;
-      padding: 0 !important;
-      line-height: 14.39px !important;
-      font-family: 'Gilroy', sans-serif !important;
-      font-size: 12px;
-      display: block;
-    }
-    
-    /* Ensure STT/No. column has consistent width */
-    table th:first-child, table td:first-child {
-      width: 8mm !important;
-      min-width: 8mm !important;
-      max-width: 8mm !important;
-    }
+	if (!finalHTML.includes('<div class="print-container">')) {
+		throw new Error('Generated HTML does not contain print-container');
+	}
 
-    .header {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      box-sizing: border-box;
-      padding-bottom: 0 !important;
-      font-family: 'Gilroy', sans-serif !important;
-      overflow: visible !important; /* Allow header content to overflow */
-    }
-    
-    .header > div:last-child {
-      padding-bottom: 0 !important;
-      margin-bottom: 0 !important;
-      overflow: visible !important;
-    }
-    
-    .content {
-      position: absolute;
-      top: ${paginationResult.contentTopMm}mm;
-      left: 0;
-      width: 100%;
-      box-sizing: border-box;
-      overflow: hidden;
-      padding: 0 1px !important; /* Add 1px padding on left and right */
-      font-family: 'Gilroy', sans-serif !important;
-    }
-    
-    .content > * {
-      padding-top: 0 !important;
-      padding-bottom: 0 !important;
-      margin-top: 0 !important;
-      margin-bottom: 0 !important;
-      font-family: 'Gilroy', sans-serif !important;
-    }
-    
-    .footer {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      box-sizing: border-box;
-      padding-top: 0 !important;
-      font-family: 'Gilroy', sans-serif !important;
-    }
-    
-    .footer > div:first-child {
-      padding-top: 0 !important;
-      margin-top: 0 !important;
-    }
-    
-    p, div, span, td, th {
-      margin-top: 0;
-      margin-bottom: 0;
-      line-height: inherit;
-      font-family: 'Gilroy', sans-serif !important;
-    }
-    
-    img {
-      max-width: 100%;
-    }
-    
-    @media print {
-      body {
-        background-color: white;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-        font-family: 'Gilroy', sans-serif !important;
-      }
-      
-      .print-container {
-        width: 720px !important; /* Force exact width even in print */
-        margin: 0 auto;
-        box-shadow: none;
-        padding: 0 1px !important; /* Ensure padding in print mode */
-      }
-      
-      .page {
-        width: 100% !important;
-        margin: 0;
-        border-bottom: none;
-        padding: 0 1px !important; /* Ensure padding in print mode */
-      }
-      
-      /* Critical: ensure overflow is visible in print mode for VLAS icon */
-      .vlas_icon, .header, .header > div {
-        overflow: visible !important;
-      }
-      
-      /* Preserve table row heights in print mode */
-      table { page-break-inside: auto; }
-      tr { page-break-inside: avoid; }
-      
-      /* Ensure paragraph styling in table cells is preserved when printing */
-      table td span, table th span {
-        margin: 0 !important;
-        padding: 0 !important;
-        line-height: 14.39px !important;
-      }
+	return finalHTML;
+}
 
-      /* Last page should not have a page break */
-      .page:last-child {
-        page-break-after: auto;
-      }
-    }
-  </style>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Force 96 DPI rendering -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
-</head>
-<body>
-  <div class="print-container">
-    ${pagesHTML}
-  </div>
-  <script>
-    // Ensure fonts are loaded before printing
-    document.fonts.ready.then(function() {
-      setTimeout(function() {
-        // Fix for VLAS icon positioning in print view
-        const vlasIcons = document.querySelectorAll('.vlas_icon');
-        vlasIcons.forEach(icon => {
-          icon.style.overflow = 'visible';
-          if (icon.querySelector('img')) {
-            icon.querySelector('img').style.maxWidth = 'none';
-          }
-        });
+/**
+ * Helper functions for processing content
+ */
+function processAnalysisSection(analysisSection) {
+	const availableWidthPx = 716;
+	analysisSection = analysisSection.replace(
+		/<table[^>]*(?:width=['"]([^'"]*)['"]*|style=['"][^'"]*width:\s*([^;'"]*)[^'"]*['"])/gi,
+		(match) =>
+			match.includes('width=')
+				? match.replace(/width=['"]([^'"]*)['"]/gi, `width="${availableWidthPx}px"`)
+				: match.replace(/(style=['"])/i, `$1width: ${availableWidthPx}px; `),
+	);
+	return analysisSection.replace(
+		/<table([^>]*)>/gi,
+		(match, tableAttrs) => `<table${tableAttrs} style="table-layout: fixed;">`,
+	);
+}
 
-        // Ensure draft watermarks are properly visible
-        const draftWatermarks = document.querySelectorAll('.draft-watermark');
-        draftWatermarks.forEach(watermark => {
-          watermark.style.overflow = 'visible';
-        });
+function createTableWithConsistentColumnWidths(tableAttributes, headerHtml, bodyHtml, columnWidths) {
+	if (!columnWidths || columnWidths.length === 0) {
+		return `<table ${tableAttributes}>${headerHtml}<tbody>${bodyHtml}</tbody></table>`;
+	}
+	try {
+		let colgroup = '<colgroup>';
+		columnWidths.forEach((col) => {
+			colgroup += `<col style="${col.width !== 'auto' ? 'width:' + col.width + ';' : ''} ${
+				col.minWidth !== 'auto' ? 'min-width:' + col.minWidth + ';' : ''
+			}">`;
+		});
+		colgroup += '</colgroup>';
+		return `<table ${tableAttributes}>${colgroup}${headerHtml}<tbody>${bodyHtml}</tbody></table>`;
+	} catch (e) {
+		return `<table ${tableAttributes}>${headerHtml}<tbody>${bodyHtml}</tbody></table>`;
+	}
+}
 
-        // Uncomment to automatically print when loaded
-        // window.print();
-      }, 1000);
-    });
-  </script>
-</body>
-</html>`;
+/**
+ * Content generation helper functions
+ */
+// FIXED: Updated generateHeaderHTML to properly display ppt_uid
+function generateHeaderHTML(showVlas = false, pptUid = null) {
+	// FIXED: Use actual ppt_uid if provided, otherwise show DRAFT
+	const displayRefCode = pptUid || 'SƠ BỘ / DRAFT';
 
-	// Return both the pagination result and the complete HTML for further use
-	return completeHTML;
-};
-
-// Helper function to get default header
-function getDefaultHeader(showVlas) {
 	return `
-<div class=" content_page_header_box" id="thead" style="position:relative; height: fit-content;">
-    <div class=" " style="position:relative; display:flex;  overflow:visible;">
-        <div>
-            <img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg" 
-                 loading="lazy" 
-                 class="OQtYGs6LmEKlbdTnVjZ4oA" 
-                 style="width:5cm;">
-        </div>
-		<div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
-			<p class="" 
-			style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
-				Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
-			</p>
-			<p class="" 
-			style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
-				/ Institute for Research and Development of Organic Products
-			</p>
-			<span class="" 
-				style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
-						width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
-				Phòng Phân tích - Kiểm nghiệm / Analysis Control Department
-			</span>
-		</div>
-
-    </div>
-    <div class=" " 
-         style="padding-top:6mm; position:relative; ">
-        <div style="position:relative; text-align:left;">
-            <p contenteditable="true" class=" content-header-title" 
-               style="font-weight:700; font-size:24pt; color:#0058A3; height: 28px;">
-                PHIẾU KẾT QUẢ THỬ NGHIỆM
-            </p>
-            <p class=" content-header-title_eng" 
-               style="font-weight:700; font-size:21pt; color:#0058A3; height: 28px;">
-                / Certificate of Analysis
-            </p>
-            <div class=" display-flex" 
-                 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 10px; height: 20px;">
-                <span class=" std_ref-title">Xuất bản / ref.:</span>
-                <p contenteditable="true" 
-                   class="  ref_code" 
-                   style="min-width:5pt; margin: 0; margin-right: 2mm;">
-                    SƠ BỘ / DRAFT
+    <div class="content_page_header_box" id="thead" style="position:relative; height: fit-content;">
+        <div style="position:relative; display:flex; overflow:visible;">
+            <div>
+                <img src="https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png" 
+                    loading="lazy" 
+                    style="width:4.8cm;">
+            </div>
+            <div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
+                <p style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
+                    Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
                 </p>
-                <span class="  published_date" 
-                      style="min-width:5pt; margin: 0;">
-					  Ngày / Date: ${new Date().toLocaleDateString('vi-VN', {
-							year: 'numeric',
-							month: '2-digit',
-							day: '2-digit',
-						})}
+                <p style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
+                    / Institute for Research and Development of Organic Products
+                </p>
+                <span style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
+                            width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
+                    Phòng Phân tích - Kiểm nghiệm / Analysis Control Department
                 </span>
             </div>
         </div>
-        <div class=" vlas_icon" 
-             style="position:absolute; right:-5mm; top:0.2cm; ${showVlas ? '' : 'display:none;'}">
-            <img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png" 
-                 loading="lazy" 
-                 class="" 
-                 style="width:5.2cm;">
-        </div>
-    </div>
-</div>`;
-}
-
-// Helper function to get default footer
-function getDefaultFooter() {
-	return `
-<div style="border-top:1px solid #4CB748; height:50px; display:flex; padding-top:0pt; align-items: center;">
-    <div style="flex-grow:1; text-align: left;">
-        <p style="color:#0058A3; margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">
-            VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN
-        </p>
-        <p style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">
-            IRDOP.ORG
-        </p>
-        <p style="color: #444444; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">
-            Form: BM06-QT010-KN / Version: 05 / Effective date: 12/03/2025
-        </p>
-    </div>
-    <div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;">
-        <div style="display: flex; align-items: center; height: 14px;">
-            <span style="font-size: 11px; margin: 0; padding: 0; line-height: 1; margin-right:2px;">Trang / Pages:</span>
-            <div style="display: flex; align-items: center; height: 14px;">
-                <span class="page-number" style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">00</span>
-                <span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">/</span>
-                <span class="page-total" style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">00</span>
+        <div style="padding-top:1mm; position:relative;">
+            <div style="position:relative; text-align:left;">
+                <p contenteditable="true" class="content-header-title" 
+                style="font-weight:840; font-size:24pt; color:#0058A3; height: 33px;">
+                    PHIẾU KẾT QUẢ THỬ NGHIỆM
+                </p>
+                <p class="content-header-title_eng" 
+                style="font-weight:850; font-size:21pt; color:#0058A3; height: 30px;">
+                    / Certificate of Analysis
+                </p>
+                <div class="display-flex" 
+                    style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;">
+                    <span class="std_ref-title">Xuất bản / ref.:</span>
+                    <p contenteditable="true" 
+                    class="ref_code" 
+                    style="min-width:5pt; margin: 0; margin-right: 2mm;">
+                        ${displayRefCode}
+                    </p>
+                    <span class="published_date" 
+                        style="min-width:5pt; margin: 0;">
+                        Ngày / Date: ${new Date().toLocaleDateString('vi-VN')}
+                    </span>
+                </div>
+            </div>
+            <div class="vlas_icon" 
+                style="position:absolute; right:0mm; top:0cm; ${showVlas ? '' : 'display:none;'}">
+                <img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png" 
+                    loading="lazy" 
+                    style="width:4.6cm;">
             </div>
         </div>
-    </div>
-</div>`;
+    </div>`;
 }
 
-// Helper function to get default customer section
-function getDefaultCustomerSection() {
+function generateFooterHTML() {
 	return `
-<div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-	<div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
-		<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: left;">Nơi / người gửi mẫu / Customer information</p>
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right;"></p>
-		</div>		
-		<div style="display: flex; flex-direction: column; gap: 2px; height: fit-content;">
-			<p style="font-weight: bold; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;"></p>
-			<p style="margin: 0; font-size: 12px; text-align: left; line-height: 1.2;">--</p>
-		</div>
-	</div>
-</div>`;
+    <div style="border-top: 1px solid #4CB748; height: 50px; display: flex; padding-top: 0pt; align-items: center;">
+        <div style="flex-grow: 1; text-align: left;">
+            <p style="color: #0058a3; margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</p>
+            <p style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">IRDOP.ORG</p>
+            <p style="opacity: 0.5; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">Form: BM06-QT010-KN / Version: 05 / Effective date: 12/03/2025</p>
+        </div>
+        <div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;">
+            <div style="display: flex; align-items: center; height: 14px;"><span style="font-size: 11px; margin: 0; padding: 0; line-height: 1; margin-right: 2px;">Trang / Pages:</span>
+                <div style="display: flex; align-items: center; height: 14px;"><span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">00</span> <span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">/</span> <span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">00</span></div>
+            </div>
+        </div>
+    </div>`;
 }
 
-// Helper function to generate customer section from client data
+// FIXED: Updated generateCustomerSection with font-weight: 800 for client name
 function generateCustomerSection(clientData) {
-	// Default values in case client data is not available
 	const clientUid = clientData?.client_uid || '';
 	const clientName = clientData?.client_name || '';
 	const clientAddress = clientData?.client_address || '';
-
 	return `
-<div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-	<div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
-		<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: left;">Nơi / người gửi mẫu / Customer information</p>
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right;">${clientUid}</p>
-		</div>		
-		<div style="display: flex; flex-direction: column; gap: 2px; height: fit-content;">
-			<p style="font-weight: bold; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;">${clientName}</p>
-			<p style="margin: 0; font-size: 12px; text-align: left; line-height: 1.2;">${clientAddress || '--'}</p>
-		</div>
-	</div>
-</div>`;
+    <div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
+        <div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;font-weight:300;">
+                <p style="font-size: 11px; line-height: 1.2; margin:0; text-align: left;">Nơi / người gửi mẫu / Customer information</p>
+                <p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right; color: black; text-decoration: none;">${clientUid}</p>
+            </div>        
+            <div style="display: flex; flex-direction: column; gap: 2px; height: fit-content;">
+                <p style="font-weight: 760; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;">${
+									clientName || '--'
+								}</p>
+                <p style="margin: 0; font-size: 12px; text-align: left; line-height: 1.2;">${clientAddress || '--'}</p>
+            </div>
+        </div>
+    </div>`;
 }
 
-// Helper function to generate sample information section from API data
 function generateSampleInfoSection(data) {
-	// Get the sample_uid from data
 	const sampleId = data.sample_uid || '';
-
-	// Get the sample_information array from data and filter out items with empty fvalue
 	const sampleInfo = data.sample_information || [];
-	// Map each sample information item to a row in the sample info section
 	const infoRows = sampleInfo
 		.map((item) => {
 			const fieldName = item.fname || '';
 			const fieldValue = item.fvalue || '--';
-
-			// Extract field label and English translation (if present)
 			const parts = fieldName.split('/');
 			const mainLabel = parts[0].trim();
 			const engLabel = parts.length > 1 ? ` / ${parts[1].trim()}` : '';
-
-			// Process mainLabel to replace "SX" with "sản xuất" and "HSD" with "Hạn sử dụng"
-			let displayMainLabel = mainLabel;
-			if (mainLabel.includes('SX')) {
-				displayMainLabel = mainLabel.replace('SX', 'sản xuất');
-			} else if (mainLabel.includes('HSD')) {
-				displayMainLabel = mainLabel.replace('HSD', 'Hạn sử dụng');
-			}
-
+			let displayMainLabel = mainLabel.replace('SX', 'sản xuất').replace('HSD', 'Hạn sử dụng');
 			return `
-	<div style="display: flex; ${fieldName.includes('Ngày tiếp nhận') && 'margin-top: 8px;'}">
-		<div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: center;">
-			<p style="font-weight:bold; margin-right: 4px;">${displayMainLabel}</p> ${engLabel}:
-		</div>
-		<div style="width: 70%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;" >
-			<p style="margin: 0; ${mainLabel.toLowerCase().includes('tên mẫu') ? 'font-weight: bold;' : ''}">${fieldValue}</p>
-		</div>
-	</div>`;
+            <div style="display: flex; ${fieldName.includes('Ngày tiếp nhận') ? 'margin-top: 8px;' : ''}">
+                <div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: top;">
+                    <p style="font-weight:bold; margin-right: 4px;">${displayMainLabel}</p> ${engLabel}:
+                </div>
+                <div style="width: 70%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;">
+                    <p style="margin: 0; ${
+											mainLabel.toLowerCase().includes('tên mẫu') ? 'font-weight: bold;' : ''
+										}">${fieldValue}</p>
+                </div>
+            </div>`;
 		})
 		.join('');
-
 	return `
-<div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-    <div style="padding: 5pt 8pt;; flex-grow: 1; position: relative;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-            <p style="font-size: 11px; line-height: 1.2; margin: 0; text-align: left;">
-                Thông tin mẫu thử / Sample information:
-            </p>
-            <p style="font-size: 11px; line-height: 1.4; margin: 0; text-align: left;">
-                ${sampleId}
-            </p>
+    <div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
+        <div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 2px; font-weight:300;">
+                <p style="font-size: 11px; line-height: 1.2; margin: 0; text-align: left;">Thông tin mẫu thử / Sample information:</p>
+                <p style="font-size: 11px; line-height: 1.4; margin: 0; text-align: left;">${sampleId}</p>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">${infoRows}</div>
         </div>
-
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-            ${infoRows}
-        </div>
-    </div>
-</div>`;
+    </div>`;
 }
 
-// Helper function to generate analysis section from API data
-function generateAnalysisSection(data, showReference) {
-	// Get the analysis array from data
-	const analysisItems = data.analysis || [];
-
-	// Define column widths here, at the beginning of the function
-	// Adjust span widths based on whether reference column is shown
-	const col2Width = showReference ? '170px' : '190px';
-	const col3Width = showReference ? '110px' : '120px';
-	const col4Width = showReference ? '60px' : '70px';
-
-	// Add extra table header for reference if needed
+// FIXED: Updated generateAnalysisSection with new protocol format
+function generateAnalysisSection(sampleData, showReference = false, referenceValues = []) {
+	const analysisItems = sampleData.analysis || [];
 	const referenceHeader = showReference
-		? `
-		<th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:10px;">
-			<strong>Tham chiếu</strong> <br> <span style="font-size: 12px; color: #444444; width: 90px;">/ Standard Ref</span>
-		</th>`
+		? `<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px;box-sizing: border-box;">
+            <strong>Tham chiếu</strong> <br> <span style="font-size: 12px; color: #444444;">/ Standard Ref</span>
+          </th>`
 		: '';
 
-	// Map each analysis item to a row in the table
+	if (showReference && referenceValues.length < analysisItems.length) {
+		const additionalCells = analysisItems.length - referenceValues.length;
+		const defaultCells = Array(additionalCells).fill(
+			`<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>`,
+		);
+		referenceValues = [...referenceValues, ...defaultCells];
+	}
+
+	const availableWidthPx = 716;
+
+	const columnWidths = showReference
+		? [
+				{ px: 43, min: '40px' }, // STT
+				{ px: 157, min: '140px' }, // Phép thử
+				{ px: 115, min: '100px' }, // Kết quả
+				{ px: 86, min: '80px' }, // Đơn vị
+				{ px: 200, min: '180px' }, // Phương pháp
+				{ px: 115, min: '100px' }, // Tham chiếu
+		  ]
+		: [
+				{ px: 50, min: '40px' }, // STT
+				{ px: 186, min: '140px' }, // Phép thử
+				{ px: 136, min: '100px' }, // Kết quả
+				{ px: 100, min: '80px' }, // Đơn vị
+				{ px: 244, min: '180px' }, // Phương pháp
+		  ];
+
 	let analysisRows = '';
 	if (analysisItems.length > 0) {
 		analysisRows = analysisItems
@@ -1366,148 +1355,563 @@ function generateAnalysisSection(data, showReference) {
 				const parameterName = item.parameter_name || '--';
 				const result = item.result_value || '--';
 				const unit = item.result_unit || '--';
-				const protocol = item?.protocol_source + ' ' + item.protocol_code || '--';
 
-				// Reference cell
-				const referenceCell = showReference
-					? `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:90px;">--</span></td>`
-					: '';
+				// FIXED: New protocol format with accreditation
+				let protocol = '';
+				const protocolSource = item.protocol_source || '';
+				const accreditation = item.accreditation || '';
+				const protocolCode = item.protocol_code || '';
 
+				if (protocolSource) {
+					protocol = protocolSource;
+					if (accreditation) {
+						protocol += ' ' + accreditation;
+					}
+					if (protocolCode) {
+						protocol += '  ' + protocolCode; // Two spaces before protocol code
+					}
+				} else {
+					protocol = '--';
+				}
+
+				let referenceCell = '';
+				if (showReference) {
+					referenceCell =
+						index < referenceValues.length
+							? referenceValues[index]
+							: `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>`;
+				}
+				const rowId = `analysis-row-${index}`;
 				return `
-			<tr style="height:10px;">
-				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width:fit-content; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:26px;">${
-					index + 1
-				}.</span></td>
-				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col2Width};">${parameterName}</span></td>
-				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col3Width};">${result}</span></td>
-				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col4Width};">${unit}</span></td>
-				<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block;">${protocol}</span></td>${referenceCell}
-			</tr>`;
+                <tr id="${rowId}" class="table-row" data-row-index="${index}">
+                    <td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${
+											columnWidths[0].px
+										}px;">${index + 1}.</td>
+                    <td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${
+											columnWidths[1].px
+										}px;">${parameterName}</td>
+                    <td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${
+											columnWidths[2].px
+										}px;">${result}</td>
+                    <td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${
+											columnWidths[3].px
+										}px;">${unit}</td>
+                    <td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${
+											columnWidths[4].px
+										}px;white-space: pre;text-wrap: auto;">${protocol}</td>
+                    ${referenceCell ? referenceCell.replace('width:', `width: ${columnWidths[5].px}px;`) : ''}
+                </tr>`;
 			})
 			.join('');
 	} else {
-		// If no analysis items, include a placeholder row
 		const referenceCell = showReference
-			? `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:90px;">--</span></td>`
+			? `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${columnWidths[5].px}px;">--</td>`
 			: '';
-
 		analysisRows = `
-		<tr style="height:auto;">
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width:fit-content; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:26px;">1</span></td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col2Width};">--</span></td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col3Width};">--</span></td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block; width:${col4Width};">--</span></td>
-			<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; height:fit-content;"><span style="margin:0; padding:0; line-height:14.39px; display:block;">--</span></td>${referenceCell}
-		</tr>`;
+            <tr id="analysis-row-0" class="table-row" data-row-index="0">
+                <td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${columnWidths[0].px}px;">1</td>
+                <td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${columnWidths[1].px}px;">--</td>
+                <td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${columnWidths[2].px}px;">--</td>
+                <td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${columnWidths[3].px}px;">--</td>
+                <td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; width: ${columnWidths[4].px}px;">--</td>${referenceCell}
+            </tr>`;
 	}
 
 	return `
-<div style="margin:0; padding:0;">
-    <table style="width: 100%; min-width: 100%; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4; table-layout: auto;">
-        <thead>
-            <tr>
-                <th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: fit-content; text-align:left; font-size:12px; width:45px;">
-                    <strong>STT</strong> <br> <span style="font-size: 12px; color: #444444; width:30px">/ No.</span>
-                </th>
-                <th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:207px;">
-                    <strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444; width:${col2Width};">/ Tests</span>
-                </th>
-                <th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:137x;">
-                    <strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444; width:${col3Width};">/ Test result</span>
-                </th>
-                <th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:87px;">
-                    <strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444; width:${col4Width};">/ Unit</span>
-                </th>
-                <th style="box-sizing: border-box;border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width:fit-content;">
-                    <strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
-                </th>${referenceHeader}
-            </tr>
-        </thead>
-        <tbody>
-            ${analysisRows}
-        </tbody>
-    </table>
-</div>`;
+    <div style="margin:0; padding:0;">
+        <table style="width: ${availableWidthPx}px; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4; table-layout: fixed;">
+            <colgroup>
+                ${columnWidths.map((col) => `<col style="width: ${col.px}px; min-width: ${col.min};">`).join('')}
+            </colgroup>
+            <thead>
+                <tr>
+                    <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width: ${
+											columnWidths[0].px
+										}px;">
+                        <strong>STT</strong> <br> <span style="font-size: 12px; color: #444444;">/ No.</span>
+                    </th>
+                    <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width: ${
+											columnWidths[1].px
+										}px;">
+                        <strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444;">/ Tests</span>
+                    </th>
+                    <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width: ${
+											columnWidths[2].px
+										}px;">
+                        <strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444;">/ Test result</span>
+                    </th>
+                    <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width: ${
+											columnWidths[3].px
+										}px;">
+                        <strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
+                    </th>
+                    <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; width: ${
+											columnWidths[4].px
+										}px;">
+                        <strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
+                    </th>
+                    ${referenceHeader ? referenceHeader.replace('width:', `width: ${columnWidths[5].px}px;`) : ''}
+                </tr>
+            </thead>
+            <tbody>
+                ${analysisRows}
+            </tbody>
+        </table>
+    </div>`;
 }
 
-// Helper function to generate comment section
 function generateCommentSection() {
 	return `
-<div style="padding-top: 0; display: flex; flex-direction: column; ; margin:0;">
-    <div style="padding: 0pt; flex-grow: 1; position: relative;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-			<p style="margin:0; font-size:12px; line-height:1.2;">
-				Nhận xét / Comment:
-			</p>
-		</div>
-		<div style="display: flex; flex-direction: column; gap: 2px; padding-left: 8px;">
-			<p class="comment-content print-text-paragraph" 
-			   style="font-size:12px; margin:0; padding:0; line-height: 1.2; text-align:left;">
-				--
-			</p>
-		</div>
-	</div>
-</div>`;
+    <div style="padding-top: 0; display: flex; flex-direction: column; margin:0;">
+        <div style="padding: 0pt; flex-grow: 1; position: relative;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                <p style="margin:0; font-size:12px; line-height:1.2;">Nhận xét / Comment:</p>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px; padding-left: 8px;">
+                <p style="font-size:12px; margin:0; padding:0; line-height: 1.2; text-align:left;">--</p>
+            </div>
+        </div>
+    </div>`;
 }
 
-// Helper function to get default notes section
-function getDefaultNotesSection() {
+// FIXED: Updated generateNotesSection with new note content
+function generateNotesSection() {
 	return `
-<div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-    <div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-			<p class="note test_note_title" 
-			   style="font-weight:bold ; margin:0; font-size:11px; line-height:1.0; height: fit-content; ">
-				Ghi chú / Note:
-			</p>
-		</div>
-		<div style="display: flex; flex-direction: column; gap: 2px;">
-			<p class="note test_note_detail print-text-paragraph" 
-			   style="font-size:11px; margin:0; padding:0; line-height: 1.2; text-align:left;">
-				KPH: Không phát hiện / Not detected.<br>
-				LOD: Giới hạn phát hiện / Limit of detection.<br>
-				LOQ: Giới hạn định lượng / Limit of quantification.<br>
-				IRDOP: Thử nghiệm thử do IRDOP thực hiện / Protocol conducted by IRDOP.<br>
-				VS: Phương pháp được công nhận theo VILAS / VILAS accredited items.<br>
-				(EX): Phép thử thực hiện bởi nhà thầu phụ / Tests conducted by subcontractors.<br>
-				Thông tin mẫu thử do khách hàng cung cấp / Sample information provided by the customer.<br>
-				Kết quả chỉ có giá trị với mẫu thử / The results are only valid for the tested sample(s).
-			</p>
-		</div>
-		
-	</div>
-</div>`;
+    <div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
+        <div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <p style="font-weight:bold; margin:0; font-size:11px; line-height:1.0;">Ghi chú / Note:</p>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+                <p class="note test_note_detail print-text-paragraph" 
+                style="font-size:11px; margin:0; padding:0; line-height: 1.2; text-align:left;">
+                    KPH: Không phát hiện / Not detected.<br>
+                    LOD: Giới hạn phát hiện / Limit of detection.<br>
+                    LOQ: Giới hạn định lượng / Limit of quantification.<br>
+                    IRDOP: Chỉ tiêu được thực hiện tại IRDOP / Analyses conducted by IRDOP.<br>
+                    EX: Chỉ tiêu được thực hiện bởi nhà thầu phụ / Analyses conducted by subcontractors.<br>
+                    VS: Chỉ tiêu được công nhận ISO/IEC 17025:2017 / Accredited per ISO/IEC 17025:2017.<br>
+                    TĐC: Chỉ tiêu được công nhận đánh giá sự phù hợp theo NĐ 107/2016/NĐ-CP / Accredited per Decree 107/2016/ND-CP.<br>
+                    Thông tin mẫu thử do khách hàng cung cấp / Sample information provided by the customer.<br>
+                    Kết quả chỉ có giá trị với mẫu thử / The results are only valid for the tested sample(s).
+                </p>
+            </div>
+        </div>
+    </div>`;
 }
 
-// Helper function to get default signature section
-function getDefaultSignatureSection() {
+function generateSignatureSection() {
 	return `
-<div style="padding-top: 0; display: flex; ; margin:0;">
-	<div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
-		<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-			<strong contenteditable="true" 
-					class="signature signer_second_title print-text-paragraph"
-					style="font-size:12px; line-height:1.2; margin:0;">
-				PHÒNG PHÂN TÍCH KIỂM NGHIỆM/<br>KIỂM SOÁT CHẤT LƯỢNG / Laboratory Manager
-			</strong>
-			<p contenteditable="true" 
-			   class="signature signer_second_name print-text-paragraph" 
-			   style="font-size:12px; margin:0; line-height:1.4;">
-				Trần Thị Oanh
-			</p>
-		</div>
-		<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-			<strong contenteditable="true" 
-					class="signature signer_fist_title print-text-paragraph"
-					style="font-size:12px; line-height:1.2; margin:0;">
-				KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President
-			</strong>
-			<p contenteditable="true" 
-			   class="signature signer_first_name print-text-paragraph" 
-			   style="font-size:12px; margin:0; line-height:1.4;">
-				Nguyễn Bá Xuân Trường
-			</p>
-		</div>
-	</div>
-</div>`;
+    <div style="padding-top: 0; display: flex; margin:0;">
+        <div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
+            <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
+                <strong style="font-size:12px; line-height:1.2; margin:0;">PHÒNG PHÂN TÍCH KIỂM NGHIỆM/<br>KIỂM SOÁT CHẤT LƯỢNG / Laboratory Manager</strong>
+                <p style="font-size:12px; margin:0; line-height:1.4;">Nguyễn Trung Kiên</p>
+            </div>
+            <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
+                <strong style="font-size:12px; line-height:1.2; margin:0;">KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President</strong>
+                <p style="font-size:12px; margin:0; line-height:1.4;">Nguyễn Bá Xuân Trường</p>
+            </div>
+        </div>
+    </div>`;
 }
+
+/**
+ * FIXED: CSS with Nunito Sans font integration
+ */
+function getPrintCSSWithFonts(A4, includeContentPositioning = true, headerHeight) {
+	const baseCSS = `
+        @page { size: A4; margin: 0; }
+        
+        /* FIXED: Proper font family declarations with Nunito Sans */
+        html, body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+            font-weight: 400;
+            font-optical-sizing: auto;
+        }
+        
+        p, td, th, div, span, strong, b { 
+            font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+        }
+        
+        /* Font weight classes for Nunito Sans */
+        .nunito-200 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 200; font-style: normal; }
+        .nunito-300 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 300; font-style: normal; }
+        .nunito-400 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 400; font-style: normal; }
+        .nunito-500 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 500; font-style: normal; }
+        .nunito-600 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 600; font-style: normal; }
+        .nunito-700 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 700; font-style: normal; }
+        .nunito-800 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 800; font-style: normal; }
+        .nunito-900 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 900; font-style: normal; }
+        
+        /* FIXED: Ensure bold elements use proper font weight */
+        strong, b, [style*="font-weight: 700"], [style*="font-weight: bold"] { 
+            font-family: 'Nunito Sans', Arial, sans-serif !important; 
+            font-weight: 700 !important; 
+        }
+        
+        /* FIXED: Extra bold elements */
+        [style*="font-weight: 800"] { 
+            font-family: 'Nunito Sans', Arial, sans-serif !important; 
+            font-weight: 800 !important; 
+        }
+        
+        /* FIXED: Ultra bold elements */
+        [style*="font-weight: 900"] { 
+            font-family: 'Nunito Sans', Arial, sans-serif !important; 
+            font-weight: 900 !important; 
+        }
+        
+        /* Normal weight elements */
+        p, td, th, div, span { 
+            font-weight: 400; 
+        }
+        
+        .print-container { width: 794px; margin: 0px auto; background-color: white; }
+        
+        .page { 
+            position: relative; 
+            width: 100%; 
+            height: 1122px; 
+            box-sizing: border-box; 
+            page-break-after: always; 
+            background-color: white; 
+            padding: ${A4.topMargin}mm ${A4.sideMargin}mm ${A4.bottomMargin}mm ${A4.sideMargin}mm; 
+            overflow: hidden; 
+            border: 1px solid #000; 
+        }
+        
+        .header { 
+            position: absolute; 
+            top: ${A4.topMargin}mm; 
+            left: ${A4.sideMargin}mm; 
+            right: ${A4.sideMargin}mm; 
+            width: calc(100% - ${2 * A4.sideMargin}mm); 
+            box-sizing: border-box; 
+            overflow: visible; 
+            z-index: 2;
+        }
+        
+        .footer { 
+            position: absolute; 
+            bottom: ${A4.bottomMargin}mm; 
+            left: ${A4.sideMargin}mm; 
+            right: ${A4.sideMargin}mm; 
+            width: calc(100% - ${2 * A4.sideMargin}mm); 
+            box-sizing: border-box; 
+            z-index: 2;
+        }
+        
+        /* FIXED: Improved content positioning with proper constraints */
+        .content { 
+            position: absolute; 
+            left: ${A4.sideMargin}mm; 
+            right: ${A4.sideMargin}mm; 
+            width: calc(100% - ${2 * A4.sideMargin}mm); 
+            box-sizing: border-box; 
+            overflow: hidden;
+            z-index: 1;
+            /* Content height and positioning will be calculated dynamically */
+        }
+        
+        table { 
+            border-collapse: collapse; 
+            table-layout: fixed; 
+            width: 100%; 
+            page-break-inside: avoid;
+            font-family: 'Nunito Sans', Arial, sans-serif !important;
+        }
+        
+        table tr { 
+            height: auto; 
+            page-break-inside: avoid; 
+        }
+        
+        table td, table th { 
+            padding: 4px 8px; 
+            border: 1px solid black; 
+            vertical-align: middle; 
+            line-height: 1.2; 
+            box-sizing: border-box; 
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-family: 'Nunito Sans', Arial, sans-serif !important;
+        }
+        
+        table td p, table th p { 
+            margin: 0; 
+            padding: 0; 
+            line-height: 1.2; 
+            font-size: 12px; 
+            overflow-wrap: anywhere; 
+            font-family: 'Nunito Sans', Arial, sans-serif !important;
+        }
+        
+        p { 
+            margin: 0; 
+            overflow-wrap: anywhere; 
+            font-family: 'Nunito Sans', Arial, sans-serif !important;
+        }
+        
+        .draft-watermark { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            pointer-events: none; 
+            z-index: 10; 
+            opacity: 0.15; 
+            transform: rotate(-45deg); 
+        }
+        
+        .draft-watermark div { 
+            font-size: 90px; 
+            font-weight: 700; 
+            color: #888; 
+            text-transform: uppercase; 
+            letter-spacing: 8px; 
+            font-family: 'Nunito Sans', Arial, sans-serif !important;
+        }
+        
+        .vlas_icon { 
+            overflow: visible !important; 
+            z-index: 10; 
+        }
+        
+        @media print { 
+            .page { border: none; } 
+            body { -webkit-print-color-adjust: exact; }
+        }
+    `;
+
+	if (includeContentPositioning) {
+		const mmToPx = (mm) => mm * 3.78;
+		// FIXED: Use actual headerHeight from measurements
+		const contentTop = mmToPx(A4.topMargin) + headerHeight + mmToPx(A4.headerSpacing);
+		const footerHeight = 50; // Approximate footer height
+		const footerTop = 1122 - mmToPx(A4.bottomMargin) - footerHeight;
+		const contentMaxHeight = footerTop - mmToPx(A4.footerSpacing) - contentTop;
+
+		return (
+			baseCSS +
+			`
+        .content { 
+            top: ${contentTop}px; 
+            max-height: ${contentMaxHeight}px;
+            height: auto;
+        }
+        `
+		);
+	}
+
+	return baseCSS;
+}
+
+/**
+ * FIXED: Improved CSS with Nunito Sans integration
+ */
+function getImprovedPrintCSSWithFonts(A4, includeContentPositioning = true, headerHeight = 160) {
+	return getPrintCSSWithFonts(A4, includeContentPositioning, headerHeight);
+}
+
+/**
+ * Helper function to get print CSS (original function for compatibility)
+ */
+function getPrintCSS(A4, includeContentPositioning = true, headerHeight = 160) {
+	return getPrintCSSWithFonts(A4, includeContentPositioning, headerHeight);
+}
+
+/**
+ * Generate multiple reports and combine them
+ */
+async function generateMultipleReports(params, is_save = false, is_publish = false) {
+	const reportHtmls = [];
+
+	try {
+		if (!Array.isArray(params) || params.length === 0) {
+			throw new Error('Invalid or empty params');
+		}
+
+		for (let i = 0; i < params.length; i++) {
+			const { sample_uid, ppt_uid } = params[i];
+			if (!sample_uid && !ppt_uid) {
+				node.warn(`Skipping invalid report parameters at index ${i}: sample_uid=${sample_uid}, ppt_uid=${ppt_uid}`);
+				continue;
+			}
+			try {
+				const reportHtml = await generatePrintPage(sample_uid, ppt_uid, is_save, is_publish);
+				if (reportHtml && typeof reportHtml === 'string' && reportHtml.includes('<div class="print-container">')) {
+					reportHtmls.push(reportHtml);
+				} else {
+					node.warn(`Failed to generate report ${i + 1}: no valid HTML payload`);
+				}
+			} catch (err) {
+				node.warn(`Error generating report ${i + 1} for sample_uid=${sample_uid}, ppt_uid=${ppt_uid}: ${err.message}`);
+			}
+		}
+
+		if (reportHtmls.length === 0) {
+			throw new Error('No reports could be generated');
+		}
+
+		return combinePagesIntoFirstReport(reportHtmls);
+	} catch (error) {
+		node.warn(`Error generating multiple reports: ${error.message}`);
+		throw error;
+	} finally {
+		reportHtmls.length = 0;
+	}
+}
+
+/**
+ * Combine multiple report pages into a single document
+ */
+function combinePagesIntoFirstReport(htmls) {
+	if (!htmls || !Array.isArray(htmls) || htmls.length === 0) {
+		node.warn('No valid HTML reports provided');
+		return '<html><body><h1>No reports to display</h1></body></html>';
+	}
+
+	const baseHtml = htmls[0];
+	let startHtml = '';
+	let endHtml = '';
+	let pagesHtml = '';
+
+	try {
+		const containerStart = baseHtml.indexOf('<div class="print-container">');
+		if (containerStart === -1) {
+			throw new Error('Could not find print-container in base HTML');
+		}
+
+		const containerEnd = baseHtml.lastIndexOf('</div></body></html>');
+		if (containerEnd === -1) {
+			throw new Error('Could not find closing tags in base HTML');
+		}
+
+		startHtml = baseHtml.slice(0, containerStart + '<div class="print-container">'.length);
+		endHtml = baseHtml.slice(containerEnd);
+
+		const allPages = [];
+
+		// Extract pages from each report
+		htmls.forEach((html, reportIndex) => {
+			let currentPos = 0;
+			const pageStartTag = '<div class="page"';
+			const pageEndTag = '</div>';
+			let pageCount = 0;
+
+			while (currentPos < html.length) {
+				const pageStart = html.indexOf(pageStartTag, currentPos);
+				if (pageStart === -1) break;
+
+				let openDivCount = 1;
+				let endPos = pageStart + pageStartTag.length;
+
+				// Find matching closing div
+				while (openDivCount > 0 && endPos < html.length) {
+					const nextOpen = html.indexOf('<div', endPos);
+					const nextClose = html.indexOf('</div>', endPos);
+
+					if (nextClose === -1) {
+						throw new Error(`Unmatched closing div tag in report ${reportIndex + 1}`);
+					}
+
+					if (nextOpen !== -1 && nextOpen < nextClose) {
+						openDivCount++;
+						endPos = nextOpen + 4;
+					} else {
+						openDivCount--;
+						endPos = nextClose + 6;
+					}
+				}
+
+				if (openDivCount !== 0) {
+					node.warn(`Malformed page div in report ${reportIndex + 1} at position ${pageStart}`);
+					break;
+				}
+
+				const pageContent = html.slice(pageStart, endPos);
+				allPages.push(pageContent);
+				pageCount++;
+				currentPos = endPos;
+			}
+
+			if (pageCount === 0) {
+				node.warn(`No valid pages found in report ${reportIndex + 1}`);
+			}
+		});
+
+		// Update page numbers
+		pagesHtml = allPages.join('\n');
+		const totalPages = allPages.length;
+
+		// Replace page numbers in footer
+		let pageCounter = 1;
+		pagesHtml = pagesHtml.replace(
+			/<span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">(\d{2})<\/span>\s*\/\s*<span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">(\d{2})<\/span>/g,
+			(match) => {
+				const currentPageNum = pageCounter.toString().padStart(2, '0');
+				const totalPagesNum = totalPages.toString().padStart(2, '0');
+				pageCounter++;
+				return `<span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">${currentPageNum}</span> / <span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">${totalPagesNum}</span>`;
+			},
+		);
+
+		return `${startHtml}\n${pagesHtml}\n${endHtml}`;
+	} catch (error) {
+		node.warn(`Error combining pages: ${error.message}`);
+		return `<html><body><h1>Error combining reports: ${error.message}</h1></body></html>`;
+	}
+}
+
+// Main execution block
+let params = msg.req.body.list_uids || [];
+const is_save = msg.req.body.is_save || false;
+const is_publish = msg.req.body.is_publish || false;
+
+// let params = [{ sample_uid: 'SPx24431008-01', ppt_uid: '' },{ sample_uid: 'SPx24431008-02', ppt_uid: '' },{ sample_uid: 'SPx24431008-3', ppt_uid: '' }];
+// const is_save = false;
+// const is_publish = false;
+
+try {
+	// Validate and normalize params
+	if (!Array.isArray(params)) {
+		params = [params];
+	}
+	if (params.length === 0) {
+		throw new Error('No valid parameters provided');
+	}
+
+	// Generate reports
+	const simpleHTML = await generateMultipleReports(params, is_save, is_publish);
+	// 	 const browser = await chromium.connect('ws://playwright:3000');
+
+	//     const page = await browser.newPage();
+
+	//     await page.setContent(simpleHTML, { waitUntil: 'networkidle' });
+
+	//     // Tạo buffer PDF với scale tương đương 96 DPI
+	//     const pdfBuffer = await page.pdf({
+	//       format: 'A4',
+	//       printBackground: true,
+	//       margin: { top: '0mm', bottom: '0mm', left: '0mm', right: '0mm' },
+	//       scale: 1,
+	//     });
+
+	//     await page.close();
+	//     await browser.close();
+
+	msg.payload = simpleHTML;
+} catch (error) {
+	node.warn(`Error in COMPLETE FINAL report generation: ${error.message}`);
+	node.warn(`Stack trace: ${error.stack}`);
+	msg.payload = `<html><body><h1>Error: ${error.message}</h1><p>Please check the logs for more details.</p></body></html>`;
+}
+
+return msg;

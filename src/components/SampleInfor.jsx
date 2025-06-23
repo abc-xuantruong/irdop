@@ -210,7 +210,6 @@ const SampleInfor = () => {
 			});
 		}
 	};
-
 	// Add function to handle saving individual field changes
 	const handleSaveField = async (field, value) => {
 		try {
@@ -295,7 +294,6 @@ const SampleInfor = () => {
 			e.target.blur();
 		}
 	};
-
 	// Update the function to properly update all analyses matrices
 	const updateAllAnalysesMatrices = async (newMatrixValue) => {
 		try {
@@ -322,14 +320,26 @@ const SampleInfor = () => {
 			}));
 			setListAnalytes(newAnalytesList);
 
-			// Call API for each analysis
+			// Call API for each analysis and check response status
+			let successCount = 0;
 			for (const analysis of updatedAnalyses) {
-				await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 					analysis: analysis,
 				});
+				if (response.status === 200) {
+					successCount++;
+				}
 			}
 
-			showToast(`Đã cập nhật nền mẫu cho ${updatedAnalyses.length} chỉ tiêu`);
+			if (successCount === updatedAnalyses.length) {
+				showToast(`Đã cập nhật nền mẫu cho ${updatedAnalyses.length} chỉ tiêu`);
+			} else {
+				Swal.fire({
+					icon: 'warning',
+					title: 'Cảnh báo',
+					text: `Chỉ cập nhật thành công ${successCount}/${updatedAnalyses.length} chỉ tiêu`,
+				});
+			}
 		} catch (error) {
 			console.error('Error updating analyses matrices:', error);
 			Swal.fire({
@@ -364,7 +374,6 @@ const SampleInfor = () => {
 			return item;
 		});
 		setListAnalytes(updatedAnalytes);
-
 		try {
 			const analysis = updatedAnalytes.find((item) => item.id === index);
 
@@ -378,11 +387,19 @@ const SampleInfor = () => {
 			};
 
 			// Send the update to the server
-			await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 				analysis: updateData,
 			});
 
-			showToast('Đã cập nhật lĩnh vực thành công!');
+			if (response.status === 200) {
+				showToast('Đã cập nhật lĩnh vực thành công!');
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật lĩnh vực',
+				});
+			}
 		} catch (error) {
 			console.error('Error updating field:', error);
 			Swal.fire({
@@ -548,27 +565,33 @@ const SampleInfor = () => {
 			}
 
 			console.log('Selected Parameters:', selectedParameters);
+			const parameters = selectedParameters.map((parameter) => {
+				const analysisData = {
+					receipt_id: currentSample.receipt_id,
+					sample_id: currentSample.id,
+					parameter_id: parameter.parameter_id || 0,
+					parameter_name: parameter.parameter_name,
+					parameter_uid: parameter.parameter_uid || '', // Ensure parameter_uid is included
+					accrenditation: parameter.accrenditation,
+					protocol_id: parameter.protocol_id,
+					technician_uid: parameter.technician_uid,
+					deadline: parameter.deadline
+						? parameter.deadline
+						: new Date(Date.now() + parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0),
+					protocol_code: parameter.protocol_code,
+					result_unit: parameter.default_unit || parameter.result_unit,
+					protocol_source: parameter.protocol_source,
+					created_by_uid: currentUser.identity_uid,
+					modified_by_uid: currentUser.identity_uid,
+				};
 
-			const parameters = selectedParameters.map((parameter) => ({
-				receipt_id: currentSample.receipt_id,
-				sample_id: currentSample.id,
-				parameter_id: parameter.parameter_id || 0,
-				parameter_name: parameter.parameter_name,
-				parameter_uid: parameter.parameter_uid || '', // Ensure parameter_uid is included
-				accrenditation: parameter.accrenditation,
-				protocol_id: parameter.protocol_id,
-				technician_uid: parameter.technician_uid,
-				deadline: parameter.deadline
-					? parameter.deadline
-					: new Date(Date.now() + parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0),
-				protocol_code: parameter.protocol_code,
-				result_unit: parameter.default_unit || parameter.result_unit,
-				result_value: parameter.result_value || '',
-				protocol_source: parameter.protocol_source,
-				created_by_uid: currentUser.identity_uid,
-				modified_by_uid: currentUser.identity_uid,
-			}));
+				// Only add result_value if it exists and is not empty
+				if (parameter.result_value && parameter.result_value !== '') {
+					analysisData.result_value = parameter.result_value;
+				}
 
+				return analysisData;
+			});
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/insert/bulk/analysis', {
 				analyses: parameters,
 			});
@@ -635,7 +658,8 @@ const SampleInfor = () => {
 
 			// Identify which fields need to be updated
 			if (analysis.parameter_name !== undefined) changedFields.parameter_name = analysis.parameter_name;
-			if (analysis.result_value !== undefined) changedFields.result_value = analysis.result_value;
+			if (analysis.result_value !== undefined && analysis.result_value !== '')
+				changedFields.result_value = analysis.result_value;
 			if (analysis.matrix !== undefined) changedFields.matrix = analysis.matrix;
 			if (analysis.result_unit !== undefined) changedFields.result_unit = analysis.result_unit;
 			if (analysis.protocol_code !== undefined) changedFields.protocol_code = analysis.protocol_code;
@@ -685,7 +709,8 @@ const SampleInfor = () => {
 
 			// Check each field that might have been updated
 			if (analysis.parameter_name !== undefined) fieldBeingUpdated.parameter_name = analysis.parameter_name;
-			if (analysis.result_value !== undefined) fieldBeingUpdated.result_value = analysis.result_value;
+			if (analysis.result_value !== undefined && analysis.result_value !== '')
+				fieldBeingUpdated.result_value = analysis.result_value;
 			if (analysis.result_unit !== undefined) fieldBeingUpdated.result_unit = analysis.result_unit;
 			if (analysis.protocol_code !== undefined) fieldBeingUpdated.protocol_code = analysis.protocol_code;
 			if (analysis.protocol_source !== undefined) fieldBeingUpdated.protocol_source = analysis.protocol_source;
@@ -737,18 +762,16 @@ const SampleInfor = () => {
 				});
 				return;
 			} // We don't update the parameter library anymore
-			var parameter_id = 0;
-
-			// Now create the analysis with the parameter_id
+			var parameter_id = 0; // Now create the analysis with the parameter_id (exclude result_value)
+			const { result_value, ...newParameterWithoutResult } = newParameter;
 			const analysisToAdd = {
-				...newParameter,
+				...newParameterWithoutResult,
 				parameter_id: parameter_id,
 				receipt_id: currentSample.receipt_id,
 				sample_id: currentSample.id,
 				created_by_uid: currentUser.identity_uid,
 				modified_by_uid: currentUser.identity_uid,
 			};
-
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/insert/analysis', {
 				analysis: analysisToAdd,
 			});
@@ -1261,13 +1284,15 @@ const SampleInfor = () => {
 				receipt_id: analysis.receipt_id,
 				modified_by_uid: currentUser.identity_uid,
 			};
-
 			// Add only the field being updated
 			if (fieldType === 'result_value') {
-				updateData.result_value = newValue;
-				// Add submission information when updating result value
-				updateData.submit_result_by = currentUser?.identity_name;
-				updateData.submit_result_at = new Date().toISOString();
+				// Only add result_value if it's not empty
+				if (newValue !== '') {
+					updateData.result_value = newValue;
+					// Add submission information when updating result value
+					updateData.submit_result_by = currentUser?.identity_name;
+					updateData.submit_result_at = new Date().toISOString();
+				}
 			} else if (fieldType === 'result_unit') {
 				updateData.result_unit = newValue;
 			} else if (fieldType === 'technician_uid') {
@@ -1341,7 +1366,6 @@ const SampleInfor = () => {
 					modified_by_uid: currentUser.identity_uid,
 				},
 			});
-
 			if (response.status === 200) {
 				showToast('Sample updated successfully!');
 				setIsEditingSample(false);
@@ -1521,7 +1545,6 @@ const SampleInfor = () => {
 					modified_by_uid: currentUser.identity_uid,
 				},
 			});
-
 			if (response.status === 200) {
 				showToast('Report updated successfully!');
 				setIsReportChanged(false); // Reset change tracker
@@ -1877,7 +1900,6 @@ const SampleInfor = () => {
 
 		// Find the updated analysis item
 		const analysis = updatedAnalytes.find((item) => item.id === index);
-
 		try {
 			// Create minimal update object with only required fields
 			const updateData = {
@@ -1889,9 +1911,19 @@ const SampleInfor = () => {
 			};
 
 			// Send the update to the server
-			await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 				analysis: updateData,
 			});
+
+			if (response.status === 200) {
+				// Only show toast after successful API response - not added here since it would be too frequent
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi cập nhật người thực hiện',
+				});
+			}
 		} catch (error) {
 			console.error('Error updating analysis:', error);
 			Swal.fire({
@@ -1972,7 +2004,6 @@ const SampleInfor = () => {
 		// Update the state
 		setListAnalytes(updatedAnalytes);
 	};
-
 	// New function to send API update for deadline
 	const saveDeadlineToAPI = async (index, date) => {
 		try {
@@ -2331,7 +2362,6 @@ const SampleInfor = () => {
 			return item;
 		});
 		setListAnalytes(updatedAnalytes);
-
 		try {
 			const analysis = updatedAnalytes.find((item) => item.id === index);
 
@@ -2345,9 +2375,17 @@ const SampleInfor = () => {
 			};
 
 			// Send the update to the server
-			await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
 				analysis: updateData,
 			});
+
+			if (response.status !== 200) {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi cập nhật nguồn phương pháp',
+				});
+			}
 		} catch (error) {
 			console.error('Error updating protocol source:', error);
 			Swal.fire({
@@ -2437,7 +2475,6 @@ const SampleInfor = () => {
 		await updateExInfo(analysis);
 		setEditingExDateField(null);
 	};
-
 	const updateExInfo = async (analysis) => {
 		try {
 			const exInfo = analysis.ex_info || { ex_name: '', send_at: null };
@@ -3341,7 +3378,7 @@ const SampleInfor = () => {
 					border-color: #6366f1 !important;
 					box-shadow: 0 0 0 1px #6366f1;
 				}
-			`}</style>
+			`}</style>{' '}
 			<Breadcrumb
 				paths={[
 					{ name: 'Danh sách', link: '/' },
@@ -3355,6 +3392,7 @@ const SampleInfor = () => {
 					},
 				]}
 				sample_uids={listSampleByReceipt.map((sample) => sample.sample_uid)}
+				showSearch={true}
 			/>
 			<div className="flex justify-end mb-1">
 				<button
@@ -3702,7 +3740,6 @@ const SampleInfor = () => {
 					{!isTechnician() && renderNewReport()}
 				</div>
 			</div>
-
 			<div className="bg-white rounded-lg w-full mt-4 p-4 pt-2 border overflow-auto ">
 				<div className="mb-1 flex justify-end">
 					<div className="w-fit flex items-center flex-wrap py-1 mr-0.5">
@@ -4426,7 +4463,6 @@ const SampleInfor = () => {
 						? handleDeleteMultipleConfirmAction
 						: handleDeleteAnalysisConfirmAction,
 				)}
-
 			{isBulkDeadlineVisible && renderBulkDeadlinePicker()}
 		</div>
 	);

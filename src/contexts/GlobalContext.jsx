@@ -17,9 +17,8 @@ export const GlobalProvider = ({ children }) => {
 	const [currentSort, setCurrentSort] = useState({});
 	const [technicians, setTechnicians] = useState([]);
 	const [currentKey, setCurrentKey] = useState([]);
-	const [clients, setClients] = useState([]);
-	const [currentUser, setCurrentUser] = useState(null);
-	const status = ['Đang chờ', 'Khẩn', 'Thường', 'Hoàn thành', 'Hủy bỏ'];
+	const [clients, setClients] = useState([]);	const [currentUser, setCurrentUser] = useState(null);
+	const status = ['Đang chờ', 'Khẩn', 'Đang thực hiện', 'Đủ kết quả', 'Hoàn thành', 'Hủy bỏ'];
 	const purposes = ['Chất lượng', 'Dự án', 'Đề tài', 'Công bố', 'Thầu phụ'];
 
 	// Helper function để kiểm tra auth cookies
@@ -219,7 +218,7 @@ export const GlobalProvider = ({ children }) => {
 			const month = String(dateObj.getMonth() + 1).padStart(2, '0');
 			const year = dateObj.getFullYear();
 
-			return `${day}-${month}-${year}`;
+			return `${day}/${month}/${year}`;
 		} catch (error) {
 			console.error('Error formatting date:', error);
 			return '';

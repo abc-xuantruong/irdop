@@ -3,8 +3,9 @@ import { apiPost, apiGet } from '../contexts/helperFunctionCallAPI';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { FaBox, FaUser, FaTruck } from 'react-icons/fa';
 
-const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
+const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 	console.log('Receipt data:', receipt);
+	console.log('Mode:', mode);
 	const { currentUser } = useContext(GlobalContext);
 	const [formData, setFormData] = useState({
 		clientAddress: receipt?.client?.client_address || '',
@@ -41,13 +42,129 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 		province_id: '1',
 		district_id: '25',
 		wards_id: '497',
-	});
-	// State to store province names
+	}); // State to store province names
 	const [provinceNames, setProvinceNames] = useState({});
 	// State to store district names
 	const [districtNames, setDistrictNames] = useState({});
 	// State to store wards names
 	const [wardsNames, setWardsNames] = useState({});
+
+	// State for province, district, ward lists
+	const [provinces, setProvinces] = useState([]);
+	const [districts, setDistricts] = useState([]);
+	const [wards, setWards] = useState([]);
+
+	// Selected values for receiver address
+	const [selectedProvince, setSelectedProvince] = useState('');
+	const [selectedDistrict, setSelectedDistrict] = useState('');
+	const [selectedWard, setSelectedWard] = useState('');
+
+	// Function to fetch all provinces
+	const fetchProvinces = async () => {
+		try {
+			const response = await fetch('https://partner.viettelpost.vn/v2/categories/listProvinceById?provinceId=-1');
+			const data = await response.json();
+
+			if (data.status === 200 && data.data) {
+				setProvinces(data.data);
+			}
+		} catch (error) {
+			console.error('Error fetching provinces:', error);
+		}
+	};
+
+	// Function to fetch districts by province ID
+	const fetchDistricts = async (provinceId) => {
+		if (!provinceId) {
+			setDistricts([]);
+			return;
+		}
+
+		try {
+			const response = await fetch(
+				`https://partner.viettelpost.vn/v2/categories/listDistrict?provinceId=${provinceId}`,
+			);
+			const data = await response.json();
+
+			if (data.status === 200 && data.data) {
+				setDistricts(data.data);
+			}
+		} catch (error) {
+			console.error('Error fetching districts:', error);
+		}
+	};
+
+	// Function to fetch wards by district ID
+	const fetchWards = async (districtId) => {
+		if (!districtId) {
+			setWards([]);
+			return;
+		}
+
+		try {
+			const response = await fetch(`https://partner.viettelpost.vn/v2/categories/listWards?districtId=${districtId}`);
+			const data = await response.json();
+
+			if (data.status === 200 && data.data) {
+				setWards(data.data);
+			}
+		} catch (error) {
+			console.error('Error fetching wards:', error);
+		}
+	};
+
+	// Handle province selection
+	const handleProvinceChange = (e) => {
+		const provinceId = e.target.value;
+		setSelectedProvince(provinceId);
+		setSelectedDistrict('');
+		setSelectedWard('');
+		setDistricts([]);
+		setWards([]);
+
+		// Update addressData
+		setAddressData((prev) => ({
+			...prev,
+			province_id: provinceId,
+			district_id: '',
+			wards_id: '',
+		}));
+
+		if (provinceId) {
+			fetchDistricts(provinceId);
+		}
+	};
+
+	// Handle district selection
+	const handleDistrictChange = (e) => {
+		const districtId = e.target.value;
+		setSelectedDistrict(districtId);
+		setSelectedWard('');
+		setWards([]);
+
+		// Update addressData
+		setAddressData((prev) => ({
+			...prev,
+			district_id: districtId,
+			wards_id: '',
+		}));
+
+		if (districtId) {
+			fetchWards(districtId);
+		}
+	};
+
+	// Handle ward selection
+	const handleWardChange = (e) => {
+		const wardId = e.target.value;
+		setSelectedWard(wardId);
+
+		// Update addressData
+		setAddressData((prev) => ({
+			...prev,
+			wards_id: wardId,
+		}));
+	};
 
 	// Function to fetch province name by ID
 	const fetchProvinceName = async (provinceId) => {
@@ -114,7 +231,26 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 		} catch (error) {
 			console.error('Error fetching wards name:', error);
 		}
-	};
+	}; // Fetch provinces when component mounts
+	useEffect(() => {
+		fetchProvinces();
+	}, []);
+
+	// Sync selected values with addressData when it changes (from address check)
+	useEffect(() => {
+		if (addressData.province_id && addressData.province_id !== selectedProvince) {
+			setSelectedProvince(addressData.province_id);
+			fetchDistricts(addressData.province_id);
+		}
+		if (addressData.district_id && addressData.district_id !== selectedDistrict) {
+			setSelectedDistrict(addressData.district_id);
+			fetchWards(addressData.district_id);
+		}
+		if (addressData.wards_id && addressData.wards_id !== selectedWard) {
+			setSelectedWard(addressData.wards_id);
+		}
+	}, [addressData.province_id, addressData.district_id, addressData.wards_id]);
+
 	// Fetch province and district names when component mounts or IDs change
 	useEffect(() => {
 		if (senderAddressData.province_id) {
@@ -143,16 +279,17 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 		addressData.district_id,
 		addressData.wards_id,
 	]);
-
 	// Function to format the full address from components
 	const getFormattedFullAddress = () => {
 		if (!addressData.address) return '';
 
 		const parts = [
 			addressData.address,
-			wardsNames[addressData.wards_id],
-			districtNames[addressData.district_id],
-			provinceNames[addressData.province_id],
+			wards.find((w) => w.WARDS_ID == addressData.wards_id)?.WARDS_NAME || wardsNames[addressData.wards_id],
+			districts.find((d) => d.DISTRICT_ID == addressData.district_id)?.DISTRICT_NAME ||
+				districtNames[addressData.district_id],
+			provinces.find((p) => p.PROVINCE_ID == addressData.province_id)?.PROVINCE_NAME ||
+				provinceNames[addressData.province_id],
 		];
 
 		// Filter out empty parts and join with commas
@@ -333,18 +470,23 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 	// Xử lý gửi đơn hàng
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [orderData, setOrderData] = useState(null);
-	const [hasExistingOrder, setHasExistingOrder] = useState(false);
-
-	// Load existing order data if tracking number exists
+	const [hasExistingOrder, setHasExistingOrder] = useState(false); // Load existing order data if tracking number exists
 	useEffect(() => {
-		if (receipt?.tracking_number) {
+		// Only load existing order if mode is 'auto' and we have a single tracking number
+		if (mode === 'auto' && receipt?.tracking_number && !receipt?.tracking_number.includes(',')) {
 			loadExistingOrder(receipt.tracking_number);
+		} else if (mode === 'new' || (receipt?.tracking_number && receipt?.tracking_number.includes(','))) {
+			// For 'new' mode or multiple tracking numbers, don't load existing order data
+			// Just show the form for creating a new shipment
+			setHasExistingOrder(false);
 		}
-	}, [receipt?.tracking_number]);
-
+	}, [receipt?.tracking_number, mode]);
 	const loadExistingOrder = async (trackingNumber) => {
 		try {
-			const response = await apiGet(`https://red.irdop.org/v1/postal/vietel/get_order/${trackingNumber}`);
+			// Only load for the first tracking number if there are multiple
+			const firstTrackingNumber = trackingNumber.split(',')[0].trim();
+
+			const response = await apiGet(`https://red.irdop.org/v1/postal/vietel/get_order/${firstTrackingNumber}`);
 			if (response.success || response.data) {
 				const orderInfo = response.data || response;
 				setOrderData(orderInfo);
@@ -403,11 +545,13 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 		} catch (error) {
 			console.error('Error loading existing order:', error);
 		}
-	};
-
-	// Handle cancel order
+	}; // Handle cancel order
 	const handleCancelOrder = async () => {
-		if (!receipt?.tracking_number) return;
+		// Get the current tracking number being viewed and the original full tracking number
+		const currentTrackingNumber = receipt?.tracking_number;
+		const originalTrackingNumber = receipt?.original_tracking_number || receipt?.tracking_number;
+
+		if (!currentTrackingNumber) return;
 
 		if (window.confirm('Bạn có chắc chắn muốn hủy đơn hàng này?')) {
 			try {
@@ -415,32 +559,86 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 
 				// Cancel order via API
 				const response = await apiPost('https://red.irdop.org/v1/postal/status/cancel', {
-					trackingNumber: receipt.tracking_number,
+					trackingNumber: currentTrackingNumber,
 				});
+
 				if (response.success || response.data) {
-					// Update receipt to clear tracking info
-					const payload = {
-						receipt: {
-							id: receipt.id,
-							receipt_uid: receipt.receipt_uid,
-							ppt_send_by: '',
-							tracking_number: '',
-						},
-					};
-					await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+					// Handle tracking number removal
+					if (originalTrackingNumber && originalTrackingNumber.includes(',')) {
+						// Multiple tracking numbers - remove only the cancelled one
+						const trackingNumbers = originalTrackingNumber
+							.split(',')
+							.map((num) => num.trim())
+							.filter((num) => num !== '');
+						const remainingNumbers = trackingNumbers.filter((num) => num !== currentTrackingNumber);
 
-					alert('Đã hủy đơn hàng thành công!');
+						// Only update if there are remaining tracking numbers
+						if (remainingNumbers.length >= 1) {
+							const updatedTrackingNumber = remainingNumbers.join(',');
 
-					// Call onOrderUpdate to refresh dashboard data
-					if (onOrderUpdate) {
-						const updatedReceipt = {
-							...receipt,
-							ppt_send_by: '',
-							tracking_number: '',
+							const payload = {
+								receipt: {
+									id: receipt.id,
+									receipt_uid: receipt.receipt_uid,
+									tracking_number: updatedTrackingNumber,
+								},
+							};
+							await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+							// Call onOrderUpdate to refresh dashboard data
+							if (onOrderUpdate) {
+								const updatedReceipt = {
+									...receipt,
+									tracking_number: updatedTrackingNumber,
+								};
+								onOrderUpdate(updatedReceipt);
+							}
+						} else {
+							// If no tracking numbers remain, clear all tracking info
+							const payload = {
+								receipt: {
+									id: receipt.id,
+									receipt_uid: receipt.receipt_uid,
+									ppt_send_by: '',
+									tracking_number: '',
+								},
+							};
+							await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+							// Call onOrderUpdate to refresh dashboard data
+							if (onOrderUpdate) {
+								const updatedReceipt = {
+									...receipt,
+									ppt_send_by: '',
+									tracking_number: '',
+								};
+								onOrderUpdate(updatedReceipt);
+							}
+						}
+					} else {
+						// Single tracking number - clear all tracking info
+						const payload = {
+							receipt: {
+								id: receipt.id,
+								receipt_uid: receipt.receipt_uid,
+								ppt_send_by: '',
+								tracking_number: '',
+							},
 						};
-						onOrderUpdate(updatedReceipt);
+						await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+						// Call onOrderUpdate to refresh dashboard data
+						if (onOrderUpdate) {
+							const updatedReceipt = {
+								...receipt,
+								ppt_send_by: '',
+								tracking_number: '',
+							};
+							onOrderUpdate(updatedReceipt);
+						}
 					}
 
+					alert('Đã hủy đơn hàng thành công!');
 					onClose && onClose();
 				} else {
 					alert('Có lỗi xảy ra khi hủy đơn hàng');
@@ -546,27 +744,37 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 						const adjustedDate = new Date();
 						adjustedDate.setHours(adjustedDate.getHours() + 7);
 						const formattedDate = adjustedDate.toISOString().split('T')[0];
+						// Append new tracking number to existing ones (if any)
+						let updatedTrackingNumber = trackingNumber;
+						if (receipt.tracking_number && receipt.tracking_number.trim() !== '') {
+							// Split existing tracking numbers, clean them, and add the new one
+							const existingNumbers = receipt.tracking_number
+								.split(',')
+								.map((num) => num.trim())
+								.filter((num) => num !== '');
+							existingNumbers.push(trackingNumber);
+							updatedTrackingNumber = existingNumbers.join(',');
+						}
+
 						const payload = {
 							receipt: {
 								id: receipt.id,
 								receipt_uid: receipt.receipt_uid,
 								ppt_send_at: formattedDate,
 								ppt_send_by: currentUser?.identity_uid,
-								tracking_number: trackingNumber,
+								tracking_number: updatedTrackingNumber,
 							},
 						};
 
 						const updateResponse = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
 						if (updateResponse.status === 200) {
-							console.log('Receipt updated successfully with tracking number:', trackingNumber);
-
-							// Call onOrderUpdate to refresh dashboard data
+							console.log('Receipt updated successfully with tracking number:', trackingNumber); // Call onOrderUpdate to refresh dashboard data
 							if (onOrderUpdate) {
 								const updatedReceipt = {
 									...receipt,
 									ppt_send_at: formattedDate,
 									ppt_send_by: currentUser?.identity_uid,
-									tracking_number: trackingNumber,
+									tracking_number: updatedTrackingNumber,
 								};
 								onOrderUpdate(updatedReceipt);
 							}
@@ -810,7 +1018,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 									{addressMessage}
 								</div>
 							)}
-						</div>
+						</div>{' '}
 						{/* 4 ô address fields - 2 hàng x 2 cột */}
 						<input
 							type="text"
@@ -820,15 +1028,44 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate }) => {
 							className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
 							required
 						/>
-						<div className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed text-left">
-							{displayProvinceWithName(addressData.province_id) || 'Mã tỉnh/thành'}
-						</div>{' '}
-						<div className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed text-left">
-							{displayDistrictWithName(addressData.district_id) || 'Mã quận/huyện'}
-						</div>
-						<div className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed text-left">
-							{displayWardsWithName(addressData.wards_id) || 'Mã phường/xã'}
-						</div>
+						<select
+							value={selectedProvince}
+							onChange={handleProvinceChange}
+							className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+						>
+							<option value="">Chọn tỉnh/thành phố</option>
+							{provinces.map((province) => (
+								<option key={province.PROVINCE_ID} value={province.PROVINCE_ID}>
+									{province.PROVINCE_NAME}
+								</option>
+							))}
+						</select>
+						<select
+							value={selectedDistrict}
+							onChange={handleDistrictChange}
+							disabled={!selectedProvince}
+							className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left disabled:bg-gray-100 disabled:cursor-not-allowed"
+						>
+							<option value="">Chọn quận/huyện</option>
+							{districts.map((district) => (
+								<option key={district.DISTRICT_ID} value={district.DISTRICT_ID}>
+									{district.DISTRICT_NAME}
+								</option>
+							))}
+						</select>
+						<select
+							value={selectedWard}
+							onChange={handleWardChange}
+							disabled={!selectedDistrict}
+							className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left disabled:bg-gray-100 disabled:cursor-not-allowed"
+						>
+							<option value="">Chọn phường/xã</option>
+							{wards.map((ward) => (
+								<option key={ward.WARDS_ID} value={ward.WARDS_ID}>
+									{ward.WARDS_NAME}
+								</option>
+							))}
+						</select>
 						{/* Combined full address row (spans all 4 columns) */}
 						<div className="col-span-4 p-1.5 text-gray-700 text-left">
 							{addressData.address ? (

@@ -132,7 +132,6 @@ export const apiPost = async (url, body, customHeaders = {}) => {
 			...customHeaders,
 		};
 		const response = await axios.post(url, body, { headers });
-
 		return response;
 	} catch (error) {
 		if (error.response) {

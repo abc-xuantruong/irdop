@@ -54,6 +54,18 @@ const CreateReceiptFromCRM = () => {
 	const [newField, setNewField] = useState({ fname: '', fvalue: '' });
 	const [defaultSampleInformation, setDefaultSampleInformation] = useState(true);
 
+	// States for direct input editing
+	const [clientInfo, setClientInfo] = useState({
+		client_name: '',
+		client_address: '',
+		legal_id: '',
+	});
+	const [contactInfo, setContactInfo] = useState({
+		name: '',
+		phone: '',
+		email: '',
+	});
+
 	const { formatDate, currentUser, purposes, hasAuthCookies } = useContext(GlobalContext);
 	const navigate = useNavigate();
 	// Default customer and receipt fields
@@ -411,9 +423,9 @@ const CreateReceiptFromCRM = () => {
 				setIsCreating(false);
 				return; // hasAuthCookies will handle redirect
 			}
-
 			const response = await apiPost('https://black.irdop.org/crm/create_receipt', {
 				client: crmData.client,
+				contact: crmData.contact,
 				samples: samplesWithStatus,
 				created_by_uid: currentUser.identity_uid,
 				modified_by_uid: currentUser.identity_uid,
@@ -873,17 +885,32 @@ const CreateReceiptFromCRM = () => {
 	const handleEditChange = (e) => {
 		setEditValue(e.target.value);
 	};
-
 	const saveEdit = () => {
 		if (editingField.type === 'client') {
-			// Update client information
-			setCrmData({
-				...crmData,
-				client: {
-					...crmData.client,
-					[editingField.field]: editValue,
-				},
-			});
+			// Handle contact fields
+			if (
+				editingField.field === 'contact_name' ||
+				editingField.field === 'contact_phone' ||
+				editingField.field === 'contact_email'
+			) {
+				const contactField = editingField.field.replace('contact_', ''); // Remove 'contact_' prefix
+				setCrmData({
+					...crmData,
+					contact: {
+						...crmData.contact,
+						[contactField]: editValue,
+					},
+				});
+			} else {
+				// Update client information
+				setCrmData({
+					...crmData,
+					client: {
+						...crmData.client,
+						[editingField.field]: editValue,
+					},
+				});
+			}
 		} else if (editingField.type === 'sample') {
 			// Update sample name
 			const updatedSamples = [...crmData.samples];
@@ -1100,6 +1127,52 @@ const CreateReceiptFromCRM = () => {
 		fetchMatrices();
 	}, []);
 
+	// Sync crmData to input states
+	useEffect(() => {
+		if (crmData) {
+			setClientInfo({
+				client_name: crmData.client?.client_name || '',
+				client_address: crmData.client?.client_address || '',
+				legal_id: crmData.client?.legal_id || '',
+			});
+			setContactInfo({
+				name: crmData.contact?.name || '',
+				phone: crmData.contact?.phone || '',
+				email: crmData.contact?.email || '',
+			});
+		}
+	}, [crmData]);
+
+	// Handle client info input changes
+	const handleClientInfoChange = (field, value) => {
+		const updatedClientInfo = { ...clientInfo, [field]: value };
+		setClientInfo(updatedClientInfo);
+
+		// Update crmData immediately
+		setCrmData((prev) => ({
+			...prev,
+			client: {
+				...prev.client,
+				[field]: value,
+			},
+		}));
+	};
+
+	// Handle contact info input changes
+	const handleContactInfoChange = (field, value) => {
+		const updatedContactInfo = { ...contactInfo, [field]: value };
+		setContactInfo(updatedContactInfo);
+
+		// Update crmData immediately
+		setCrmData((prev) => ({
+			...prev,
+			contact: {
+				...prev.contact,
+				[field]: value,
+			},
+		}));
+	};
+
 	// Filter matrices based on input
 	const filterMatrices = (input) => {
 		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
@@ -1130,7 +1203,6 @@ const CreateReceiptFromCRM = () => {
 		updatedCustomerInfo[sampleIndex] = [...updatedCustomerInfo[sampleIndex], { fname: '', fvalue: '' }];
 		setCustomerInfo(updatedCustomerInfo);
 	};
-
 	const handleCustomerFieldChange = (sampleIndex, fieldIndex, field, value) => {
 		const updatedCustomerInfo = { ...customerInfo };
 		if (!updatedCustomerInfo[sampleIndex]) {
@@ -1140,13 +1212,32 @@ const CreateReceiptFromCRM = () => {
 		if (field === 'fname') {
 			const selectedField = defaultCustomerFields.find((item) => item.fname === value);
 			if (selectedField) {
-				updatedCustomerInfo[sampleIndex][fieldIndex] = { ...selectedField };
+				// When user selects a predefined field, use that field and clear any 'other' value
+				updatedCustomerInfo[sampleIndex][fieldIndex] = {
+					...selectedField,
+					other: undefined, // Clear other field when selecting predefined option
+				};
+			} else if (value === 'Khác') {
+				// When user selects "Khác", initialize with empty other field
+				updatedCustomerInfo[sampleIndex][fieldIndex] = {
+					...updatedCustomerInfo[sampleIndex][fieldIndex],
+					fname: 'Khác',
+					other: '', // Initialize empty other field
+				};
 			} else {
 				updatedCustomerInfo[sampleIndex][fieldIndex] = {
 					...updatedCustomerInfo[sampleIndex][fieldIndex],
 					fname: value,
+					other: undefined, // Clear other field for any other custom value
 				};
 			}
+		} else if (field === 'other') {
+			// When user types in the "other" input, update both 'other' and 'fname' fields
+			updatedCustomerInfo[sampleIndex][fieldIndex] = {
+				...updatedCustomerInfo[sampleIndex][fieldIndex],
+				other: value,
+				fname: value, // Set fname to the custom value entered by user
+			};
 		} else {
 			updatedCustomerInfo[sampleIndex][fieldIndex] = {
 				...updatedCustomerInfo[sampleIndex][fieldIndex],
@@ -1265,18 +1356,20 @@ const CreateReceiptFromCRM = () => {
 		}
 
 		setIsCreating(true);
-
 		try {
 			// Check auth cookies before making API call
 			if (!hasAuthCookies()) {
 				setIsCreating(false);
 				return; // hasAuthCookies will handle redirect
-			} // Prepare the order data
+			}
+
+			// Prepare the order data
 			const orderData = {
 				order_code: crmData.order_code || '',
 				quote_code: crmData.quote_code || '',
 				sale_recorder: crmData.sale_recorder || '',
 				client: crmData.client,
+				contact: crmData.contact,
 				total_amount: crmData.total_amount || 0,
 				samples: crmData.samples.map((sample, index) => {
 					// Include sample_information if it exists for this sample
@@ -1363,15 +1456,7 @@ const CreateReceiptFromCRM = () => {
 												<span className="font-medium text-gray-500">Ghi nhận doanh số: </span>
 												{crmData.sale_recorder || '--'}
 											</p>
-											<p>
-												<span className="font-medium text-gray-500">Chiết khấu: </span>
-												{crmData.discount_summary
-													? new Intl.NumberFormat('vi-VN', {
-															style: 'currency',
-															currency: 'VND',
-													  }).format(crmData.discount_summary)
-													: '--'}{' '}
-											</p>
+
 											<p>
 												<span className="font-medium text-gray-500">Tổng tiền: </span>
 												{crmData.total_amount
@@ -1391,72 +1476,74 @@ const CreateReceiptFromCRM = () => {
 											</p>
 
 											<div className="mb-2">
-												<p className="font-medium text-gray-500">Tên cá nhân / tổ chức</p>
-												{editingField.type === 'client' && editingField.field === 'client_name' ? (
-													<input
-														type="text"
-														value={editValue}
-														onChange={handleEditChange}
-														onKeyDown={handleKeyDown}
-														onBlur={saveEdit}
-														autoFocus
-														className="w-full border p-1 rounded bg-white"
-													/>
-												) : (
-													<p
-														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
-														onClick={() => startEditing('client', 'client_name', crmData.client.client_name)}
-														title="Nhấn để chỉnh sửa"
-													>
-														{crmData.client.client_name}
-													</p>
-												)}
+												<label className="font-medium text-gray-500 block mb-1">Tên cá nhân / tổ chức</label>
+												<input
+													type="text"
+													value={clientInfo.client_name}
+													onChange={(e) => handleClientInfoChange('client_name', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập tên cá nhân / tổ chức"
+												/>
 											</div>
 
 											<div className="mb-2">
-												<p className="font-medium text-gray-500">Địa chỉ</p>
-												{editingField.type === 'client' && editingField.field === 'client_address' ? (
-													<input
-														type="text"
-														value={editValue}
-														onChange={handleEditChange}
-														onKeyDown={handleKeyDown}
-														onBlur={saveEdit}
-														autoFocus
-														className="w-full border p-1 rounded bg-white"
-													/>
-												) : (
-													<p
-														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
-														onClick={() => startEditing('client', 'client_address', crmData.client.client_address)}
-														title="Nhấn để chỉnh sửa"
-													>
-														{crmData.client.client_address || '--'}
-													</p>
-												)}
+												<label className="font-medium text-gray-500 block mb-1">Địa chỉ</label>
+												<input
+													type="text"
+													value={clientInfo.client_address}
+													onChange={(e) => handleClientInfoChange('client_address', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập địa chỉ"
+												/>
 											</div>
 
 											<div className="mb-1">
-												<p className="font-medium text-gray-500">Mã số thuế / CCCD:</p>
-												{editingField.type === 'client' && editingField.field === 'legal_id' ? (
-													<input
-														type="text"
-														value={editValue}
-														onChange={handleEditChange}
-														onKeyDown={handleKeyDown}
-														onBlur={saveEdit}
-														autoFocus
-														className="w-full border p-1 rounded bg-white"
-													/>
-												) : (
-													<p
-														className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
-														onClick={() => startEditing('client', 'legal_id', crmData.client.legal_id)}
-														title="Nhấn để chỉnh sửa"
-													>
-														{crmData.client.legal_id || '--'}
-													</p>
-												)}
+												<label className="font-medium text-gray-500 block mb-1">Mã số thuế / CCCD</label>
+												<input
+													type="text"
+													value={clientInfo.legal_id}
+													onChange={(e) => handleClientInfoChange('legal_id', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập mã số thuế / CCCD"
+												/>
+											</div>
+										</div>
+
+										{/* Contact Information Section */}
+										<div className="border rounded-lg p-4 text-start w-full h-fit">
+											<h3 className="font-semibold text-lg mb-2">Thông tin liên hệ</h3>
+
+											<div className="mb-2">
+												<label className="font-medium text-gray-500 block mb-1">Người liên hệ</label>
+												<input
+													type="text"
+													value={contactInfo.name}
+													onChange={(e) => handleContactInfoChange('name', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập tên người liên hệ"
+												/>
+											</div>
+
+											<div className="mb-2">
+												<label className="font-medium text-gray-500 block mb-1">Điện thoại</label>
+												<input
+													type="tel"
+													value={contactInfo.phone}
+													onChange={(e) => handleContactInfoChange('phone', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập số điện thoại"
+												/>
+											</div>
+
+											<div className="mb-1">
+												<label className="font-medium text-gray-500 block mb-1">Email</label>
+												<input
+													type="email"
+													value={contactInfo.email}
+													onChange={(e) => handleContactInfoChange('email', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập địa chỉ email"
+												/>
 											</div>
 										</div>
 									</div>
@@ -1815,8 +1902,17 @@ const CreateReceiptFromCRM = () => {
 																							<tbody>
 																								<tr>
 																									<td className="w-1/3 text-start p-1 font-medium min-w-32 flex justify-between items-center">
+																										{' '}
 																										<select
-																											value={field?.fname || ''}
+																											value={
+																												defaultCustomerFields.some(
+																													(item) => item.fname === field?.fname,
+																												)
+																													? field.fname
+																													: field?.other
+																													? 'Khác'
+																													: field?.fname || ''
+																											}
 																											onChange={(e) =>
 																												handleCustomerFieldChange(
 																													index,
@@ -1826,12 +1922,16 @@ const CreateReceiptFromCRM = () => {
 																												)
 																											}
 																											className={`p-1 ${
-																												field.fname === 'Khác' ? 'w-1/2 mr-1' : 'w-full'
+																												field.fname === 'Khác' ||
+																												(field?.other &&
+																													!defaultCustomerFields.some(
+																														(item) => item.fname === field?.fname,
+																													))
+																													? 'w-1/2 mr-1'
+																													: 'w-full'
 																											} border min-w-16 rounded-md bg-white text-xs`}
 																										>
-																											<option value={field.fname}>
-																												{field.fname || 'Chọn thông tin'}
-																											</option>
+																											<option value="">Chọn thông tin</option>
 																											{defaultCustomerFields.map((selectField) => (
 																												<option key={selectField.fname} value={selectField.fname}>
 																													{selectField.fname}
@@ -1839,7 +1939,11 @@ const CreateReceiptFromCRM = () => {
 																											))}
 																											<option value="Khác">Khác</option>
 																										</select>
-																										{field.fname === 'Khác' && (
+																										{(field.fname === 'Khác' ||
+																											(field?.other &&
+																												!defaultCustomerFields.some(
+																													(item) => item.fname === field?.fname,
+																												))) && (
 																											<input
 																												type="text"
 																												value={field?.other || ''}

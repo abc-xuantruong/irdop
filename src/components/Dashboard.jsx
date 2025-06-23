@@ -22,7 +22,6 @@ import {
 	FaStickyNote,
 	FaTimes,
 } from 'react-icons/fa';
-import { set } from 'date-fns';
 
 const Dashboard = () => {
 	const location = useLocation();
@@ -36,15 +35,7 @@ const Dashboard = () => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const datePickerRef = useRef(null);
 	const [showDateRangePicker, setShowDateRangePicker] = useState(false);
-
-	// Extract search term from URL query params
-	useEffect(() => {
-		const queryParams = new URLSearchParams(location.search);
-		const searchParam = queryParams.get('search');
-		if (searchParam) {
-			setSearchTerm(searchParam);
-		}
-	}, [location.search]);
+	const [showPendingFilter, setShowPendingFilter] = useState(false);
 
 	// Add state for preliminary results view
 	const [preliminaryData, setPreliminaryData] = useState({
@@ -103,7 +94,7 @@ const Dashboard = () => {
 	const receiptsPerPage = 50;
 	const [hoveredReceiptId, setHoveredReceiptId] = useState(null);
 	const [hoveredSampleId, setHoveredSampleId] = useState(null);
-	let isFetch = false;
+	const [isFetch, setIsFetch] = useState(false);
 
 	// Date input state
 	const [dateInputValues, setDateInputValues] = useState({});
@@ -781,7 +772,6 @@ const Dashboard = () => {
 			}
 		}
 	};
-
 	const handleClearSearch = () => {
 		// Reset search term
 		setSearchTerm('');
@@ -1477,6 +1467,58 @@ const Dashboard = () => {
 		}
 	};
 
+	const filterPendingReceipts = () => {
+		const filteredReceipts = currentList.filter((receipt) => {
+			if (!receipt.samples || receipt.samples.length === 0) return false;
+
+			return receipt.samples.some((sample) => {
+				// Check if tests are completed
+				const totalTests = sample?.analysis?.length || 0;
+				const completedTests =
+					sample?.analysis?.filter(
+						(order) => order?.result_value !== null && order?.result_value !== '<p></p>' && order?.result_value !== '',
+					)?.length || 0;
+
+				if (totalTests === 0 || totalTests !== completedTests) return false;
+
+				// Check if report has no non-DRAFT ppt_uid
+				const reports = sample.report || [];
+				const hasNonDraftPPT = reports.some((report) => report.ppt_uid && report.ppt_uid !== 'DRAFT');
+
+				return !hasNonDraftPPT;
+			});
+		});
+
+		setCurrentList(filteredReceipts);
+		setIsFilter(true);
+		setCurrentPage(1);
+		showToast(`Hiển thị ${filteredReceipts.length} tiếp nhận có mẫu hoàn thành chờ PPT`, 'info');
+	};
+
+	const togglePendingFilter = () => {
+		if (showPendingFilter) {
+			// Turn off pending filter
+			setShowPendingFilter(false);
+			if (!searchTerm) {
+				setCurrentList(originalList);
+				setIsFilter(false);
+			}
+		} else {
+			// Turn on pending filter
+			setShowPendingFilter(true);
+			// Turn off other filters if active
+			if (showTodayDeadlines) {
+				setShowTodayDeadlines(false);
+				setShowDateRangePicker(false);
+				setIsCalendarOpen(false);
+			}
+			if (showOverdueFilter) {
+				setShowOverdueFilter(false);
+			}
+			filterPendingReceipts();
+		}
+	};
+
 	// Add function to fetch overdue receipts
 	const fetchOverdueReceipts = async () => {
 		try {
@@ -1536,7 +1578,6 @@ const Dashboard = () => {
 			fetchOverdueReceipts();
 		}
 	};
-
 	// Handle status filter application
 	const handleStatusFilter = (statusIndex) => {
 		// If clicking the same status filter that's already active, clear the filter
@@ -1544,8 +1585,38 @@ const Dashboard = () => {
 			setStatusFilter(null);
 			// Reset to original list or maintain other filters
 			if (viewMode === 'preliminary') {
-				// For preliminary view, reload the preliminary data
-				fetchPreliminaryData();
+				// For preliminary view, restore original preliminary data without calling API
+				// Reset to the original preliminary data state
+				if (searchTerm || filterInfo.isFilterActive) {
+					// Re-apply existing filters using existing data
+					if (searchTerm) {
+						const queryParams = new URLSearchParams(location.search);
+						const searchParam = queryParams.get('search');
+						if (searchParam) {
+							// Re-search with existing term in preliminary data
+							const sourceData = [...preliminaryData[selectedPreliminaryType]];
+							const filtered = sourceData.filter(
+								(receipt) =>
+									(receipt.receipt_uid || '').includes(searchParam) ||
+									(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
+									receipt.samples?.some(
+										(sample) =>
+											(sample.sample_uid || '').includes(searchParam) ||
+											(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
+									),
+							);
+							const newPreliminaryData = {
+								...preliminaryData,
+								[selectedPreliminaryType]: filtered,
+							};
+							setPreliminaryData(newPreliminaryData);
+						}
+					}
+					showToast('Đã hủy lọc trạng thái', 'info');
+				} else {
+					// Just clear the filter, keep current data
+					showToast('Đã hủy lọc trạng thái', 'info');
+				}
 			} else {
 				// Reset to appropriate list based on other active filters
 				if (isFilter && !searchTerm) {
@@ -1625,7 +1696,6 @@ const Dashboard = () => {
 	useEffect(() => {
 		setStatusFilter(null);
 	}, [viewMode, selectedPreliminaryType]);
-
 	useEffect(() => {
 		if (searchTerm) {
 			setStatusFilter(null);
@@ -1635,27 +1705,26 @@ const Dashboard = () => {
 	useEffect(() => {
 		setCurrentTitlePage('Danh sách tiếp nhận mẫu');
 	}, [setCurrentTitlePage]);
-
-	// Add effect to reset deadline filter when search term changes
-	useEffect(() => {
-		if (searchTerm && showTodayDeadlines) {
-			setShowTodayDeadlines(false);
-		}
-	}, [searchTerm]);
 	const fetchReceipt = async () => {
+		console.log('fetchReceipt called');
+		console.trace('fetchReceipt call stack'); // This will show us where it was called from
 		try {
 			const response = await apiGet('https://black.irdop.org/khsi19me/db/get/recent_receipt');
 			if (response.status === 200) {
+				console.log('fetchReceipt success, data length:', response.data.length);
 				// Store the original fetched data
 				setOriginalList(response.data);
 				// If there's no active filter, update the current list as well
 				if (!isFilter) {
+					console.log('No filter active, updating current list too');
 					setCurrentList(response.data);
 
 					// Turn off deadline filter when refreshing data
 					if (showTodayDeadlines) {
 						setShowTodayDeadlines(false);
 					}
+				} else {
+					console.log('Filter is active, keeping current list unchanged');
 				}
 			} else {
 				Swal.fire({
@@ -1673,7 +1742,6 @@ const Dashboard = () => {
 			});
 		}
 	};
-
 	const fetchSearchResults = async (query) => {
 		try {
 			const response = await apiPost('https://black.irdop.org/khsi19me/db/search/receipt', {
@@ -1710,17 +1778,24 @@ const Dashboard = () => {
 
 		if (!isFetch) {
 			if (searchParam) {
-				// If there's a search parameter, perform search
-				fetchSearchResults(searchParam);
+				// Chỉ set searchTerm, không gọi API trực tiếp
+				setSearchTerm(searchParam);
 			} else {
 				// Otherwise fetch all receipts
 				fetchReceipt();
 			}
-			isFetch = true;
+			setIsFetch(true);
 		}
 	}, []);
 
-	// Add useEffect to handle search term changes
+	// Handle search term from URL on component mount
+	useEffect(() => {
+		const queryParams = new URLSearchParams(location.search);
+		const searchParam = queryParams.get('search');
+		if (searchParam && !searchTerm) {
+			setSearchTerm(searchParam);
+		}
+	}, [location.search, searchTerm]); // Add useEffect to handle search term changes - chỉ gọi API một lần ở đây
 	useEffect(() => {
 		if (searchTerm) {
 			fetchSearchResults(searchTerm);
@@ -1730,16 +1805,26 @@ const Dashboard = () => {
 			setIsFilter(false);
 		}
 	}, [searchTerm]);
-
 	useEffect(() => {
 		const intervalId = setInterval(() => {
 			// Always fetch data to update originalList
 			// The currentList will only be updated if no filter is active
-			fetchReceipt();
+			// Only fetch if we're not actively filtering to avoid disrupting user's filtering experience
+			if (
+				!isFilter &&
+				!searchTerm &&
+				!salesRecorderFilter &&
+				!statusFilter &&
+				!recordCodeSort &&
+				!requestNumberSort &&
+				!paymentStatusFilter
+			) {
+				fetchReceipt();
+			}
 		}, 60000); // Fetch every 60 seconds
 
-		return () => clearInterval(intervalId); // Cleanup interval on component unmount or when isFilter changes
-	}, [isFilter]); // Re-run effect when isFilter changes
+		return () => clearInterval(intervalId); // Cleanup interval on component unmount or when filtering state changes
+	}, [isFilter, searchTerm, salesRecorderFilter, statusFilter, recordCodeSort, requestNumberSort, paymentStatusFilter]); // Re-run effect when any filter state changes
 
 	const handlePageChange = (pageNumber) => {
 		setCurrentPage(pageNumber);
@@ -1751,53 +1836,71 @@ const Dashboard = () => {
 		// Don't update state if we're editing a date
 		if (editingField.field === 'deadline') return;
 		setHoveredReceiptId(receiptId);
-	};
-	// Handle sales recorder filter selection
+	}; // Handle sales recorder filter selection
 	const handleSalesRecorderFilter = (recorder) => {
+		console.log('handleSalesRecorderFilter called with:', recorder);
+		console.log('Current state - salesRecorderFilter:', salesRecorderFilter);
+		console.log('Current state - searchTerm:', searchTerm);
+		console.log('Current state - filterInfo.isFilterActive:', filterInfo.isFilterActive);
+
 		// If clicking the same filter that's already active, clear the filter
 		if (salesRecorderFilter === recorder) {
+			console.log('Clearing sales recorder filter...');
 			setSalesRecorderFilter(null);
 
-			// Reset to original list or maintain other filters
+			// Reset to original list or maintain other filters without calling API
 			if (searchTerm || filterInfo.isFilterActive) {
-				// If we have active filters, restore the filtered list
-				fetchReceipt().then(() => {
-					// Re-apply existing filters
-					if (searchTerm) {
-						const queryParams = new URLSearchParams(location.search);
-						const searchParam = queryParams.get('search');
-						if (searchParam) {
-							// Re-search with existing term
-							const filtered = originalList.filter(
-								(receipt) =>
-									(receipt.receipt_uid || '').includes(searchParam) ||
-									(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
-									receipt.samples?.some(
-										(sample) =>
-											(sample.sample_uid || '').includes(searchParam) ||
-											(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
-									),
-							);
-							setCurrentList(filtered);
-						}
-					} else if (filterInfo.isFilterActive) {
-						// Re-apply date filter
-						fetchReceiptsByDeadline(filterInfo.startDate, filterInfo.endDate);
-					} else {
-						setCurrentList(originalList);
+				console.log('Re-applying existing filters using existing data...');
+				// Re-apply existing filters using existing data
+				if (searchTerm) {
+					const queryParams = new URLSearchParams(location.search);
+					const searchParam = queryParams.get('search');
+					if (searchParam) {
+						console.log('Re-applying search filter for:', searchParam);
+						// Re-search with existing term using originalList
+						const filtered = originalList.filter(
+							(receipt) =>
+								(receipt.receipt_uid || '').includes(searchParam) ||
+								(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
+								receipt.samples?.some(
+									(sample) =>
+										(sample.sample_uid || '').includes(searchParam) ||
+										(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
+								),
+						);
+						setCurrentList(filtered);
 					}
-				});
+				} else if (filterInfo.isFilterActive) {
+					console.log('Re-applying date filter using existing data...');
+					// Re-apply date filter using existing data
+					const filtered = originalList.filter((receipt) => {
+						if (!receipt.samples || receipt.samples.length === 0) return false;
+
+						return receipt.samples.some((sample) => {
+							if (!sample.deadline) return false;
+							const deadlineDate = new Date(sample.deadline);
+							return deadlineDate >= filterInfo.startDate && deadlineDate <= filterInfo.endDate;
+						});
+					});
+					setCurrentList(filtered);
+				} else {
+					console.log('Setting to original list...');
+					setCurrentList(originalList);
+				}
 			} else {
+				console.log('No filters active, restoring original list...');
 				// No filters active, just restore original list
 				setCurrentList(originalList);
 			}
 			showToast('Đã hủy lọc người ghi nhận', 'info');
 		} else {
+			console.log('Applying new sales recorder filter:', recorder);
 			// Apply the new sales recorder filter
 			setSalesRecorderFilter(recorder);
 
 			// Filter current list based on sales recorder
 			const filteredList = [...currentList].filter((receipt) => receipt.sale_recorder === recorder);
+			console.log('Filtered list length:', filteredList.length);
 			setCurrentList(filteredList);
 
 			showToast(`Hiển thị ${filteredList.length} tiếp nhận có người ghi nhận là "${recorder}"`, 'info');
@@ -2129,14 +2232,13 @@ const Dashboard = () => {
 		}
 		return [];
 	};
-
-	// New function to check if all samples in a receipt are completed (status >= 3)
+	// New function to check if all samples in a receipt are completed (status >= 4)
 	const areAllSamplesCompleted = (receipt) => {
 		// If there are no samples, return false
 		if (!receipt.samples || receipt.samples.length === 0) return false;
 
-		// Check if all samples have status >= 3
-		return receipt.samples.every((sample) => sample.status >= 3);
+		// Check if all samples have status >= 4 (Hoàn thành)
+		return receipt.samples.every((sample) => sample.status >= 4);
 	};
 
 	// Add custom toast notification function
@@ -2173,8 +2275,7 @@ const Dashboard = () => {
 	const isAccountant = () => {
 		// Admin users have accountant permissions, accountants have permissions
 		return currentUser?.role?.staff_admin || currentUser?.role?.staff_accountant;
-	};
-	// Add function to handle note icon click
+	}; // Add function to handle note icon click
 	const handleNoteClick = (receipt) => {
 		// Open a dialog with the current note content
 		Swal.fire({
@@ -2320,42 +2421,47 @@ const Dashboard = () => {
 			visible: false,
 		});
 	};
-
 	// Modified toggleRecordCodeSort function
 	const toggleRecordCodeSort = () => {
 		// If already sorting, clear the sort
 		if (recordCodeSort !== 0) {
 			setRecordCodeSort(0);
 
-			// Reset to original list or maintain other filters
+			// Reset to original list or maintain other filters without calling API
 			if (searchTerm || filterInfo.isFilterActive) {
-				// If we have active filters, restore the filtered list
-				fetchReceipt().then(() => {
-					// Re-apply existing filters
-					if (searchTerm) {
-						const queryParams = new URLSearchParams(location.search);
-						const searchParam = queryParams.get('search');
-						if (searchParam) {
-							// Re-search with existing term
-							const filtered = originalList.filter(
-								(receipt) =>
-									(receipt.receipt_uid || '').includes(searchParam) ||
-									(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
-									receipt.samples?.some(
-										(sample) =>
-											(sample.sample_uid || '').includes(searchParam) ||
-											(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
-									),
-							);
-							setCurrentList(filtered);
-						}
-					} else if (filterInfo.isFilterActive) {
-						// Re-apply date filter
-						fetchReceiptsByDeadline(filterInfo.startDate, filterInfo.endDate);
-					} else {
-						setCurrentList(originalList);
+				// Re-apply existing filters using existing data
+				if (searchTerm) {
+					const queryParams = new URLSearchParams(location.search);
+					const searchParam = queryParams.get('search');
+					if (searchParam) {
+						// Re-search with existing term using originalList
+						const filtered = originalList.filter(
+							(receipt) =>
+								(receipt.receipt_uid || '').includes(searchParam) ||
+								(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
+								receipt.samples?.some(
+									(sample) =>
+										(sample.sample_uid || '').includes(searchParam) ||
+										(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
+								),
+						);
+						setCurrentList(filtered);
 					}
-				});
+				} else if (filterInfo.isFilterActive) {
+					// Re-apply date filter using existing data
+					const filtered = originalList.filter((receipt) => {
+						if (!receipt.samples || receipt.samples.length === 0) return false;
+
+						return receipt.samples.some((sample) => {
+							if (!sample.deadline) return false;
+							const deadlineDate = new Date(sample.deadline);
+							return deadlineDate >= filterInfo.startDate && deadlineDate <= filterInfo.endDate;
+						});
+					});
+					setCurrentList(filtered);
+				} else {
+					setCurrentList(originalList);
+				}
 			} else {
 				// No filters active, just restore original list
 				setCurrentList(originalList);
@@ -2368,42 +2474,47 @@ const Dashboard = () => {
 			setShowRequestNumberDropdown(false);
 		}
 	};
-
 	// Modified toggleRequestNumberSort function
 	const toggleRequestNumberSort = () => {
 		// If already sorting, clear the sort
 		if (requestNumberSort !== 0) {
 			setRequestNumberSort(0);
 
-			// Reset to original list or maintain other filters
+			// Reset to original list or maintain other filters without calling API
 			if (searchTerm || filterInfo.isFilterActive) {
-				// If we have active filters, restore the filtered list
-				fetchReceipt().then(() => {
-					// Re-apply existing filters
-					if (searchTerm) {
-						const queryParams = new URLSearchParams(location.search);
-						const searchParam = queryParams.get('search');
-						if (searchParam) {
-							// Re-search with existing term
-							const filtered = originalList.filter(
-								(receipt) =>
-									(receipt.receipt_uid || '').includes(searchParam) ||
-									(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
-									receipt.samples?.some(
-										(sample) =>
-											(sample.sample_uid || '').includes(searchParam) ||
-											(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
-									),
-							);
-							setCurrentList(filtered);
-						}
-					} else if (filterInfo.isFilterActive) {
-						// Re-apply date filter
-						fetchReceiptsByDeadline(filterInfo.startDate, filterInfo.endDate);
-					} else {
-						setCurrentList(originalList);
+				// Re-apply existing filters using existing data
+				if (searchTerm) {
+					const queryParams = new URLSearchParams(location.search);
+					const searchParam = queryParams.get('search');
+					if (searchParam) {
+						// Re-search with existing term using originalList
+						const filtered = originalList.filter(
+							(receipt) =>
+								(receipt.receipt_uid || '').includes(searchParam) ||
+								(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
+								receipt.samples?.some(
+									(sample) =>
+										(sample.sample_uid || '').includes(searchParam) ||
+										(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
+								),
+						);
+						setCurrentList(filtered);
 					}
-				});
+				} else if (filterInfo.isFilterActive) {
+					// Re-apply date filter using existing data
+					const filtered = originalList.filter((receipt) => {
+						if (!receipt.samples || receipt.samples.length === 0) return false;
+
+						return receipt.samples.some((sample) => {
+							if (!sample.deadline) return false;
+							const deadlineDate = new Date(sample.deadline);
+							return deadlineDate >= filterInfo.startDate && deadlineDate <= filterInfo.endDate;
+						});
+					});
+					setCurrentList(filtered);
+				} else {
+					setCurrentList(originalList);
+				}
 			} else {
 				// No filters active, just restore original list
 				setCurrentList(originalList);
@@ -2469,41 +2580,46 @@ const Dashboard = () => {
 			showToast(`Hiển thị ${sortedList.length} tiếp nhận không có SYC`, 'info');
 		}
 	};
-
 	// Add function to handle payment status filtering
 	const handlePaymentFilter = (status) => {
 		// If clicking the same filter that's already active, clear the filter
 		if (paymentStatusFilter === status) {
 			setPaymentStatusFilter(null);
-			// Reset to original list or maintain other filters
+			// Reset to original list or maintain other filters without calling API
 			if (searchTerm || filterInfo.isFilterActive) {
-				// If we have active filters, restore the filtered list
-				fetchReceipt().then(() => {
-					// Re-apply existing filters
-					if (searchTerm) {
-						const queryParams = new URLSearchParams(location.search);
-						const searchParam = queryParams.get('search');
-						if (searchParam) {
-							// Re-search with existing term
-							const filtered = originalList.filter(
-								(receipt) =>
-									(receipt.receipt_uid || '').includes(searchParam) ||
-									(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
-									receipt.samples?.some(
-										(sample) =>
-											(sample.sample_uid || '').includes(searchParam) ||
-											(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
-									),
-							);
-							setCurrentList(filtered);
-						}
-					} else if (filterInfo.isFilterActive) {
-						// Re-apply date filter
-						fetchReceiptsByDeadline(filterInfo.startDate, filterInfo.endDate);
-					} else {
-						setCurrentList(originalList);
+				// Re-apply existing filters using existing data
+				if (searchTerm) {
+					const queryParams = new URLSearchParams(location.search);
+					const searchParam = queryParams.get('search');
+					if (searchParam) {
+						// Re-search with existing term using originalList
+						const filtered = originalList.filter(
+							(receipt) =>
+								(receipt.receipt_uid || '').includes(searchParam) ||
+								(receipt.client?.client_name || '').toLowerCase().includes(searchParam.toLowerCase()) ||
+								receipt.samples?.some(
+									(sample) =>
+										(sample.sample_uid || '').includes(searchParam) ||
+										(sample.sample_name || '').toLowerCase().includes(searchParam.toLowerCase()),
+								),
+						);
+						setCurrentList(filtered);
 					}
-				});
+				} else if (filterInfo.isFilterActive) {
+					// Re-apply date filter using existing data
+					const filtered = originalList.filter((receipt) => {
+						if (!receipt.samples || receipt.samples.length === 0) return false;
+
+						return receipt.samples.some((sample) => {
+							if (!sample.deadline) return false;
+							const deadlineDate = new Date(sample.deadline);
+							return deadlineDate >= filterInfo.startDate && deadlineDate <= filterInfo.endDate;
+						});
+					});
+					setCurrentList(filtered);
+				} else {
+					setCurrentList(originalList);
+				}
 			} else {
 				// No filters active, just restore original list
 				setCurrentList(originalList);
@@ -2568,6 +2684,7 @@ const Dashboard = () => {
 
 	// Calculate if a view mode is currently active
 	const isPreliminaryActive = viewMode === 'preliminary';
+	
 	const isPaymentActive = viewMode === 'payment';
 
 	// Add this helper function if it doesn't already exist
@@ -3156,8 +3273,15 @@ const Dashboard = () => {
 					<p className="font-semibold mb-1">Ghi chú:</p>
 					<p>{tooltipState.content}</p>
 				</div>
-			)}
-			<Breadcrumb paths={[{}]} />
+			)}{' '}
+			<Breadcrumb
+				paths={[{}]}
+				source={originalList}
+				setCurrentList={setCurrentList}
+				setIsFilter={setIsFilter}
+				searchTerm={searchTerm}
+				setSearchTerm={setSearchTerm}
+			/>
 			<div className="justify-between items-center w-full mb-1 hidden md:flex">
 				<div className="px-2 mb-1 mt-1">
 					<div className="flex width-fit space-x-2">
@@ -3218,7 +3342,17 @@ const Dashboard = () => {
 						</div>{' '}
 						{/* Right side - Deadline and Overdue buttons */}
 						<div className="flex items-center space-x-2 flex-shrink-0">
-							{' '}
+							{/* Pending button */}
+							<button
+								className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+									showPendingFilter ? 'text-white bg-blue-600' : 'text-black'
+								}`}
+								onClick={togglePendingFilter}
+								title={showPendingFilter ? 'Hiển thị danh sách bình thường' : 'Hiển thị mẫu đã hoàn thành chờ PPT'}
+							>
+								<FaFileAlt size={18} />
+								<span className="font-normal">Pending</span>
+							</button>
 							<button
 								className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
 									showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black'
@@ -3955,34 +4089,69 @@ const Dashboard = () => {
 																			{receipt.ppt_send_by ? getUserName(receipt.ppt_send_by) : '--'}
 																		</td>{' '}
 																		<td
-																			className={`p-1 text-start align-top cursor-pointer hover:bg-gray-100 ${
+																			className={`p-1 text-start align-top hover:bg-gray-100 ${
 																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
 																			}`}
 																			rowSpan={samplesToShow.length}
-																			onClick={() => {
-																				setSelectedReceipt(receipt);
-																				setShowShipmentForm(true);
-																			}}
 																		>
 																			{receipt.tracking_number ? (
-																				<div className="flex flex-col items-start">
-																					<span className="text-blue-600 hover:text-blue-800 hover:underline">
-																						{receipt.tracking_number}
-																					</span>
-																					<a
-																						href={`https://viettelpost.vn/thong-tin-don-hang?peopleTracking=sender&orderNumber=${receipt.tracking_number}&orderType=1`}
-																						target="_blank"
-																						rel="noopener noreferrer"
-																						className="mt-1 text-green-600 hover:text-green-800 flex items-center text-xs"
-																						onClick={(e) => e.stopPropagation()}
-																						title="Theo dõi đơn hàng trên Viettel Post"
+																				<div className="flex flex-col items-start space-y-1">
+																					{' '}
+																					{/* Display existing tracking numbers */}
+																					{receipt.tracking_number.split(',').map((trackingNum, index) => {
+																						const trimmedNum = trackingNum.trim();
+																						if (!trimmedNum) return null;
+																						return (
+																							<div key={index} className="flex items-center space-x-2">
+																								{' '}
+																								<span
+																									className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+																									onClick={() => {
+																										setSelectedReceipt({
+																											...receipt,
+																											tracking_number: trimmedNum,
+																											original_tracking_number: receipt.tracking_number,
+																											mode: 'auto',
+																										});
+																										setShowShipmentForm(true);
+																									}}
+																								>
+																									{trimmedNum}
+																								</span>
+																								<a
+																									href={`https://viettelpost.vn/thong-tin-don-hang?peopleTracking=sender&orderNumber=${trimmedNum}&orderType=1`}
+																									target="_blank"
+																									rel="noopener noreferrer"
+																									className="text-green-600 hover:text-green-800 flex items-center text-xs"
+																									onClick={(e) => e.stopPropagation()}
+																									title="Theo dõi đơn hàng trên Viettel Post"
+																								>
+																									<FaExternalLinkAlt size={10} className="mr-1" /> Track
+																								</a>
+																							</div>
+																						);
+																					})}
+																					{/* Always show "Add shipment" button at the bottom */}
+																					<div
+																						className="cursor-pointer text-blue-600 hover:text-blue-800 text-xs border border-blue-300 rounded px-2 py-1 hover:bg-blue-50"
+																						onClick={() => {
+																							setSelectedReceipt({ ...receipt, mode: 'new' });
+																							setShowShipmentForm(true);
+																						}}
 																					>
-																						<FaExternalLinkAlt size={12} className="mr-1" />
-																						Theo dõi
-																					</a>
+																						+ Thêm vận đơn
+																					</div>
 																				</div>
 																			) : (
-																				<span className="text-gray-500 hover:text-blue-600">Tạo vận đơn</span>
+																				<div
+																					className="cursor-pointer text-gray-500 hover:text-blue-600 border border-gray-300 rounded px-2 py-1 hover:bg-gray-50"
+																					onClick={() => {
+																						setSelectedReceipt({ ...receipt, mode: 'new' });
+																						setShowShipmentForm(true);
+																					}}
+																				>
+																					Tạo vận đơn
+																				</div>
 																			)}
 																		</td>
 																	</>
@@ -4548,7 +4717,7 @@ const Dashboard = () => {
 																		)}
 																	</td>{' '}
 																	<td
-																		className="p-1 text-start align-top cursor-pointer hover:bg-gray-100"
+																		className="p-1 text-start align-top cursor-pointer hover:bg-gray-100 whitespace-nowrap"
 																		onClick={() => handleFieldClick(receipt.id, sample.id, 'status')}
 																	>
 																		{editingField.receiptId === receipt.id &&
@@ -4561,38 +4730,44 @@ const Dashboard = () => {
 																				className="p-1 border rounded-md w-full text-sm bg-white"
 																				autoFocus
 																			>
-																				<option value={0}>Chờ xử lý</option>
-																				<option value={1}>Mẫu khẩn</option>
-																				<option value={2}>Đang xử lý</option>
-																				<option value={3}>Hoàn thành</option>
-																				<option value={4}>Hủy bỏ</option>
+																				<option value={0}>Đang chờ</option>
+																				<option value={1}>Khẩn</option>
+																				<option value={2}>Đang thực hiện</option>
+																				<option value={3}>Đủ kết quả</option>
+																				<option value={4}>Hoàn thành</option>
+																				<option value={5}>Hủy bỏ</option>
 																			</select>
 																		) : (
 																			<div className="text-sm">
+																				{' '}
 																				<span
-																					className={`px-2 py-1 rounded-full text-xs font-medium ${
-																						sample.status === 3
+																					className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+																						sample.status === 4
 																							? 'bg-green-100 text-green-800'
+																							: sample.status === 3
+																							? 'bg-emerald-100 text-emerald-800'
 																							: sample.status === 2
 																							? 'bg-blue-100 text-blue-800'
 																							: sample.status === 1
 																							? 'bg-yellow-200 text-yellow-800'
 																							: sample.status === 0
 																							? 'bg-gray-100 text-gray-800'
-																							: sample.status === 4
+																							: sample.status === 5
 																							? 'bg-red-100 text-red-800'
 																							: 'bg-gray-100 text-gray-800'
 																					}`}
 																				>
-																					{sample.status === 3
+																					{sample.status === 4
 																						? 'Hoàn thành'
+																						: sample.status === 3
+																						? 'Đủ kết quả'
 																						: sample.status === 2
-																						? 'Đang xử lý'
+																						? 'Đang thực hiện'
 																						: sample.status === 1
-																						? 'Mẫu khẩn'
+																						? 'Khẩn'
 																						: sample.status === 0
-																						? 'Chờ xử lý'
-																						: sample.status === 4
+																						? 'Đang chờ'
+																						: sample.status === 5
 																						? 'Hủy bỏ'
 																						: 'Chưa xác định'}
 																				</span>
@@ -4678,8 +4853,10 @@ const Dashboard = () => {
 						</div>
 						{/* Content with top padding to account for fixed header */}{' '}
 						<div className="max-w-[80vw] max-h-[90vh] overflow-y-auto p-0">
+							{' '}
 							<ShipmentForm
 								receipt={selectedReceipt}
+								mode={selectedReceipt?.mode || 'auto'}
 								onClose={() => {
 									setShowShipmentForm(false);
 									setSelectedReceipt(null);
@@ -4689,6 +4866,8 @@ const Dashboard = () => {
 									setCurrentList((prevList) =>
 										prevList.map((receipt) => (receipt.id === updatedReceipt.id ? updatedReceipt : receipt)),
 									);
+									// Refresh the data to get latest tracking numbers
+									fetchReceipt();
 								}}
 							/>
 						</div>

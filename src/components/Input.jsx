@@ -69,13 +69,10 @@ const TinyMceInput = ({ value, onUpdate, onKey }) => {
 						editorContainer.style.zIndex = '100';
 					}
 				});
-
 				editor.on('blur', () => {
 					const content = editor.getContent();
-					// Only call onUpdate if content is not empty
-					if (!isEmptyContent(content)) {
-						onUpdate(content);
-					}
+					// Always call onUpdate, even for empty content
+					onUpdate(content);
 				});
 
 				// Lắng nghe sự kiện keydown để cập nhật khi nhấn Enter hoặc X

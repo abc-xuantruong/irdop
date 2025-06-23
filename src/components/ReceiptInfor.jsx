@@ -16,6 +16,7 @@ import CreateReceipt from './CreateReceipt';
 import { apiGet, apiPost, apiGetBlob } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import axios from 'axios'; // Add axios import
+import EmailForm from './EmailForm';
 // Import the generateReportToHTML function
 
 const ReceiptInfor = ({ receipt }) => {
@@ -48,7 +49,7 @@ const ReceiptInfor = ({ receipt }) => {
 		{ fname: 'Số lô / LOT no.', fvalue: '' },
 		{ fname: 'Ngày sản xuất / mfg.', fvalue: '' },
 		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
-		{ fname: 'Nơi sản / mfr.', fvalue: '' },
+		{ fname: 'Nơi sản xuất / mfr.', fvalue: '' },
 	]);
 	const [checkConfirm, setCheckConfirm] = useState(false);
 	const defaultFields = sampleInformation;
@@ -77,12 +78,14 @@ const ReceiptInfor = ({ receipt }) => {
 
 	// Add state to store original values for comparison
 	const [originalValues, setOriginalValues] = useState({});
-
 	// State to track report generation progress
 	const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
 	const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
 	const [isGeneratingPublish, setIsGeneratingPublish] = useState(false);
 	const [generationProgress, setGenerationProgress] = useState(0);
+
+	// State for EmailForm visibility
+	const [isEmailFormVisible, setIsEmailFormVisible] = useState(false);
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -797,14 +800,16 @@ const ReceiptInfor = ({ receipt }) => {
 										: new Date(Date.now() + (analysis?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0)),
 									protocol_code: analysis.protocol_code,
 									result_unit: analysis.result_unit || '',
-									result_value: '', // Don't copy result values
 									protocol_source: analysis.protocol_source,
 									matrix: newSample.matrix || analysis.matrix,
 									field: analysis.field,
 									created_by_uid: currentUser.identity_uid,
 									modified_by_uid: currentUser.identity_uid,
 								};
-
+								// Add result_value if it exists and is not null, empty string, or '<p><p>'
+								if (analysis.result_value && analysis.result_value !== '' && analysis.result_value !== '<p><p>') {
+									analysisData.result_value = analysis.result_value;
+								}
 								// Remove keys with empty string values
 								return Object.fromEntries(Object.entries(analysisData).filter(([key, value]) => value !== ''));
 							});
@@ -1958,7 +1963,7 @@ const ReceiptInfor = ({ receipt }) => {
 			};
 
 			// Call the API
-			const response = await axios.post('http://127.0.0.1:1880/html_to_pdf', requestBody, {
+			const response = await axios.post('https://black.irdop.org/khsi19me/convert/report_html', requestBody, {
 				headers: {
 					'Content-Type': 'application/json',
 					Accept: '*/*',
@@ -2042,7 +2047,7 @@ const ReceiptInfor = ({ receipt }) => {
 			};
 
 			// Call the API
-			const response = await axios.post('http://127.0.0.1:1880/html_to_pdf', requestBody, {
+			const response = await axios.post('https://black.irdop.org/khsi19me/convert/report_html', requestBody, {
 				headers: {
 					'Content-Type': 'application/json',
 					Accept: '*/*',
@@ -2125,7 +2130,7 @@ const ReceiptInfor = ({ receipt }) => {
 			};
 
 			// Use apiPost instead of axios directly or form submission
-			const response = await axios.post('http://127.0.0.1:1880/html_to_pdf', requestBody, {
+			const response = await axios.post('https://black.irdop.org/khsi19me/convert/report_html', requestBody, {
 				headers: {
 					'Content-Type': 'application/json',
 				},
@@ -2386,8 +2391,7 @@ const ReceiptInfor = ({ receipt }) => {
 				.colored-toast .swal2-html-container {
 					color: white;
 				}
-			`}</style>
-
+			`}</style>{' '}
 			<Breadcrumb
 				paths={[
 					{ name: 'Danh sách', link: '/' },
@@ -2396,6 +2400,7 @@ const ReceiptInfor = ({ receipt }) => {
 						link: `/dashboard/receipt?receipt_uid=${currentReceipt?.receipt_uid}`,
 					},
 				]}
+				showSearch={true}
 			/>
 			{/* Only show action buttons for non-technicians */}
 			{!isTechnician() && (
@@ -2409,7 +2414,7 @@ const ReceiptInfor = ({ receipt }) => {
 							<div className="flex items-center ">
 								{'Excel'} <PiDownloadSimpleBold size={20} className="ml-1" />
 							</div>
-						</button>
+						</button>{' '}
 						<button
 							className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20 ml-2"
 							onClick={() =>
@@ -2420,7 +2425,14 @@ const ReceiptInfor = ({ receipt }) => {
 								{'PRINT'} <FaTag size={20} className="ml-1" />
 							</div>
 						</button>
-
+						<button
+							className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20 ml-2"
+							onClick={() => setIsEmailFormVisible(true)}
+						>
+							<div className="flex items-center ">
+								{'Email'} <MdOutlineContactPhone size={20} className="ml-1" />
+							</div>
+						</button>
 						<CreateReceipt receipt={currentReceipt} setUpdatedReceipt={setCurrentReceipt} />
 						<button
 							className="bg-background border-gray-300 text-red-500 font-medium py-0 px-2 rounded-lg w-20"
@@ -3041,13 +3053,15 @@ const ReceiptInfor = ({ receipt }) => {
 					)}
 				</div>
 			</div>
-			{/* Only show payment confirmation and delete confirmation dialogs for non-technicians */}
+			{/* Only show payment confirmation and delete confirmation dialogs for non-technicians */}{' '}
 			{!isTechnician() && isPaymentConfirmVisible && renderPayStatusConfirm()}
 			{isDeleteConfirmVisible &&
 				renderDeleteConfirm(
 					'Bạn có chắc chắn muốn xóa mục này?',
 					deleteType === 'sample' ? handleDeleteSampleConfirmAction : handleDeleteAnalysisConfirmAction,
 				)}
+			{/* EmailForm */}
+			<EmailForm receipt={currentReceipt} isVisible={isEmailFormVisible} onClose={() => setIsEmailFormVisible(false)} />
 		</div>
 	);
 };

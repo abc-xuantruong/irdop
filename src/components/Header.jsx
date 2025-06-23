@@ -68,11 +68,19 @@ const Header = () => {
 		// Close dropdown after the actions
 		setDropdownOpen(false);
 	};
-
 	// Function to navigate and close dropdown
 	const handleNavigate = (path) => {
 		navigate(path);
 		setDropdownOpen(false);
+	};
+
+	// Function to handle logo click
+	const handleLogoClick = () => {
+		if (currentPath === '/' || currentPath === '/dashboard') {
+			window.location.reload();
+		} else {
+			navigate('/');
+		}
 	};
 
 	// Truncate identity name for display if needed
@@ -89,9 +97,10 @@ const Header = () => {
 
 	return (
 		<div className="w-screen bg-white border-b shadow flex justify-center items-center relative z-50">
+			{' '}
 			<div className="flex justify-between items-center w-full 2xl:max-w-screen-2xl xl:max-w-screen-xl lg:max-w-screen-lg md:max-w-screen-md sm:max-w-screen-sm  max-w-sm ">
 				<div className="text-2xl font-bold">
-					<img src={logo} alt="Logo" className="h-14 py-2 cursor-pointer " onClick={() => navigate('/')} />
+					<img src={logo} alt="Logo" className="h-14 py-2 cursor-pointer " onClick={handleLogoClick} />
 				</div>
 				{/* Desktop Navigation - Hidden on mobile */}
 				<div className="md:flex items-center hidden">

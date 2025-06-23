@@ -1,32 +1,72 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { MdArrowRight } from 'react-icons/md';
 
 import FilterBar from './FilterBar';
 
-const Breadcrumb = ({ paths, source, setCurrentList, setIsFilter, sample_uids }) => {
+const Breadcrumb = ({
+	paths,
+	source,
+	setCurrentList,
+	setIsFilter,
+	sample_uids,
+	searchTerm,
+	setSearchTerm,
+	showSearch = false,
+}) => {
 	const { currentTitlePage } = useContext(GlobalContext);
-	const [searchTerm, setSearchTerm] = useState('');
+	const [tempSearchValue, setTempSearchValue] = useState('');
 	const location = useLocation();
 	const navigate = useNavigate();
 	const isDashboard = location.pathname.includes('dashboard') || location.pathname === '/';
+	const isMainDashboard =
+		location.pathname === '/' || location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard?');
+	const shouldShowSearch = showSearch || isMainDashboard;
+
+	// Sync tempSearchValue with searchTerm when searchTerm changes from outside
+	useEffect(() => {
+		setTempSearchValue(searchTerm || '');
+	}, [searchTerm]);
+
 	return (
 		<nav className="flex flex-col w-lvw 2xl:max-w-screen-2xl xl:max-w-screen-xl lg:max-w-screen-lg md:max-w-screen-md sm:max-w-screen-sm max-w-sm mb-4 font-semibold py-4 border-b-2">
 			<div className="flex flex-wrap items-center justify-between gap-4 mb-2">
-				<h1 className="text-2xl md:text-3xl font-bold text-primary text-start">{currentTitlePage}</h1>
-				{/* Search input - only visible on dashboard/home page */}
-				{isDashboard && (
+				<h1 className="text-2xl md:text-3xl font-bold text-primary text-start">{currentTitlePage}</h1>{' '}
+				{/* Search input - visible on dashboard or when showSearch is true */}
+				{shouldShowSearch && (
 					<div className="w-full md:w-full md:max-w-[400px] xl:max-w-xl bg-none">
-						<FilterBar
-							source={source || []} // Pass the original list to FilterBar
-							setCurrentList={setCurrentList}
-							typeSearch="receipt"
-							setIsFilter={setIsFilter} // Pass the setIsFilter function
-							hide={['sort', 'filter']} // Conditionally hide search
+						<input
+							type="text"
+							value={tempSearchValue}
+							onChange={(e) => setTempSearchValue(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === 'Enter') {
+									e.preventDefault();
+									// Trigger search when Enter is pressed
+									const trimmedValue = e.target.value.trim();
+									if (trimmedValue) {
+										// If we're on dashboard and have setSearchTerm, update the search term
+										if (isMainDashboard && setSearchTerm) {
+											setSearchTerm(trimmedValue);
+										}
+										// Always navigate to dashboard with search parameter
+										navigate(`/dashboard?search=${encodeURIComponent(trimmedValue)}`);
+									} else {
+										// Clear search parameter
+										if (isMainDashboard && setSearchTerm) {
+											setSearchTerm('');
+										}
+										// Go to dashboard without search parameter
+										navigate('/dashboard');
+									}
+								}
+							}}
+							placeholder="Tìm kiếm..."
+							className="w-full p-1.5 border border-gray-300 rounded-md bg-white"
 						/>
 					</div>
-				)}{' '}
+				)}
 			</div>
 			{paths && paths.length > 0 && paths.some((path) => path && path.name) && (
 				<div className="md:flex items-start flex-wrap justify-between">

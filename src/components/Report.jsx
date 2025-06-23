@@ -625,16 +625,14 @@ export default function MultiPageEditor() {
 		const clientUid = clientData?.client_uid || '';
 		const clientName = clientData?.client_name || '';
 		const clientAddress = clientData?.client_address || '';
-
 		return `
 <div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-    <div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
-	    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: left;">Nơi / người gửi mẫu / Customer information</p>
-			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right; color: black; text-decoration: none;">${clientUid}</p>
-        </div>		
+    <div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">	    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: left; font-weight: 300;">Nơi / người gửi mẫu / Customer information</p>
+			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right; color: black; text-decoration: none; font-weight: 300;">${clientUid}</p>
+        </div>
 		<div style="display: flex; flex-direction: column; gap: 2px; height: fit-content;">
-			<p style="font-weight: bold; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;">${clientName}</p>
+			<p style="font-weight: 760; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;">${clientName || '--'}</p>
 			<p style="margin: 0; font-size: 12px; text-align: left; line-height: 1.2;">${clientAddress || '--'}</p>
 		</div>
 	</div>
@@ -681,12 +679,11 @@ export default function MultiPageEditor() {
 
 		return `
 <div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
-    <div style="padding: 5pt 8pt;; flex-grow: 1; position: relative;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-            <p style="font-size: 11px; line-height: 1.2; margin: 0; text-align: left;">
+    <div style="padding: 5pt 8pt;; flex-grow: 1; position: relative;">        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+            <p style="font-size: 11px; line-height: 1.2; margin: 0; text-align: left; font-weight: 300;">
                 Thông tin mẫu thử / Sample information:
             </p>
-            <p style="font-size: 11px; line-height: 1.4; margin: 0; text-align: left;">
+            <p style="font-size: 11px; line-height: 1.4; margin: 0; text-align: left; font-weight: 300;">
                 ${sampleId}
             </p>
         </div>
@@ -903,17 +900,35 @@ export default function MultiPageEditor() {
 					const parameterName = item.parameter_name || '--';
 					const result = item.result_value || '--';
 					const unit = item.result_unit || '--';
-					const protocol = item.protocol_code || '--';
 
-					// Split accreditation by comma, trim whitespace, and combine with protocol_source
+					// Create protocol display with protocol_source, accreditation, and protocol_code
+					const protocolSource = item.protocol_source || '';
 					const accreditationParts = item.accreditation
 						? item.accreditation
 								.split(',')
 								.map((part) => part.trim())
 								.filter((part) => part.length > 0)
 						: [];
-					const protocolSource = item.protocol_source || '';
-					const scope = protocolSource + (accreditationParts.length > 0 ? ' ' + accreditationParts.join(' ') : '');
+					const protocolCode = item.protocol_code || '';
+					// Format: protocol_source<space>accreditation<2 spaces>protocol_code
+					let protocol = '';
+					if (protocolSource) {
+						protocol += protocolSource;
+					}
+					if (accreditationParts.length > 0) {
+						protocol += (protocol ? ' ' : '') + accreditationParts.join(' ');
+					}
+					if (protocolCode) {
+						// Always add 2 non-breaking spaces before protocol_code if there's any content before it
+						if (protocol.trim()) {
+							protocol += '&nbsp;&nbsp;' + protocolCode;
+						} else {
+							protocol = protocolCode;
+						}
+					}
+					if (!protocol) {
+						protocol = '--';
+					}
 
 					// Reference cell handling with improved logic
 					let referenceCell = '';
@@ -941,8 +956,7 @@ export default function MultiPageEditor() {
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${parameterName}</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${result}</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${unit}</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${protocol}</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${scope}</td>${referenceCell}
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; white-space: pre; text-wrap: auto;">${protocol}</td>${referenceCell}
 				</tr>`;
 				})
 				.join('');
@@ -951,15 +965,13 @@ export default function MultiPageEditor() {
 			const referenceCell = showReference
 				? `<td class="reference-cell" style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>`
 				: '';
-
 			analysisRows = `
 				<tr id="analysis-row-0" class="table-row" data-row-index="0">
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; ">1</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">--</td>${referenceCell}
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; white-space: pre; text-wrap: auto;">--</td>${referenceCell}
 				</tr>`;
 		}
 
@@ -982,9 +994,6 @@ export default function MultiPageEditor() {
                     <strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
                 </th>                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box;">
                     <strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
-                </th>
-                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box; max-width: 115px; ">
-                    <strong>Phạm vi công nhận</strong> <br> <span style="font-size: 12px; color: #444444;">/ Accreditation scope</span>
                 </th>${referenceHeader}
             </tr>
         </thead>
@@ -1064,8 +1073,8 @@ export default function MultiPageEditor() {
 				KPH: Không phát hiện / Not detected.<br>
 				LOD: Giới hạn phát hiện / Limit of detection.<br>
 				LOQ: Giới hạn định lượng / Limit of quantification.<br>
-				IRDOP: Chỉ tiêu được thực hiện tại IRDOP / Parameters conducted by IRDOP.<br>
-				EX: Chỉ tiêu được thực hiện bởi nhà thầu phụ / Parameters conducted by subcontractors.<br>
+				IRDOP: Chỉ tiêu được thực hiện tại IRDOP / Analyses conducted by IRDOP.<br>
+				EX: Chỉ tiêu được thực hiện bởi nhà thầu phụ / Analyses conducted by subcontractors.<br>
 				VS: Chỉ tiêu được công nhận ISO/IEC 17025:2017 / Accredited per ISO/IEC 17025:2017.<br>
 				TĐC: Chỉ tiêu được công nhận đánh giá sự phù hợp theo NĐ 107/2016/NĐ-CP / Accredited per Decree 107/2016/ND-CP.<br>
 				Thông tin mẫu thử do khách hàng cung cấp / Sample information provided by the customer.<br>
@@ -1081,11 +1090,8 @@ export default function MultiPageEditor() {
 		<div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
 		
 			<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;width: 100%;">
-				<strong contenteditable="true" 
-						class="signature signer_fist_title print-text-paragraph"
-						style="font-size:12px; line-height:1.2; margin:0;">
-					TRƯỞNG PHÒNG PHÂN TÍCH - KIỂM NGHIỆM <br> / Laborator Manager
-				</strong>
+                <strong style="font-size:12px; line-height:1.2; margin:0;">PHÒNG PHÂN TÍCH KIỂM NGHIỆM/<br>KIỂM SOÁT CHẤT LƯỢNG / Laboratory Manager</strong>
+				
 				<p contenteditable="true" 
 				   class="signature signer_first_name print-text-paragraph" 
 				   style="font-size:12px; margin:0; line-height:1.4;">
@@ -1115,7 +1121,7 @@ export default function MultiPageEditor() {
 	// Notification for two-page layout
 	const nextPageNotification = `
 <div style="padding: 10px 0; text-align: center; font-size: 12px; font-style: italic; color: #666;">
-    - Xem kết quả ở trang tiếp theo / See the results on the following page -
+    - Xem kết quả ở trang tiếp theo / The results are on the next page -
 </div>`;
 
 	// Update initial content with empty placeholders and comment section if needed
@@ -1126,62 +1132,55 @@ export default function MultiPageEditor() {
 
 	const [content, setContent] = useState(initialContent);
 	const [header, setHeader] = useState(`
-<div class=" content_page_header_box" id="thead" style="position:relative; height: fit-content;">
-    <div class=" " style="position:relative; display:flex;  overflow:visible;">
+<div class="content_page_header_box" id="thead" style="position:relative; height: fit-content;">
+    <div style="position:relative; display:flex; overflow:visible;">
         <div>
-            <img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg" 
-                 loading="lazy" 
-                 class="OQtYGs6LmEKlbdTnVjZ4oA" 
-                 style="width:5cm;">
+            <img src="https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png" 
+                loading="lazy" 
+                style="width:4.8cm;">
         </div>
-		<div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
-			<p class="" 
-			style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
-				Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
-			</p>
-			<p class="" 
-			style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
-				/ Institute for Research and Development of Organic Products
-			</p>
-			<span class="" 
-				style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
-						width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
-				Trưởng Phòng Phân tích - Kiểm nghiệm / Analysis and Testing Dept.
-			</span>
-		</div>
-
+        <div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
+            <p style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
+                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
+            </p>
+            <p style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
+                / Institute for Research and Development of Organic Products
+            </p>
+            <span style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
+                        width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
+                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department
+            </span>
+        </div>
     </div>
-    <div class=" " 
-         style="padding-top:6mm; position:relative; ">
+    <div style="padding-top:1mm; position:relative;">
         <div style="position:relative; text-align:left;">
-            <p contenteditable="true" class=" content-header-title" 
-               style="font-weight:700; font-size:24pt; color:#0058A3; height: 28px;">
+            <p contenteditable="true" class="content-header-title" 
+            style="font-weight:840; font-size:24pt; color:#0058A3; height: 33px;">
                 PHIẾU KẾT QUẢ THỬ NGHIỆM
             </p>
-            <p class=" content-header-title_eng" 
-               style="font-weight:700; font-size:21pt; color:#0058A3; height: 28px;">
+            <p class="content-header-title_eng" 
+            style="font-weight:830; font-size:21pt; color:#0058A3; height: 30px;">
                 / Certificate of Analysis
             </p>
-            <div class=" display-flex" 
-                 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px;; height: 28px;">
-                <span class=" std_ref-title">Xuất bản / ref.:</span>
+            <div class="display-flex" 
+                style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;">
+                <span class="std_ref-title">Xuất bản / ref.:</span>
                 <p contenteditable="true" 
-                   class="  ref_code" 
-                   style="min-width:5pt; margin: 0; margin-right: 2mm;">
+                class="ref_code" 
+                style="min-width:5pt; margin: 0; margin-right: 2mm;">
                     SƠ BỘ / DRAFT
                 </p>
-                <span class="  published_date" 
-                      style="min-width:5pt; margin: 0;">
-					  Ngày / Date: ${formatDate(new Date())}
+                <span class="published_date" 
+                    style="min-width:5pt; margin: 0;">
+                    Ngày / Date: ${new Date().toLocaleDateString('vi-VN')}
                 </span>
             </div>
         </div>
-        <div class=" vlas_icon" 
-             style="position:absolute; right:0mm; top:0.2cm; ${showVlas ? '' : 'display:none;'}">
+        <div class="vlas_icon" 
+            style="position:absolute; right:0mm; top:0cm; ${showVlas ? '' : 'display:none;'}">
             <img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png" 
-                 loading="lazy" 
-                 class="" 
-                 style="width:5.2cm;">
+                loading="lazy" 
+                style="width:4.6cm;">
         </div>
     </div>
 </div>
@@ -1191,7 +1190,7 @@ export default function MultiPageEditor() {
 <div style="flex-grow: 1; text-align: left;">
 <p style="color: #0058a3; margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</p>
 <p style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">IRDOP.ORG</p>
-<p style="opacity: 0.5; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">Form: BM06-QT010-KN / Version: 06 / Effective date: 02/06/2025</p>
+<p style="opacity: 0.5; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">Form: BM06-QT010-KN / Version: 07 / Effective date: 23/06/2025</p>
 </div>
 <div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;">
 <div style="display: flex; align-items: center; height: 14px;"><span style="font-size: 11px; margin: 0; padding: 0; line-height: 1; margin-right: 2px;">Trang / Pages:</span>
@@ -1214,68 +1213,53 @@ export default function MultiPageEditor() {
 
 	const editorRef = useRef(null);
 	const contentRef = useRef(null);
-
-	// Add font loading effect to ensure Gilroy is available
+	// Add font loading effect to ensure Nunito Sans is available
 	useEffect(() => {
 		// Create a style element for font-face declarations
 		const fontStyle = document.createElement('style');
 		fontStyle.textContent = `
-			@font-face {
-				font-family: 'Gilroy';
-				src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
+			@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+			
+			body, .editable, .header-editable, .content-editable, .footer-editable, p, td, th, div, span, strong, b {
+				font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 				font-weight: 400;
-				font-style: normal;
-				font-display: swap;
 			}
 			
-			@font-face {
-				font-family: 'Gilroy';
-				src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-				font-weight: 500;
-				font-style: normal;
-				font-display: swap;
+			strong, b, [style*="font-weight: 700"], [style*="font-weight: bold"] { 
+				font-family: 'Nunito Sans', Arial, sans-serif !important; 
+				font-weight: 700 !important; 
 			}
 			
-			@font-face {
-				font-family: 'Gilroy';
-				src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-				font-weight: 700;
-				font-style: normal;
-				font-display: swap;
+			[style*="font-weight: 800"] { 
+				font-family: 'Nunito Sans', Arial, sans-serif !important; 
+				font-weight: 800 !important; 
+			}
+					[style*="font-weight: 900"] { 
+				font-family: 'Nunito Sans', Arial, sans-serif !important; 
+				font-weight: 900 !important; 
+			}
+					/* FIXED: Custom font weights for specific elements */
+			[style*="font-weight: 300"] { 
+				font-family: 'Nunito Sans', Arial, sans-serif !important; 
+				font-weight: 300 !important; 
 			}
 			
-			body, .editable, .header-editable, .content-editable, .footer-editable {
-				font-family: 'Gilroy', sans-serif !important;
+			[style*="font-weight: 760"] { 
+				font-family: 'Nunito Sans', Arial, sans-serif !important; 
+				font-weight: 760 !important; 
+			}
+			
+			[style*="font-weight: 840"] { 
+				font-family: 'Nunito Sans', Arial, sans-serif !important; 
+				font-weight: 840 !important; 
+			}
+			
+			[style*="font-weight: 850"] { 
+				font-family: 'Nunito Sans', Arial, sans-serif !important; 
+				font-weight: 850 !important; 
 			}
 			`;
 		document.head.appendChild(fontStyle);
-
-		// Load the font files programmatically to ensure they're available
-		const fontUrls = [
-			'/public/fonts/SVN-Gilroy Regular.otf',
-			'/public/fonts/SVN-Gilroy SemiBold.otf',
-			'/public/fonts/SVN-Gilroy Bold.otf',
-		];
-
-		// Preload fonts
-		const fontPromises = fontUrls.map((url) => {
-			return new Promise((resolve, reject) => {
-				const link = document.createElement('link');
-				link.rel = 'preload';
-				link.href = url;
-				link.as = 'font';
-				link.type = 'font/otf';
-				link.crossOrigin = 'anonymous';
-				link.onload = resolve;
-				link.onerror = reject;
-				document.head.appendChild(link);
-			});
-		});
-
-		// Wait for fonts to load
-		Promise.all(fontPromises)
-			.then(() => console.log('All Gilroy fonts loaded successfully'))
-			.catch((err) => console.error('Error loading Gilroy fonts:', err));
 
 		return () => {
 			document.head.removeChild(fontStyle);
@@ -1319,32 +1303,45 @@ export default function MultiPageEditor() {
 			extended_valid_elements: 'span[style]',
 			charmap: [[8727, 'multiplication sign (∗)']],
 			content_style: `
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
+				@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+				
+				body, *[contenteditable="true"], p, td, th, div, span, strong, b {
+					font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 					font-weight: 400;
-					font-style: normal;
-					font-display: swap;
 				}
 				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-					font-weight: 500;
-					font-style: normal;
-					font-display: swap;
+				strong, b, [style*="font-weight: 700"], [style*="font-weight: bold"] { 
+					font-family: 'Nunito Sans', Arial, sans-serif !important; 
+					font-weight: 700 !important; 
 				}
 				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-					font-weight: 700;
-					font-style: normal;
-					font-display: swap;
+				[style*="font-weight: 800"] { 
+					font-family: 'Nunito Sans', Arial, sans-serif !important; 
+					font-weight: 800 !important; 
+				}
+						[style*="font-weight: 900"] { 
+					font-family: 'Nunito Sans', Arial, sans-serif !important; 
+					font-weight: 900 !important; 
+				}
+						/* FIXED: Custom font weights for specific elements */
+				[style*="font-weight: 300"] { 
+					font-family: 'Nunito Sans', Arial, sans-serif !important; 
+					font-weight: 300 !important; 
 				}
 				
-				body, *[contenteditable="true"] {
-					font-family: 'Gilroy', sans-serif !important;
+				[style*="font-weight: 760"] { 
+					font-family: 'Nunito Sans', Arial, sans-serif !important; 
+					font-weight: 760 !important; 
+				}
+				
+				[style*="font-weight: 840"] { 
+					font-family: 'Nunito Sans', Arial, sans-serif !important; 
+					font-weight: 840 !important; 
+				}
+				
+				[style*="font-weight: 850"] { 
+					font-family: 'Nunito Sans', Arial, sans-serif !important; 
+					font-weight: 850 !important; 
 				}
 				
 				${isReadOnly ? '.editable { cursor: default !important; }' : ''}
@@ -2463,34 +2460,10 @@ export default function MultiPageEditor() {
 
 		// Get paginated content
 		const paginationResult = paginateContent();
-
 		// Prepare custom font support for print window
 		const fontFaces = `
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
-					font-weight: 400;
-					font-style: normal;
-					font-display: swap;
-				}
-				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-					font-weight: 500;
-					font-style: normal;
-					font-display: swap;
-				}
-				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-					font-weight: 700;
-					font-style: normal;
-					font-display: swap;
-				}
+				/* Using Google Fonts - no need for local font faces */
 			`;
-
 		// Write the print document with proper CSS for printing
 		printWindow.document.write(`
 				<!DOCTYPE html>
@@ -2498,19 +2471,81 @@ export default function MultiPageEditor() {
 				<head>
 					<title>${documentTitle}</title>
 					<meta charset="utf-8">
+					<link rel="preconnect" href="https://fonts.googleapis.com">
+					<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+					<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet">
 					<style>
 						${fontFaces}
+						
+						/* FIXED: Proper font family declarations with Nunito Sans */
+						html, body { 
+							margin: 0; 
+							padding: 0; 
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+							font-weight: 400;
+							font-optical-sizing: auto;
+							background-color: #f0f0f0;
+						}
+						
+						p, td, th, div, span, strong, b { 
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+						}
+						
+						/* Font weight classes for Nunito Sans */
+						.nunito-200 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 200; font-style: normal; }
+						.nunito-300 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 300; font-style: normal; }
+						.nunito-400 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 400; font-style: normal; }
+						.nunito-500 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 500; font-style: normal; }
+						.nunito-600 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 600; font-style: normal; }
+						.nunito-700 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 700; font-style: normal; }
+						.nunito-800 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 800; font-style: normal; }
+						.nunito-900 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 900; font-style: normal; }
+						
+						/* FIXED: Ensure bold elements use proper font weight */
+						strong, b, [style*="font-weight: 700"], [style*="font-weight: bold"] { 
+							font-family: 'Nunito Sans', Arial, sans-serif !important; 
+							font-weight: 700 !important; 
+						}
+								/* FIXED: Extra bold elements */
+						[style*="font-weight: 800"] { 
+							font-family: 'Nunito Sans', Arial, sans-serif !important; 
+							font-weight: 800 !important; 
+						}
+						
+						/* FIXED: Ultra bold elements */
+						[style*="font-weight: 900"] { 
+							font-family: 'Nunito Sans', Arial, sans-serif !important; 
+							font-weight: 900 !important;						}
+						
+						/* FIXED: Custom font weights for specific elements */
+						[style*="font-weight: 300"] { 
+							font-family: 'Nunito Sans', Arial, sans-serif !important; 
+							font-weight: 300 !important; 
+						}
+						
+						[style*="font-weight: 760"] { 
+							font-family: 'Nunito Sans', Arial, sans-serif !important; 
+							font-weight: 760 !important; 
+						}
+						
+						[style*="font-weight: 840"] { 
+							font-family: 'Nunito Sans', Arial, sans-serif !important; 
+							font-weight: 840 !important; 
+						}
+						
+						[style*="font-weight: 850"] { 
+							font-family: 'Nunito Sans', Arial, sans-serif !important; 
+							font-weight: 850 !important; 
+						}
+						
+						/* Normal weight elements */
+						p, td, th, div, span { 
+							font-weight: 400; 
+						}
 						
 						@page {
 							size: A4;
 							margin: 0; /* Remove default page margins, we'll handle with padding */
-						}
-						
-						html, body {
-							margin: 0;
-							padding: 0;
-							font-family: 'Gilroy', sans-serif !important;
-							background-color: #f0f0f0;
 						}
 						
 						/* Style for anchor tags in printing - no underline, black text, not bold */
@@ -2524,7 +2559,7 @@ export default function MultiPageEditor() {
 							width: 794px; /* Exact A4 width at 96 DPI (210mm = 8.27in = 794px) */
 							margin: 20px auto;
 							background-color: white;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 						}
 						
 						.page {
@@ -2535,25 +2570,23 @@ export default function MultiPageEditor() {
 							page-break-after: always;
 							background-color: white;
 							border-bottom: 1px dashed #ccc;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							/* Apply margins as padding */
 							padding: ${A4.topMargin * 3.78}px ${A4.sideMargin * 3.78}px ${A4.bottomMargin * 3.78}px ${A4.sideMargin * 3.78}px;
 							overflow: hidden;
 						}
-				
 						/* Allow VLAS icon to overflow the container */
 						.vlas_icon {
 							overflow: visible !important;
 							z-index: 10;
 						}
 						.vlas_icon img {
-							transform: translateX(-5mm);
+							/* Removed transform: translateX(-5mm) to align flush with right edge */
 						}
-						
-						/* Additional styles for table rows to preserve height */
+								/* Additional styles for table rows to preserve height */
 						table {
 							border-collapse: collapse;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							table-layout: fixed; /* Helps with consistent row heights */
 							width: 100%;
 						}
@@ -2573,13 +2606,12 @@ export default function MultiPageEditor() {
 							box-sizing: border-box !important; /* Ensure padding is included in height */
 							font-size: 12px !important; /* Standard font size for all table cells */
 						}
-						
-						/* Fix paragraph styling in table cells */
+								/* Fix paragraph styling in table cells */
 						table td p, table th p {
 							margin: 0 !important;
 							padding: 0 !important;
 							line-height: 1.2 !important;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							font-size: 12px !important;
 						}
 						
@@ -2592,19 +2624,18 @@ export default function MultiPageEditor() {
 							width: calc(100% - ${2 * A4.sideMargin * 3.78}px);
 							box-sizing: border-box;
 							padding-bottom: ${A4.headerSpacing * 3.78}px !important;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							overflow: visible !important; /* Allow header content to overflow */
 						}
-						
-						/* Font sizes for header elements */
+								/* Font sizes for header elements */
 						.header .content-header-title {
 							font-size: 24pt !important;
-							font-weight: 700 !important;
+							font-weight: 840 !important;
 						}
 						
 						.header .content-header-title_eng {
 							font-size: 21pt !important;
-							font-weight: 700 !important;
+							font-weight: 850 !important;
 						}
 						
 						.header .std_ref-title, 
@@ -2618,8 +2649,7 @@ export default function MultiPageEditor() {
 							margin-bottom: 0 !important;
 							overflow: visible !important;
 						}
-						
-						/* Content area positioned with space for header and footer */
+								/* Content area positioned with space for header and footer */
 						.content {
 							position: absolute;
 							top: calc(${A4.topMargin * 3.78}px + ${paginationResult.headerHeightPx}px + ${A4.headerSpacing * 3.78}px);
@@ -2628,7 +2658,7 @@ export default function MultiPageEditor() {
 							width: calc(100% - ${2 * A4.sideMargin * 3.78}px);
 							box-sizing: border-box;
 							overflow: visible;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							/* Height is automatically calculated based on content */
 						}
 						
@@ -2638,7 +2668,7 @@ export default function MultiPageEditor() {
 							padding-bottom: 0 !important;
 							margin-top: 0 !important;
 							margin-bottom: 0 !important;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 						}
 						
 						/* Customer section typography */
@@ -2704,10 +2734,9 @@ export default function MultiPageEditor() {
 							bottom: ${A4.bottomMargin * 3.78}px;
 							left: ${A4.sideMargin * 3.78}px;
 							right: ${A4.sideMargin * 3.78}px;
-							width: calc(100% - ${2 * A4.sideMargin * 3.78}px);
-							box-sizing: border-box;
+							width: calc(100% - ${2 * A4.sideMargin * 3.78}px);							box-sizing: border-box;
 							padding-top: 0 !important;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 						}
 						
 						/* Footer typography */
@@ -2729,24 +2758,22 @@ export default function MultiPageEditor() {
 						.footer div > div span {
 							font-size: 11px !important;
 						}
-						
-						p, div, span, td, th {
+								p, div, span, td, th {
 							margin-top: 0;
 							margin-bottom: 0;
 							line-height: inherit;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 						}
 						
 						img {
 							max-width: 100%;
 						}
 						
-						@media print {
-							body {
+						@media print {							body {
 								background-color: white;
 								-webkit-print-color-adjust: exact;
 								print-color-adjust: exact;
-								font-family: 'Gilroy', sans-serif !important;
+								font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							}
 							
 							/* Ensure anchor styling is maintained in print */
@@ -2835,12 +2862,12 @@ export default function MultiPageEditor() {
 						}, 1000);
 					});
 
-					// Add event listener to close window after printing
-					window.addEventListener('afterprint', function() {
-						setTimeout(function() {
-							window.close();
-						}, 500);
-					});
+					// // Add event listener to close window after printing
+					// window.addEventListener('afterprint', function() {
+					// 	setTimeout(function() {
+					// 		window.close();
+					// 	}, 500);
+					// });
 				</script>
 				</body>
 				</html>
@@ -3052,7 +3079,7 @@ export default function MultiPageEditor() {
 			topMargin: 15,
 			bottomMargin: 8,
 			sideMargin: 10,
-			headerSpacing: 7,
+			headerSpacing: 5,
 			footerSpacing: 2,
 		};
 
@@ -3467,29 +3494,7 @@ export default function MultiPageEditor() {
 			// Apply initial line heights to the editor for WYSIWYG experience
 			const editorStyleElement = document.createElement('style');
 			editorStyleElement.textContent = `
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
-					font-weight: 400;
-					font-style: normal;
-					font-display: swap;
-				}
-				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-					font-weight: 500;
-					font-style: normal;
-					font-display: swap;
-					}
-				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-					font-weight: 700;
-					font-style: normal;
-					font-display: swap;
-				}
+				@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
 				
 				p {
 					overflow-wrap: break-word !important;
@@ -3503,7 +3508,7 @@ export default function MultiPageEditor() {
 					line-height: inherit;
 					margin-top: 0;
 					margin-bottom: 0;
-					font-family: 'Gilroy', sans-serif !important;
+					font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 					overflow-wrap: break-word !important;
 					word-wrap: break-word !important;
 				}
@@ -3512,7 +3517,7 @@ export default function MultiPageEditor() {
 				.content-editable table {
 					border-collapse: collapse;
 					table-layout: fixed;
-					font-family: 'Gilroy', sans-serif !important;
+					font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 				}
 				
 				/* Table cell paragraph styling in editor */
@@ -3526,7 +3531,7 @@ export default function MultiPageEditor() {
 				}
 
 				.editable, .header-editable, .content-editable, .footer-editable {
-					font-family: 'Gilroy', sans-serif !important;
+					font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 				}
 			`;
 			document.head.appendChild(editorStyleElement);
@@ -3668,10 +3673,9 @@ export default function MultiPageEditor() {
 			justify-content: center;
 			align-items: center;
 			pointer-events: none;
-			z-index: 10;
-			opacity: 0.15;
+			z-index: 10;			opacity: 0.15;
 			transform: rotate(-45deg);
-			font-family: 'Gilroy', sans-serif;
+			font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 		">
 			<div style="
 				font-size: 90px;
@@ -3801,7 +3805,6 @@ export default function MultiPageEditor() {
 					</div>
 				</div>
 			</div>
-
 			{/* </div>
 			</div>
 ft chat bubble for Ghi chú/Note */}
@@ -3813,7 +3816,6 @@ ft chat bubble for Ghi chú/Note */}
 					<div className="absolute -right-2 top-5 w-0 h-0 border-t-8 border-b-8 border-l-8 border-transparent border-l-blue-50"></div>
 				</div>
 			)}
-
 			{additionalRequest && (
 				<div className="fixed right-4 text-start top-96 w-56 max-h-60 overflow-y-auto bg-green-50 rounded-lg border border-green-200 shadow-md p-3 z-10">
 					<div className="font-bold text-blue-700 text-sm mb-2">Yêu cầu / Requirements:</div>
@@ -3822,13 +3824,13 @@ ft chat bubble for Ghi chú/Note */}
 					<div className="absolute -left-2 top-5 w-0 h-0 border-t-8 border-b-8 border-r-8 border-transparent border-r-green-50"></div>
 				</div>
 			)}
-
 			<div className="flex flex-col gap-4 overflow-x-auto p-4 bg-white shadow-lg rounded-lg">
 				<div className="flex justify-center">
 					<div
 						className="bg-white flex flex-col"
 						style={{
-							fontFamily: 'Gilroy, sans-serif',
+							fontFamily:
+								"'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 							width: '718px',
 							margin: '0 auto',
 						}}
@@ -3838,7 +3840,11 @@ ft chat bubble for Ghi chú/Note */}
 							className={`header-editable editable text-center font-bold text-lg border-b px-0 pt-8 pb-4 ${
 								isReadOnly ? 'read-only' : ''
 							}`}
-							style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
+							style={{
+								fontFamily:
+									"'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+								width: '100%',
+							}}
 							dangerouslySetInnerHTML={{
 								__html: header.replace(/SƠ BỘ \/ DRAFT/g, pptUid || 'SƠ BỘ / DRAFT'),
 							}}
@@ -3847,43 +3853,28 @@ ft chat bubble for Ghi chú/Note */}
 							id="content-edit"
 							ref={contentRef}
 							className={`content-editable editable border-0 px-0 py-2 text-base my-4 ${isReadOnly ? 'read-only' : ''}`}
-							style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
+							style={{
+								fontFamily:
+									"'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+								width: '100%',
+							}}
 							dangerouslySetInnerHTML={{ __html: content }}
 						/>
 						<div
 							id="footer-edit"
 							className={`footer-editable editable px-0 pb-8 pt-4 ${isReadOnly ? 'read-only' : ''}`}
-							style={{ fontFamily: 'Gilroy, sans-serif', width: '100%' }}
+							style={{
+								fontFamily:
+									"'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+								width: '100%',
+							}}
 							dangerouslySetInnerHTML={{ __html: footer }}
 						/>
 					</div>
 				</div>
-			</div>
-
+			</div>{' '}
 			<style jsx>{`
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
-					font-weight: 400;
-					font-style: normal;
-					font-display: swap;
-				}
-
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-					font-weight: 500;
-					font-style: normal;
-					font-display: swap;
-				}
-
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-					font-weight: 700;
-					font-style: normal;
-					font-display: swap;
-				}
+				@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
 
 				.read-only {
 					cursor: default !important;
@@ -3892,12 +3883,14 @@ ft chat bubble for Ghi chú/Note */}
 				@media print {
 					body * {
 						visibility: hidden;
-						font-family: 'Gilroy', sans-serif !important;
+						font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+							sans-serif !important;
 					}
 					.print-content,
 					.print-content * {
 						visibility: visible;
-						font-family: 'Gilroy', sans-serif !important;
+						font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+							sans-serif !important;
 					}
 					.print-content {
 						position: absolute;
