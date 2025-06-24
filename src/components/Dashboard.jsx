@@ -772,29 +772,39 @@ const Dashboard = () => {
 			}
 		}
 	};
-	const handleClearSearch = () => {
+	const [isClearing, setIsClearing] = useState(false);
+	const searchExecutedRef = useRef(false);
+	const handleClearSearch = async () => {
+		// Set flag to prevent useEffects from interfering
+		setIsClearing(true);
+		// Reset search ref
+		searchExecutedRef.current = false;
+
 		// Reset search term
 		setSearchTerm('');
 		// Reset all filters and states
 		setIsFilter(false);
 		setShowTodayDeadlines(false);
 		setShowOverdueFilter(false);
-		setViewMode('normal');
+		// Keep current viewMode instead of resetting to 'normal'
 
 		// Always navigate to the clean path without query parameters
 		// This will remove any search parameters from the URL
 		navigate(location.pathname);
 
-		// Fetch fresh data only once
-		fetchReceipt().then(() => {
-			// Fetch a new set of receipts and update the UI
-			apiGet('https://black.irdop.org/khsi19me/db/get/recent_receipt').then((response) => {
-				if (response.status === 200) {
-					setOriginalList(response.data);
-					setCurrentList(response.data);
-				}
-			});
-		});
+		// Fetch fresh data and ensure both lists are updated
+		try {
+			const response = await apiGet('https://black.irdop.org/khsi19me/db/get/recent_receipt');
+			if (response.status === 200) {
+				setOriginalList(response.data);
+				setCurrentList(response.data);
+			}
+		} catch (error) {
+			console.error('Error fetching receipts:', error);
+		} finally {
+			// Reset flag after clearing is complete
+			setIsClearing(false);
+		}
 	};
 
 	// Split date handling into two functions:
@@ -1777,34 +1787,49 @@ const Dashboard = () => {
 		const searchParam = queryParams.get('search');
 
 		if (!isFetch) {
-			if (searchParam) {
-				// Chỉ set searchTerm, không gọi API trực tiếp
-				setSearchTerm(searchParam);
-			} else {
-				// Otherwise fetch all receipts
+			if (!searchParam) {
+				// Only fetch all receipts if there's no search param
+				// If there is a search param, let the other useEffect handle it
 				fetchReceipt();
 			}
 			setIsFetch(true);
 		}
-	}, []);
-
-	// Handle search term from URL on component mount
+	}, []); // Handle search term from URL on component mount and URL changes
 	useEffect(() => {
+		// Don't run if we're in the middle of clearing search
+		if (isClearing) return;
+
 		const queryParams = new URLSearchParams(location.search);
 		const searchParam = queryParams.get('search');
-		if (searchParam && !searchTerm) {
+
+		// Only set searchTerm if it's different from current value
+		if (searchParam && searchParam !== searchTerm) {
 			setSearchTerm(searchParam);
+		} else if (!searchParam && searchTerm) {
+			// Clear searchTerm if no search param in URL but we have searchTerm
+			setSearchTerm('');
 		}
-	}, [location.search, searchTerm]); // Add useEffect to handle search term changes - chỉ gọi API một lần ở đây
+	}, [location.search, isClearing]); // Add useEffect to handle search term changes - chỉ gọi API một lần ở đây
 	useEffect(() => {
+		// Don't run if we're in the middle of clearing search
+		if (isClearing) return;
+
 		if (searchTerm) {
-			fetchSearchResults(searchTerm);
+			// Only call API if we haven't already searched for this term
+			if (!searchExecutedRef.current) {
+				searchExecutedRef.current = true;
+				fetchSearchResults(searchTerm);
+				// Reset flag after a short delay
+				setTimeout(() => {
+					searchExecutedRef.current = false;
+				}, 1000);
+			}
 		} else if (!searchTerm && isFilter) {
 			// If search term is cleared, reset to original data
 			setCurrentList(originalList);
 			setIsFilter(false);
 		}
-	}, [searchTerm]);
+	}, [searchTerm, isClearing]);
 	useEffect(() => {
 		const intervalId = setInterval(() => {
 			// Always fetch data to update originalList
@@ -2684,7 +2709,7 @@ const Dashboard = () => {
 
 	// Calculate if a view mode is currently active
 	const isPreliminaryActive = viewMode === 'preliminary';
-	
+
 	const isPaymentActive = viewMode === 'payment';
 
 	// Add this helper function if it doesn't already exist
@@ -3299,7 +3324,7 @@ const Dashboard = () => {
 					<div className="flex justify-between items-center min-w-fit">
 						{/* Left side - PPT and Payment buttons */}{' '}
 						<div className="flex items-center space-x-2 flex-shrink-0">
-							{/* PPT button */}
+							{/* PPT button */}{' '}
 							<button
 								className={`p-1 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 ${
 									isPreliminaryActive ? 'text-white bg-blue-600' : 'text-black'
@@ -3308,7 +3333,7 @@ const Dashboard = () => {
 								title={isPreliminaryActive ? 'Hiển thị chế độ bình thường' : 'Hiển thị danh sách kết quả sơ bộ'}
 							>
 								<FaFileAlt size={18} />
-								<span className="font-normal">PPT</span>
+								<span className="font-normal">Tiến độ</span>
 							</button>
 							{/* Payment button - hide for technicians */}
 							{!isTechnician() && (
@@ -3496,24 +3521,23 @@ const Dashboard = () => {
 							{' '}
 							<tr className="border-b-2">
 								{/* Common columns - always displayed */}
-								<th className="p-1 border-b text-start min-w-[300px]">Mã tiếp nhận mẫu</th>
-								{/* For PPT view - only show the 7 specific columns */}{' '}
+								<th className="p-1 border-b text-start min-w-[300px]">Mã tiếp nhận mẫu</th>{' '}
+								{/* For PPT view - only show the remaining columns after removing some */}{' '}
 								{isPreliminaryActive ? (
 									<>
-										{/* The 7 specific columns for PPT view */}
+										{/* The remaining columns for PPT view */}
 										<th
 											className="p-1 border-b text-start max-w-28 min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700"
 											onClick={toggleDeadlineFormat}
 										>
 											Hạn trả KQ
 										</th>
-										<th className="p-1 border-b text-start min-w-[200px]">Địa chỉ</th>
-										<th className="p-1 border-b text-start min-w-[150px]">Người liên hệ</th>{' '}
-										<th className="p-1 border-b text-start min-w-[120px]">Điện thoại</th>
-										<th className="p-1 border-b text-start max-w-28 min-w-[100px]">Gửi PPT</th>
-										<th className="p-1 border-b text-start min-w-[110px]">Người gửi</th>
+										<th className="p-1 border-b text-start min-w-[100px]">Tiếp nhận</th>
+										<th className="p-1 border-b text-start min-w-[100px]">Gửi sơ bộ</th>
+										<th className="p-1 border-b text-start min-w-[100px]">Gửi kết quả</th>
 										<th className="p-1 border-b text-start min-w-[120px]">Mã vận đơn</th>
 										<th className="p-1 border-b text-start min-w-[100px] w-[10%]">Mã mẫu</th>
+										<th className="p-1 border-b text-start min-w-[100px]">Chỉ tiêu</th>
 										<th className="p-1 border-b text-start w-[15%] min-w-40">Mã PPT</th>
 									</>
 								) : (
@@ -3979,106 +4003,28 @@ const Dashboard = () => {
 																		)}
 																	</td>
 																)}{' '}
-																{/* Add the new columns for Preliminary view for empty receipts */}
+																{/* Add the remaining columns for Preliminary view for empty receipts */}
 																{isPreliminaryActive && (
 																	<>
+																		{' '}
 																		<td
-																			className={`p-1 text-start align-top cursor-pointer hover:bg-blue-50 ${
+																			className={`p-1 text-start align-top ${
 																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
 																			}`}
 																			rowSpan={samplesToShow.length}
-																			onClick={() =>
-																				handleCopyToClipboard(
-																					!isTechnician()
-																						? receipt.client?.client_address || '--'
-																						: '[Thông tin bị ẩn]',
-																				)
-																			}
-																			title="Click để copy địa chỉ"
 																		>
-																			{!isTechnician() ? receipt.client?.client_address || '--' : '[Thông tin bị ẩn]'}
-																		</td>
-																		<td
-																			className={`p-1 text-start align-top cursor-pointer hover:bg-blue-50 ${
-																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																			}`}
-																			rowSpan={samplesToShow.length}
-																			onClick={() =>
-																				handleCopyToClipboard(
-																					!isTechnician() ? receipt.contact?.name || '--' : '[Thông tin bị ẩn]',
-																				)
-																			}
-																			title="Click để copy tên người liên hệ"
-																		>
-																			{!isTechnician() ? receipt.contact?.name || '--' : '[Thông tin bị ẩn]'}
-																		</td>
-																		<td
-																			className={`p-1 text-start align-top cursor-pointer hover:bg-blue-50 ${
-																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
-																			}`}
-																			rowSpan={samplesToShow.length}
-																			onClick={() =>
-																				handleCopyToClipboard(
-																					!isTechnician() ? receipt.contact?.phone || '--' : '[Thông tin bị ẩn]',
-																				)
-																			}
-																			title="Click để copy số điện thoại"
-																		>
-																			{!isTechnician() ? receipt.contact?.phone || '--' : '[Thông tin bị ẩn]'}
-																		</td>{' '}
-																		<td
-																			className={`p-1 border-b text-start w-[10%] min-w-28 cursor-pointer hover:text-[#103667] underline text-blue-700`}
-																			rowSpan={samplesToShow.length}
-																			onClick={() => handleFieldClick(receipt.id, null, 'ppt_send_at')}
-																		>
-																			{editingField.receiptId === receipt.id &&
-																			editingField.sampleId === null &&
-																			editingField.field === 'ppt_send_at' ? (
-																				<div
-																					onClick={(e) => e.stopPropagation()}
-																					onMouseEnter={(e) => e.stopPropagation()}
-																					onMouseLeave={(e) => e.stopPropagation()}
+																			{' '}
+																			<div className="text-sm">
+																				<span
+																					className={`px-2 py-1 rounded text-xs font-medium ${
+																						receipt.status && receipt.status !== 'Chưa xác định'
+																							? 'bg-green-100 text-green-800'
+																							: 'bg-gray-100 text-gray-600'
+																					}`}
 																				>
-																					<DatePicker
-																						selected={receipt.ppt_send_at ? new Date(receipt.ppt_send_at) : null}
-																						onChange={(date) => handlePptSendChange(receipt.id, date)}
-																						onFocus={() => handleDatePickerFocus(receipt.id, receipt.ppt_send_at)}
-																						onChangeRaw={(e) => handleDateInputChange(receipt.id, e)}
-																						onKeyDown={(e) => handlePptSendKeyDown(e, receipt.id)}
-																						dateFormat="dd/MM/yyyy"
-																						className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
-																						calendarClassName="text-black"
-																						placeholderText="Chọn ngày gửi"
-																						autoFocus
-																						shouldCloseOnSelect={true}
-																						popperModifiers={{
-																							preventOverflow: {
-																								enabled: true,
-																							},
-																							hide: {
-																								enabled: true,
-																							},
-																						}}
-																					/>
-																				</div>
-																			) : (
-																				<div className="w-full h-full p-1 py-0 rounded cursor-pointer hover:bg-gray-100">
-																					{receipt.ppt_send_at ? (
-																						formatDate(receipt.ppt_send_at)
-																					) : (
-																						<span
-																							className="cursor-pointer text-gray-500 hover:text-blue-600"
-																							onClick={(e) => {
-																								e.stopPropagation();
-																								// Just set editing field for normal date picker
-																								handleFieldClick(receipt.id, null, 'ppt_send_at');
-																							}}
-																						>
-																							Chưa gửi
-																						</span>
-																					)}
-																				</div>
-																			)}
+																					{receipt.status || 'Chưa xác định'}
+																				</span>
+																			</div>
 																		</td>
 																		<td
 																			className={`p-1 text-start align-top ${
@@ -4086,8 +4032,16 @@ const Dashboard = () => {
 																			}`}
 																			rowSpan={samplesToShow.length}
 																		>
-																			{receipt.ppt_send_by ? getUserName(receipt.ppt_send_by) : '--'}
-																		</td>{' '}
+																			{receipt.draft_send_at ? formatDate(receipt.draft_send_at) : '--'}
+																		</td>
+																		<td
+																			className={`p-1 text-start align-top ${
+																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																		>
+																			{receipt.ppt_send_at ? formatDate(receipt.ppt_send_at) : '--'}
+																		</td>
 																		<td
 																			className={`p-1 text-start align-top hover:bg-gray-100 ${
 																				hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
@@ -4596,8 +4550,7 @@ const Dashboard = () => {
 														{!isPaymentActive &&
 															(isPreliminaryActive ? (
 																<>
-																	{/* PPT view - show only 3 sample-specific columns (5 receipt columns are handled above) */}{' '}
-																	{/* Mã mẫu column */}
+																	{/* PPT view - show only sample-specific columns */} {/* Mã mẫu column */}
 																	<td className="p-1 text-start align-top">
 																		<div className="text-sm max-w-40 truncate">
 																			{sample.sample_uid ? (
@@ -4612,6 +4565,26 @@ const Dashboard = () => {
 																			)}
 																		</div>
 																	</td>{' '}
+																	{/* Chỉ tiêu column */}
+																	<td className="p-1 text-start align-top">
+																		<div className="text-sm">
+																			{totalTests > 0 ? (
+																				<span
+																					className={`font-medium ${
+																						completedTests === totalTests
+																							? 'text-green-600'
+																							: completedTests > 0
+																							? 'text-yellow-600'
+																							: 'text-gray-600'
+																					}`}
+																				>
+																					{completedTests}/{totalTests}
+																				</span>
+																			) : (
+																				<span className="text-gray-500">0/0</span>
+																			)}
+																		</div>
+																	</td>
 																	{/* Mã PPT column - display ppt_uid from first report object if it exists */}
 																	<td className="p-1 text-start align-top">
 																		<div className="text-sm">

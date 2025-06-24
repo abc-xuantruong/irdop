@@ -1349,10 +1349,21 @@ const ReceiptInfor = ({ receipt }) => {
 
 		const date = new Date(dateString);
 		return isNaN(date.getTime()) ? new Date() : date;
-	};
-
-	// Function to handle Excel download
+	}; // Function to handle Excel download
 	const handleExcelDownload = async () => {
+		// Check if receipt status is undefined or empty
+		if (!currentReceipt?.status || currentReceipt.status.trim() === '' || currentReceipt.status === 'Chưa xác định') {
+			// Show error dialog
+			Swal.fire({
+				icon: 'error',
+				title: 'Không thể tải xuống',
+				text: 'Bạn cần gửi email tiếp nhận cho khách hàng trước khi tải xuống file Excel.',
+				confirmButtonText: 'Đã hiểu',
+				confirmButtonColor: '#3085d6',
+			});
+			return;
+		}
+
 		try {
 			// Show loading toast
 			showToast('Đang tải xuống file Excel...', 'info');
@@ -1531,6 +1542,25 @@ const ReceiptInfor = ({ receipt }) => {
 			return false;
 		}
 	};
+
+	// Handle status change
+	const handleStatusChange = (newStatus) => {
+		setCurrentReceipt((prev) => ({
+			...prev,
+			status: newStatus,
+		}));
+		handleReceiptApiUpdate('status', newStatus);
+		setEditingGeneralField(null);
+	};
+
+	// Function to update receipt status from EmailForm
+	const updateReceiptStatus = (newStatus) => {
+		setCurrentReceipt((prev) => ({
+			...prev,
+			status: newStatus,
+		}));
+	};
+
 	// Handle client information update
 	const handleClientApiUpdate = async (field, value) => {
 		try {
@@ -2456,13 +2486,34 @@ const ReceiptInfor = ({ receipt }) => {
 								<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN CHUNG</h2>
 							</div>
 							<div className="w-full">
+								{' '}
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số hồ sơ lưu</label>
 									{renderField('record_code', currentReceipt?.record_code)}
-								</div>
+								</div>{' '}
 								<div className="flex justify-start items-start mb-1">
-									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số yêu cầu đến</label>
-									{renderField('request_number', currentReceipt?.request_number, false, 'number')}
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Trạng thái</label>
+									{editingGeneralField === 'status' ? (
+										<select
+											value={currentReceipt?.status || 'Chưa xác định'}
+											onChange={(e) => handleStatusChange(e.target.value)}
+											onBlur={() => setEditingGeneralField(null)}
+											className="w-2/3 px-2 py-1 text-sm border rounded-md bg-white"
+											autoFocus
+										>
+											<option value="Chưa xác định">Chưa xác định</option>
+											<option value="Đã tiếp nhận">Đã tiếp nhận</option>
+											<option value="Bàn giao lab">Bàn giao lab</option>
+											<option value="Đã gửi kết quả">Đã gửi kết quả</option>
+										</select>
+									) : (
+										<div
+											className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
+											onClick={() => setEditingGeneralField('status')}
+										>
+											{currentReceipt?.status || 'Chưa xác định'}
+										</div>
+									)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã tiếp nhận</label>
@@ -3059,9 +3110,14 @@ const ReceiptInfor = ({ receipt }) => {
 				renderDeleteConfirm(
 					'Bạn có chắc chắn muốn xóa mục này?',
 					deleteType === 'sample' ? handleDeleteSampleConfirmAction : handleDeleteAnalysisConfirmAction,
-				)}
+				)}{' '}
 			{/* EmailForm */}
-			<EmailForm receipt={currentReceipt} isVisible={isEmailFormVisible} onClose={() => setIsEmailFormVisible(false)} />
+			<EmailForm
+				receipt={currentReceipt}
+				isVisible={isEmailFormVisible}
+				onClose={() => setIsEmailFormVisible(false)}
+				onStatusUpdate={updateReceiptStatus}
+			/>
 		</div>
 	);
 };

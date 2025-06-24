@@ -67,6 +67,11 @@ export const checkAuth = async () => {
 		await axios.post('https://pink.irdop.org/ab4dg2/auth/me', {}, { headers });
 		return { status: 200, data: { message: 'Session valid' } };
 	} catch (error) {
+		// Xóa auth cookies khi có lỗi 401
+		if (error.response?.status === 401 || error.response?.statusCode === 401) {
+			Cookies.remove('auth');
+			Cookies.remove('identityUID');
+		}
 		redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
 		return { status: 401, data: { message: 'Session expired' } };
 	}
@@ -76,7 +81,7 @@ export const apiGet = async (url, customHeaders = {}) => {
 	try {
 		const authHeaders = getAuthHeader();
 
-		// Nếu không có auth headers thì hiển thị redirectToLogin
+		// Nếu không có auth headers thì return luôn
 		if (!authHeaders) {
 			redirectToLogin('Vui lòng đăng nhập để tiếp tục...');
 			return { status: 401, data: { message: 'No auth token' } };
@@ -100,7 +105,6 @@ export const apiGet = async (url, customHeaders = {}) => {
 				forbidden('Bạn không có quyền truy cập vào chức năng này!');
 				return { status: 403, data: { message: error.response?.data?.message || 'Forbidden' } };
 			} else if (error.response?.status === 401) {
-				redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
 				return { status: 401, data: { message: error.response?.data?.message || 'Unauthorized' } };
 			}
 			return {
@@ -116,7 +120,7 @@ export const apiPost = async (url, body, customHeaders = {}) => {
 	try {
 		const authHeaders = getAuthHeader();
 
-		// Nếu không có auth headers thì hiển thị redirectToLogin
+		// Nếu không có auth headers thì chuyển về login
 		if (!authHeaders) {
 			redirectToLogin('Vui lòng đăng nhập để tiếp tục...');
 			return { status: 401, data: { message: 'No auth token' } };
@@ -139,7 +143,6 @@ export const apiPost = async (url, body, customHeaders = {}) => {
 				forbidden('Bạn không có quyền truy cập vào chức năng này!');
 				return { status: 403, data: { message: error.response?.data?.message || 'Forbidden' } };
 			} else if (error.response?.status === 401) {
-				redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
 				return { status: 401, data: { message: error.response?.data?.message || 'Unauthorized' } };
 			}
 			return {

@@ -1,0 +1,62 @@
+/* Email Form Styling */
+.email-content-editor {
+	outline: none;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.email-content-editor [contenteditable='true'] {
+	background-color: #ffffcc !important;
+	padding: 2px 4px !important;
+	border-radius: 3px;
+	margin: 0 1px;
+	transition: background-color 0.2s ease;
+}
+
+.email-content-editor [contenteditable='true']:hover {
+	background-color: #ffff99 !important;
+}
+
+.email-content-editor [contenteditable='true']:focus {
+	background-color: #ffff66 !important;
+	outline: 2px solid #3b82f6;
+	outline-offset: 1px;
+}
+
+/* Prevent line breaks in editable spans */
+.email-content-editor [contenteditable='true'] {
+	white-space: nowrap;
+	display: inline-block;
+	min-width: 100px;
+}
+
+/* Style for email sections */
+.email-section {
+	border: 2px solid #e0e0e0;
+	margin: 20px 0;
+	padding: 15px;
+	background-color: #f9f9f9;
+	border-radius: 8px;
+}
+
+.email-section h3 {
+	color: #2563eb;
+	margin-top: 0;
+	margin-bottom: 15px;
+}
+
+.email-section.warning {
+	background-color: #fff5f5;
+}
+
+.email-section.warning h3 {
+	color: #dc2626;
+}
+
+/* Signature section */
+.email-signature {
+	margin-top: 30px;
+	text-align: center;
+	border-top: 2px solid #e0e0e0;
+	padding-top: 15px;
+}
