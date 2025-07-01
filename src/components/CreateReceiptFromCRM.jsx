@@ -28,6 +28,11 @@ const CreateReceiptFromCRM = () => {
 	const [currentPage, setCurrentPage] = useState(1);
 	const [typingTimeout, setTypingTimeout] = useState(null);
 
+	// Add states for partner link
+	const [isCreatingLink, setIsCreatingLink] = useState(false);
+	const [partnerLink, setPartnerLink] = useState('');
+	const [linkError, setLinkError] = useState('');
+
 	// Add new states for inline editing
 	const [editingField, setEditingField] = useState({
 		type: null, // 'client' or 'sample'
@@ -64,6 +69,10 @@ const CreateReceiptFromCRM = () => {
 		name: '',
 		phone: '',
 		email: '',
+	});
+	const [receiverInfo, setReceiverInfo] = useState({
+		name: '',
+		address: '',
 	});
 
 	const { formatDate, currentUser, purposes, hasAuthCookies } = useContext(GlobalContext);
@@ -162,6 +171,8 @@ const CreateReceiptFromCRM = () => {
 		setAllUrgent(false);
 		setSelectedPurpose(''); // Reset to default purpose
 		setDeadline(''); // Reset deadline
+		setPartnerLink(''); // Reset partner link
+		setLinkError(''); // Reset link error
 	};
 
 	const closeModal = () => {
@@ -187,6 +198,11 @@ const CreateReceiptFromCRM = () => {
 		setShowMatrixDropdown(false);
 		setMatrixPage(1);
 		setCurrentEditingMatrixIndex(null);
+		setClientInfo({ client_name: '', client_address: '', legal_id: '' });
+		setContactInfo({ name: '', phone: '', email: '' });
+		setReceiverInfo({ name: '', address: '' });
+		setPartnerLink(''); // Reset partner link
+		setLinkError(''); // Reset link error
 
 		try {
 			// Check auth cookies before making API call
@@ -426,6 +442,7 @@ const CreateReceiptFromCRM = () => {
 			const response = await apiPost('https://black.irdop.org/crm/create_receipt', {
 				client: crmData.client,
 				contact: crmData.contact,
+				receiver: receiverInfo,
 				samples: samplesWithStatus,
 				created_by_uid: currentUser.identity_uid,
 				modified_by_uid: currentUser.identity_uid,
@@ -1140,6 +1157,10 @@ const CreateReceiptFromCRM = () => {
 				phone: crmData.contact?.phone || '',
 				email: crmData.contact?.email || '',
 			});
+			setReceiverInfo({
+				name: crmData.receiver?.name || '',
+				address: crmData.receiver?.address || '',
+			});
 		}
 	}, [crmData]);
 
@@ -1168,6 +1189,21 @@ const CreateReceiptFromCRM = () => {
 			...prev,
 			contact: {
 				...prev.contact,
+				[field]: value,
+			},
+		}));
+	};
+
+	// Handle receiver info input changes
+	const handleReceiverInfoChange = (field, value) => {
+		const updatedReceiverInfo = { ...receiverInfo, [field]: value };
+		setReceiverInfo(updatedReceiverInfo);
+
+		// Update crmData immediately
+		setCrmData((prev) => ({
+			...prev,
+			receiver: {
+				...prev.receiver,
 				[field]: value,
 			},
 		}));
@@ -1307,6 +1343,11 @@ const CreateReceiptFromCRM = () => {
 		setShowMatrixDropdown(false);
 		setMatrixPage(1);
 		setCurrentEditingMatrixIndex(null);
+		setClientInfo({ client_name: '', client_address: '', legal_id: '' });
+		setContactInfo({ name: '', phone: '', email: '' });
+		setReceiverInfo({ name: '', address: '' });
+		setPartnerLink(''); // Reset partner link
+		setLinkError(''); // Reset link error
 
 		try {
 			// Check auth cookies before making API call
@@ -1370,6 +1411,7 @@ const CreateReceiptFromCRM = () => {
 				sale_recorder: crmData.sale_recorder || '',
 				client: crmData.client,
 				contact: crmData.contact,
+				receiver: receiverInfo,
 				total_amount: crmData.total_amount || 0,
 				samples: crmData.samples.map((sample, index) => {
 					// Include sample_information if it exists for this sample
@@ -1398,6 +1440,89 @@ const CreateReceiptFromCRM = () => {
 			setIsCreating(false);
 		}
 	};
+	// Function to handle creating partner link
+	const handleCreatePartnerLink = async () => {
+		if (!crmData) {
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Không có dữ liệu đơn hàng!',
+			});
+			return;
+		}
+
+		const orderCode = crmData.order_code;
+		if (!orderCode) {
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Không tìm thấy mã đơn hàng!',
+			});
+			return;
+		}
+
+		setIsCreatingLink(true);
+		setLinkError('');
+
+		try {
+			const res = await apiGet(`https://black.irdop.org/db/order/create_uri/${orderCode}`);
+			const result = res.data;
+			if (result.order_code && result.partner_uri) {
+				const domain = window.location.origin;
+
+				const fullLink = `${domain}/partner_request_form.html?orderCode=${encodeURIComponent(result.order_code)}&uri=${encodeURIComponent(result.partner_uri)}`;
+				console.log('Generated partner link:', fullLink);
+				setPartnerLink(fullLink);
+				Swal.fire({
+					icon: 'success',
+					title: 'Thành công',
+					text: 'Đã tạo link điền phiếu thành công!',
+					timer: 2000,
+					showConfirmButton: false,
+				});
+			} else {
+				console.error('API response:', result);
+				setLinkError('Phản hồi API không hợp lệ: ' + JSON.stringify(result));
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: 'API trả về không đúng định dạng. Xem console để biết chi tiết!',
+				});
+			}
+		} catch (error) {
+			console.error('Error creating partner link:', error);
+			setLinkError('Không thể tạo link điền phiếu!');
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Không thể tạo link điền phiếu!',
+			});
+		} finally {
+			setIsCreatingLink(false);
+		}
+	};
+
+	// Function to copy link to clipboard
+	const handleCopyLink = async () => {
+		try {
+			await navigator.clipboard.writeText(partnerLink);
+			Swal.fire({
+				icon: 'success',
+				title: 'Đã sao chép',
+				text: 'Link đã được sao chép vào clipboard!',
+				timer: 1500,
+				showConfirmButton: false,
+			});
+		} catch (error) {
+			console.error('Error copying to clipboard:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Không thể sao chép link!',
+			});
+		}
+	};
+
 	return (
 		<>
 			<button
@@ -1543,6 +1668,33 @@ const CreateReceiptFromCRM = () => {
 													onChange={(e) => handleContactInfoChange('email', e.target.value)}
 													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 													placeholder="Nhập địa chỉ email"
+												/>
+											</div>
+										</div>
+
+										{/* Receiver Information Section */}
+										<div className="border rounded-lg p-4 text-start w-full h-fit">
+											<h3 className="font-semibold text-lg mb-2">Thông tin người nhận</h3>
+
+											<div className="mb-2">
+												<label className="font-medium text-gray-500 block mb-1">Tên người nhận</label>
+												<input
+													type="text"
+													value={receiverInfo.name}
+													onChange={(e) => handleReceiverInfoChange('name', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập tên người nhận (nếu khác với người liên hệ)"
+												/>
+											</div>
+
+											<div className="mb-1">
+												<label className="font-medium text-gray-500 block mb-1">Địa chỉ người nhận</label>
+												<input
+													type="text"
+													value={receiverInfo.address}
+													onChange={(e) => handleReceiverInfoChange('address', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập địa chỉ người nhận (nếu khác với địa chỉ khách hàng)"
 												/>
 											</div>
 										</div>
@@ -1815,6 +1967,7 @@ const CreateReceiptFromCRM = () => {
 																			>
 																				{getPaginatedMatrices(matrixInput).map((matrix, matrixIndex) => (
 																					<div
+								
 																						key={matrixIndex}
 																						className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
 																						onClick={() => {
@@ -2199,14 +2352,43 @@ const CreateReceiptFromCRM = () => {
 							{crmData && (
 								<>
 									{' '}
-									{/* Left side button */}
-									<button
-										onClick={handleTestSave}
-										disabled={isCreating}
-										className="bg-gray-500 border border-gray-500 text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-gray-600 hover:border-gray-600 disabled:bg-gray-300 disabled:border-gray-300 disabled:cursor-not-allowed"
-									>
-										Lưu phiếu
-									</button>
+									{/* Left side buttons */}
+									<div className="flex gap-3 items-center">
+										<button
+											onClick={handleTestSave}
+											disabled={isCreating}
+											className="bg-gray-500 border border-gray-500 text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-gray-600 hover:border-gray-600 disabled:bg-gray-300 disabled:border-gray-300 disabled:cursor-not-allowed"
+										>
+											Lưu phiếu
+										</button>
+										<button
+											onClick={handleCreatePartnerLink}
+											disabled={isCreatingLink || isCreating}
+											className="bg-orange-500 border border-orange-500 text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-orange-600 hover:border-orange-600 disabled:bg-orange-300 disabled:border-orange-300 disabled:cursor-not-allowed"
+										>
+											{isCreatingLink ? 'Đang tạo link...' : 'Tạo link điền phiếu'}
+										</button>
+										{partnerLink && (
+											<div className="flex items-center gap-2">
+												<span className="text-sm text-gray-600">Link:</span>
+												<button
+													onClick={handleCopyLink}
+													className="bg-green-500 text-white text-sm rounded-md py-1 px-3 cursor-pointer hover:bg-green-600 flex items-center gap-1"
+													title="Click để sao chép link"
+												>
+													<span className="max-w-xs truncate">{partnerLink}</span>
+													<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth={2}
+															d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+														/>
+													</svg>
+												</button>
+											</div>
+										)}
+									</div>
 									{/* Right side buttons */}
 									<div className="flex gap-3">
 										<button

@@ -70,8 +70,11 @@ const ProcessingSample = () => {
 	const [filterUrgent, setFilterUrgent] = useState(false); // Add state for urgent filter
 	const [filterNoResults, setFilterNoResults] = useState(false); // Add state for no results filter
 	const [filterOverdue, setFilterOverdue] = useState(false); // Add state for overdue filter
+	const [filterContractor, setFilterContractor] = useState(false); // Add state for contractor filter (EX)
 	const [editableCell, setEditableCell] = useState({ analysisId: null, column: null }); // Track editable cell for v3
 	const [inputValue, setInputValue] = useState('');
+	// Add state for EX information
+	const [exInfo, setExInfo] = useState({}); // Track EX information for each analysis
 	const location = useLocation();
 	const navigate = useNavigate(); // Add navigate hook for URL manipulation
 	let isFetch = false;
@@ -100,7 +103,7 @@ const ProcessingSample = () => {
 
 			// If deadline_start and deadline_end parameters exist, use the filter API
 			if (queryParams.has('deadline_start') && queryParams.has('deadline_end')) {
-				apiUrl = 'https://black.irdop.org/to82oe92i/db/filter/analysis/deadline/processing_sample/v3';
+				apiUrl = 'https://black.irdop.org/to82oe92i/db/filter/deadline/processing_sample/v3';
 
 				// Update filter info with the dates from URL
 				const startDate = new Date(queryParams.get('deadline_start'));
@@ -112,7 +115,8 @@ const ProcessingSample = () => {
 					endDate,
 				});
 
-				// Set date range for display in the UI				setDateRange([startDate, endDate]);
+				// Set date range for display in the UI
+				setDateRange([startDate, endDate]);
 				setShowTodayDeadlines(true);
 
 				const response = await apiPost(apiUrl, {
@@ -128,20 +132,21 @@ const ProcessingSample = () => {
 				apiUrl = 'https://black.irdop.org/to82oe92i/db/filter/fast/processing_sample/v3';
 				setFilterUrgent(true);
 				setFilterNoResults(false);
-				setFilterOverdue(false); // Reset overdue filter state
+				setFilterOverdue(false);
+				setFilterContractor(false);
 				const response = await apiGet(apiUrl);
 				const data = Array.isArray(response?.data) ? response.data : [];
 
 				// Update the main data source
 				setProcessingSample(data);
-				setFilterOverdue(false); // Reset overdue filter state
 			}
 			// If the no_results parameter exists, use no results API
 			else if (queryParams.has('no_results')) {
 				apiUrl = 'https://black.irdop.org/to82oe92i/db/filter/result/processing_sample/v3';
 				setFilterNoResults(true);
 				setFilterUrgent(false);
-				setFilterOverdue(false); // Reset overdue filter state
+				setFilterOverdue(false);
+				setFilterContractor(false);
 				const response = await apiGet(apiUrl);
 				const data = Array.isArray(response?.data) ? response.data : [];
 
@@ -154,16 +159,44 @@ const ProcessingSample = () => {
 				setFilterOverdue(true);
 				setFilterUrgent(false);
 				setFilterNoResults(false);
+				setFilterContractor(false);
 				const response = await apiGet(apiUrl);
 				const data = Array.isArray(response?.data) ? response.data : [];
 
 				// Update the main data source
 				setProcessingSample(data);
+			}
+			// If the contractor parameter exists, filter for EX protocol_source
+			else if (queryParams.has('contractor')) {
+				// Use default API and filter client-side for EX
+				setFilterContractor(true);
+				setFilterOverdue(false);
+				setFilterUrgent(false);
+				setFilterNoResults(false);
+				const response = await apiGet(apiUrl);
+				const data = Array.isArray(response?.data) ? response.data : [];
+
+				// Filter data to show only EX protocol_source
+				const filteredData = data
+					.map((receipt) => ({
+						...receipt,
+						samples: receipt.samples
+							?.map((sample) => ({
+								...sample,
+								analysis: sample.analysis?.filter((analysis) => analysis.protocol_source === 'EX'),
+							}))
+							.filter((sample) => sample.analysis && sample.analysis.length > 0),
+					}))
+					.filter((receipt) => receipt.samples && receipt.samples.length > 0);
+
+				// Update the main data source
+				setProcessingSample(filteredData);
 			} else {
 				// Default API call without filters
 				setFilterUrgent(false);
 				setFilterNoResults(false);
-				setFilterOverdue(false); // Reset overdue filter state
+				setFilterOverdue(false);
+				setFilterContractor(false);
 				const response = await apiGet(apiUrl);
 				const data = Array.isArray(response?.data) ? response.data : [];
 
@@ -341,11 +374,22 @@ const ProcessingSample = () => {
 	// Update the interval for periodic refresh
 	useEffect(() => {
 		const interval = setInterval(() => {
-			fetchReceiptData();
+			// Only refresh if no filters are active to avoid overriding filtered data
+			const currentParams = new URLSearchParams(location.search);
+			const hasActiveFilters =
+				currentParams.has('urgent') ||
+				currentParams.has('no_results') ||
+				currentParams.has('overdue') ||
+				currentParams.has('deadline_start') ||
+				currentParams.has('contractor');
+
+			if (!hasActiveFilters) {
+				fetchReceiptData();
+			}
 		}, 60000);
 
 		return () => clearInterval(interval);
-	}, []);
+	}, [location.search]);
 
 	// Handle click outside category dropdown to close it
 	useEffect(() => {
@@ -746,10 +790,45 @@ const ProcessingSample = () => {
 
 			// Then proceed with the bulk analysis update
 			const updatePromises = selectedRows.map((rowId) => {
+				// Prepare the update body with EX info if protocol_source is EX
+				const updateBody = { ...bulkEditValues };
+
+				// If there are EX fields in bulkEditValues, structure them under ex_info
+				if (updateBody.protocol_source === 'EX' && (bulkEditValues.ex_name || bulkEditValues.send_at)) {
+					// Get current ex_info for this analysis
+					let currentExInfo = {};
+
+					// Find current analysis data to get existing ex_info
+					if (filteredProcessingSample) {
+						filteredProcessingSample.forEach((receipt) => {
+							receipt.samples?.forEach((sample) => {
+								const analysis = sample.analysis?.find((a) => a.id === rowId);
+								if (analysis && analysis.ex_info) {
+									currentExInfo = { ...analysis.ex_info };
+								}
+							});
+						});
+					}
+
+					// Create complete ex_info object
+					updateBody.ex_info = {
+						...currentExInfo,
+					};
+
+					if (bulkEditValues.ex_name !== undefined) {
+						updateBody.ex_info.ex_name = bulkEditValues.ex_name;
+						delete updateBody.ex_name; // Remove from top level
+					}
+					if (bulkEditValues.send_at !== undefined) {
+						updateBody.ex_info.send_at = bulkEditValues.send_at;
+						delete updateBody.send_at; // Remove from top level
+					}
+				}
+
 				const body = {
 					analysis: {
 						id: rowId,
-						...bulkEditValues,
+						...updateBody,
 					},
 				};
 				return apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', body);
@@ -770,7 +849,26 @@ const ProcessingSample = () => {
 								...sample,
 								analysis: sample.analysis?.map((analysis) => {
 									if (selectedRows.includes(analysis.id)) {
-										return { ...analysis, ...bulkEditValues };
+										const updatedAnalysis = { ...analysis, ...bulkEditValues };
+
+										// Handle EX info properly for protocol_source === 'EX'
+										if (bulkEditValues.protocol_source === 'EX' && (bulkEditValues.ex_name || bulkEditValues.send_at)) {
+											// Preserve existing ex_info and update with new values
+											updatedAnalysis.ex_info = {
+												...analysis.ex_info,
+											};
+
+											if (bulkEditValues.ex_name !== undefined) {
+												updatedAnalysis.ex_info.ex_name = bulkEditValues.ex_name;
+												delete updatedAnalysis.ex_name; // Remove from top level
+											}
+											if (bulkEditValues.send_at !== undefined) {
+												updatedAnalysis.ex_info.send_at = bulkEditValues.send_at;
+												delete updatedAnalysis.send_at; // Remove from top level
+											}
+										}
+
+										return updatedAnalysis;
 									}
 									return analysis;
 								}),
@@ -886,6 +984,7 @@ const ProcessingSample = () => {
 		searchParams.delete('no_results');
 		searchParams.delete('urgent');
 		searchParams.delete('overdue');
+		searchParams.delete('contractor');
 
 		// Reset filter info
 		setFilterInfo({
@@ -928,6 +1027,7 @@ const ProcessingSample = () => {
 		searchParams.delete('no_results');
 		searchParams.delete('urgent');
 		searchParams.delete('overdue');
+		searchParams.delete('contractor');
 
 		// Reset filter info
 		setFilterInfo({
@@ -947,6 +1047,49 @@ const ProcessingSample = () => {
 		} else {
 			// If already active, just removed it (handled above)
 			toast.info('Đã tắt bộ lọc chưa có kết quả');
+		}
+
+		// Update the URL without reloading the page
+		navigate({
+			pathname: location.pathname,
+			search: searchParams.toString(),
+		});
+		// The fetchReceiptData will be called by the useEffect that watches location.search
+	};
+
+	const toggleContractorFilter = () => {
+		// Get current URL search params
+		const searchParams = new URLSearchParams(location.search);
+
+		// Check if contractor filter is already active in the URL
+		const hasContractorParam = searchParams.has('contractor');
+
+		// Clear all existing filters first
+		searchParams.delete('deadline_start');
+		searchParams.delete('deadline_end');
+		searchParams.delete('no_results');
+		searchParams.delete('urgent');
+		searchParams.delete('overdue');
+		searchParams.delete('contractor');
+
+		// Reset filter info
+		setFilterInfo({
+			isFilterActive: false,
+			count: 0,
+			startDate: null,
+			endDate: null,
+		});
+
+		// Reset UI state for datepicker
+		setShowTodayDeadlines(false);
+
+		if (!hasContractorParam) {
+			// Add the parameter if it doesn't exist
+			searchParams.set('contractor', 'true');
+			toast.info('Đã bật bộ lọc thầu phụ');
+		} else {
+			// If already active, just removed it (handled above)
+			toast.info('Đã tắt bộ lọc thầu phụ');
 		}
 
 		// Update the URL without reloading the page
@@ -1097,6 +1240,7 @@ const ProcessingSample = () => {
 			searchParams.delete('no_results');
 			searchParams.delete('urgent');
 			searchParams.delete('overdue');
+			searchParams.delete('contractor');
 
 			// Then set the new deadline parameters
 			searchParams.set('deadline_start', formattedStartDate);
@@ -1184,8 +1328,7 @@ const ProcessingSample = () => {
 		// Show toast notification
 		toast.info('Đã tắt bộ lọc ngày trả kết quả');
 
-		// Fetch fresh data
-		fetchReceiptData();
+		// The URL change will trigger the useEffect and fetchReceiptData will be called automatically
 	};
 
 	// Function to handle file drop
@@ -1504,6 +1647,100 @@ const ProcessingSample = () => {
 		}
 	};
 
+	// Handle EX information changes
+	const handleExInfoChange = (analysisId, field, value) => {
+		setExInfo((prev) => ({
+			...prev,
+			[analysisId]: {
+				...prev[analysisId],
+				[field]: value,
+			},
+		}));
+	};
+
+	const handleExInfoSave = async (analysisId, field, value) => {
+		try {
+			// Get current ex_info for this analysis
+			let currentExInfo = {};
+
+			// Find current analysis data to get existing ex_info
+			if (processingSample) {
+				processingSample.forEach((receipt) => {
+					receipt.samples?.forEach((sample) => {
+						const analysis = sample.analysis?.find((a) => a.id === analysisId);
+						if (analysis && analysis.ex_info) {
+							currentExInfo = { ...analysis.ex_info };
+						}
+					});
+				});
+			}
+
+			// Update the specific field in ex_info
+			const updatedExInfo = {
+				...currentExInfo,
+				[field]: value,
+			};
+
+			// Use the same API structure as handleSaveContentV3
+			const body = {
+				analysis: {
+					id: analysisId,
+					ex_info: updatedExInfo,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', body);
+
+			if (response?.status === 200) {
+				toast.success('Cập nhật thông tin EX thành công');
+
+				// Update both raw and filtered data simultaneously (same pattern as handleSaveContentV3)
+				const updateBothDatasets = (prevData) => {
+					if (!prevData) return prevData;
+
+					return prevData.map((receipt) => {
+						return {
+							...receipt,
+							samples: receipt.samples?.map((sample) => {
+								return {
+									...sample,
+									analysis: sample.analysis?.map((analysis) => {
+										if (analysis.id === analysisId) {
+											return { ...analysis, ex_info: updatedExInfo };
+										}
+										return analysis;
+									}),
+								};
+							}),
+						};
+					});
+				};
+
+				// Update both states in parallel
+				setProcessingSample(updateBothDatasets);
+				setFilteredProcessingSample(updateBothDatasets);
+
+				// Clear the local exInfo state for this analysis after successful save
+				setExInfo((prev) => {
+					const newState = { ...prev };
+					delete newState[analysisId];
+					return newState;
+				});
+			}
+		} catch (error) {
+			console.error('Error updating EX info:', error);
+			toast.error('Lỗi khi cập nhật thông tin EX');
+		}
+	};
+
+	// Handle Enter key press for EX info fields
+	const handleExInfoKeyDown = (e, analysisId, field, value) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			handleExInfoSave(analysisId, field, value);
+		}
+	};
+
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
@@ -1591,6 +1828,7 @@ const ProcessingSample = () => {
 									searchParams.delete('no_results');
 									searchParams.delete('urgent');
 									searchParams.delete('overdue');
+									searchParams.delete('contractor');
 
 									// Reset filter info
 									setFilterInfo({
@@ -1623,6 +1861,15 @@ const ProcessingSample = () => {
 								title="Hiển thị mẫu quá hạn"
 							>
 								Quá hạn
+							</button>
+							<button
+								className={`px-3 py-1 text-sm rounded-lg border ${
+									filterContractor ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
+								}`}
+								onClick={toggleContractorFilter}
+								title="Hiển thị mẫu thầu phụ (EX)"
+							>
+								Thầu phụ
 							</button>{' '}
 							{/* Add deadline filter button */}
 							<div className="relative">
@@ -2027,40 +2274,43 @@ const ProcessingSample = () => {
 														size={14}
 													/>
 												</div>
-												{editingNote === receipt.id ? (
-													<div className="flex items-center gap-2 mt-2">
-														<textarea
-															value={noteInput}
-															onChange={(e) => setNoteInput(e.target.value)}
-															className="p-2 border rounded-lg w-full bg-white"
-															rows={3}
-															placeholder="Nhập ghi chú..."
-														/>
-														<div className="flex flex-col gap-2">
-															<button
-																onClick={() => handleSaveNote(receipt)}
-																className="bg-blue-500 text-white px-2 py-1 rounded-lg w-24"
-															>
-																Xác nhận
-															</button>
-															<button
-																onClick={() => setEditingNote(null)}
-																className="bg-gray-500 text-white px-2 py-1 rounded-lg w-24"
-															>
-																Hủy bỏ
-															</button>
+												{
+													editingNote === receipt.id && (
+														<div className="flex items-center gap-2 mt-2">
+															<textarea
+																value={noteInput}
+																onChange={(e) => setNoteInput(e.target.value)}
+																className="p-2 border rounded-lg w-full bg-white"
+																rows={3}
+																placeholder="Nhập ghi chú..."
+															/>
+															<div className="flex flex-col gap-2">
+																<button
+																	onClick={() => handleSaveNote(receipt)}
+																	className="bg-blue-500 text-white px-2 py-1 rounded-lg w-24"
+																>
+																	Xác nhận
+																</button>
+																<button
+																	onClick={() => setEditingNote(null)}
+																	className="bg-gray-500 text-white px-2 py-1 rounded-lg w-24"
+																>
+																	Hủy bỏ
+																</button>
+															</div>
 														</div>
-													</div>
-												) : (
-													receipt.note && (
-														<p
-															className="text-gray-600 italic cursor-pointer hover:underline w-fit mt-1"
-															onClick={() => handleEditNote(receipt)}
-														>
-															Ghi chú: {receipt.note}
-														</p>
 													)
-												)}
+													// : (
+													// 	receipt.note && (
+													// 		<p
+													// 			className="text-gray-600 italic cursor-pointer hover:underline w-fit mt-1"
+													// 			onClick={() => handleEditNote(receipt)}
+													// 		>
+													// 			Ghi chú: {receipt.note}
+													// 		</p>
+													// 	)
+													// )
+												}
 											</div>
 
 											<div className="flex items-center gap-3">
@@ -2134,6 +2384,40 @@ const ProcessingSample = () => {
 																onChange={(e) => handleBulkEditChange('reference', e.target.value)}
 															/>
 														</div>
+														{/* EX Name field - only show if protocol_source is EX */}
+														{bulkEditValues.protocol_source === 'EX' && (
+															<div className="flex items-center gap-2 min-w-[200px]">
+																<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Tên EX:</label>
+																<input
+																	type="text"
+																	className="flex-1 p-2 border rounded-lg bg-white text-sm"
+																	placeholder="Nhập tên EX"
+																	value={bulkEditValues.ex_name || ''}
+																	onChange={(e) => handleBulkEditChange('ex_name', e.target.value)}
+																/>
+															</div>
+														)}
+														{/* EX Send Date field - only show if protocol_source is EX */}
+														{bulkEditValues.protocol_source === 'EX' && (
+															<div className="flex items-center gap-2 min-w-[200px]">
+																<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Ngày gửi:</label>
+																<input
+																	type="date"
+																	className="flex-1 p-2 border rounded-lg bg-white text-sm"
+																	value={
+																		bulkEditValues.send_at
+																			? new Date(bulkEditValues.send_at).toISOString().split('T')[0]
+																			: ''
+																	}
+																	onChange={(e) => {
+																		const dateValue = e.target.value
+																			? new Date(e.target.value + 'T00:00:00').toISOString()
+																			: '';
+																		handleBulkEditChange('send_at', dateValue);
+																	}}
+																/>
+															</div>
+														)}
 														{/* Deadline field */}
 														<div className="flex flex-col min-w-[120px]">
 															<label className="mb-1 font-medium text-sm text-left">Hạn trả</label>
@@ -2272,13 +2556,35 @@ const ProcessingSample = () => {
 																			<td className="border p-1 text-start">{foundSample?.sample_uid}</td>
 																			<td className="border p-1 text-start">{foundAnalysis.parameter_name}</td>
 																			<td className="border p-1 text-start">
-																				<span className="preview-protocol-source">
-																					{bulkEditValues.protocol_source || foundAnalysis.protocol_source || '--'}
-																				</span>
-																				&nbsp;
-																				<span className="preview-protocol-code">
-																					{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
-																				</span>
+																				<div className="flex flex-col gap-1">
+																					<div>
+																						<span className="preview-protocol-source">
+																							{bulkEditValues.protocol_source || foundAnalysis.protocol_source || '--'}
+																						</span>
+																						&nbsp;
+																						<span className="preview-protocol-code">
+																							{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
+																						</span>
+																					</div>
+																					{/* Show EX info if protocol_source is EX */}
+																					{(bulkEditValues.protocol_source === 'EX' ||
+																						foundAnalysis.protocol_source === 'EX') && (
+																						<div className="text-xs text-gray-600 bg-gray-50 p-1 rounded border mt-1">
+																							<div>
+																								<strong>Tên EX:</strong>{' '}
+																								{bulkEditValues.ex_name || foundAnalysis.ex_info?.ex_name || '--'}
+																							</div>
+																							<div>
+																								<strong>Ngày gửi:</strong>{' '}
+																								{bulkEditValues.send_at
+																									? new Date(bulkEditValues.send_at).toLocaleDateString('vi-VN')
+																									: foundAnalysis.ex_info?.send_at
+																									? new Date(foundAnalysis.ex_info.send_at).toLocaleDateString('vi-VN')
+																									: '--'}
+																							</div>
+																						</div>
+																					)}
+																				</div>
 																			</td>
 																			<td className="border p-1 text-start">
 																				<div
@@ -2462,7 +2768,6 @@ const ProcessingSample = () => {
 																					</select>
 																				</td>
 																				<td className="border p-1">
-																					{' '}
 																					<input
 																						type="text"
 																						value={fileInfo.uploadDescription || ''}
@@ -2525,6 +2830,10 @@ const ProcessingSample = () => {
 																<span className="font-semibold">Nền mẫu:</span> {sample.matrix || 'N/A'}
 															</div>
 
+															<div className="min-w-40">
+																<span className="font-semibold">Mô tả:</span> {sample.sample_description || 'N/A'}
+															</div>
+
 															{sample.additional_request && (
 																<div className="mt-1 mb-2">
 																	<span className="font-semibold">Yêu cầu khách hàng:</span> {sample.additional_request}
@@ -2547,6 +2856,7 @@ const ProcessingSample = () => {
 															<thead>
 																{' '}
 																<tr className="bg-gray-100  text-sm text-gray-600">
+																	<th className="font-normal p-1 text-start min-w-20 w-20">Mã chỉ tiêu</th>
 																	<th className="font-normal p-1 text-start min-w-60 w-1/4">Chỉ tiêu</th>
 
 																	<th className="font-normal p-1 text-start min-w-60 w-1/4">Phương pháp</th>
@@ -2554,7 +2864,7 @@ const ProcessingSample = () => {
 																	<th className="font-normal p-1 text-start min-w-32">Đơn vị</th>
 																	<th className="font-normal p-1 text-start w-28 min-w-28">Hạn trả</th>
 																	<th className="font-normal p-1 text-start w-36 min-w-40">Người thực hiện</th>
-																	<th className="font-normal p-1 text-start min-w-32 w-36">Tham chiếu</th>
+																	{/* <th className="font-normal p-1 text-start min-w-32 w-36">Tham chiếu</th> */}
 																	<th className="font-normal p-1 text-center w-12 min-w-12">
 																		<input
 																			type="checkbox"
@@ -2577,33 +2887,98 @@ const ProcessingSample = () => {
 																			selectedCheckboxesV3.includes(item.id) ? 'bg-gray-100' : ''
 																		} hover:bg-gray-50`}
 																	>
+																		<td className="border p-1 text-start">{item.id || 'N/A'}</td>
 																		<td className="border p-1 text-start">{item.parameter_name || 'N/A'}</td>
 
 																		<td className="border p-1 text-start ">
-																			<div className="flex items-center gap-0.5">
-																				<select
-																					className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
-																					onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
-																					value={item.protocol_source || ''}
-																				>
-																					<option value="IRDOP">IRDOP</option>
-																					<option value="IRDOP VS">IRDOP VS</option>
-																					<option value="EX">EX</option>
-																				</select>
-																				<input
-																					type="text"
-																					className="w-full bg-white border border-white hover:border-purple-500 rounded  p-1 py-0 text-left"
-																					placeholder="Mã phương pháp"
-																					value={
-																						editableCell.analysisId === item.id &&
-																						editableCell.column === 'protocol_code'
-																							? inputValue
-																							: item.protocol_code || ''
-																					}
-																					onChange={(e) => handleProtocolCodeChange(item.id, e.target.value)}
-																					onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value)}
-																					onKeyDown={(e) => handleProtocolCodeKeyDown(e, item.id, e.target.value)}
-																				/>
+																			<div className="flex flex-col gap-1">
+																				<div className="flex items-center gap-0.5">
+																					<select
+																						className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
+																						onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
+																						value={item.protocol_source || ''}
+																					>
+																						<option value="">--</option>
+																						<option value="IRDOP">IRDOP</option>
+																						<option value="IRDOP VS">IRDOP VS</option>
+																						<option value="EX">EX</option>
+																					</select>
+																					<input
+																						type="text"
+																						className="w-full bg-white border border-white hover:border-purple-500 rounded  p-1 py-0 text-left"
+																						placeholder="Mã phương pháp"
+																						value={
+																							editableCell.analysisId === item.id &&
+																							editableCell.column === 'protocol_code'
+																								? inputValue
+																								: item.protocol_code || ''
+																						}
+																						onChange={(e) => handleProtocolCodeChange(item.id, e.target.value)}
+																						onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value)}
+																						onKeyDown={(e) => handleProtocolCodeKeyDown(e, item.id, e.target.value)}
+																					/>
+																				</div>
+																				{/* EX Information - only show if protocol_source is EX */}
+																				{item.protocol_source === 'EX' && (
+																					<div className="flex flex-col gap-2 mt-1 p-2 bg-gray-50 rounded border">
+																						<div className="flex items-center gap-2">
+																							<label className="text-xs font-medium text-gray-600 min-w-[50px]">
+																								Tên EX:
+																							</label>
+																							<input
+																								type="text"
+																								className="flex-1 text-xs bg-white border border-gray-300 hover:border-purple-500 rounded p-1 text-left"
+																								placeholder="Nhập tên EX"
+																								value={
+																									exInfo[item.id]?.ex_name !== undefined
+																										? exInfo[item.id].ex_name
+																										: item.ex_info?.ex_name || ''
+																								}
+																								onChange={(e) => handleExInfoChange(item.id, 'ex_name', e.target.value)}
+																								onBlur={(e) => handleExInfoSave(item.id, 'ex_name', e.target.value)}
+																								onKeyDown={(e) =>
+																									handleExInfoKeyDown(e, item.id, 'ex_name', e.target.value)
+																								}
+																							/>
+																						</div>
+																						<div className="flex items-center gap-2">
+																							<label className="text-xs font-medium text-gray-600 min-w-[50px]">
+																								Ngày gửi:
+																							</label>
+																							<input
+																								type="date"
+																								className="flex-1 text-xs bg-white border border-gray-300 hover:border-purple-500 rounded p-1 text-left"
+																								value={
+																									exInfo[item.id]?.send_at !== undefined
+																										? new Date(exInfo[item.id].send_at).toISOString().split('T')[0]
+																										: item.ex_info?.send_at
+																										? new Date(item.ex_info.send_at).toISOString().split('T')[0]
+																										: ''
+																								}
+																								onChange={(e) => {
+																									const dateValue = e.target.value
+																										? new Date(e.target.value + 'T00:00:00').toISOString()
+																										: '';
+																									handleExInfoChange(item.id, 'send_at', dateValue);
+																								}}
+																								onBlur={(e) => {
+																									const dateValue = e.target.value
+																										? new Date(e.target.value + 'T00:00:00').toISOString()
+																										: '';
+																									handleExInfoSave(item.id, 'send_at', dateValue);
+																								}}
+																								onKeyDown={(e) => {
+																									if (e.key === 'Enter') {
+																										const dateValue = e.target.value
+																											? new Date(e.target.value + 'T00:00:00').toISOString()
+																											: '';
+																										handleExInfoSave(item.id, 'send_at', dateValue);
+																									}
+																								}}
+																							/>
+																						</div>
+																					</div>
+																				)}
 																			</div>
 																		</td>
 																		<td
@@ -2683,7 +3058,7 @@ const ProcessingSample = () => {
 																					)}
 																			</div>
 																		</td>
-																		<td className="border p-1 text-start">
+																		{/* <td className="border p-1 text-start">
 																			<input
 																				type="text"
 																				className=" bg-white w-full border hover:border-purple-500 rounded p-1 py-0 text-left"
@@ -2692,7 +3067,7 @@ const ProcessingSample = () => {
 																				onKeyDown={(e) => handleReferenceKeyDown(e, item.id, e.target.value)}
 																				onBlur={(e) => handleReferenceBlur(e, item.id, e.target.value)}
 																			/>
-																		</td>
+																		</td> */}
 																		<td className="border p-1 text-center">
 																			<input
 																				type="checkbox"
@@ -2805,6 +3180,36 @@ const ProcessingSample = () => {
 											onChange={(e) => handleBulkEditChange('reference', e.target.value)}
 										/>
 									</div>
+									{/* EX Name field - only show if protocol_source is EX */}
+									{bulkEditValues.protocol_source === 'EX' && (
+										<div className="flex items-center gap-2 min-w-[200px]">
+											<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Tên EX:</label>
+											<input
+												type="text"
+												className="flex-1 p-2 border rounded-lg bg-white text-sm"
+												placeholder="Nhập tên EX"
+												value={bulkEditValues.ex_name || ''}
+												onChange={(e) => handleBulkEditChange('ex_name', e.target.value)}
+											/>
+										</div>
+									)}
+									{/* EX Send Date field - only show if protocol_source is EX */}
+									{bulkEditValues.protocol_source === 'EX' && (
+										<div className="flex items-center gap-2 min-w-[200px]">
+											<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Ngày gửi:</label>
+											<input
+												type="date"
+												className="flex-1 p-2 border rounded-lg bg-white text-sm"
+												value={
+													bulkEditValues.send_at ? new Date(bulkEditValues.send_at).toISOString().split('T')[0] : ''
+												}
+												onChange={(e) => {
+													const dateValue = e.target.value ? new Date(e.target.value + 'T00:00:00').toISOString() : '';
+													handleBulkEditChange('send_at', dateValue);
+												}}
+											/>
+										</div>
+									)}
 									{/* Deadline field */}
 									<div className="flex flex-col min-w-[120px]">
 										<label className="mb-1 font-medium text-sm text-left">Hạn trả</label>
@@ -2951,13 +3356,35 @@ const ProcessingSample = () => {
 												<td className="border p-1 text-start">{foundSample?.sample_uid}</td>
 												<td className="border p-1 text-start">{foundAnalysis.parameter_name}</td>
 												<td className="border p-1 text-start">
-													<span className="preview-protocol-source">
-														{bulkEditValues.protocol_source || foundAnalysis.protocol_source || '--'}
-													</span>
-													&nbsp;
-													<span className="preview-protocol-code">
-														{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
-													</span>
+													{' '}
+													<div className="flex flex-col gap-1">
+														<div>
+															<span className="preview-protocol-source">
+																{bulkEditValues.protocol_source || foundAnalysis.protocol_source || '--'}
+															</span>
+															&nbsp;
+															<span className="preview-protocol-code">
+																{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
+															</span>
+														</div>
+														{/* Show EX info if protocol_source is EX */}
+														{(bulkEditValues.protocol_source === 'EX' || foundAnalysis.protocol_source === 'EX') && (
+															<div className="text-xs text-gray-600 bg-gray-50 p-1 rounded border mt-1">
+																<div>
+																	<strong>Tên EX:</strong>{' '}
+																	{bulkEditValues.ex_name || foundAnalysis.ex_info?.ex_name || '--'}
+																</div>
+																<div>
+																	<strong>Ngày gửi:</strong>{' '}
+																	{bulkEditValues.send_at
+																		? new Date(bulkEditValues.send_at).toLocaleDateString('vi-VN')
+																		: foundAnalysis.ex_info?.send_at
+																		? new Date(foundAnalysis.ex_info.send_at).toLocaleDateString('vi-VN')
+																		: '--'}
+																</div>
+															</div>
+														)}
+													</div>
 												</td>
 												<td className="border p-1 text-start">
 													<div
@@ -3030,7 +3457,7 @@ const ProcessingSample = () => {
 																{['Raw Data', 'Prepare Report', 'Calculation'].map((category) => (
 																	<label
 																		key={category}
-																		className="flex items-center gap-1 p-0.5 hover:bg-gray-50 cursor-pointer font-normal"
+																		className="flex items-center gap-2 p-0.5 hover:bg-gray-50 cursor-pointer font-normal"
 																	>
 																		<input
 																			type="checkbox"

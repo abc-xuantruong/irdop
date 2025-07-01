@@ -3754,37 +3754,81 @@ const SampleInfor = () => {
 								<FaSync className="mr-1" />
 								{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
 							</button>{' '}
-							<button
-								className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
-									selectedAnalytes.length > 0 ||
-									listAnalytes.filter(
-										(analysis) =>
-											!analysis.parameter_uid &&
-											analysis.matrix &&
-											((analysis.protocol_source !== 'EX' && analysis.protocol_code) ||
-												analysis.protocol_source === 'EX') &&
-											analysis.protocol_source &&
-											analysis.field,
-									).length > 0
-										? 'bg-blue-500'
-										: 'bg-gray-300 cursor-not-allowed'
-								} mr-2`}
-								onClick={handleUpdateDatabase}
-								title="Cập nhật CSDL"
-							>
-								<FaDatabase className="mr-1" />
-								{selectedAnalytes.length > 0
-									? selectedAnalytes.length
-									: listAnalytes.filter(
-											(analysis) =>
-												!analysis.parameter_uid &&
-												analysis.matrix &&
-												((analysis.protocol_source !== 'EX' && analysis.protocol_code) ||
-													analysis.protocol_source === 'EX') &&
-												analysis.protocol_source &&
-												analysis.field,
-									  ).length || '0'}
-							</button>
+<button
+    className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+        // ĐIỀU KIỆN ACTIVE MỚI
+        (
+            (selectedAnalytes.length > 0 &&
+                listAnalytes
+                    .filter((a) => selectedAnalytes.includes(a.id))
+                    .every(
+                        (a) =>
+                            !a.parameter_uid &&
+                            a.parameter_name &&
+                            a.matrix &&
+                            ((a.protocol_source !== 'EX' && a.protocol_code) || a.protocol_source === 'EX') &&
+                            a.protocol_source &&
+                            a.field,
+                    )
+            ) ||
+            (selectedAnalytes.length === 0 &&
+                listAnalytes.some(
+                    (a) =>
+                        !a.parameter_uid &&
+                        a.parameter_name &&
+                        a.matrix &&
+                        ((a.protocol_source !== 'EX' && a.protocol_code) || a.protocol_source === 'EX') &&
+                        a.protocol_source &&
+                        a.field,
+                ))
+        )
+            ? 'bg-blue-500'
+            : 'bg-gray-300 cursor-not-allowed'
+    } mr-2`}
+    onClick={
+        (
+            (selectedAnalytes.length > 0 &&
+                listAnalytes
+                    .filter((a) => selectedAnalytes.includes(a.id))
+                    .every(
+                        (a) =>
+                            !a.parameter_uid &&
+                            a.parameter_name &&
+                            a.matrix &&
+                            ((a.protocol_source !== 'EX' && a.protocol_code) || a.protocol_source === 'EX') &&
+                            a.protocol_source &&
+                            a.field,
+                    )
+            ) ||
+            (selectedAnalytes.length === 0 &&
+                listAnalytes.some(
+                    (a) =>
+                        !a.parameter_uid &&
+                        a.parameter_name &&
+                        a.matrix &&
+                        ((a.protocol_source !== 'EX' && a.protocol_code) || a.protocol_source === 'EX') &&
+                        a.protocol_source &&
+                        a.field,
+                ))
+        )
+            ? handleUpdateDatabase
+            : undefined
+    }
+    title="Cập nhật CSDL"
+>
+    <FaDatabase className="mr-1" />
+    {selectedAnalytes.length > 0
+        ? selectedAnalytes.length
+        : listAnalytes.filter(
+                (a) =>
+                    !a.parameter_uid &&
+                    a.parameter_name &&
+                    a.matrix &&
+                    ((a.protocol_source !== 'EX' && a.protocol_code) || a.protocol_source === 'EX') &&
+                    a.protocol_source &&
+                    a.field,
+          ).length || '0'}
+</button>
 							<button
 								className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
 									selectedAnalytes.length > 0 ? 'bg-red-500' : 'bg-gray-300 cursor-not-allowed'

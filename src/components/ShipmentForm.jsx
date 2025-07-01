@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { apiPost, apiGet } from '../contexts/helperFunctionCallAPI';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { FaBox, FaUser, FaTruck } from 'react-icons/fa';
@@ -7,25 +7,79 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 	console.log('Receipt data:', receipt);
 	console.log('Mode:', mode);
 	const { currentUser } = useContext(GlobalContext);
-	const [formData, setFormData] = useState({
-		clientAddress: receipt?.client?.client_address || '',
-		clientContactName: receipt?.contact?.name || '',
-		clientContactPhone: receipt?.contact?.phone || '',
-		clientContactEmail: receipt?.contact?.email || '',
-		notes: '',
-		// Thông tin người gửi mặc định
-		senderName: 'VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN',
-		senderAddress: '12 Phùng Khoang 2',
-		senderPhone: '0868872578',
-		senderEmail: 'kiemnghiem@irdop.org',
-		// Thông tin hàng hóa - format mới: <số lượng sample_uid> x PPT tiếp nhận <receipt_uid> Bao gồm các mã: \n <Danh sách sample_uid xuống dòng> \n <client_name>
-		productName: `${receipt?.samples?.length || 0} x PPT tiếp nhận ${receipt?.receipt_uid || ''} Bao gồm các mã:${
-			receipt?.samples?.length ? `\n${receipt?.samples.map((s) => s.sample_uid).join('\n')}` : ''
-		}${receipt?.client?.client_name ? `\n${receipt?.client?.client_name}` : ''}`,
-		productQuantity: 1,
-		productWeight: 100,
-		productType: 'HH',
-	});
+
+	// Initialize form data based on mode
+	const getInitialFormData = useCallback(() => {
+		// Apply receiver/client priority logic for both modes
+		// Address: receiver.address first, then client.client_address
+		const clientAddress = receipt?.receiver?.address || receipt?.client?.client_address || '';
+
+		// Contact name: receiver.name first, then contact.name
+		const clientContactName = receipt?.receiver?.name || receipt?.contact?.name || '';
+
+		// Phone: if receiver.name exists, leave blank; otherwise use contact.phone
+		const clientContactPhone = receipt?.receiver?.name ? '' : receipt?.contact?.phone || '';
+
+		if (mode === 'new') {
+			// For new shipments, use receiver/client data but blank product name
+			return {
+				clientAddress,
+				clientContactName,
+				clientContactPhone,
+				clientContactEmail: receipt?.contact?.email || '',
+				notes: '',
+				// Thông tin người gửi mặc định
+				senderName: 'VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN',
+				senderAddress: '12 Phùng Khoang 2',
+				senderPhone: '0868872578',
+				senderEmail: 'kiemnghiem@irdop.org',
+				// Thông tin hàng hóa mặc định - completely blank for new shipments
+				productName: '',
+				productQuantity: 1,
+				productWeight: 100,
+				productType: 'HH',
+			};
+		} else {
+			// For auto mode, use existing receipt data with priority logic
+			return {
+				clientAddress,
+				clientContactName,
+				clientContactPhone,
+				clientContactEmail: receipt?.contact?.email || '',
+				notes: '',
+				// Thông tin người gửi mặc định
+				senderName: 'VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN',
+				senderAddress: '12 Phùng Khoang 2',
+				senderPhone: '0868872578',
+				senderEmail: 'kiemnghiem@irdop.org',
+				// Thông tin hàng hóa - format mới: <số lượng sample_uid> x PPT tiếp nhận <receipt_uid> Bao gồm các mã: \n <Danh sách sample_uid xuống dòng> \n <client_name>
+				productName: `${receipt?.samples?.length || 0} x PPT tiếp nhận ${receipt?.receipt_uid || ''} Bao gồm các mã:${
+					receipt?.samples?.length ? `\n${receipt?.samples.map((s) => s.sample_uid).join('\n')}` : ''
+				}${receipt?.client?.client_name ? `\n${receipt?.client?.client_name}` : ''}`,
+				productQuantity: 1,
+				productWeight: 100,
+				productType: 'HH',
+			};
+		}
+	}, [
+		mode,
+		receipt?.receiver?.address,
+		receipt?.receiver?.name,
+		receipt?.client?.client_address,
+		receipt?.contact?.name,
+		receipt?.contact?.phone,
+		receipt?.contact?.email,
+		receipt?.samples,
+		receipt?.receipt_uid,
+		receipt?.client?.client_name,
+	]);
+
+	const [formData, setFormData] = useState(() => getInitialFormData());
+
+	// Reinitialize form data when receipt or mode changes
+	useEffect(() => {
+		setFormData(getInitialFormData());
+	}, [getInitialFormData]);
 	const [addressMessage, setAddressMessage] = useState('');
 	const [isCheckingAddress, setIsCheckingAddress] = useState(false);
 	const [addressError, setAddressError] = useState(false);
@@ -404,7 +458,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				productName: productNameFormat,
 			}));
 		}
-	}, [removedUIDs, sampleUIDs, receiptUID]);
+	}, []);
 	const checkAddress = async () => {
 		if (!formData.clientAddress.trim()) {
 			setAddressMessage('Vui lòng nhập địa chỉ');
@@ -474,7 +528,12 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 	useEffect(() => {
 		// Only load existing order if mode is 'auto' and we have a single tracking number
 		if (mode === 'auto' && receipt?.tracking_number && !receipt?.tracking_number.includes(',')) {
-			loadExistingOrder(receipt.tracking_number);
+			// Skip API call for direct pickup tracking numbers (starting with TT)
+			if (receipt.tracking_number.startsWith('TT')) {
+				setHasExistingOrder(true); // Set as existing to show direct pickup status
+			} else {
+				loadExistingOrder(receipt.tracking_number);
+			}
 		} else if (mode === 'new' || (receipt?.tracking_number && receipt?.tracking_number.includes(','))) {
 			// For 'new' mode or multiple tracking numbers, don't load existing order data
 			// Just show the form for creating a new shipment
@@ -599,7 +658,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 								receipt: {
 									id: receipt.id,
 									receipt_uid: receipt.receipt_uid,
-									ppt_send_by: '',
+									ppt_send_at: null,
+									ppt_send_by: null,
 									tracking_number: '',
 								},
 							};
@@ -609,7 +669,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							if (onOrderUpdate) {
 								const updatedReceipt = {
 									...receipt,
-									ppt_send_by: '',
+									ppt_send_at: null,
+									ppt_send_by: null,
 									tracking_number: '',
 								};
 								onOrderUpdate(updatedReceipt);
@@ -621,7 +682,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							receipt: {
 								id: receipt.id,
 								receipt_uid: receipt.receipt_uid,
-								ppt_send_by: '',
+								ppt_send_at: null,
+								ppt_send_by: null,
 								tracking_number: '',
 							},
 						};
@@ -631,7 +693,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						if (onOrderUpdate) {
 							const updatedReceipt = {
 								...receipt,
-								ppt_send_by: '',
+								ppt_send_at: null,
+								ppt_send_by: null,
 								tracking_number: '',
 							};
 							onOrderUpdate(updatedReceipt);
@@ -802,357 +865,581 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 			setIsSubmitting(false);
 		}
 	};
+
+	// Handle direct customer pickup
+	const handleDirectPickup = async () => {
+		if (!receipt?.id || !receipt?.receipt_uid) {
+			alert('Không có thông tin phiếu tiếp nhận để cập nhật');
+			return;
+		}
+
+		try {
+			setIsSubmitting(true);
+
+			// Generate tracking number in format 'TT' + 'DDMMYYYY'
+			const now = new Date();
+			const day = String(now.getDate()).padStart(2, '0');
+			const month = String(now.getMonth() + 1).padStart(2, '0');
+			const year = String(now.getFullYear());
+			const trackingNumber = `TT${day}${month}${year}`;
+
+			// Add 7 hours to account for GMT+7
+			const adjustedDate = new Date();
+			adjustedDate.setHours(adjustedDate.getHours() + 7);
+			const formattedDate = adjustedDate.toISOString().split('T')[0];
+
+			// Append new tracking number to existing ones (if any)
+			let updatedTrackingNumber = trackingNumber;
+			if (receipt.tracking_number && receipt.tracking_number.trim() !== '') {
+				// Split existing tracking numbers, clean them, and add the new one
+				const existingNumbers = receipt.tracking_number
+					.split(',')
+					.map((num) => num.trim())
+					.filter((num) => num !== '');
+				existingNumbers.push(trackingNumber);
+				updatedTrackingNumber = existingNumbers.join(',');
+			}
+
+			const payload = {
+				receipt: {
+					id: receipt.id,
+					receipt_uid: receipt.receipt_uid,
+					ppt_send_at: formattedDate,
+					ppt_send_by: currentUser?.identity_uid,
+					tracking_number: updatedTrackingNumber,
+				},
+			};
+
+			const updateResponse = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+			if (updateResponse.status === 200) {
+				console.log('Receipt updated successfully with direct pickup tracking number:', trackingNumber);
+
+				// Call onOrderUpdate to refresh dashboard data
+				if (onOrderUpdate) {
+					const updatedReceipt = {
+						...receipt,
+						ppt_send_at: formattedDate,
+						ppt_send_by: currentUser?.identity_uid,
+						tracking_number: updatedTrackingNumber,
+					};
+					onOrderUpdate(updatedReceipt);
+				}
+
+				alert(`Đã cập nhật thành công! Mã theo dõi: ${trackingNumber}`);
+				onClose && onClose();
+			} else {
+				console.error('Error updating receipt:', updateResponse.data?.message);
+				alert('Có lỗi xảy ra khi cập nhật phiếu tiếp nhận');
+			}
+		} catch (error) {
+			console.error('Error updating receipt for direct pickup:', error);
+			alert('Có lỗi xảy ra khi cập nhật: ' + (error.message || 'Lỗi không xác định'));
+		} finally {
+			setIsSubmitting(false);
+		}
+	};
+
+	// Handle removing direct pickup status
+	const handleRemoveDirectPickup = async () => {
+		if (!receipt?.id || !receipt?.receipt_uid || !receipt?.tracking_number) {
+			alert('Không có thông tin phiếu tiếp nhận để cập nhật');
+			return;
+		}
+
+		if (window.confirm('Bạn có chắc chắn muốn bỏ trạng thái nhận trực tiếp?')) {
+			try {
+				setIsSubmitting(true);
+
+				// Get the current tracking number being viewed
+				const currentTrackingNumber = receipt.tracking_number;
+				const originalTrackingNumber = receipt.original_tracking_number || receipt.tracking_number;
+
+				// Remove the current tracking number from the list
+				if (originalTrackingNumber && originalTrackingNumber.includes(',')) {
+					// Multiple tracking numbers - remove only the current one
+					const trackingNumbers = originalTrackingNumber
+						.split(',')
+						.map((num) => num.trim())
+						.filter((num) => num !== '');
+					const remainingNumbers = trackingNumbers.filter((num) => num !== currentTrackingNumber);
+
+					if (remainingNumbers.length >= 1) {
+						// Still have other tracking numbers
+						const updatedTrackingNumber = remainingNumbers.join(',');
+
+						const payload = {
+							receipt: {
+								id: receipt.id,
+								receipt_uid: receipt.receipt_uid,
+								tracking_number: updatedTrackingNumber,
+							},
+						};
+						await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+						// Call onOrderUpdate to refresh dashboard data
+						if (onOrderUpdate) {
+							const updatedReceipt = {
+								...receipt,
+								tracking_number: updatedTrackingNumber,
+							};
+							onOrderUpdate(updatedReceipt);
+						}
+					} else {
+						// No tracking numbers remain, clear all tracking info
+						const payload = {
+							receipt: {
+								id: receipt.id,
+								receipt_uid: receipt.receipt_uid,
+								ppt_send_at: null,
+								ppt_send_by: null,
+								tracking_number: '',
+							},
+						};
+						await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+						// Call onOrderUpdate to refresh dashboard data
+						if (onOrderUpdate) {
+							const updatedReceipt = {
+								...receipt,
+								ppt_send_at: null,
+								ppt_send_by: null,
+								tracking_number: '',
+							};
+							onOrderUpdate(updatedReceipt);
+						}
+					}
+				} else {
+					// Single tracking number - clear all tracking info
+					const payload = {
+						receipt: {
+							id: receipt.id,
+							receipt_uid: receipt.receipt_uid,
+							ppt_send_at: null,
+							ppt_send_by: null,
+							tracking_number: '',
+						},
+					};
+					await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+					// Call onOrderUpdate to refresh dashboard data
+					if (onOrderUpdate) {
+						const updatedReceipt = {
+							...receipt,
+							ppt_send_at: null,
+							ppt_send_by: null,
+							tracking_number: '',
+						};
+						onOrderUpdate(updatedReceipt);
+					}
+				}
+
+				alert('Đã bỏ trạng thái nhận trực tiếp thành công!');
+				onClose && onClose();
+			} catch (error) {
+				console.error('Error removing direct pickup status:', error);
+				alert('Có lỗi xảy ra khi bỏ trạng thái: ' + (error.message || 'Lỗi không xác định'));
+			} finally {
+				setIsSubmitting(false);
+			}
+		}
+	};
+
+	// Check if this is a direct pickup tracking number - but only for existing tracking, not new shipments
+	const isDirectPickup =
+		mode !== 'new' &&
+		receipt?.tracking_number &&
+		receipt.tracking_number.split(',').some((tn) => tn.trim().startsWith('TT'));
+
 	return (
-		<div className="shipment-form p-6 bg-gray-50 rounded-lg max-w-7xl mx-auto relative mt-16">
-			{' '}
-			{/* Grid layout for sender and receiver info */}
-			<div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-				{' '}
-				{/* Thông tin hàng hóa */}
-				<div className="p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-					<div className="flex items-center mb-4 p-2 bg-gray-100 text-gray-800 -mx-2 -mt-2">
-						<FaBox className="mr-3 text-xl" />
-						<h4 className="text-xl font-semibold">Hàng hóa</h4>
-					</div>
-					<div className="grid grid-cols-4 gap-2 items-center">
-						{/* Từ khóa liên quan */}
-						<div className="text-sm font-medium text-gray-700 text-left flex items-start h-fit pt-2">
-							Từ khóa liên quan:
-						</div>
-						<div className="col-span-3">
-							{/* Combined UIDs (sample + receipt) */}
-							{(sampleUIDs.length > 0 || receiptUID.length > 0) && (
-								<div className="mb-2">
-									<div className="flex flex-wrap gap-2">
-										{/* Sample UIDs */}
-										{sampleUIDs.map((uid, index) => (
-											<div
-												key={`sample-${index}`}
-												className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${
-													removedUIDs.has(uid)
-														? 'bg-gray-100 text-gray-400 border-gray-300'
-														: 'bg-blue-100 text-blue-800 border-blue-300'
-												}`}
-											>
-												<span>{uid}</span>
-												<button
-													type="button"
-													onClick={() => (removedUIDs.has(uid) ? handleRestoreUID(uid) : handleRemoveUID(uid))}
-													className={`ml-1 text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center hover:bg-opacity-80 ${
-														removedUIDs.has(uid)
-															? 'text-gray-500 hover:text-gray-700'
-															: 'text-red-600 hover:text-red-800'
-													}`}
-													title={removedUIDs.has(uid) ? 'Khôi phục' : 'Xóa'}
-												>
-													{removedUIDs.has(uid) ? '↶' : '×'}
-												</button>
-											</div>
-										))}
-
-										{/* Receipt UID */}
-										{receiptUID.map((uid, index) => (
-											<div
-												key={`receipt-${index}`}
-												className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${
-													removedUIDs.has(uid)
-														? 'bg-gray-100 text-gray-400 border-gray-300'
-														: 'bg-green-100 text-green-800 border-green-300'
-												}`}
-											>
-												<span>{uid}</span>
-												<button
-													type="button"
-													onClick={() => (removedUIDs.has(uid) ? handleRestoreUID(uid) : handleRemoveUID(uid))}
-													className={`ml-1 text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center hover:bg-opacity-80 ${
-														removedUIDs.has(uid)
-															? 'text-gray-500 hover:text-gray-700'
-															: 'text-red-600 hover:text-red-800'
-													}`}
-													title={removedUIDs.has(uid) ? 'Khôi phục' : 'Xóa'}
-												>
-													{removedUIDs.has(uid) ? '↶' : '×'}
-												</button>
-											</div>
-										))}
-									</div>
-								</div>
-							)}
-
-							{/* Hiển thị thông báo nếu không có UID nào */}
-							{sampleUIDs.length === 0 && receiptUID.length === 0 && (
-								<div className="text-gray-500 text-xs italic">Không có từ khóa liên quan</div>
-							)}
-						</div>
-
-						{/* Product name field spanning all 4 columns */}
-						<label
-							htmlFor="productName"
-							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
-						>
-							Tên hàng hóa:
-						</label>
-						<textarea
-							id="productName"
-							name="productName"
-							value={formData.productName}
-							onChange={handleInputChange}
-							rows="3"
-							className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-						/>
-
-						{/* Số lượng và Trọng lượng trên cùng 1 hàng */}
-						<label
-							htmlFor="productQuantity"
-							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
-						>
-							Số lượng:
-						</label>
-						<input
-							type="number"
-							id="productQuantity"
-							name="productQuantity"
-							value={formData.productQuantity}
-							onChange={handleInputChange}
-							className="col-span-1 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-						/>
-
-						<label
-							htmlFor="productWeight"
-							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
-						>
-							Trọng lượng (gram):
-						</label>
-						<input
-							type="number"
-							id="productWeight"
-							name="productWeight"
-							value={formData.productWeight}
-							onChange={handleInputChange}
-							className="col-span-1 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-						/>
-
-						{/* Hidden product type - not visible but still used for API */}
-						<input type="hidden" id="productType" name="productType" value={formData.productType || 'HH'} />
-					</div>
-				</div>{' '}
-				{/* Thông tin người nhận */}
-				<div className="p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-					<div className="flex items-center mb-4 p-2 bg-gray-100 text-gray-800 -mx-2 -mt-2">
-						<FaUser className="mr-3 text-xl" />
-						<h4 className="text-xl font-semibold">Người nhận</h4>
-					</div>
-					<div className="grid grid-cols-4 gap-2 items-center">
-						{/* Họ tên người nhận */}
-						<label
-							htmlFor="clientContactName"
-							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
-						>
-							Họ tên người nhận:
-						</label>
-						<input
-							type="text"
-							id="clientContactName"
-							name="clientContactName"
-							value={formData.clientContactName}
-							onChange={handleInputChange}
-							className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
-						/>
-						{/* Số điện thoại */}
-						<label
-							htmlFor="clientContactPhone"
-							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
-						>
-							Số điện thoại:
-						</label>
-						<input
-							type="text"
-							id="clientContactPhone"
-							name="clientContactPhone"
-							value={formData.clientContactPhone}
-							onChange={handleInputChange}
-							className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
-						/>
-						{/* Email */}
-						<label
-							htmlFor="clientContactEmail"
-							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
-						>
-							Email:
-						</label>
-						<input
-							type="email"
-							id="clientContactEmail"
-							name="clientContactEmail"
-							value={formData.clientContactEmail}
-							onChange={handleInputChange}
-							className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
-						/>
-						{/* Địa chỉ nhận */}
-						<label
-							htmlFor="clientAddress"
-							className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
-						>
-							Địa chỉ nhận:
-						</label>
-						<input
-							type="text"
-							id="clientAddress"
-							name="clientAddress"
-							value={formData.clientAddress}
-							onChange={handleInputChange}
-							className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
-						/>
-						{/* Nút kiểm tra địa chỉ và thông báo trên cùng 1 hàng */}
-						<button
-							type="button"
-							onClick={checkAddress}
-							disabled={isCheckingAddress}
-							className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm h-fit outline-none"
-						>
-							{isCheckingAddress ? 'Đang kiểm tra...' : 'Kiểm tra địa chỉ'}
-						</button>{' '}
-						<div className="col-span-3">
-							{addressMessage && (
-								<div className={`p-1.5 text-sm text-left ${addressError ? 'text-red-700' : 'text-green-700'}`}>
-									{addressMessage}
-								</div>
-							)}
-						</div>{' '}
-						{/* 4 ô address fields - 2 hàng x 2 cột */}
-						<input
-							type="text"
-							value={addressData.address}
-							onChange={(e) => setAddressData((prev) => ({ ...prev, address: e.target.value }))}
-							placeholder="Địa chỉ chuẩn hóa (bắt buộc)"
-							className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
-							required
-						/>
-						<select
-							value={selectedProvince}
-							onChange={handleProvinceChange}
-							className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
-						>
-							<option value="">Chọn tỉnh/thành phố</option>
-							{provinces.map((province) => (
-								<option key={province.PROVINCE_ID} value={province.PROVINCE_ID}>
-									{province.PROVINCE_NAME}
-								</option>
-							))}
-						</select>
-						<select
-							value={selectedDistrict}
-							onChange={handleDistrictChange}
-							disabled={!selectedProvince}
-							className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left disabled:bg-gray-100 disabled:cursor-not-allowed"
-						>
-							<option value="">Chọn quận/huyện</option>
-							{districts.map((district) => (
-								<option key={district.DISTRICT_ID} value={district.DISTRICT_ID}>
-									{district.DISTRICT_NAME}
-								</option>
-							))}
-						</select>
-						<select
-							value={selectedWard}
-							onChange={handleWardChange}
-							disabled={!selectedDistrict}
-							className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left disabled:bg-gray-100 disabled:cursor-not-allowed"
-						>
-							<option value="">Chọn phường/xã</option>
-							{wards.map((ward) => (
-								<option key={ward.WARDS_ID} value={ward.WARDS_ID}>
-									{ward.WARDS_NAME}
-								</option>
-							))}
-						</select>
-						{/* Combined full address row (spans all 4 columns) */}
-						<div className="col-span-4 p-1.5 text-gray-700 text-left">
-							{addressData.address ? (
-								<i className="text-gray-600">{getFormattedFullAddress() || 'Chưa có địa chỉ chuẩn hóa'}</i>
-							) : (
-								<i className="text-amber-500">Chú ý: địa chỉ phải được ngăn cách bởi dấu phẩy ( , ).</i>
-							)}
-						</div>
-					</div>
-				</div>
+		<div
+			className={`shipment-form p-2 bg-gray-50 rounded-lg mx-auto relative mt-16 ${
+				isDirectPickup ? 'max-w-4xl' : 'max-w-7xl'
+			}`}
+		>
+			{/* Header with title */}
+			<div className="mb-6 text-center">
+				<h2 className={`font-bold text-gray-800 ${isDirectPickup ? 'text-3xl' : 'text-2xl'}`}>
+					{isDirectPickup ? 'Lấy trực tiếp' : 'Thông tin gửi hàng'}
+				</h2>
+				{isDirectPickup && <p className="text-lg text-green-600 mt-2">Mã tracking: {receipt.tracking_number}</p>}
 			</div>{' '}
-			{/* Thông tin người gửi - full width */}
-			<div className="mt-4 p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-				{' '}
-				<div className="flex items-center mb-4 p-2 bg-gray-100 text-gray-800 -mx-2 -mt-2">
-					<FaTruck className="mr-3 text-xl" />
-					<h4 className="text-xl font-semibold">Thông tin gửi</h4>
-				</div>
-				<div className="space-y-4">
-					{/* Hiển thị thông tin người gửi dạng text */}
-					<div className="form-group">
-						<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
-							Đơn vị gửi: <span className="font-normal">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</span>
+			{/* Grid layout for sender and receiver info */}
+			{!isDirectPickup && (
+				<>
+					<div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+						{' '}
+						{/* Thông tin hàng hóa */}
+						<div className="p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+							<div className="flex items-center mb-4 p-2 bg-gray-100 text-gray-800 -mx-2 -mt-2">
+								<FaBox className="mr-3 text-xl" />
+								<h4 className="text-xl font-semibold">Hàng hóa</h4>
+							</div>
+							<div className="grid grid-cols-4 gap-2 items-center">
+								{/* Từ khóa liên quan */}
+								<div className="text-sm font-medium text-gray-700 text-left flex items-start h-fit pt-2">
+									Từ khóa liên quan:
+								</div>
+								<div className="col-span-3">
+									{/* Combined UIDs (sample + receipt) */}
+									{(sampleUIDs.length > 0 || receiptUID.length > 0) && (
+										<div className="mb-2">
+											<div className="flex flex-wrap gap-2">
+												{/* Sample UIDs */}
+												{sampleUIDs.map((uid, index) => (
+													<div
+														key={`sample-${index}`}
+														className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${
+															removedUIDs.has(uid)
+																? 'bg-gray-100 text-gray-400 border-gray-300'
+																: 'bg-blue-100 text-blue-800 border-blue-300'
+														}`}
+													>
+														<span>{uid}</span>
+														<button
+															type="button"
+															onClick={() => (removedUIDs.has(uid) ? handleRestoreUID(uid) : handleRemoveUID(uid))}
+															className={`ml-1 text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center hover:bg-opacity-80 ${
+																removedUIDs.has(uid)
+																	? 'text-gray-500 hover:text-gray-700'
+																	: 'text-red-600 hover:text-red-800'
+															}`}
+															title={removedUIDs.has(uid) ? 'Khôi phục' : 'Xóa'}
+														>
+															{removedUIDs.has(uid) ? '↶' : '×'}
+														</button>
+													</div>
+												))}
+
+												{/* Receipt UID */}
+												{receiptUID.map((uid, index) => (
+													<div
+														key={`receipt-${index}`}
+														className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${
+															removedUIDs.has(uid)
+																? 'bg-gray-100 text-gray-400 border-gray-300'
+																: 'bg-green-100 text-green-800 border-green-300'
+														}`}
+													>
+														<span>{uid}</span>
+														<button
+															type="button"
+															onClick={() => (removedUIDs.has(uid) ? handleRestoreUID(uid) : handleRemoveUID(uid))}
+															className={`ml-1 text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center hover:bg-opacity-80 ${
+																removedUIDs.has(uid)
+																	? 'text-gray-500 hover:text-gray-700'
+																	: 'text-red-600 hover:text-red-800'
+															}`}
+															title={removedUIDs.has(uid) ? 'Khôi phục' : 'Xóa'}
+														>
+															{removedUIDs.has(uid) ? '↶' : '×'}
+														</button>
+													</div>
+												))}
+											</div>
+										</div>
+									)}
+
+									{/* Hiển thị thông báo nếu không có UID nào */}
+									{sampleUIDs.length === 0 && receiptUID.length === 0 && (
+										<div className="text-gray-500 text-xs italic">Không có từ khóa liên quan</div>
+									)}
+								</div>
+
+								{/* Product name field spanning all 4 columns */}
+								<label
+									htmlFor="productName"
+									className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+								>
+									Tên hàng hóa:
+								</label>
+								<textarea
+									id="productName"
+									name="productName"
+									value={formData.productName}
+									onChange={handleInputChange}
+									rows="3"
+									className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+								/>
+
+								{/* Số lượng và Trọng lượng trên cùng 1 hàng */}
+								<label
+									htmlFor="productQuantity"
+									className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+								>
+									Số lượng:
+								</label>
+								<input
+									type="number"
+									id="productQuantity"
+									name="productQuantity"
+									value={formData.productQuantity}
+									onChange={handleInputChange}
+									className="col-span-1 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+								/>
+
+								<label
+									htmlFor="productWeight"
+									className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+								>
+									Trọng lượng (gram):
+								</label>
+								<input
+									type="number"
+									id="productWeight"
+									name="productWeight"
+									value={formData.productWeight}
+									onChange={handleInputChange}
+									className="col-span-1 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+								/>
+
+								{/* Hidden product type - not visible but still used for API */}
+								<input type="hidden" id="productType" name="productType" value={formData.productType || 'HH'} />
+							</div>
+						</div>{' '}
+						{/* Thông tin người nhận */}
+						<div className="p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+							<div className="flex items-center mb-4 p-2 bg-gray-100 text-gray-800 -mx-2 -mt-2">
+								<FaUser className="mr-3 text-xl" />
+								<h4 className="text-xl font-semibold">Người nhận</h4>
+							</div>
+							<div className="grid grid-cols-4 gap-2 items-center">
+								{/* Họ tên người nhận */}
+								<label
+									htmlFor="clientContactName"
+									className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+								>
+									Họ tên người nhận:
+								</label>
+								<input
+									type="text"
+									id="clientContactName"
+									name="clientContactName"
+									value={formData.clientContactName}
+									onChange={handleInputChange}
+									className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+								/>
+								{/* Số điện thoại */}
+								<label
+									htmlFor="clientContactPhone"
+									className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+								>
+									Số điện thoại:
+								</label>
+								<input
+									type="text"
+									id="clientContactPhone"
+									name="clientContactPhone"
+									value={formData.clientContactPhone}
+									onChange={handleInputChange}
+									className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+								/>
+								{/* Email */}
+								<label
+									htmlFor="clientContactEmail"
+									className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+								>
+									Email:
+								</label>
+								<input
+									type="email"
+									id="clientContactEmail"
+									name="clientContactEmail"
+									value={formData.clientContactEmail}
+									onChange={handleInputChange}
+									className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+								/>
+								{/* Địa chỉ nhận */}
+								<label
+									htmlFor="clientAddress"
+									className="text-sm font-medium text-gray-700 text-left flex items-center h-fit"
+								>
+									Địa chỉ nhận:
+								</label>
+								<input
+									type="text"
+									id="clientAddress"
+									name="clientAddress"
+									value={formData.clientAddress}
+									onChange={handleInputChange}
+									className="col-span-3 p-1.5 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+								/>
+								{/* Nút kiểm tra địa chỉ và thông báo trên cùng 1 hàng */}
+								<button
+									type="button"
+									onClick={checkAddress}
+									disabled={isCheckingAddress}
+									className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm h-fit outline-none"
+								>
+									{isCheckingAddress ? 'Đang kiểm tra...' : 'Kiểm tra địa chỉ'}
+								</button>{' '}
+								<div className="col-span-3">
+									{addressMessage && (
+										<div className={`p-1.5 text-sm text-left ${addressError ? 'text-red-700' : 'text-green-700'}`}>
+											{addressMessage}
+										</div>
+									)}
+								</div>{' '}
+								{/* 4 ô address fields - 2 hàng x 2 cột */}
+								<input
+									type="text"
+									value={addressData.address}
+									onChange={(e) => setAddressData((prev) => ({ ...prev, address: e.target.value }))}
+									placeholder="Địa chỉ chuẩn hóa (bắt buộc)"
+									className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+									required
+								/>
+								<select
+									value={selectedProvince}
+									onChange={handleProvinceChange}
+									className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left"
+								>
+									<option value="">Chọn tỉnh/thành phố</option>
+									{provinces.map((province) => (
+										<option key={province.PROVINCE_ID} value={province.PROVINCE_ID}>
+											{province.PROVINCE_NAME}
+										</option>
+									))}
+								</select>
+								<select
+									value={selectedDistrict}
+									onChange={handleDistrictChange}
+									disabled={!selectedProvince}
+									className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left disabled:bg-gray-100 disabled:cursor-not-allowed"
+								>
+									<option value="">Chọn quận/huyện</option>
+									{districts.map((district) => (
+										<option key={district.DISTRICT_ID} value={district.DISTRICT_ID}>
+											{district.DISTRICT_NAME}
+										</option>
+									))}
+								</select>
+								<select
+									value={selectedWard}
+									onChange={handleWardChange}
+									disabled={!selectedDistrict}
+									className="col-span-2 p-1.5 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left disabled:bg-gray-100 disabled:cursor-not-allowed"
+								>
+									<option value="">Chọn phường/xã</option>
+									{wards.map((ward) => (
+										<option key={ward.WARDS_ID} value={ward.WARDS_ID}>
+											{ward.WARDS_NAME}
+										</option>
+									))}
+								</select>
+								{/* Combined full address row (spans all 4 columns) */}
+								<div className="col-span-4 p-1.5 text-gray-700 text-left">
+									{addressData.address ? (
+										<i className="text-gray-600">{getFormattedFullAddress() || 'Chưa có địa chỉ chuẩn hóa'}</i>
+									) : (
+										<i className="text-amber-500">Chú ý: địa chỉ phải được ngăn cách bởi dấu phẩy ( , ).</i>
+									)}
+								</div>
+							</div>
 						</div>
-						<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
-							Địa chỉ:{' '}
-							<span className="font-normal">
-								{`${senderAddressData.address}, 
+					</div>
+					{/* Thông tin người gửi - full width */}
+					<div className="mt-4 p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+						{' '}
+						<div className="flex items-center mb-4 p-2 bg-gray-100 text-gray-800 -mx-2 -mt-2">
+							<FaTruck className="mr-3 text-xl" />
+							<h4 className="text-xl font-semibold">Thông tin gửi</h4>
+						</div>
+						<div className="space-y-4">
+							{/* Hiển thị thông tin người gửi dạng text */}
+							<div className="form-group">
+								<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
+									Đơn vị gửi: <span className="font-normal">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</span>
+								</div>
+								<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
+									Địa chỉ:{' '}
+									<span className="font-normal">
+										{`${senderAddressData.address}, 
 								${wardsNames[senderAddressData.wards_id] || ''}, 
 								${districtNames[senderAddressData.district_id] || ''}, 
 								${provinceNames[senderAddressData.province_id] || ''}`}
-							</span>
-						</div>{' '}
-						<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
-							Số điện thoại: <span className="font-normal">{formData.senderPhone}</span> - Email:{' '}
-							<span className="font-normal">{formData.senderEmail}</span>
-						</div>
-						<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
-							Hình thức vận chuyển:{' '}
-							<select
-								value={serviceType}
-								onChange={(e) => setServiceType(e.target.value)}
-								className="ml-2 p-1 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-							>
-								<option value="VTK">VTK - Vận chuyển tiết kiệm</option>
-								<option value="VCN">VCN - Vận chuyển nhanh</option>
-							</select>
+									</span>
+								</div>{' '}
+								<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
+									Số điện thoại: <span className="font-normal">{formData.senderPhone}</span> - Email:{' '}
+									<span className="font-normal">{formData.senderEmail}</span>
+								</div>
+								<div className="text-sm text-gray-700 mb-2 text-left font-semibold">
+									Hình thức vận chuyển:{' '}
+									<select
+										value={serviceType}
+										onChange={(e) => setServiceType(e.target.value)}
+										className="ml-2 p-1 border border-gray-300 rounded-md bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+									>
+										<option value="VTK">VTK - Vận chuyển tiết kiệm</option>
+										<option value="VCN">VCN - Vận chuyển nhanh</option>
+									</select>
+								</div>
+							</div>
+
+							{/* Giữ lại các input ẩn để lưu giá trị mặc định */}
+							<input type="hidden" id="senderName" name="senderName" value={formData.senderName} />
+							<input type="hidden" id="senderAddress" name="senderAddress" value={formData.senderAddress} />
+							<input type="hidden" id="senderPhone" name="senderPhone" value={formData.senderPhone} />
+							<input type="hidden" id="senderEmail" name="senderEmail" value={formData.senderEmail} />
+
+							{/* Phần ghi chú chuyển vào đây */}
+							<div className="form-group mt-4">
+								<label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2 text-left">
+									Ghi chú:
+								</label>
+								<textarea
+									id="notes"
+									name="notes"
+									value={formData.notes}
+									onChange={handleInputChange}
+									rows="2"
+									className="w-full p-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+									placeholder="Nhập ghi chú thêm..."
+								/>
+							</div>
 						</div>
 					</div>
-
-					{/* Giữ lại các input ẩn để lưu giá trị mặc định */}
-					<input type="hidden" id="senderName" name="senderName" value={formData.senderName} />
-					<input type="hidden" id="senderAddress" name="senderAddress" value={formData.senderAddress} />
-					<input type="hidden" id="senderPhone" name="senderPhone" value={formData.senderPhone} />
-					<input type="hidden" id="senderEmail" name="senderEmail" value={formData.senderEmail} />
-
-					{/* Phần ghi chú chuyển vào đây */}
-					<div className="form-group mt-4">
-						<label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2 text-left">
-							Ghi chú:
-						</label>
-						<textarea
-							id="notes"
-							name="notes"
-							value={formData.notes}
-							onChange={handleInputChange}
-							rows="2"
-							className="w-full p-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-							placeholder="Nhập ghi chú thêm..."
-						/>
-					</div>
+				</>
+			)}
+			{/* Direct pickup status message */}
+			{isDirectPickup && (
+				<div className="mt-6 text-center">
+					<div className="text-green-600 font-semibold text-lg">✓ Khách hàng đã nhận trực tiếp</div>
 				</div>
-			</div>{' '}
+			)}
 			{/* Action buttons */}
 			<div className="flex justify-between mt-6 pt-4 border-t border-gray-200">
-				{hasExistingOrder ? (
-					<button
-						type="button"
-						onClick={handleCancelOrder}
-						disabled={isSubmitting}
-						className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-					>
-						{isSubmitting ? 'Đang hủy...' : 'Hủy đơn hàng'}
-					</button>
-				) : (
-					<div></div>
-				)}
+				<div className="flex space-x-3">
+					{isDirectPickup ? (
+						<button
+							type="button"
+							onClick={handleRemoveDirectPickup}
+							disabled={isSubmitting}
+							className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+						>
+							{isSubmitting ? 'Đang xử lý...' : 'Bỏ trạng thái'}
+						</button>
+					) : hasExistingOrder ? (
+						<button
+							type="button"
+							onClick={handleCancelOrder}
+							disabled={isSubmitting}
+							className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+						>
+							{isSubmitting ? 'Đang hủy...' : 'Hủy đơn hàng'}
+						</button>
+					) : (
+						<button
+							type="button"
+							onClick={handleDirectPickup}
+							disabled={isSubmitting}
+							className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+						>
+							{isSubmitting ? 'Đang xử lý...' : 'Khách nhận trực tiếp'}
+						</button>
+					)}
+				</div>
 				<div className="flex space-x-3">
 					<button
 						type="button"
@@ -1161,7 +1448,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 					>
 						Đóng
 					</button>
-					{!hasExistingOrder && (
+					{!hasExistingOrder && !isDirectPickup && (
 						<button
 							type="button"
 							onClick={handleSubmitOrder}

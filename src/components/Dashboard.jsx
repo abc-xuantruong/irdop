@@ -4055,6 +4055,10 @@ const Dashboard = () => {
 																					{receipt.tracking_number.split(',').map((trackingNum, index) => {
 																						const trimmedNum = trackingNum.trim();
 																						if (!trimmedNum) return null;
+
+																						// Check if this is a direct pickup tracking number (starts with TT)
+																						const isDirectPickup = trimmedNum.startsWith('TT');
+
 																						return (
 																							<div key={index} className="flex items-center space-x-2">
 																								{' '}
@@ -4072,16 +4076,18 @@ const Dashboard = () => {
 																								>
 																									{trimmedNum}
 																								</span>
-																								<a
-																									href={`https://viettelpost.vn/thong-tin-don-hang?peopleTracking=sender&orderNumber=${trimmedNum}&orderType=1`}
-																									target="_blank"
-																									rel="noopener noreferrer"
-																									className="text-green-600 hover:text-green-800 flex items-center text-xs"
-																									onClick={(e) => e.stopPropagation()}
-																									title="Theo dõi đơn hàng trên Viettel Post"
-																								>
-																									<FaExternalLinkAlt size={10} className="mr-1" /> Track
-																								</a>
+																								{!isDirectPickup && (
+																									<a
+																										href={`https://viettelpost.vn/thong-tin-don-hang?peopleTracking=sender&orderNumber=${trimmedNum}&orderType=1`}
+																										target="_blank"
+																										rel="noopener noreferrer"
+																										className="text-green-600 hover:text-green-800 flex items-center text-xs"
+																										onClick={(e) => e.stopPropagation()}
+																										title="Theo dõi đơn hàng trên Viettel Post"
+																									>
+																										<FaExternalLinkAlt size={10} className="mr-1" /> Track
+																									</a>
+																								)}
 																							</div>
 																						);
 																					})}
@@ -4803,48 +4809,62 @@ const Dashboard = () => {
 			{renderQuickPaymentForm()} {/* Shipment form - added at the end of the component */}
 			{showShipmentForm && selectedReceipt && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-					<div className="bg-white rounded-lg shadow-lg  w-fit mx-4  overflow-y-auto relative">
-						{' '}
-						{/* Fixed header */}
-						<div className="absolute top-0 left-0 right-0 flex justify-between items-center p-2 bg-white border-b border-gray-200 rounded-t-lg z-10">
-							<h2 className="text-xl font-semibold text-gray-800">
-								{selectedReceipt.tracking_number
-									? `Thông tin vận đơn ${selectedReceipt.tracking_number}${
-											selectedReceipt.ppt_send_at ? ` - Ngày ${formatDate(selectedReceipt.ppt_send_at)}` : ''
-									  }`
-									: 'Tạo vận đơn'}
-							</h2>
-							<button
-								onClick={() => {
-									setShowShipmentForm(false);
-									setSelectedReceipt(null);
-								}}
-								className="text-gray-500 hover:text-gray-700 text-xl"
-							>
-								<FaTimes />
-							</button>
-						</div>
-						{/* Content with top padding to account for fixed header */}{' '}
-						<div className="max-w-[80vw] max-h-[90vh] overflow-y-auto p-0">
-							{' '}
-							<ShipmentForm
-								receipt={selectedReceipt}
-								mode={selectedReceipt?.mode || 'auto'}
-								onClose={() => {
-									setShowShipmentForm(false);
-									setSelectedReceipt(null);
-								}}
-								onOrderUpdate={(updatedReceipt) => {
-									// Update currentList with new receipt data
-									setCurrentList((prevList) =>
-										prevList.map((receipt) => (receipt.id === updatedReceipt.id ? updatedReceipt : receipt)),
-									);
-									// Refresh the data to get latest tracking numbers
-									fetchReceipt();
-								}}
-							/>
-						</div>
-					</div>
+					{(() => {
+						// Check if this is a direct pickup - but only for existing tracking numbers, not new shipments
+						const isDirectPickup =
+							selectedReceipt?.mode !== 'new' &&
+							selectedReceipt?.tracking_number &&
+							selectedReceipt.tracking_number.split(',').some((tn) => tn.trim().startsWith('TT'));
+
+						return (
+							<div className="bg-white rounded-lg shadow-lg w-fit mx-4 overflow-y-auto relative">
+								{/* Fixed header */}
+								<div className="absolute top-0 left-0 right-0 flex justify-between items-center p-2 bg-white border-b border-gray-200 rounded-t-lg z-10">
+									<h2 className="text-xl font-semibold text-gray-800">
+										{selectedReceipt?.mode === 'new'
+											? 'Tạo vận đơn mới'
+											: selectedReceipt.tracking_number
+											? `Thông tin vận đơn ${selectedReceipt.tracking_number}${
+													selectedReceipt.ppt_send_at ? ` - Ngày ${formatDate(selectedReceipt.ppt_send_at)}` : ''
+											  }`
+											: 'Tạo vận đơn'}
+									</h2>
+									<button
+										onClick={() => {
+											setShowShipmentForm(false);
+											setSelectedReceipt(null);
+										}}
+										className="text-gray-500 hover:text-gray-700 text-xl"
+									>
+										<FaTimes />
+									</button>
+								</div>
+								{/* Content with dynamic width based on pickup type */}
+								<div
+									className={`${
+										isDirectPickup ? 'max-w-[50vw] min-w-[360px]' : 'max-w-[80vw]'
+									} max-h-[90vh] overflow-y-auto p-0`}
+								>
+									<ShipmentForm
+										receipt={selectedReceipt}
+										mode={selectedReceipt?.mode || 'auto'}
+										onClose={() => {
+											setShowShipmentForm(false);
+											setSelectedReceipt(null);
+										}}
+										onOrderUpdate={(updatedReceipt) => {
+											// Update currentList with new receipt data
+											setCurrentList((prevList) =>
+												prevList.map((receipt) => (receipt.id === updatedReceipt.id ? updatedReceipt : receipt)),
+											);
+											// Refresh the data to get latest tracking numbers
+											fetchReceipt();
+										}}
+									/>
+								</div>
+							</div>
+						);
+					})()}
 				</div>
 			)}
 		</div>

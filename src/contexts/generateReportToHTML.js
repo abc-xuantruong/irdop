@@ -1178,7 +1178,6 @@ function createTableWithConsistentColumnWidths(tableAttributes, headerHtml, body
 /**
  * Content generation helper functions
  */
-// FIXED: Updated generateHeaderHTML to properly display ppt_uid
 function generateHeaderHTML(showVlas = false, pptUid = null) {
 	// FIXED: Use actual ppt_uid if provided, otherwise show DRAFT
 	const displayRefCode = pptUid || 'SƠ BỘ / DRAFT';
@@ -1228,13 +1227,7 @@ function generateHeaderHTML(showVlas = false, pptUid = null) {
                     </span>
                 </div>
             </div>
-            <div class="vlas_icon" 
-                style="position:absolute; right:0mm; top:0cm; ${showVlas ? '' : 'display:none;'}">
-                <img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png" 
-                    loading="lazy" 
-                    style="width:4.6cm;">
             </div>
-        </div>
     </div>`;
 }
 

@@ -16,6 +16,7 @@ import CreateReceipt from './CreateReceipt';
 import { apiGet, apiPost, apiGetBlob } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import axios from 'axios'; // Add axios import
+import FileForm from './FileForm';
 import EmailForm from './EmailForm';
 // Import the generateReportToHTML function
 
@@ -82,10 +83,17 @@ const ReceiptInfor = ({ receipt }) => {
 	const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
 	const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
 	const [isGeneratingPublish, setIsGeneratingPublish] = useState(false);
-	const [generationProgress, setGenerationProgress] = useState(0);
-
-	// State for EmailForm visibility
+	const [generationProgress, setGenerationProgress] = useState(0); // State for EmailForm visibility
 	const [isEmailFormVisible, setIsEmailFormVisible] = useState(false);
+	const [emailFormData, setEmailFormData] = useState({
+		from: '',
+		to: '',
+		subject: '',
+		body: '',
+		attachments: [],
+	});
+	const [isLoadingEmailData, setIsLoadingEmailData] = useState(false);
+	const [isFileFormVisible, setIsFileFormVisible] = useState(false);
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -342,6 +350,10 @@ const ReceiptInfor = ({ receipt }) => {
 					'contact.name': receiptData.contact?.name || '',
 					'contact.phone': receiptData.contact?.phone || '',
 					'contact.email': receiptData.contact?.email || '',
+					'receiver.address': receiptData.receiver?.address || '',
+					'receiver.name': receiptData.receiver?.name || '',
+					'receiver.email': receiptData.receiver?.email || '',
+					'receiver.other': receiptData.receiver?.other || '',
 				});
 
 				// Fetch user information for created_by_uid and modified_by_uid
@@ -394,6 +406,9 @@ const ReceiptInfor = ({ receipt }) => {
 		}
 		return uid; // Fallback to UID if name not found
 	};
+
+	// Add this helper for super admin
+	const isSuperAdmin = () => currentUser?.role?.staff_superAdmin;
 
 	// Toggle edit mode
 	const toggleEditMode = () => {
@@ -1551,14 +1566,98 @@ const ReceiptInfor = ({ receipt }) => {
 		}));
 		handleReceiptApiUpdate('status', newStatus);
 		setEditingGeneralField(null);
-	};
-
-	// Function to update receipt status from EmailForm
+	}; // Function to update receipt status from EmailForm
 	const updateReceiptStatus = (newStatus) => {
 		setCurrentReceipt((prev) => ({
 			...prev,
 			status: newStatus,
 		}));
+	};
+
+	// Function to fetch email form data from API
+	const fetchEmailFormData = async () => {
+		if (!currentReceipt?.receipt_uid) return;
+
+		setIsLoadingEmailData(true);
+		try {
+			showToast('Đang tải dữ liệu email...', 'info');
+
+			const response = await apiPost('https://black.irdop.org/v1/get/email/receipt_form', {
+				receipt_uid: currentReceipt.receipt_uid,
+			});
+
+			if (response.status === 200) {
+				const { from, to, subject, body, attachments } = response.data;
+				setEmailFormData({
+					from: from || 'kiemnghiem@irdop.org',
+					to: to || 'trungkien912@gmail.com',
+					subject: subject || '',
+					body: body || '',
+					attachments: attachments || [],
+				});
+				setIsEmailFormVisible(true);
+			} else {
+				throw new Error(response.data?.message || 'Không thể tải dữ liệu email');
+			}
+		} catch (error) {
+			console.error('Error fetching email form data:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: `Không thể tải dữ liệu email: ${error.message || 'Lỗi không xác định'}`,
+			});
+		} finally {
+			setIsLoadingEmailData(false);
+		}
+	};
+
+	// Function to handle email submission
+	const handleEmailSubmit = async (emailData) => {
+		try {
+			console.log('Sending receipt notification email:', emailData);
+
+			const response = await apiPost('https://red.irdop.org/v1/mail/send/receipt', emailData);
+
+			if (response.status === 200) {
+				// Update receipt status to "Đã tiếp nhận" after successful email sending
+				try {
+					const updatePayload = {
+						receipt: {
+							id: currentReceipt.id,
+							receipt_uid: currentReceipt.receipt_uid,
+							status: 'Đã tiếp nhận',
+							modified_by_uid: currentUser.identity_uid,
+						},
+					};
+
+					const updateResponse = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', updatePayload);
+					if (updateResponse.status === 200) {
+						console.log('Receipt status updated successfully to "Đã tiếp nhận"');
+						updateReceiptStatus('Đã tiếp nhận');
+					} else {
+						console.warn('Failed to update receipt status:', updateResponse.data?.message);
+					}
+				} catch (updateError) {
+					console.error('Error updating receipt status:', updateError);
+				}
+
+				Swal.fire({
+					icon: 'success',
+					title: 'Thành công',
+					text: 'Email thông báo tiếp nhận đã được gửi thành công!',
+				});
+				setIsEmailFormVisible(false);
+			} else {
+				throw new Error(response.data?.message || 'Không thể gửi email');
+			}
+		} catch (error) {
+			console.error('Error sending email:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: `Không thể gửi email: ${error.message || 'Lỗi không xác định'}`,
+			});
+		}
 	};
 
 	// Handle client information update
@@ -1655,6 +1754,53 @@ const ReceiptInfor = ({ receipt }) => {
 		}
 	};
 
+	// Handle receiver information update
+	const handleReceiverApiUpdate = async (field, value) => {
+		try {
+			// Create an updated receiver object with just the changed field
+			const updatedReceiver = {
+				...currentReceipt.receiver,
+				[field]: value,
+			};
+
+			delete updatedReceiver.created_by_uid;
+
+			// Update through receipt endpoint with receiver as a nested property
+			const payload = {
+				receipt: {
+					id: currentReceipt.id,
+					receipt_uid: currentReceipt.receipt_uid,
+					receiver: updatedReceiver,
+					modified_by_uid: currentUser.identity_uid,
+				},
+			};
+
+			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+
+			if (response.status === 200) {
+				showToast(`Cập nhật thông tin người nhận thành công!`);
+				return true;
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Lỗi khi cập nhật thông tin người nhận',
+				});
+				fetchReceipt(); // Refresh data on error
+				return false;
+			}
+		} catch (error) {
+			console.error('Error updating receiver information:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật thông tin người nhận',
+			});
+			fetchReceipt(); // Refresh data on error
+			return false;
+		}
+	};
+
 	// Handle key down for receipt fields
 	const handleReceiptInputKeyDown = (e, field, value) => {
 		if (e.key === 'Enter') {
@@ -1694,58 +1840,20 @@ const ReceiptInfor = ({ receipt }) => {
 		}
 	};
 
-	// Add this function before the return statement
-	// Function to check if ALL client and contact information fields are filled
-	const hasAllClientAndContactFields = () => {
-		if (!currentReceipt) return false;
+	// Handle key down for receiver fields
+	const handleReceiverInputKeyDown = (e, field, value) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			handleReceiverApiUpdate(field, value);
 
-		// Check if client information exists
-		if (!currentReceipt.client) return false;
-
-		// Check client information
-		const clientFields = ['client_name', 'client_address', 'legal_id', 'client_uid'];
-		for (const field of clientFields) {
-			if (!currentReceipt.client[field] || currentReceipt.client[field].trim() === '') {
-				return false; // Return false if ANY field is empty
+			// Remove focus
+			if (document.activeElement) {
+				document.activeElement.blur();
 			}
 		}
-
-		// Check if contact information exists
-		if (!currentReceipt.contact) return false;
-
-		// Check contact information
-		const contactFields = ['name', 'phone', 'email'];
-		for (const field of contactFields) {
-			if (!currentReceipt.contact[field] || currentReceipt.contact[field].trim() === '') {
-				return false; // Return false if ANY field is empty
-			}
-		}
-
-		return true; // All fields have values
 	};
 
-	// Initialize customer details visibility state with default value of false
-	const [isCustomerDetailsVisible, setIsCustomerDetailsVisible] = useState(false);
-	// Add this ref to track if we've already set the visibility
-	const initialVisibilitySet = React.useRef(false);
-
-	const toggleCustomerDetails = () => {
-		setIsCustomerDetailsVisible(!isCustomerDetailsVisible);
-	};
-
-	// Replace the existing useEffect for visibility with this one
-	// that runs only once when data is first loaded
-	useEffect(() => {
-		if (currentReceipt && !initialVisibilitySet.current) {
-			// Set visibility based on whether all fields are filled
-			setIsCustomerDetailsVisible(!hasAllClientAndContactFields());
-			// Mark that we've set the initial visibility
-			initialVisibilitySet.current = true;
-		}
-	}, [currentReceipt]);
-
-	// Remove the existing useEffect with [currentReceipt] dependency that was
-	// causing the panel to auto-hide during form edits
+	// Removed customer details visibility management - details are always shown
 
 	// Handle field click to switch to edit mode
 	const handleFieldClick = (fieldName) => {
@@ -1770,6 +1878,9 @@ const ReceiptInfor = ({ receipt }) => {
 		} else if (field.startsWith('contact.')) {
 			const actualField = field.split('.')[1];
 			handleContactApiUpdate(actualField, value);
+		} else if (field.startsWith('receiver.')) {
+			const actualField = field.split('.')[1];
+			handleReceiverApiUpdate(actualField, value);
 		} else {
 			handleReceiptApiUpdate(field, value);
 		}
@@ -2217,8 +2328,7 @@ const ReceiptInfor = ({ receipt }) => {
 	const getNewestReport = (reports) => {
 		const allReports = getAllReports(reports);
 		return allReports.length > 0 ? allReports[0] : null;
-	};
-	// Helper function to check if all analyses in a sample have been reviewed
+	}; // Helper function to check if all analyses in a sample have been reviewed
 	const allAnalysesReviewed = (sample) => {
 		if (!sample.analysis || sample.analysis.length === 0) return false;
 		const allReviewed = sample.analysis.every((analysis) => analysis.reviewed_by);
@@ -2392,6 +2502,28 @@ const ReceiptInfor = ({ receipt }) => {
 		);
 	};
 
+	// Custom EmailForm Component using HTML from API
+	const EmailFormFromAPI = () => {
+		if (!isEmailFormVisible || !emailFormHtml) return null;
+
+		return (
+			<div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50">
+				<div className="bg-white p-6 rounded-lg w-4/5 max-w-4xl max-h-[90vh] overflow-y-auto relative">
+					<button
+						className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl font-bold"
+						onClick={() => {
+							setIsEmailFormVisible(false);
+							setEmailFormHtml('');
+						}}
+					>
+						×
+					</button>
+					<div dangerouslySetInnerHTML={{ __html: emailFormHtml }} />
+				</div>
+			</div>
+		);
+	};
+
 	return (
 		<div className="w-full">
 			{/* Add custom styling for SweetAlert toasts */}
@@ -2454,15 +2586,48 @@ const ReceiptInfor = ({ receipt }) => {
 							<div className="flex items-center ">
 								{'PRINT'} <FaTag size={20} className="ml-1" />
 							</div>
-						</button>
+						</button>{' '}
 						<button
 							className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20 ml-2"
-							onClick={() => setIsEmailFormVisible(true)}
+							onClick={fetchEmailFormData}
+							disabled={isLoadingEmailData}
 						>
+							{' '}
 							<div className="flex items-center ">
-								{'Email'} <MdOutlineContactPhone size={20} className="ml-1" />
+								{isLoadingEmailData ? (
+									<>
+										<svg className="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24">
+											<circle
+												className="opacity-25"
+												cx="12"
+												cy="12"
+												r="10"
+												stroke="currentColor"
+												strokeWidth="4"
+											></circle>
+											<path
+												className="opacity-75"
+												fill="currentColor"
+												d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+											></path>
+										</svg>
+										Loading
+									</>
+								) : (
+									<>
+										{'Email'} <MdOutlineContactPhone size={20} className="ml-1" />
+									</>
+								)}
 							</div>
 						</button>
+						{isSuperAdmin() && (
+							<button
+								className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20 ml-2"
+								onClick={() => setIsFileFormVisible(true)}
+							>
+								File
+							</button>
+						)}
 						<CreateReceipt receipt={currentReceipt} setUpdatedReceipt={setCurrentReceipt} />
 						<button
 							className="bg-background border-gray-300 text-red-500 font-medium py-0 px-2 rounded-lg w-20"
@@ -2474,23 +2639,22 @@ const ReceiptInfor = ({ receipt }) => {
 						</button>
 					</div>
 				</div>
-			)}
+			)}{' '}
 			{/* Only show general and order information sections for non-technicians */}
 			{!isTechnician() && (
 				<div className="rounded-lg w-full p-4 bg-white ">
-					<div className="flex flex-col md:flex-row">
-						{/* Thông tin chung Section - now 2/5 width and includes contact info */}
-						<div className="w-full md:w-2/5 flex flex-col items-start px-2">
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+						{/* THÔNG TIN CHUNG Section */}
+						<div className="flex flex-col items-start">
 							<div className="flex justify-start items-center mb-1">
 								<CgFileDocument size={16} className="text-primary" />
 								<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN CHUNG</h2>
 							</div>
 							<div className="w-full">
-								{' '}
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số hồ sơ lưu</label>
 									{renderField('record_code', currentReceipt?.record_code)}
-								</div>{' '}
+								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Trạng thái</label>
 									{editingGeneralField === 'status' ? (
@@ -2575,77 +2739,80 @@ const ReceiptInfor = ({ receipt }) => {
 									)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã vận đơn</label>
+									<div className="w-2/3 px-2 py-0 text-sm text-left border border-white rounded-lg">
+										{currentReceipt?.tracking_number || '--'}
+									</div>
+								</div>
+								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ghi chú</label>
 									{renderTextareaField('note', currentReceipt?.note)}
 								</div>
 							</div>
 						</div>
 
-						{/* Thông tin đơn hàng Section - now 3/5 width */}
-						<div className="w-full md:w-3/5 flex flex-col items-start px-2">
+						{/* THÔNG TIN ĐƠN HÀNG Section */}
+						<div className="flex flex-col items-start">
 							<div className="flex justify-start items-center mb-1">
 								<TiBusinessCard size={16} className="text-primary" />
 								<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN ĐƠN HÀNG</h2>
 							</div>
 							<div className="w-full">
-								<div className="flex justify-start items-start mb-1">
-									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Tên khách hàng</label>
-									<div
-										className="w-full px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg flex items-center justify-between"
-										onClick={toggleCustomerDetails}
-									>
-										{currentReceipt?.client?.client_name || '--'}
-										<span
-											className={`text-xs ${
-												!hasAllClientAndContactFields() ? 'text-red-600' : 'text-blue-600'
-											} font-bold`}
-										>
-											{isCustomerDetailsVisible ? 'Ẩn' : ' Xem Chi tiết'}
-										</span>
+								{/* Customer details - always visible */}
+								<div className="rounded-lg mb-2">
+									<div className="flex justify-start items-start mb-1">
+										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã khách hàng</label>
+										{renderField('client.client_uid', currentReceipt?.client?.client_uid)}
+									</div>
+									<div className="flex justify-start items-start mb-1">
+										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
+											Tổ chức/cá nhân
+										</label>
+										{renderField('client.client_name', currentReceipt?.client?.client_name)}
+									</div>
+									<div className="flex justify-start items-start mb-1">
+										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Địa chỉ</label>
+										{renderField('client.client_address', currentReceipt?.client?.client_address)}
+									</div>
+									<div className="flex justify-start items-start mb-1">
+										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
+											Mã số thuế/CCCD
+										</label>
+										{renderField('client.legal_id', currentReceipt?.client?.legal_id)}
+									</div>
+									<div className="flex justify-start items-start mb-1">
+										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Điện thoại</label>
+										{renderField('client.client_phone', currentReceipt?.client?.client_phone)}
+									</div>
+									<div className="flex justify-start items-start mb-1">
+										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email hóa đơn</label>
+										{renderField('client.invoice_email', currentReceipt?.client?.invoice_email)}
+									</div>
+									<div className="flex justify-start items-start mb-1">
+										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Hóa đơn (khác)</label>
+										{editingGeneralField === 'client.invoice_info' ? (
+											<textarea
+												name="client.invoice_info"
+												className="w-2/3 bg-white border border-blue-500 px-2 py-0 rounded-lg text-sm focus:outline-none resize-none align-top"
+												rows="2"
+												value={currentReceipt?.client?.invoice_info || ''}
+												onChange={handleInputChange}
+												onBlur={() => handleFieldBlur('client.invoice_info', currentReceipt?.client?.invoice_info)}
+												onKeyDown={(e) =>
+													handleFieldKeyDown(e, 'client.invoice_info', currentReceipt?.client?.invoice_info)
+												}
+												autoFocus
+											/>
+										) : (
+											<div
+												className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top"
+												onClick={() => handleFieldClick('client.invoice_info')}
+											>
+												{displayValue(currentReceipt?.client?.invoice_info)}
+											</div>
+										)}
 									</div>
 								</div>
-
-								{/* Customer details in the same layout as other fields */}
-								{isCustomerDetailsVisible && (
-									<div className="rounded-lg px-1 border-l-4 border-teritary">
-										<div className="flex justify-start items-start mb-1">
-											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
-												Tổ chức / Cá nhân
-											</label>
-											{renderField('client.client_name', currentReceipt?.client?.client_name)}
-										</div>
-										<div className="flex justify-start items-start mb-1 ">
-											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
-												Mã khách hàng
-											</label>
-											{renderField('client.client_uid', currentReceipt?.client?.client_uid)}
-										</div>
-										<div className="flex justify-start items-start mb-1">
-											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Địa chỉ</label>
-											{renderField('client.client_address', currentReceipt?.client?.client_address)}
-										</div>
-										<div className="flex justify-start items-start mb-1">
-											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
-												Mã số thuế/CCCD
-											</label>
-											{renderField('client.legal_id', currentReceipt?.client?.legal_id)}
-										</div>
-										<div className="flex justify-start items-start mb-1">
-											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
-												Người liên hệ
-											</label>
-											{renderField('contact.name', currentReceipt?.contact?.name)}
-										</div>
-										<div className="flex justify-start items-start mb-1">
-											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Điện thoại</label>
-											{renderField('contact.phone', currentReceipt?.contact?.phone)}
-										</div>
-										<div className="flex justify-start items-start mb-1">
-											<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email</label>
-											{renderField('contact.email', currentReceipt?.contact?.email)}
-										</div>
-									</div>
-								)}
 
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số báo giá</label>
@@ -2678,6 +2845,76 @@ const ReceiptInfor = ({ receipt }) => {
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Người thực hiện</label>
 									{renderField('sale_recorder', currentReceipt?.sale_recorder)}
+								</div>
+							</div>
+						</div>
+
+						{/* THÔNG TIN LIÊN HỆ Section */}
+						<div className="flex flex-col items-start">
+							<div className="flex justify-start items-center mb-1">
+								<MdOutlineContactPhone size={16} className="text-primary" />
+								<h2 className="text-md font-semibold w-fit text-primary px-1">THÔNG TIN LIÊN HỆ</h2>
+							</div>
+							<div className="w-full">
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Người liên hệ</label>
+									{renderField('contact.name', currentReceipt?.contact?.name)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Điện thoại</label>
+									{renderField('contact.phone', currentReceipt?.contact?.phone)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email</label>
+									{renderField('contact.email', currentReceipt?.contact?.email)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">CCCD</label>
+									{renderField('contact.id', currentReceipt?.contact?.id)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ngày cấp</label>
+									{renderField('contact.id_date', currentReceipt?.contact?.id_date)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Nơi cấp</label>
+									{renderField('contact.id_place', currentReceipt?.contact?.id_place)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Địa chỉ nhận KQ</label>
+									{renderField('receiver.address', currentReceipt?.receiver?.address)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
+										Người nhận (khác)
+									</label>
+									{renderField('receiver.name', currentReceipt?.receiver?.name)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email KQ</label>
+									{renderField('receiver.email', currentReceipt?.receiver?.email)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Khác</label>
+									{editingGeneralField === 'receiver.other' ? (
+										<textarea
+											name="receiver.other"
+											className="w-2/3 bg-white border border-blue-500 px-2 py-0 rounded-lg text-sm focus:outline-none resize-none align-top"
+											rows="2"
+											value={currentReceipt?.receiver?.other || ''}
+											onChange={handleInputChange}
+											onBlur={() => handleFieldBlur('receiver.other', currentReceipt?.receiver?.other)}
+											onKeyDown={(e) => handleFieldKeyDown(e, 'receiver.other', currentReceipt?.receiver?.other)}
+											autoFocus
+										/>
+									) : (
+										<div
+											className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top"
+											onClick={() => handleFieldClick('receiver.other')}
+										>
+											{displayValue(currentReceipt?.receiver?.other)}
+										</div>
+									)}
 								</div>
 							</div>
 						</div>
@@ -3113,10 +3350,20 @@ const ReceiptInfor = ({ receipt }) => {
 				)}{' '}
 			{/* EmailForm */}
 			<EmailForm
-				receipt={currentReceipt}
+				from={emailFormData.from}
+				to={emailFormData.to}
+				subject={emailFormData.subject}
+				body={emailFormData.body}
+				attachments={emailFormData.attachments}
 				isVisible={isEmailFormVisible}
 				onClose={() => setIsEmailFormVisible(false)}
-				onStatusUpdate={updateReceiptStatus}
+				onSubmit={handleEmailSubmit}
+			/>
+			{/* FileForm */}
+			<FileForm
+				foreginKey={[currentReceipt?.receipt_uid]}
+				isVisible={isFileFormVisible}
+				onClose={() => setIsFileFormVisible(false)}
 			/>
 		</div>
 	);
