@@ -57,22 +57,30 @@ const CreateReceiptFromCRM = () => {
 	});
 	const [customerInfo, setCustomerInfo] = useState({});
 	const [newField, setNewField] = useState({ fname: '', fvalue: '' });
-	const [defaultSampleInformation, setDefaultSampleInformation] = useState(true);
+	const [defaultSampleInformation, setDefaultSampleInformation] = useState(false);
 
 	// States for direct input editing
 	const [clientInfo, setClientInfo] = useState({
 		client_name: '',
 		client_address: '',
 		legal_id: '',
+		client_phone: '',
+		invoice_email: '',
+		invoice_info: '',
 	});
 	const [contactInfo, setContactInfo] = useState({
 		name: '',
 		phone: '',
 		email: '',
+		id: '',
+		id_date: '',
+		id_place: '',
 	});
 	const [receiverInfo, setReceiverInfo] = useState({
 		name: '',
 		address: '',
+		email: '',
+		other: '',
 	});
 
 	const { formatDate, currentUser, purposes, hasAuthCookies } = useContext(GlobalContext);
@@ -190,7 +198,7 @@ const CreateReceiptFromCRM = () => {
 		setSelectedPurpose('');
 		setDeadline('');
 		setCustomerInfo({});
-		setDefaultSampleInformation(true);
+		setDefaultSampleInformation(false);
 		setEditingField({ type: null, field: null, index: null });
 		setEditingAnalysis({ sampleIndex: null, analysisIndex: null, field: null });
 		setEditingSampleInfo({ sampleIndex: null, isEditing: false });
@@ -198,9 +206,28 @@ const CreateReceiptFromCRM = () => {
 		setShowMatrixDropdown(false);
 		setMatrixPage(1);
 		setCurrentEditingMatrixIndex(null);
-		setClientInfo({ client_name: '', client_address: '', legal_id: '' });
-		setContactInfo({ name: '', phone: '', email: '' });
-		setReceiverInfo({ name: '', address: '' });
+		setClientInfo({
+			client_name: '',
+			client_address: '',
+			legal_id: '',
+			client_phone: '',
+			invoice_email: '',
+			invoice_info: '',
+		});
+		setContactInfo({
+			name: '',
+			phone: '',
+			email: '',
+			id: '',
+			id_date: '',
+			id_place: '',
+		});
+		setReceiverInfo({
+			name: '',
+			address: '',
+			email: '',
+			other: '',
+		});
 		setPartnerLink(''); // Reset partner link
 		setLinkError(''); // Reset link error
 
@@ -1151,15 +1178,23 @@ const CreateReceiptFromCRM = () => {
 				client_name: crmData.client?.client_name || '',
 				client_address: crmData.client?.client_address || '',
 				legal_id: crmData.client?.legal_id || '',
+				client_phone: crmData.client?.client_phone || '',
+				invoice_email: crmData.client?.invoice_email || '',
+				invoice_info: crmData.client?.invoice_info || '',
 			});
 			setContactInfo({
 				name: crmData.contact?.name || '',
 				phone: crmData.contact?.phone || '',
 				email: crmData.contact?.email || '',
+				id: crmData.contact?.id || '',
+				id_date: crmData.contact?.id_date || '',
+				id_place: crmData.contact?.id_place || '',
 			});
 			setReceiverInfo({
 				name: crmData.receiver?.name || '',
 				address: crmData.receiver?.address || '',
+				email: crmData.receiver?.email || '',
+				other: crmData.receiver?.other || '',
 			});
 		}
 	}, [crmData]);
@@ -1229,20 +1264,40 @@ const CreateReceiptFromCRM = () => {
 	const handleAddCustomerField = (sampleIndex) => {
 		const updatedCustomerInfo = { ...customerInfo };
 		if (!updatedCustomerInfo[sampleIndex]) {
-			updatedCustomerInfo[sampleIndex] = [
-				{
-					fname: 'Tên mẫu thử / name.',
-					fvalue: crmData?.samples[sampleIndex]?.sample_name || '',
-				},
-			];
+			if (!defaultSampleInformation && crmData?.samples[sampleIndex]) {
+				// Initialize with default fields if defaultSampleInformation is false
+				updatedCustomerInfo[sampleIndex] = defaultCustomerFields.map((field) => ({
+					...field,
+					fvalue: field.fname === 'Tên mẫu thử / name.' ? crmData.samples[sampleIndex].sample_name || '' : field.fvalue,
+				}));
+			} else {
+				updatedCustomerInfo[sampleIndex] = [
+					{
+						fname: 'Tên mẫu thử / name.',
+						fvalue: crmData?.samples[sampleIndex]?.sample_name || '',
+					},
+				];
+			}
 		}
 		updatedCustomerInfo[sampleIndex] = [...updatedCustomerInfo[sampleIndex], { fname: '', fvalue: '' }];
 		setCustomerInfo(updatedCustomerInfo);
 	};
 	const handleCustomerFieldChange = (sampleIndex, fieldIndex, field, value) => {
 		const updatedCustomerInfo = { ...customerInfo };
+
+		// Initialize with default fields if not exists and defaultSampleInformation is false
 		if (!updatedCustomerInfo[sampleIndex]) {
-			updatedCustomerInfo[sampleIndex] = [];
+			if (!defaultSampleInformation && crmData?.samples[sampleIndex]) {
+				updatedCustomerInfo[sampleIndex] = defaultCustomerFields.map((defaultField) => ({
+					...defaultField,
+					fvalue:
+						defaultField.fname === 'Tên mẫu thử / name.'
+							? crmData.samples[sampleIndex].sample_name || ''
+							: defaultField.fvalue,
+				}));
+			} else {
+				updatedCustomerInfo[sampleIndex] = [];
+			}
 		}
 
 		if (field === 'fname') {
@@ -1292,7 +1347,7 @@ const CreateReceiptFromCRM = () => {
 	const handleAddSampleInfoToAll = () => {
 		if (!crmData || !crmData.samples) return;
 
-		if (defaultSampleInformation) {
+		if (!defaultSampleInformation) {
 			// Switch to full sample information mode
 			const updatedCustomerInfo = { ...customerInfo };
 
@@ -1304,13 +1359,13 @@ const CreateReceiptFromCRM = () => {
 				updatedCustomerInfo[index] = [...defaultFields];
 			});
 			setCustomerInfo(updatedCustomerInfo);
-			setDefaultSampleInformation(false);
-			showBriefNotification('Đã bật đầy đủ thông tin mẫu cho tất cả các mẫu!', 'success');
-		} else {
-			// Switch back to default mode
-			setCustomerInfo({});
 			setDefaultSampleInformation(true);
-			showBriefNotification('Đã chuyển về thông tin mặc định!', 'success');
+			showBriefNotification('Đã bật chế độ thông tin mẫu đầy đủ!', 'success');
+		} else {
+			// Switch back to default mode (sample info shown by default)
+			setCustomerInfo({});
+			setDefaultSampleInformation(false);
+			showBriefNotification('Đã tắt chế độ thông tin mẫu đầy đủ!', 'success');
 		}
 	};
 
@@ -1335,7 +1390,7 @@ const CreateReceiptFromCRM = () => {
 		setSelectedPurpose('');
 		setDeadline('');
 		setCustomerInfo({});
-		setDefaultSampleInformation(true);
+		setDefaultSampleInformation(false);
 		setEditingField({ type: null, field: null, index: null });
 		setEditingAnalysis({ sampleIndex: null, analysisIndex: null, field: null });
 		setEditingSampleInfo({ sampleIndex: null, isEditing: false });
@@ -1343,9 +1398,28 @@ const CreateReceiptFromCRM = () => {
 		setShowMatrixDropdown(false);
 		setMatrixPage(1);
 		setCurrentEditingMatrixIndex(null);
-		setClientInfo({ client_name: '', client_address: '', legal_id: '' });
-		setContactInfo({ name: '', phone: '', email: '' });
-		setReceiverInfo({ name: '', address: '' });
+		setClientInfo({
+			client_name: '',
+			client_address: '',
+			legal_id: '',
+			client_phone: '',
+			invoice_email: '',
+			invoice_info: '',
+		});
+		setContactInfo({
+			name: '',
+			phone: '',
+			email: '',
+			id: '',
+			id_date: '',
+			id_place: '',
+		});
+		setReceiverInfo({
+			name: '',
+			address: '',
+			email: '',
+			other: '',
+		});
 		setPartnerLink(''); // Reset partner link
 		setLinkError(''); // Reset link error
 
@@ -1470,7 +1544,9 @@ const CreateReceiptFromCRM = () => {
 			if (result.order_code && result.partner_uri) {
 				const domain = window.location.origin;
 
-				const fullLink = `${domain}/partner_request_form.html?orderCode=${encodeURIComponent(result.order_code)}&uri=${encodeURIComponent(result.partner_uri)}`;
+				const fullLink = `${domain}/partner_request_form.html?orderCode=${encodeURIComponent(
+					result.order_code,
+				)}&uri=${encodeURIComponent(result.partner_uri)}`;
 				console.log('Generated partner link:', fullLink);
 				setPartnerLink(fullLink);
 				Swal.fire({
@@ -1632,6 +1708,39 @@ const CreateReceiptFromCRM = () => {
 													placeholder="Nhập mã số thuế / CCCD"
 												/>
 											</div>
+
+											<div className="mb-2">
+												<label className="font-medium text-gray-500 block mb-1">Điện thoại</label>
+												<input
+													type="tel"
+													value={clientInfo.client_phone}
+													onChange={(e) => handleClientInfoChange('client_phone', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập số điện thoại"
+												/>
+											</div>
+
+											<div className="mb-2">
+												<label className="font-medium text-gray-500 block mb-1">Email hóa đơn</label>
+												<input
+													type="email"
+													value={clientInfo.invoice_email}
+													onChange={(e) => handleClientInfoChange('invoice_email', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập email hóa đơn"
+												/>
+											</div>
+
+											<div className="mb-1">
+												<label className="font-medium text-gray-500 block mb-1">TT hóa đơn (khác)</label>
+												<input
+													type="text"
+													value={clientInfo.invoice_info}
+													onChange={(e) => handleClientInfoChange('invoice_info', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập thông tin hóa đơn khác"
+												/>
+											</div>
 										</div>
 
 										{/* Contact Information Section */}
@@ -1670,6 +1779,38 @@ const CreateReceiptFromCRM = () => {
 													placeholder="Nhập địa chỉ email"
 												/>
 											</div>
+
+											<div className="mb-2">
+												<label className="font-medium text-gray-500 block mb-1">CCCD</label>
+												<input
+													type="text"
+													value={contactInfo.id}
+													onChange={(e) => handleContactInfoChange('id', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập số CCCD"
+												/>
+											</div>
+
+											<div className="mb-2">
+												<label className="font-medium text-gray-500 block mb-1">Ngày cấp</label>
+												<input
+													type="date"
+													value={contactInfo.id_date}
+													onChange={(e) => handleContactInfoChange('id_date', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+												/>
+											</div>
+
+											<div className="mb-1">
+												<label className="font-medium text-gray-500 block mb-1">Nơi cấp</label>
+												<input
+													type="text"
+													value={contactInfo.id_place}
+													onChange={(e) => handleContactInfoChange('id_place', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập nơi cấp CCCD"
+												/>
+											</div>
 										</div>
 
 										{/* Receiver Information Section */}
@@ -1697,6 +1838,28 @@ const CreateReceiptFromCRM = () => {
 													placeholder="Nhập địa chỉ người nhận (nếu khác với địa chỉ khách hàng)"
 												/>
 											</div>
+
+											<div className="mb-2">
+												<label className="font-medium text-gray-500 block mb-1">Email KQ</label>
+												<input
+													type="email"
+													value={receiverInfo.email}
+													onChange={(e) => handleReceiverInfoChange('email', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập email nhận kết quả"
+												/>
+											</div>
+
+											<div className="mb-1">
+												<label className="font-medium text-gray-500 block mb-1">Khác</label>
+												<input
+													type="text"
+													value={receiverInfo.other}
+													onChange={(e) => handleReceiverInfoChange('other', e.target.value)}
+													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+													placeholder="Nhập thông tin khác"
+												/>
+											</div>
 										</div>
 									</div>
 
@@ -1711,13 +1874,13 @@ const CreateReceiptFromCRM = () => {
 														<button
 															onClick={handleAddSampleInfoToAll}
 															className={`text-white text-sm rounded-lg px-3 py-1 ${
-																!defaultSampleInformation
+																defaultSampleInformation
 																	? 'bg-sky-500 hover:bg-sky-600'
 																	: 'bg-gray-400 hover:bg-gray-500'
 															}`}
 															title="Bật/tắt thông tin đầy đủ cho tất cả mẫu"
 														>
-															Đầy đủ thông tin mẫu
+															{defaultSampleInformation ? 'Tắt thông tin mẫu' : 'Đầy đủ thông tin mẫu'}
 														</button>
 														<button
 															type="button"
@@ -1881,7 +2044,7 @@ const CreateReceiptFromCRM = () => {
 													/>
 												</div>
 											</div>
-											<div className="overflow-y-auto max-h-[calc(95vh-400px)] lg:max-h-[50vh] pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 mb-10">
+											<div className="overflow-y-auto max-h-fit pr-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 mb-10">
 												{crmData.samples.map((sample, index) => (
 													<div key={index} className="mb-4 p-2 border rounded w-full">
 														<div className="flex justify-between items-center">
@@ -1967,7 +2130,6 @@ const CreateReceiptFromCRM = () => {
 																			>
 																				{getPaginatedMatrices(matrixInput).map((matrix, matrixIndex) => (
 																					<div
-								
 																						key={matrixIndex}
 																						className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
 																						onClick={() => {
@@ -2032,7 +2194,7 @@ const CreateReceiptFromCRM = () => {
 															</div>{' '}
 														</div>{' '}
 														{/* Sample Information Section - Moved above analysis table */}
-														{customerInfo[index]?.length > 0 && (
+														{(customerInfo[index]?.length > 0 || !defaultSampleInformation) && (
 															<div className="mb-4 border-t pt-4">
 																<div className="border py-2 mt-2 rounded-lg">
 																	{/* Customer Information Section */}
@@ -2049,7 +2211,18 @@ const CreateReceiptFromCRM = () => {
 																		</div>
 																		<div className="w-full overflow-hidden hover:overflow-auto mb-1">
 																			<div className="flex flex-wrap">
-																				{customerInfo[index].map((field, fieldIndex) => (
+																				{(
+																					customerInfo[index] ||
+																					(!defaultSampleInformation
+																						? defaultCustomerFields.map((field) => ({
+																								...field,
+																								fvalue:
+																									field.fname === 'Tên mẫu thử / name.'
+																										? sample.sample_name || ''
+																										: field.fvalue,
+																						  }))
+																						: [])
+																				).map((field, fieldIndex) => (
 																					<div key={fieldIndex} className="mb-1 w-full px-2">
 																						<table className="w-full">
 																							<tbody>

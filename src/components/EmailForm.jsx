@@ -1,10 +1,21 @@
 import * as React from 'react';
 const { useState, useEffect, useRef } = React;
 import Swal from 'sweetalert2';
+import { apiPost } from '../contexts/helperFunctionCallAPI';
 
-const EmailForm = ({ from, to, subject, body, attachments, isVisible, onClose, onSubmit }) => {
+const EmailForm = ({ from, to, subject, body, attachments, foreignKeyUIDs, isVisible, onClose, onSubmit }) => {
 	const [isSendingEmail, setIsSendingEmail] = useState(false);
 	const contentEditableRef = useRef(null);
+
+	// File selection states
+	const [showFileModal, setShowFileModal] = useState(false);
+	const [fileList, setFileList] = useState([]);
+	const [selectedFileIds, setSelectedFileIds] = useState([]);
+	const [loadingFiles, setLoadingFiles] = useState(false);
+
+	// Attachment files info
+	const [attachmentFiles, setAttachmentFiles] = useState([]);
+	const [loadingAttachments, setLoadingAttachments] = useState(false);
 
 	// Helper function to strip HTML tags for validation
 	const stripHtmlTags = (html) => {
@@ -31,6 +42,13 @@ const EmailForm = ({ from, to, subject, body, attachments, isVisible, onClose, o
 			body: body || '',
 			attachments: attachments || [],
 		});
+
+		// Load attachment files info when attachments change
+		if (attachments && attachments.length > 0) {
+			loadAttachmentFiles(attachments);
+		} else {
+			setAttachmentFiles([]);
+		}
 	}, [from, to, subject, body, attachments]);
 
 	// Update contenteditable div when emailData.body changes
@@ -39,6 +57,107 @@ const EmailForm = ({ from, to, subject, body, attachments, isVisible, onClose, o
 			contentEditableRef.current.innerHTML = emailData.body;
 		}
 	}, [emailData.body]);
+
+	// Load files when opening file modal
+	const loadFiles = async () => {
+		if (!foreignKeyUIDs) {
+			return;
+		}
+
+		setLoadingFiles(true);
+		try {
+			const response = await apiPost('https://red.irdop.org/v1/file/get_by_key', {
+				foreignKeyUIDs: foreignKeyUIDs,
+			});
+
+			if (response.status === 200 && Array.isArray(response.data)) {
+				setFileList(response.data);
+			} else {
+				setFileList([]);
+			}
+		} catch (error) {
+			console.error('Error loading files:', error);
+			setFileList([]);
+		} finally {
+			setLoadingFiles(false);
+		}
+	};
+
+	// Load attachment files info
+	const loadAttachmentFiles = async (attachmentIds) => {
+		if (!attachmentIds || attachmentIds.length === 0) {
+			setAttachmentFiles([]);
+			return;
+		}
+
+		setLoadingAttachments(true);
+		try {
+			const fileResults = [];
+
+			// Gọi API từng file một
+			for (const attachmentId of attachmentIds) {
+				try {
+					const response = await apiPost('https://red.irdop.org/v1/file/get/file', {
+						id: attachmentId,
+					});
+
+					if (response.status === 200 && response.data) {
+						fileResults.push(response.data);
+					}
+				} catch (fileError) {
+					console.error(`Error loading file ${attachmentId}:`, fileError);
+					// Continue với file tiếp theo nếu có lỗi
+				}
+			}
+
+			setAttachmentFiles(fileResults);
+		} catch (error) {
+			console.error('Error loading attachment files:', error);
+			setAttachmentFiles([]);
+		} finally {
+			setLoadingAttachments(false);
+		}
+	};
+
+	// Handle file selection
+	const handleFileSelect = (fileId, isSelected) => {
+		if (isSelected) {
+			setSelectedFileIds((prev) => [...prev, fileId]);
+		} else {
+			setSelectedFileIds((prev) => prev.filter((id) => id !== fileId));
+		}
+	};
+
+	// Add selected files to attachments
+	const handleConfirmFileSelection = () => {
+		// Add only file IDs to attachments array
+		setEmailData((prev) => ({
+			...prev,
+			attachments: [...prev.attachments, ...selectedFileIds],
+		}));
+
+		setShowFileModal(false);
+		setSelectedFileIds([]);
+	};
+
+	// Remove attachment by ID
+	const handleRemoveAttachment = (fileId) => {
+		setEmailData((prev) => ({
+			...prev,
+			attachments: prev.attachments.filter((id) => id !== fileId),
+		}));
+	};
+
+	// Get file name by ID from attachmentFiles or fileList
+	const getFileNameById = (fileId) => {
+		// First check in attachmentFiles
+		let file = attachmentFiles.find((f) => f.id === fileId);
+		if (!file) {
+			// Fallback to fileList
+			file = fileList.find((f) => f.id === fileId);
+		}
+		return file?.originInfo?.fileName || 'Unknown File';
+	};
 
 	if (!isVisible) return null;
 
@@ -281,6 +400,42 @@ const EmailForm = ({ from, to, subject, body, attachments, isVisible, onClose, o
 							minHeight: '400px',
 						}}
 					/>
+
+					<label className="text-sm font-medium text-gray-700 pt-2 text-left">Đính kèm:</label>
+					<div className="space-y-2">
+						{loadingAttachments ? (
+							<div className="text-sm text-gray-500">Đang tải thông tin file đính kèm...</div>
+						) : emailData.attachments.length > 0 ? (
+							<div className="space-y-1">
+								{emailData.attachments.map((fileId, index) => (
+									<div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded border">
+										<span className="text-sm">{getFileNameById(fileId)}</span>
+										<button
+											onClick={() => handleRemoveAttachment(fileId)}
+											className="text-red-600 hover:text-red-800 text-sm"
+										>
+											Xóa
+										</button>
+									</div>
+								))}
+							</div>
+						) : null}
+						<button
+							onClick={(e) => {
+								if (!foreignKeyUIDs) {
+									return;
+								}
+
+								setShowFileModal(true);
+								loadFiles();
+							}}
+							className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm cursor-pointer"
+							disabled={!foreignKeyUIDs}
+							type="button"
+						>
+							Chọn file đính kèm
+						</button>
+					</div>
 				</div>
 
 				<div className="flex justify-end space-x-2">
@@ -314,6 +469,100 @@ const EmailForm = ({ from, to, subject, body, attachments, isVisible, onClose, o
 					</button>
 				</div>
 			</div>
+
+			{/* File Selection Modal */}
+			{showFileModal && (
+				<div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-60">
+					<div className="bg-white p-6 rounded-lg w-4/5 max-w-4xl max-h-[80vh] overflow-y-auto">
+						<h3 className="text-xl font-semibold mb-4">Chọn file đính kèm</h3>
+
+						{loadingFiles ? (
+							<div className="text-center py-4">Đang tải danh sách file...</div>
+						) : (
+							<>
+								{fileList.length > 0 ? (
+									<div className="space-y-2 max-h-96 overflow-y-auto">
+										{fileList.map((file) => {
+											const isAlreadyAttached = emailData.attachments.includes(file.id);
+											const isSelected = selectedFileIds.includes(file.id);
+
+											return (
+												<div
+													key={file.id}
+													className={`flex items-center space-x-3 p-2 border rounded cursor-pointer hover:bg-gray-50 ${
+														isAlreadyAttached ? 'bg-gray-100 opacity-50' : ''
+													} ${isSelected ? 'border-blue-500 bg-blue-50' : ''}`}
+													onClick={() => {
+														if (!isAlreadyAttached) {
+															handleFileSelect(file.id, !isSelected);
+														}
+													}}
+												>
+													<input
+														type="checkbox"
+														checked={isSelected}
+														onChange={(e) => handleFileSelect(file.id, e.target.checked)}
+														disabled={isAlreadyAttached}
+														className="w-4 h-4"
+														onClick={(e) => e.stopPropagation()}
+													/>
+													<div className="flex-1 min-w-0">
+														<div className="flex items-center gap-4 min-w-0 text-start">
+															<div className="min-w-[300px] flex-1">
+																<span className="font-medium text-sm truncate block">
+																	{file.originInfo?.fileName || 'Unknown File'}
+																</span>
+															</div>
+															<div className="min-w-[100px] flex-shrink-0">
+																<span className="text-sm text-gray-600 whitespace-nowrap">
+																	{(file.originInfo?.fileSize / 1024).toFixed(2)} KB
+																</span>
+															</div>
+															<div className="min-w-[120px] flex-shrink-0">
+																<span className="text-sm text-gray-600 whitespace-nowrap">
+																	{new Date(file.createdAt).toLocaleDateString()}
+																</span>
+															</div>
+															{isAlreadyAttached && (
+																<div className="flex-shrink-0">
+																	<span className="text-blue-600 font-medium text-sm whitespace-nowrap">
+																		• Đã đính kèm
+																	</span>
+																</div>
+															)}
+														</div>
+													</div>
+												</div>
+											);
+										})}
+									</div>
+								) : (
+									<div className="text-center py-4 text-gray-500">Không có file nào</div>
+								)}
+
+								<div className="flex justify-end space-x-2 mt-4">
+									<button
+										onClick={() => {
+											setShowFileModal(false);
+											setSelectedFileIds([]);
+										}}
+										className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+									>
+										Hủy
+									</button>
+									<button
+										onClick={handleConfirmFileSelection}
+										disabled={selectedFileIds.length === 0}
+										className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+									>
+										Xác nhận ({selectedFileIds.length} file)
+									</button>
+								</div>
+							</>
+						)}
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };
