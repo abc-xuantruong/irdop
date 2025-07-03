@@ -1199,7 +1199,7 @@ export default function MultiPageEditor() {
         <div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
             <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
                 <strong style="font-size:12px; line-height:1.2; margin:0;">PHÒNG PHÂN TÍCH KIỂM NGHIỆM/<br>KIỂM SOÁT CHẤT LƯỢNG / Laboratory Manager</strong>
-                <p style="font-size:12px; margin:0; line-height:1.4;">Nguyễn Trung Kiên</p>
+                <p style="font-size:12px; margin:0; line-height:1.4;">Trần Thị Lan</p>
             </div>
             <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
                 <strong style="font-size:12px; line-height:1.2; margin:0;">KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President</strong>
