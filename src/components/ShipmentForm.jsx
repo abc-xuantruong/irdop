@@ -1045,91 +1045,6 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 		}
 	};
 
-	// State for adding existing tracking number
-	const [showAddTracking, setShowAddTracking] = useState(false);
-	const [newTrackingNumber, setNewTrackingNumber] = useState('');
-
-	// Handle adding existing tracking number
-	const handleAddExistingTracking = async () => {
-		if (!newTrackingNumber.trim()) {
-			alert('Vui lòng nhập mã vận đơn');
-			return;
-		}
-
-		if (!receipt?.id || !receipt?.receipt_uid) {
-			alert('Không có thông tin phiếu tiếp nhận để cập nhật');
-			return;
-		}
-
-		try {
-			setIsSubmitting(true);
-
-			// Add 7 hours to account for GMT+7
-			const adjustedDate = new Date();
-			adjustedDate.setHours(adjustedDate.getHours() + 7);
-			const formattedDate = adjustedDate.toISOString().split('T')[0];
-
-			// Append new tracking number to existing ones (if any)
-			let updatedTrackingNumber = newTrackingNumber.trim();
-			if (receipt.tracking_number && receipt.tracking_number.trim() !== '') {
-				// Split existing tracking numbers, clean them, and add the new one
-				const existingNumbers = receipt.tracking_number
-					.split(',')
-					.map((num) => num.trim())
-					.filter((num) => num !== '');
-
-				// Check if tracking number already exists
-				if (existingNumbers.includes(newTrackingNumber.trim())) {
-					alert('Mã vận đơn này đã tồn tại');
-					return;
-				}
-
-				existingNumbers.push(newTrackingNumber.trim());
-				updatedTrackingNumber = existingNumbers.join(',');
-			}
-
-			const payload = {
-				receipt: {
-					id: receipt.id,
-					receipt_uid: receipt.receipt_uid,
-					ppt_send_at: formattedDate,
-					ppt_send_by: currentUser?.identity_uid,
-					tracking_number: updatedTrackingNumber,
-				},
-			};
-
-			const updateResponse = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
-
-			if (updateResponse.status === 200) {
-				console.log('Receipt updated successfully with existing tracking number:', newTrackingNumber.trim());
-
-				// Call onOrderUpdate to refresh dashboard data
-				if (onOrderUpdate) {
-					const updatedReceipt = {
-						...receipt,
-						ppt_send_at: formattedDate,
-						ppt_send_by: currentUser?.identity_uid,
-						tracking_number: updatedTrackingNumber,
-					};
-					onOrderUpdate(updatedReceipt);
-				}
-
-				alert(`Đã thêm mã vận đơn thành công: ${newTrackingNumber.trim()}`);
-				setShowAddTracking(false);
-				setNewTrackingNumber('');
-				onClose && onClose();
-			} else {
-				console.error('Error updating receipt:', updateResponse.data?.message);
-				alert('Có lỗi xảy ra khi cập nhật phiếu tiếp nhận');
-			}
-		} catch (error) {
-			console.error('Error adding existing tracking number:', error);
-			alert('Có lỗi xảy ra khi thêm mã vận đơn: ' + (error.message || 'Lỗi không xác định'));
-		} finally {
-			setIsSubmitting(false);
-		}
-	};
-
 	// Check if this is a direct pickup tracking number - but only for existing tracking, not new shipments
 	const isDirectPickup =
 		mode !== 'new' &&
@@ -1493,48 +1408,6 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 					<div className="text-green-600 font-semibold text-lg">✓ Khách hàng đã nhận trực tiếp</div>
 				</div>
 			)}
-			{/* Add existing tracking number section */}
-			{!isDirectPickup && !hasExistingOrder && showAddTracking && (
-				<div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
-					<div className="space-y-3">
-						<div className="flex items-center justify-between">
-							<h5 className="font-medium text-gray-700">Thêm mã vận đơn hiện có</h5>
-							<button
-								type="button"
-								onClick={() => {
-									setShowAddTracking(false);
-									setNewTrackingNumber('');
-								}}
-								className="text-gray-500 hover:text-gray-700"
-							>
-								✕
-							</button>
-						</div>
-						<div className="flex gap-3">
-							<input
-								type="text"
-								value={newTrackingNumber}
-								onChange={(e) => setNewTrackingNumber(e.target.value)}
-								placeholder="Nhập mã vận đơn hiện có..."
-								className="flex-1 p-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
-								onKeyPress={(e) => {
-									if (e.key === 'Enter') {
-										handleAddExistingTracking();
-									}
-								}}
-							/>
-							<button
-								type="button"
-								onClick={handleAddExistingTracking}
-								disabled={isSubmitting || !newTrackingNumber.trim()}
-								className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-							>
-								{isSubmitting ? 'Đang thêm...' : 'Xác nhận'}
-							</button>
-						</div>
-					</div>
-				</div>
-			)}
 			{/* Action buttons */}
 			<div className="flex justify-between mt-6 pt-4 border-t border-gray-200">
 				<div className="flex space-x-3">
@@ -1557,24 +1430,14 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							{isSubmitting ? 'Đang hủy...' : 'Hủy đơn hàng'}
 						</button>
 					) : (
-						<>
-							<button
-								type="button"
-								onClick={handleDirectPickup}
-								disabled={isSubmitting}
-								className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-							>
-								{isSubmitting ? 'Đang xử lý...' : 'Khách nhận trực tiếp'}
-							</button>
-							<button
-								type="button"
-								onClick={() => setShowAddTracking(true)}
-								disabled={isSubmitting || showAddTracking}
-								className="px-6 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-							>
-								Gửi cùng vận đơn khác
-							</button>
-						</>
+						<button
+							type="button"
+							onClick={handleDirectPickup}
+							disabled={isSubmitting}
+							className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+						>
+							{isSubmitting ? 'Đang xử lý...' : 'Khách nhận trực tiếp'}
+						</button>
 					)}
 				</div>
 				<div className="flex space-x-3">

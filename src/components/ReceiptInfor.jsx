@@ -9,18 +9,7 @@ import { PiDownloadSimpleBold } from 'react-icons/pi';
 import { CgFileDocument } from 'react-icons/cg';
 import { TiBusinessCard } from 'react-icons/ti';
 import { MdOutlineContactPhone } from 'react-icons/md';
-import {
-	FaTrashAlt,
-	FaEdit,
-	FaCheck,
-	FaMoneyBillWave,
-	FaFilePdf,
-	FaTag,
-	FaImage,
-	FaUpload,
-	FaFile,
-	FaFolder,
-} from 'react-icons/fa';
+import { FaTrashAlt, FaEdit, FaCheck, FaMoneyBillWave, FaFilePdf, FaTag } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import CreateReceipt from './CreateReceipt';
@@ -29,7 +18,6 @@ import Swal from 'sweetalert2';
 import axios from 'axios'; // Add axios import
 import FileForm from './FileForm';
 import EmailForm from './EmailForm';
-import SampleImageUpload from './SampleImageUpload';
 // Import the generateReportToHTML function
 
 const ReceiptInfor = ({ receipt }) => {
@@ -106,11 +94,6 @@ const ReceiptInfor = ({ receipt }) => {
 	});
 	const [isLoadingEmailData, setIsLoadingEmailData] = useState(false);
 	const [isFileFormVisible, setIsFileFormVisible] = useState(false);
-
-	// Add state for sample image
-	const [sampleImageUrl, setSampleImageUrl] = useState('');
-	const [isLoadingImage, setIsLoadingImage] = useState(false);
-	const [imageError, setImageError] = useState(false);
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -319,33 +302,6 @@ const ReceiptInfor = ({ receipt }) => {
 		return date;
 	};
 
-	// Function to fetch sample image if sample_img_uid exists
-	const fetchSampleImage = async (sampleImgUid) => {
-		if (!sampleImgUid) return;
-
-		setIsLoadingImage(true);
-		setImageError(false);
-
-		try {
-			const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
-				expiry: 60 * 10,
-				mode: 'view',
-				fileRecord: { id: sampleImgUid },
-			});
-
-			if (response.status === 200 && response.data) {
-				setSampleImageUrl(response.data);
-			} else {
-				setImageError(true);
-			}
-		} catch (error) {
-			console.error('Error fetching sample image:', error);
-			setImageError(true);
-		} finally {
-			setIsLoadingImage(false);
-		}
-	};
-
 	const fetchReceipt = async () => {
 		try {
 			const response = await apiGet(`https://black.irdop.org/khsi19me/db/get/receipt_full/${receipt_uid}`);
@@ -406,11 +362,6 @@ const ReceiptInfor = ({ receipt }) => {
 				}
 				if (receiptData.modified_by_uid) {
 					fetchUserIdentity(receiptData.modified_by_uid);
-				}
-
-				// Fetch sample image if sample_img_uid exists
-				if (receiptData.sample_img_uid) {
-					fetchSampleImage(receiptData.sample_img_uid);
 				}
 			} else if (response.status === 401) {
 				navigate('/login');
@@ -1642,7 +1593,7 @@ const ReceiptInfor = ({ receipt }) => {
 					to: to || 'trungkien912@gmail.com',
 					subject: subject || '',
 					body: body || '',
-					attachments: [currentReceipt?.sample_img_uid] || [],
+					attachments: attachments || [],
 				});
 				setIsEmailFormVisible(true);
 			} else {
@@ -1962,13 +1913,7 @@ const ReceiptInfor = ({ receipt }) => {
 		const displayText = isCurrency ? formatCurrency(value) : displayValue(value);
 
 		if (disabled) {
-			return (
-				<div className="w-2/3 px-2 py-0 text-sm text-left border border-white break-words overflow-hidden">
-					<span className="block truncate" title={displayText}>
-						{displayText}
-					</span>
-				</div>
-			);
+			return <div className="w-2/3 px-2 py-0 text-sm text-left border border-white">{displayText}</div>;
 		}
 
 		if (isEditing) {
@@ -1988,11 +1933,10 @@ const ReceiptInfor = ({ receipt }) => {
 
 		return (
 			<div
-				className="w-full px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg align-top break-words overflow-hidden"
+				className="w-full px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg align-top"
 				onClick={() => handleFieldClick(fieldName)}
-				title={displayText}
 			>
-				<span className="block truncate">{displayText}</span>
+				{displayText}
 			</div>
 		);
 	};
@@ -2002,13 +1946,7 @@ const ReceiptInfor = ({ receipt }) => {
 		const isEditing = editingGeneralField === fieldName;
 
 		if (disabled) {
-			return (
-				<div className="w-2/3 px-2 py-0 text-sm text-left border border-white break-words overflow-hidden">
-					<span className="block" title={displayValue(value)}>
-						{displayValue(value)}
-					</span>
-				</div>
-			);
+			return <div className="w-2/3 px-2 py-0 text-sm text-left border border-white">{displayValue(value)}</div>;
 		}
 
 		if (isEditing) {
@@ -2028,11 +1966,10 @@ const ReceiptInfor = ({ receipt }) => {
 
 		return (
 			<div
-				className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top break-words overflow-hidden"
+				className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top"
 				onClick={() => handleFieldClick(fieldName)}
-				title={displayValue(value)}
 			>
-				<span className="block">{displayValue(value)}</span>
+				{displayValue(value)}
 			</div>
 		);
 	};
@@ -2683,14 +2620,14 @@ const ReceiptInfor = ({ receipt }) => {
 								)}
 							</div>
 						</button>
-						<button
-							className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20 ml-2"
-							onClick={() => setIsFileFormVisible(true)}
-						>
-							<div className="flex items-center justify-between">
-								{'File'} <FaFolder size={15} className="ml-1" />
-							</div>
-						</button>
+						{isSuperAdmin() && (
+							<button
+								className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20 ml-2"
+								onClick={() => setIsFileFormVisible(true)}
+							>
+								File
+							</button>
+						)}
 						<CreateReceipt receipt={currentReceipt} setUpdatedReceipt={setCurrentReceipt} />
 						<button
 							className="bg-background border-gray-300 text-red-500 font-medium py-0 px-2 rounded-lg w-20"
@@ -2741,6 +2678,10 @@ const ReceiptInfor = ({ receipt }) => {
 											{currentReceipt?.status || 'Chưa xác định'}
 										</div>
 									)}
+								</div>
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã tiếp nhận</label>
+									{renderField('receipt_uid', currentReceipt?.receipt_uid, true)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ngày tiếp nhận</label>
@@ -2806,65 +2747,6 @@ const ReceiptInfor = ({ receipt }) => {
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ghi chú</label>
 									{renderTextareaField('note', currentReceipt?.note)}
-								</div>
-
-								{/* Add sample image section below note */}
-								<div className="flex justify-start items-start mb-1">
-									<div>
-										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Hình ảnh mẫu</label>
-										{/* Sample Image Upload Button */}
-										{currentReceipt?.receipt_uid && (
-											<SampleImageUpload
-												receiptUid={currentReceipt.receipt_uid}
-												receiptID={currentReceipt.id}
-												onUploadSuccess={(fileUid) => {
-													// Handle successful upload, e.g., by fetching the receipt again
-													fetchReceipt();
-												}}
-											/>
-										)}
-									</div>
-									<div className="w-2/3">
-										{/* Sample Image Display */}
-										{currentReceipt?.sample_img_uid && (
-											<div className="mb-2 w-fit h-fit">
-												{isLoadingImage ? (
-													<div className="flex items-center justify-center p-4 border border-gray-300 rounded-lg">
-														<svg className="animate-spin h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24">
-															<circle
-																className="opacity-25"
-																cx="12"
-																cy="12"
-																r="10"
-																stroke="currentColor"
-																strokeWidth="4"
-															></circle>
-															<path
-																className="opacity-75"
-																fill="currentColor"
-																d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-															></path>
-														</svg>
-														<span className="ml-2 text-gray-500">Đang tải hình ảnh...</span>
-													</div>
-												) : imageError ? (
-													<div className="flex items-center justify-center p-4 border border-red-300 rounded-lg bg-red-50">
-														<FaImage className="text-red-400 mr-2" size={20} />
-														<span className="text-red-600">Không thể tải hình ảnh</span>
-													</div>
-												) : sampleImageUrl ? (
-													<div className="border border-gray-300 rounded-lg overflow-hidden">
-														<img
-															src={sampleImageUrl}
-															alt="Hình ảnh mẫu"
-															className="w-full h-auto max-h-48 object-contain"
-															onError={() => setImageError(true)}
-														/>
-													</div>
-												) : null}
-											</div>
-										)}
-									</div>
 								</div>
 							</div>
 						</div>
@@ -3027,11 +2909,10 @@ const ReceiptInfor = ({ receipt }) => {
 										/>
 									) : (
 										<div
-											className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top break-words overflow-hidden"
+											className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top"
 											onClick={() => handleFieldClick('receiver.other')}
-											title={displayValue(currentReceipt?.receiver?.other)}
 										>
-											<span className="block">{displayValue(currentReceipt?.receiver?.other)}</span>
+											{displayValue(currentReceipt?.receiver?.other)}
 										</div>
 									)}
 								</div>
@@ -3108,7 +2989,7 @@ const ReceiptInfor = ({ receipt }) => {
 													<path
 														className="opacity-75"
 														fill="currentColor"
-														d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+														d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
 													></path>
 												</svg>
 											</span>
@@ -3142,7 +3023,7 @@ const ReceiptInfor = ({ receipt }) => {
 													<path
 														className="opacity-75"
 														fill="currentColor"
-														d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+														d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
 													></path>
 												</svg>
 											</span>
@@ -3176,7 +3057,7 @@ const ReceiptInfor = ({ receipt }) => {
 													<path
 														className="opacity-75"
 														fill="currentColor"
-														d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+														d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
 													></path>
 												</svg>
 											</span>
@@ -3474,16 +3355,13 @@ const ReceiptInfor = ({ receipt }) => {
 				subject={emailFormData.subject}
 				body={emailFormData.body}
 				attachments={emailFormData.attachments}
-				foreignKeyUIDs={[currentReceipt?.receipt_uid]}
 				isVisible={isEmailFormVisible}
 				onClose={() => setIsEmailFormVisible(false)}
 				onSubmit={handleEmailSubmit}
 			/>
 			{/* FileForm */}
 			<FileForm
-				foreignKeyUIDs={[currentReceipt?.receipt_uid]}
-				// localPath="activities/LAB"
-				objectPath="activities/LAB"
+				foreginKey={[currentReceipt?.receipt_uid]}
 				isVisible={isFileFormVisible}
 				onClose={() => setIsFileFormVisible(false)}
 			/>

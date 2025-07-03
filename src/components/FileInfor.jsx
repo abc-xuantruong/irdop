@@ -3,476 +3,196 @@ import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiPost, apiGet } from '../contexts/helperFunctionCallAPI';
 import { toast, ToastContainer } from 'react-toastify';
-import { FaEye, FaDownload, FaTrashAlt, FaEdit, FaPlus, FaCheck, FaTimes, FaFilter, FaUndo } from 'react-icons/fa';
+import { FaEye, FaDownload, FaTrashAlt } from 'react-icons/fa';
 import { useNavigate, useLocation } from 'react-router-dom';
-import Swal from 'sweetalert2';
 
 const FileInfor = () => {
-	const { setCurrentTitlePage, getIdenByUid, currentUser } = useContext(GlobalContext);
+	const { setCurrentTitlePage } = useContext(GlobalContext);
 	const navigate = useNavigate();
 	const location = useLocation();
-	const [fileList, setFileList] = useState([]);
-	const [loading, setLoading] = useState(false);
+	const [existingFiles, setExistingFiles] = useState([]);
+	const [groupedFiles, setGroupedFiles] = useState({});
 	const [currentPage, setCurrentPage] = useState(1);
-	const [filesPerPage, setFilesPerPage] = useState(20);
-	const [totalPages, setTotalPages] = useState(1);
-	const [searchTerm, setSearchTerm] = useState('');
-	const [isSearchMode, setIsSearchMode] = useState(false);
-	const [searchResults, setSearchResults] = useState([]);
-	const [isTrashMode, setIsTrashMode] = useState(false);
-	const [trashFiles, setTrashFiles] = useState([]);
-	const [editingFile, setEditingFile] = useState(null);
-	const [editData, setEditData] = useState({});
-	const [addingForeignKey, setAddingForeignKey] = useState(null);
-	const [newForeignKey, setNewForeignKey] = useState('');
-	const [identityNames, setIdentityNames] = useState({});
-	const [showFilters, setShowFilters] = useState({
-		fileName: false,
-		userTags: false,
-		identityName: false,
-		foreignKeyUIDs: false,
-	});
+	const [filesPerPage] = useState(30);
+	const [selectedSource, setSelectedSource] = useState('irdop'); // Default source
 	const [filters, setFilters] = useState({
 		fileName: '',
-		userTags: [],
-		identityName: '',
-		foreignKeyUIDs: '',
+		description: '',
+		categories: [],
+		uploadedByUID: '',
+		createdByUID: '',
 	});
+	const [showFilters, setShowFilters] = useState({
+		fileName: false,
+		description: false,
+		categories: false,
+		uploadedByUID: false,
+		createdByUID: false,
+	});
+	const [searchQuery, setSearchQuery] = useState('');
 
-	// Function to fetch identity names for files without identityName
-	const fetchIdentityNames = async (files) => {
-		const filesToFetch = files.filter((file) => !file.identityName && file.identityUID);
-		if (filesToFetch.length === 0) return;
-
-		const newIdentityNames = { ...identityNames };
-
-		for (const file of filesToFetch) {
-			if (!newIdentityNames[file.identityUID]) {
-				try {
-					const identityData = await getIdenByUid(file.identityUID);
-					if (identityData && identityData.identity_name) {
-						newIdentityNames[file.identityUID] = identityData.identity_name;
-					}
-				} catch (error) {
-					console.error('Error fetching identity for UID:', file.identityUID, error);
-				}
+	// Function to get identity UID from cookies
+	const getIdentityUID = () => {
+		const cookies = document.cookie.split(';');
+		for (let cookie of cookies) {
+			const [name, value] = cookie.trim().split('=');
+			if (name === 'identityUID') {
+				return value;
 			}
 		}
-
-		setIdentityNames(newIdentityNames);
+		return null;
 	};
-
-	// Add a helper function to check if user is an admin
-	const isAdmin = () => {
-		return currentUser?.role?.staff_admin;
-	};
-
-	// Set the title page and fetch files
+	// Set the title page and handle URL parameters
 	useEffect(() => {
 		setCurrentTitlePage('Danh sách File');
 
-		// Check URL parameters for search term
+		// Get query and source from URL if exists
 		const urlParams = new URLSearchParams(location.search);
-		const searchFromUrl = urlParams.get('searchTerm');
+		const queryFromUrl = urlParams.get('query') || '';
+		const sourceFromUrl = urlParams.get('source') || 'irdop';
 
-		if (searchFromUrl) {
-			setSearchTerm(searchFromUrl);
-			handleSearch(searchFromUrl);
-		} else {
-			fetchFiles();
-		}
-	}, [setCurrentTitlePage]);
+		setSearchQuery(queryFromUrl);
+		setSelectedSource(sourceFromUrl);
 
-	// Function to fetch trash files
-	const fetchTrashFiles = async () => {
-		setLoading(true);
+		// Fetch files with query and source from URL
+		fetchExistingFiles(queryFromUrl, sourceFromUrl);
+	}, [setCurrentTitlePage, location.search]);
+	// Function to fetch existing files from API
+	const fetchExistingFiles = async (query = '', source = 'irdop') => {
 		try {
-			const response = await apiPost('https://red.irdop.org/v1/file/get/trash');
-
-			if (response.status === 200 && Array.isArray(response.data.listFiles)) {
-				setTrashFiles(response.data.listFiles);
-				setIsTrashMode(true);
-				setIsSearchMode(false);
-				fetchIdentityNames(response.data.listFiles);
-			} else {
-				setTrashFiles([]);
-				setIsTrashMode(true);
+			const requestBody = { source };
+			if (query) {
+				requestBody.query = query;
 			}
-		} catch (error) {
-			console.error('Error fetching trash files:', error);
-			toast.error('Lỗi kết nối khi tải danh sách file chờ xóa');
-			setTrashFiles([]);
-			setIsTrashMode(true);
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	// Function to clear trash mode
-	const handleClearTrashMode = () => {
-		setIsTrashMode(false);
-		setCurrentPage(1);
-		fetchFiles(1);
-	};
-
-	const handleRestoreFile = async (fileId) => {
-		try {
-			const response = await apiPost('https://red.irdop.org/v1/file/update/file', {
-				id: fileId,
-				updateData: {
-					deletedAt: null,
-				},
-			});
-
+			const response = await apiPost('https://red.irdop.org/v1/file/get_list', requestBody);
+			console.log('Response from API:', response);
 			if (response.status === 200) {
-				toast.success('Khôi phục file thành công', { autoClose: 1000 });
-				fetchTrashFiles();
-			} else {
-				toast.error('Lỗi khi khôi phục file', { autoClose: 1000 });
-			}
-		} catch (error) {
-			console.error('Error restoring file:', error);
-			toast.error('Lỗi khi khôi phục file', { autoClose: 1000 });
-		}
-	};
+				const data = response.data;
+				setExistingFiles(data);
 
-	// Function to fetch files by page
-	const fetchFiles = async (page = currentPage, itemsPerPage = filesPerPage) => {
-		setLoading(true);
-		try {
-			const response = await apiPost('https://red.irdop.org/v1/file/get_by_page', {
-				page: page,
-				filesPerPage: itemsPerPage,
-			});
+				// Group files by fileGroupUID
+				const grouped = data.reduce((acc, file) => {
+					const groupId = file.fileGroupUID || 'no-group';
+					if (!acc[groupId]) {
+						acc[groupId] = [];
+					}
+					acc[groupId].push(file);
+					return acc;
+				}, {});
 
-			if (response.status === 200 && response.data) {
-				setFileList(response.data.listFiles || []);
-				setTotalPages(response.data.totalPage || 1);
-				setIsSearchMode(false);
-				fetchIdentityNames(response.data.listFiles || []);
+				setGroupedFiles(grouped);
 			} else {
-				setFileList([]);
-				setTotalPages(1);
+				console.error('Failed to fetch files:', response.data?.message || 'Unknown error');
+				toast.error(`Lỗi khi tải danh sách file: ${response.data?.message || 'Unknown error'}`);
 			}
 		} catch (error) {
 			console.error('Error fetching files:', error);
 			toast.error('Lỗi kết nối khi tải danh sách file');
-			setFileList([]);
-			setTotalPages(1);
-		} finally {
-			setLoading(false);
 		}
 	};
 
-	// Function to handle search
-	const handleSearch = async (term = searchTerm) => {
-		if (!term.trim()) return;
-
-		setLoading(true);
-		try {
-			const response = await apiPost('https://red.irdop.org/v1/file/search', {
-				searchTerm: term.trim(),
-			});
-
-			if (response.status === 200 && response.data) {
-				// Handle both possible response formats
-				const searchData = Array.isArray(response.data) ? response.data : response.data.listFiles || [];
-				setSearchResults(searchData);
-				setIsSearchMode(true);
-				setCurrentPage(1);
-				fetchIdentityNames(searchData);
-
-				// Update URL with search term
-				const urlParams = new URLSearchParams(location.search);
-				urlParams.set('searchTerm', term.trim());
-				navigate(`${location.pathname}?${urlParams.toString()}`, { replace: true });
-			} else {
-				setSearchResults([]);
-				setIsSearchMode(true);
-			}
-		} catch (error) {
-			console.error('Error searching files:', error);
-			toast.error('Lỗi kết nối khi tìm kiếm file');
-			setSearchResults([]);
-			setIsSearchMode(true);
-		} finally {
-			setLoading(false);
-		}
+	// Function to handle search input change (only update input value)
+	const handleSearchChange = (e) => {
+		setSearchQuery(e.target.value);
 	};
-
-	// Function to clear search
-	const handleClearSearch = () => {
-		setSearchTerm('');
-		setSearchResults([]);
-		setIsSearchMode(false);
-		setCurrentPage(1);
-
-		// Remove search term from URL
-		const urlParams = new URLSearchParams(location.search);
-		urlParams.delete('searchTerm');
-		const newUrl = urlParams.toString() ? `${location.pathname}?${urlParams.toString()}` : location.pathname;
-		navigate(newUrl, { replace: true });
-
-		// Fetch regular files
-		fetchFiles(1, filesPerPage);
-	};
-
-	// Function to handle search input submit
+	// Function to handle Enter key press
 	const handleSearchSubmit = (e) => {
-		if (e.key === 'Enter' || e.type === 'click') {
-			handleSearch();
-		}
-	};
+		if (e.key === 'Enter') {
+			const query = searchQuery.trim();
 
-	// Function to handle files per page change
-	const handleFilesPerPageChange = (newFilesPerPage) => {
-		setFilesPerPage(newFilesPerPage);
-		setCurrentPage(1);
-		if (!isSearchMode && !isTrashMode) {
-			fetchFiles(1, newFilesPerPage);
-		}
-	};
-
-	// Fetch identity names when fileList, searchResults, or trashFiles changes
-	useEffect(() => {
-		const files = isTrashMode ? trashFiles : isSearchMode ? searchResults : fileList;
-		if (files.length > 0) {
-			fetchIdentityNames(files);
-		}
-	}, [fileList, searchResults, trashFiles, isSearchMode, isTrashMode]);
-
-	// Handle click outside to close filter dropdowns
-	useEffect(() => {
-		const handleClickOutside = (event) => {
-			// Check if click is outside any filter-related elements
-			const isClickInsideFilter =
-				event.target.closest('.filter-dropdown') ||
-				event.target.closest('.filter-button') ||
-				event.target.closest('th') ||
-				event.target.closest('input[type="checkbox"]') ||
-				event.target.closest('select') ||
-				event.target.closest('input[type="text"]');
-
-			if (!isClickInsideFilter) {
-				setShowFilters({
-					fileName: false,
-					userTags: false,
-					identityName: false,
-					foreignKeyUIDs: false,
-				});
+			// Update URL with query parameter
+			const urlParams = new URLSearchParams(location.search);
+			if (query) {
+				urlParams.set('query', query);
+			} else {
+				urlParams.delete('query');
 			}
+
+			// Navigate with new URL parameters
+			navigate(`${location.pathname}?${urlParams.toString()}`, { replace: true });
+
+			// Fetch files with query
+			fetchExistingFiles(query, selectedSource);
+		}
+	};
+
+	// Function to handle source change
+	const handleSourceChange = (e) => {
+		const newSource = e.target.value;
+		setSelectedSource(newSource);
+
+		// Update URL with source parameter
+		const urlParams = new URLSearchParams(location.search);
+		urlParams.set('source', newSource);
+
+		// Navigate with new URL parameters
+		navigate(`${location.pathname}?${urlParams.toString()}`, { replace: true });
+
+		// Fetch files with new source
+		fetchExistingFiles(searchQuery, newSource);
+	};
+
+	// Function to get paginated files
+	const getPaginatedFiles = () => {
+		const allFiles = [];
+
+		// Flatten all files with their group information
+		Object.entries(groupedFiles).forEach(([groupId, files]) => {
+			files.forEach((file) => {
+				allFiles.push({
+					...file,
+					groupId: groupId,
+				});
+			});
+		});
+
+		// Apply filters
+		const filteredFiles = allFiles.filter((file) => {
+			const fileNameMatch =
+				filters.fileName === '' ||
+				(file.fileInfo?.fileName || '').toLowerCase().includes(filters.fileName.toLowerCase());
+
+			const descriptionMatch =
+				filters.description === '' ||
+				(file.uploadDescription || '').toLowerCase().includes(filters.description.toLowerCase());
+
+			const categoryMatch =
+				filters.categories.length === 0 ||
+				(Array.isArray(file.fileCategory)
+					? file.fileCategory.some((cat) => filters.categories.includes(cat))
+					: filters.categories.includes(file.fileCategory));
+
+			const uploadedByUIDMatch =
+				filters.uploadedByUID === '' ||
+				(file.uploadedByName || '').toLowerCase().includes(filters.uploadedByUID.toLowerCase());
+
+			const createdByUIDMatch =
+				filters.createdByUID === '' ||
+				(file.createdByUID || '').toLowerCase().includes(filters.createdByUID.toLowerCase());
+
+			return fileNameMatch && descriptionMatch && categoryMatch && uploadedByUIDMatch && createdByUIDMatch;
+		});
+
+		// Calculate pagination based on filtered files
+		const startIndex = (currentPage - 1) * filesPerPage;
+		const endIndex = startIndex + filesPerPage;
+		const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+
+		// Group the paginated files back by groupId
+		const groupedPaginatedFiles = {};
+		paginatedFiles.forEach((file) => {
+			const groupId = file.groupId;
+			if (!groupedPaginatedFiles[groupId]) {
+				groupedPaginatedFiles[groupId] = [];
+			}
+			groupedPaginatedFiles[groupId].push(file);
+		});
+
+		return {
+			groupedFiles: groupedPaginatedFiles,
+			totalFiles: filteredFiles.length,
+			totalPages: Math.ceil(filteredFiles.length / filesPerPage),
 		};
-
-		document.addEventListener('mousedown', handleClickOutside);
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside);
-		};
-	}, []);
-
-	const categoryOptions = [
-		'Ảnh mẫu',
-		'Phiếu gửi mẫu',
-		'Đơn hàng',
-		'Biên bản kiểm nghiệm',
-		'Phiếu phân tích',
-		'Biên bản bàn giao',
-		'Specification / COA',
-	];
-
-	// Function to handle file actions (view/download)
-	const handleFileAction = async (fileRecord, mode) => {
-		try {
-			const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
-				expiry: 60 * 10,
-				mode: mode,
-				fileRecord: fileRecord,
-			});
-
-			if (response.status === 200 && response.data) {
-				if (mode === 'view') {
-					window.open(response.data, '_blank');
-					toast.success('Đã mở file trong tab mới', { autoClose: 1000 });
-				} else if (mode === 'download') {
-					const link = document.createElement('a');
-					link.href = response.data;
-					link.download = fileRecord.originInfo?.fileName || 'download';
-					document.body.appendChild(link);
-					link.click();
-					document.body.removeChild(link);
-					toast.success('Tải file thành công', { autoClose: 1000 });
-				}
-			}
-		} catch (error) {
-			console.error(`${mode} failed:`, error);
-			toast.error(`Lỗi khi ${mode === 'view' ? 'xem' : 'tải'} file`, { autoClose: 1000 });
-		}
-	};
-
-	// Function to add foreign key
-	const handleAddForeignKey = (fileId) => {
-		if (!newForeignKey.trim()) return;
-
-		const updatedForeignKeys = [...(editData.foreignKeyUIDs || []), newForeignKey.trim()];
-		setEditData({
-			...editData,
-			foreignKeyUIDs: updatedForeignKeys,
-		});
-		setAddingForeignKey(null);
-		setNewForeignKey('');
-	};
-
-	// Function to remove foreign key
-	const handleRemoveForeignKey = (fileId, keyToRemove) => {
-		const updatedForeignKeys = (editData.foreignKeyUIDs || []).filter((key) => key !== keyToRemove);
-		setEditData({
-			...editData,
-			foreignKeyUIDs: updatedForeignKeys,
-		});
-	};
-
-	// Function to update file
-	const handleUpdateFile = async (fileId) => {
-		try {
-			const response = await apiPost('https://red.irdop.org/v1/file/update/file', {
-				id: fileId,
-				updateData: {
-					originInfo: editData.originInfo,
-					userTags: editData.userTags,
-					foreignKeyUIDs: editData.foreignKeyUIDs,
-				},
-			});
-
-			if (response.status === 200) {
-				toast.success('Cập nhật file thành công', { autoClose: 1000 });
-				// Refresh file list based on current mode
-				if (isTrashMode) {
-					fetchTrashFiles();
-				} else if (isSearchMode) {
-					handleSearch();
-				} else {
-					fetchFiles();
-				}
-				setEditingFile(null);
-				setEditData({});
-				setAddingForeignKey(null);
-				setNewForeignKey('');
-			}
-		} catch (error) {
-			console.error('Update failed:', error);
-			toast.error('Lỗi khi cập nhật file', { autoClose: 1000 });
-		}
-	};
-
-	// Function to start editing
-	const handleEditStart = (file) => {
-		setEditingFile(file.id);
-		setEditData({
-			originInfo: {
-				fileName: file.originInfo?.fileName || '',
-				mimeType: file.originInfo?.mimeType || '',
-				fileSize: file.originInfo?.fileSize || 0,
-			},
-			userTags: file.userTags || [],
-			foreignKeyUIDs: file.foreignKeyUIDs || [],
-		});
-	};
-
-	// Function to cancel editing
-	const handleEditCancel = () => {
-		setEditingFile(null);
-		setEditData({});
-		setAddingForeignKey(null);
-		setNewForeignKey('');
-	};
-
-	// Function to delete file
-	const handleDeleteFile = async (file) => {
-		try {
-			const result = await Swal.fire({
-				title: 'Xác nhận xóa file',
-				text: `Bạn có chắc chắn muốn xóa file "${file.originInfo?.fileName}"?`,
-				icon: 'warning',
-				showCancelButton: true,
-				confirmButtonColor: '#d33',
-				cancelButtonColor: '#3085d6',
-				confirmButtonText: 'Xóa',
-				cancelButtonText: 'Hủy',
-			});
-
-			if (result.isConfirmed) {
-				const response = await apiPost('https://red.irdop.org/v1/file/update/file', {
-					id: file.id,
-					updateData: {
-						deletedAt: new Date().toISOString(),
-					},
-				});
-
-				if (response.status === 200) {
-					toast.success('Xóa file thành công', { autoClose: 1000 });
-					// Refresh file list based on current mode
-					if (isTrashMode) {
-						fetchTrashFiles();
-					} else if (isSearchMode) {
-						handleSearch();
-					} else {
-						fetchFiles();
-					}
-				} else {
-					toast.error('Lỗi khi xóa file', { autoClose: 1000 });
-				}
-			}
-		} catch (error) {
-			console.error('Delete failed:', error);
-			toast.error('Lỗi khi xóa file', { autoClose: 1000 });
-		}
-	};
-
-	// Function to permanently delete file from trash
-	const handleDeleteFilePermanently = async (file) => {
-		try {
-			const result = await Swal.fire({
-				title: 'Xác nhận xóa vĩnh viễn',
-				text: `Bạn có chắc chắn muốn xóa vĩnh viễn file "${file.originInfo?.fileName}"? Hành động này không thể hoàn tác!`,
-				icon: 'warning',
-				showCancelButton: true,
-				confirmButtonColor: '#d33',
-				cancelButtonColor: '#3085d6',
-				confirmButtonText: 'Xóa vĩnh viễn',
-				cancelButtonText: 'Hủy',
-			});
-
-			if (result.isConfirmed) {
-				const response = await apiPost('https://red.irdop.org/v1/file/delete/permanent', {
-					id: file.id,
-				});
-
-				if (response.status === 200) {
-					toast.success('Xóa file vĩnh viễn thành công', { autoClose: 1000 });
-					fetchTrashFiles();
-				} else {
-					toast.error('Lỗi khi xóa file vĩnh viễn', { autoClose: 1000 });
-				}
-			}
-		} catch (error) {
-			console.error('Permanent delete failed:', error);
-			toast.error('Lỗi khi xóa file vĩnh viễn', { autoClose: 1000 });
-		}
-	};
-
-	// Function to toggle filter visibility
-	const toggleFilter = (column) => {
-		setShowFilters((prev) => ({
-			...prev,
-			[column]: !prev[column],
-		}));
-
-		// Clear filter when hiding
-		if (showFilters[column]) {
-			setFilters((prev) => ({
-				...prev,
-				[column]: column === 'userTags' ? [] : '',
-			}));
-		}
 	};
 
 	// Function to handle filter change
@@ -484,98 +204,221 @@ const FileInfor = () => {
 		setCurrentPage(1); // Reset to first page when filtering
 	};
 
-	// Function to handle category filter change
-	const handleCategoryFilterChange = (category, isChecked) => {
-		setFilters((prev) => ({
+	// Function to toggle filter input visibility
+	const toggleFilter = (column) => {
+		setShowFilters((prev) => ({
 			...prev,
-			userTags: isChecked ? [...prev.userTags, category] : prev.userTags.filter((tag) => tag !== category),
+			[column]: !prev[column],
 		}));
-		setCurrentPage(1);
-	};
 
-	// Filter files based on search term and filters
-	const getFilteredFiles = () => {
-		const files = isSearchMode ? searchResults : fileList;
-
-		return files.filter((file) => {
-			// File name filter
-			if (filters.fileName && !file.originInfo?.fileName?.toLowerCase().includes(filters.fileName.toLowerCase())) {
-				return false;
+		// Clear filter when hiding
+		if (showFilters[column]) {
+			if (column === 'categories') {
+				setFilters((prev) => ({ ...prev, categories: [] }));
+			} else {
+				handleFilterChange(column, '');
 			}
-
-			// User tags filter
-			if (filters.userTags.length > 0) {
-				if (filters.userTags.includes('empty')) {
-					// If "empty" is selected, include files with no tags
-					if (file.userTags && file.userTags.length > 0) return false;
-				} else {
-					// Normal tag filtering
-					const hasMatchingTag = filters.userTags.some((tag) => file.userTags && file.userTags.includes(tag));
-					if (!hasMatchingTag) return false;
-				}
-			}
-
-			// Identity name filter
-			if (filters.identityName) {
-				const identityName = file.identityName || identityNames[file.identityUID] || '';
-				if (!identityName.toLowerCase().includes(filters.identityName.toLowerCase())) {
-					return false;
-				}
-			}
-
-			// Foreign key UIDs filter
-			if (filters.foreignKeyUIDs) {
-				if (filters.foreignKeyUIDs === 'empty') {
-					// If "empty" is selected, include files with no foreign keys
-					if (file.foreignKeyUIDs && file.foreignKeyUIDs.length > 0) return false;
-				} else {
-					// Normal foreign key filtering
-					const foreignKeysString = (file.foreignKeyUIDs || []).join(' ').toLowerCase();
-					if (!foreignKeysString.includes(filters.foreignKeyUIDs.toLowerCase())) {
-						return false;
-					}
-				}
-			}
-
-			return true;
-		});
-	};
-
-	// Get paginated files
-	const getPaginatedFiles = () => {
-		if (isSearchMode) {
-			// For search results, handle pagination locally
-			const filteredFiles = getFilteredFiles();
-			const startIndex = (currentPage - 1) * filesPerPage;
-			const endIndex = startIndex + filesPerPage;
-
-			return {
-				paginatedFiles: filteredFiles.slice(startIndex, endIndex),
-				totalFiles: filteredFiles.length,
-				totalPages: Math.ceil(filteredFiles.length / filesPerPage),
-			};
-		} else {
-			// For regular files, use server-side pagination
-			const filteredFiles = getFilteredFiles();
-
-			return {
-				paginatedFiles: filteredFiles,
-				totalFiles: filteredFiles.length,
-				totalPages: totalPages,
-			};
 		}
 	};
 
 	// Function to handle page change
 	const handlePageChange = (newPage) => {
 		setCurrentPage(newPage);
-
-		if (!isSearchMode) {
-			// For regular mode, fetch new page from server
-			fetchFiles(newPage, filesPerPage);
-		}
-
+		// Scroll to top of the page
 		window.scrollTo({ top: 0, behavior: 'smooth' });
+	};
+
+	// Function to get unique categories from all files
+	const getUniqueCategories = () => {
+		const categories = new Set();
+		Object.values(groupedFiles).forEach((files) => {
+			files.forEach((file) => {
+				if (Array.isArray(file.fileCategory)) {
+					file.fileCategory.forEach((cat) => categories.add(cat));
+				} else if (file.fileCategory) {
+					categories.add(file.fileCategory);
+				}
+			});
+		});
+		return Array.from(categories).sort();
+	};
+
+	// Function to handle category filter change
+	const handleCategoryFilterChange = (category, isChecked) => {
+		setFilters((prev) => {
+			const newCategories = isChecked
+				? [...prev.categories, category]
+				: prev.categories.filter((cat) => cat !== category);
+			return {
+				...prev,
+				categories: newCategories,
+			};
+		});
+		setCurrentPage(1);
+	};
+
+	// Function to get category display name
+	const getCategoryDisplayName = (category) => {
+		switch (category) {
+			case 'RawData':
+				return 'Raw Data';
+			case 'PreparedReport':
+				return 'Prepare Report';
+			case 'Calculation':
+				return 'Calculation';
+			default:
+				return category;
+		}
+	};
+
+	// Function to handle file view - redirect to file without auto-close
+	const handleView = async (file) => {
+		try {
+			if (!file.objectName) {
+				toast.error('Không tìm thấy thông tin file để xem', {
+					autoClose: 1000,
+				});
+				return;
+			}
+
+			// Get the download URL from the API
+			const linkResponse = await apiPost('https://red.irdop.org/v1/file/downlink', {
+				objectName: file.objectName,
+			});
+
+			if (linkResponse.status !== 200) {
+				console.error('Failed to get view link:', linkResponse.data?.message || 'Unknown error');
+				toast.error(`Lỗi khi lấy link xem: ${linkResponse.data?.message || 'Unknown error'}`, {
+					autoClose: 1000,
+				});
+				return;
+			}
+
+			// Open the file URL in a new tab
+			window.open(linkResponse.data.url, '_blank');
+
+			toast.success('Đã mở file trong tab mới', {
+				autoClose: 1000,
+			});
+		} catch (error) {
+			console.error('Error viewing file:', error);
+			toast.error('Lỗi kết nối khi xem file', {
+				autoClose: 1000,
+			});
+		}
+	};
+
+	// Function to handle file download
+	const handleDownload = async (file) => {
+		try {
+			if (!file.objectName) {
+				toast.error('Không tìm thấy thông tin file để tải xuống', {
+					autoClose: 1000,
+				});
+				return;
+			}
+
+			// First get the download URL from the API
+			const linkResponse = await apiPost('https://red.irdop.org/v1/file/downlink', {
+				objectName: file.objectName,
+			});
+
+			if (linkResponse.status !== 200) {
+				console.error('Failed to get download link:', linkResponse.data?.message || 'Unknown error');
+				toast.error(`Lỗi khi lấy link tải: ${linkResponse.data?.message || 'Unknown error'}`, {
+					autoClose: 1000,
+				});
+				return;
+			} // Using fetch to get blob without headers
+			const response = await fetch(linkResponse.data.url);
+
+			if (response.ok) {
+				// Get the blob directly from the response
+				const blob = await response.blob();
+
+				// Create a new blob with explicit type to ensure correct handling
+				const fileBlob = new Blob([blob], { type: file.fileInfo?.fileType || 'application/octet-stream' });
+
+				// Create a URL for the blob
+				const url = window.URL.createObjectURL(fileBlob);
+
+				// For IE/Edge browsers
+				if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+					window.navigator.msSaveOrOpenBlob(fileBlob, file.fileInfo?.fileName || 'downloaded-file');
+				} else {
+					// For modern browsers
+					const link = document.createElement('a');
+					link.href = url;
+					link.setAttribute('download', file.fileInfo?.fileName || 'downloaded-file');
+					link.style.display = 'none';
+
+					// Append to body, click and remove
+					document.body.appendChild(link);
+					link.click();
+
+					// Clean up after a short delay to ensure download starts
+					setTimeout(() => {
+						document.body.removeChild(link);
+						window.URL.revokeObjectURL(url);
+					}, 200);
+				}
+
+				toast.success('Tải file thành công', {
+					autoClose: 1000,
+				});
+			} else {
+				console.error('Failed to download file:', response.statusText);
+				toast.error(`Lỗi khi tải file: ${response.statusText}`, {
+					autoClose: 1000,
+				});
+			}
+		} catch (error) {
+			console.error('Error downloading file:', error);
+			toast.error('Lỗi kết nối khi tải file', {
+				autoClose: 1000,
+			});
+		}
+	};
+
+	// Function to handle file delete
+	const handleDelete = async (file) => {
+		try {
+			if (!file.objectName) {
+				toast.error('Không tìm thấy thông tin file để xóa', {
+					autoClose: 1000,
+				});
+				return;
+			}
+
+			// Confirm before deleting
+			if (!window.confirm('Bạn có chắc chắn muốn xóa file này?')) {
+				return;
+			}
+
+			const response = await apiPost('https://red.irdop.org/v1/file/update', {
+				objectName: file.objectName,
+				deleteAt: Date.now(),
+			});
+
+			if (response.status === 200) {
+				toast.success('Xóa file thành công', {
+					autoClose: 1000,
+				});
+
+				// Refresh the file list
+				fetchExistingFiles(searchQuery);
+			} else {
+				console.error('Failed to delete file:', response.data?.message || 'Unknown error');
+				toast.error(`Lỗi khi xóa file: ${response.data?.message || 'Unknown error'}`, {
+					autoClose: 1000,
+				});
+			}
+		} catch (error) {
+			console.error('Error deleting file:', error);
+			toast.error('Lỗi kết nối khi xóa file', {
+				autoClose: 1000,
+			});
+		}
 	};
 
 	return (
@@ -584,581 +427,360 @@ const FileInfor = () => {
 			{/* Breadcrumb */}
 			<Breadcrumb paths={[{}]} />
 
-			{/* File Management Section */}
+			{/* Existing Files Section */}
 			<div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+				{' '}
 				<div className="flex justify-between items-center mb-4">
+					<h2 className="text-xl font-semibold">Danh sách file hiện có</h2>
 					<div className="flex items-center gap-4">
-						<button
-							onClick={() => {
-								if (isTrashMode) {
-									handleClearTrashMode();
-								}
-							}}
-							className={`px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-								!isTrashMode
-									? 'bg-blue-600 text-white focus:ring-blue-500'
-									: 'bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-gray-300'
-							}`}
+						<select
+							value={selectedSource}
+							onChange={handleSourceChange}
+							className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
 						>
-							File hiện có
-						</button>
-						<button
-							onClick={() => {
-								if (!isTrashMode) {
-									setIsTrashMode(true);
-									fetchTrashFiles();
-								}
-							}}
-							className={`px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-								isTrashMode
-									? 'bg-blue-600 text-white focus:ring-blue-500'
-									: 'bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-gray-300'
-							}`}
-						>
-							File chờ xóa
-						</button>
-					</div>
-					{/* Search bar and controls */}
-					<div className="flex items-center gap-4">
-						<div className="flex items-center gap-2">
-							<label className="text-sm text-gray-600">Số file/trang:</label>
-							<select
-								value={filesPerPage}
-								onChange={(e) => handleFilesPerPageChange(parseInt(e.target.value))}
-								className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
-							>
-								<option value={10}>10</option>
-								<option value={20}>20</option>
-								<option value={50}>50</option>
-								<option value={100}>100</option>
-							</select>
-						</div>
-						<div className="flex items-center gap-2">
-							<input
-								type="text"
-								placeholder="Tìm kiếm file theo tên..."
-								value={searchTerm}
-								onChange={(e) => setSearchTerm(e.target.value)}
-								onKeyPress={handleSearchSubmit}
-								className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-							/>
-							<button
-								onClick={handleSearchSubmit}
-								className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-							>
-								Tìm kiếm
-							</button>
-						</div>
+							<option value="irdop">Tất cả file</option>
+							<option value="activities/lab">LAB</option>
+							<option value="SOP/protocol">Phương pháp</option>
+						</select>
+						<input
+							type="text"
+							placeholder="Tìm kiếm file..."
+							value={searchQuery}
+							onChange={handleSearchChange}
+							onKeyPress={handleSearchSubmit}
+							className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+						/>
 					</div>
 				</div>
-
-				{/* Search mode indicator */}
-				{isSearchMode && (
-					<div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-						<div className="flex items-center justify-between">
-							<span className="text-sm text-blue-800">📝 Đang hiển thị kết quả tìm kiếm cho: "{searchTerm}"</span>
-							<button onClick={handleClearSearch} className="text-sm text-blue-600 hover:text-blue-800 underline">
-								Quay về danh sách đầy đủ
-							</button>
-						</div>
-					</div>
-				)}
-
-				{/* File listing table */}
-				{isTrashMode ? (
+				{Object.keys(groupedFiles).length > 0 ? (
 					<>
-						<div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-							<h3 className="text-lg font-semibold text-red-800 mb-2">File chờ xóa</h3>
-							<p className="text-red-600">
-								Đây là danh sách các file đã bị xóa. Bạn có thể khôi phục trước khi xóa vĩnh viễn theo định kì.
-							</p>
-						</div>
-						<div className="overflow-x-auto">
-							<table className="w-full text-black border">
-								<thead>
-									<tr>
-										<th className="py-2 px-2 border text-left">Tên file</th>
-										<th className="py-2 px-2 border text-left w-[250px] max-w-[250px]">Khóa liên kết</th>
-										<th className="py-2 px-2 border text-left">Người tạo</th>
-										<th className="py-2 px-2 border text-left">Kích thước</th>
-										<th className="py-2 px-2 border text-left">Ngày sửa đổi</th>
-										<th className="py-2 px-2 border text-left">Danh mục</th>
-										<th className="py-2 px-2 border text-left min-w-[100px] w-[100px]">Thao tác</th>
-									</tr>
-								</thead>
-								<tbody>
-									{trashFiles.map((file, index) => (
-										<tr key={file.id} className="hover:bg-gray-50">
-											<td className="py-2 px-2 border text-left">{file.originInfo?.fileName || '-'}</td>
-											<td className="py-2 px-2 border text-left w-[250px] max-w-[250px]">
-												<div className="flex flex-wrap gap-1">
-													{(file.foreignKeyUIDs || []).length > 0 ? (
-														file.foreignKeyUIDs.map((key, keyIndex) => (
-															<span
-																key={keyIndex}
-																className="bg-gray-100 text-gray-800 text-xs px-1 py-0.5 rounded truncate"
+						{(() => {
+							const { groupedFiles: paginatedGroupedFiles, totalFiles, totalPages } = getPaginatedFiles();
+
+							return (
+								<>
+									{/* File count and pagination info */}
+									<div className="flex justify-between items-center mb-4">
+										<div className="text-sm text-gray-600">
+											Tổng số: {totalFiles} file | Trang {currentPage} / {totalPages}
+										</div>
+									</div>
+
+									{/* Files Table */}
+									<div className="overflow-auto">
+										<table className="w-full border-collapse border border-gray-300 bg-white">
+											<thead className="bg-gray-100">
+												<tr>
+													<th className="border p-2 text-start min-w-48">
+														<div className="flex items-center">
+															Tên file
+															<button
+																onClick={() => toggleFilter('fileName')}
+																className="ml-2 text-gray-500 hover:text-gray-700 p-1.5"
 															>
-																{key}
-															</span>
-														))
-													) : (
-														<span className="text-gray-400 text-xs">Không có UID</span>
-													)}
-												</div>
-											</td>
-											<td className="py-2 px-2 border text-left">
-												{file.identityName || identityNames[file.identityUID] || '-'}
-											</td>
-											<td className="py-2 px-2 border text-left">
-												{file.originInfo?.fileSize ? (file.originInfo.fileSize / 1024).toFixed(2) + ' KB' : '-'}
-											</td>
-											<td className="py-2 px-2 border text-left">
-												{file.createdAt ? new Date(file.createdAt).toLocaleDateString() : '-'}
-											</td>
-											<td className="py-2 px-2 border text-left">{file.userTags?.join(', ') || '-'}</td>
-											<td className="py-2 px-2 border text-left min-w-[100px] w-[100px]">
-												<div className="flex space-x-1 flex-wrap">
-													<button
-														className="text-blue-500 hover:text-blue-700 text-lg px-1 py-1"
-														onClick={() => handleFileAction(file, 'view')}
-														title="Preview"
-													>
-														<FaEye />
-													</button>
-													{isAdmin() && (
+																<svg
+																	xmlns="http://www.w3.org/2000/svg"
+																	className={`h-4 w-4 transition-transform ${showFilters.fileName ? 'rotate-180' : ''}`}
+																	viewBox="0 0 20 20"
+																	fill="currentColor"
+																>
+																	<path
+																		fillRule="evenodd"
+																		d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+																		clipRule="evenodd"
+																	/>
+																</svg>
+															</button>
+														</div>
+														{showFilters.fileName && (
+															<div className="mt-1">
+																<input
+																	type="text"
+																	placeholder="Tìm kiếm tên file..."
+																	value={filters.fileName}
+																	onChange={(e) => handleFilterChange('fileName', e.target.value)}
+																	className="w-full p-1 text-xs border rounded bg-white"
+																/>
+															</div>
+														)}
+													</th>
+													<th className="border p-2 text-start w-1/4 min-w-60">
+														<div className="flex items-center">
+															Mô tả
+															<button
+																onClick={() => toggleFilter('description')}
+																className="ml-2 text-gray-500 hover:text-gray-700 p-1.5"
+															>
+																<svg
+																	xmlns="http://www.w3.org/2000/svg"
+																	className={`h-4 w-4 transition-transform ${
+																		showFilters.description ? 'rotate-180' : ''
+																	}`}
+																	viewBox="0 0 20 20"
+																	fill="currentColor"
+																>
+																	<path
+																		fillRule="evenodd"
+																		d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+																		clipRule="evenodd"
+																	/>
+																</svg>
+															</button>
+														</div>
+														{showFilters.description && (
+															<div className="mt-1">
+																<input
+																	type="text"
+																	placeholder="Tìm kiếm mô tả..."
+																	value={filters.description}
+																	onChange={(e) => handleFilterChange('description', e.target.value)}
+																	className="w-full p-1 text-xs border rounded bg-white"
+																/>
+															</div>
+														)}
+													</th>
+													<th className="border p-2 text-start w-40 min-w-40 relative">
+														<div className="flex items-center">
+															Danh mục
+															<button
+																onClick={() => toggleFilter('categories')}
+																className="ml-2 text-gray-500 hover:text-gray-700 p-1.5"
+															>
+																<svg
+																	xmlns="http://www.w3.org/2000/svg"
+																	className={`h-4 w-4 transition-transform ${
+																		showFilters.categories ? 'rotate-180' : ''
+																	}`}
+																	viewBox="0 0 20 20"
+																	fill="currentColor"
+																>
+																	<path
+																		fillRule="evenodd"
+																		d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+																		clipRule="evenodd"
+																	/>
+																</svg>
+															</button>
+														</div>
+														{showFilters.categories && (
+															<div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-300 rounded mt-1 shadow-lg max-h-60 overflow-y-auto">
+																<div className="p-2">
+																	{getUniqueCategories().map((category) => (
+																		<label
+																			key={category}
+																			className="flex items-center py-1 px-1 font-normal hover:bg-gray-100 cursor-pointer"
+																		>
+																			<input
+																				type="checkbox"
+																				checked={filters.categories.includes(category)}
+																				onChange={(e) => handleCategoryFilterChange(category, e.target.checked)}
+																				className="mr-2"
+																				onClick={(e) => e.stopPropagation()}
+																			/>
+																			<span className="text-sm">{getCategoryDisplayName(category)}</span>
+																		</label>
+																	))}
+																	{getUniqueCategories().length === 0 && (
+																		<div className="text-sm text-gray-500 p-2">Không có danh mục nào</div>
+																	)}
+																</div>
+															</div>
+														)}
+													</th>
+													<th className="border p-2 text-start w-36 min-w-36">
+														<div className="flex items-center">
+															Upload bởi
+															<button
+																onClick={() => toggleFilter('uploadedByUID')}
+																className="ml-2 text-gray-500 hover:text-gray-700 p-1.5"
+															>
+																<svg
+																	xmlns="http://www.w3.org/2000/svg"
+																	className={`h-4 w-4 transition-transform ${
+																		showFilters.uploadedByUID ? 'rotate-180' : ''
+																	}`}
+																	viewBox="0 0 20 20"
+																	fill="currentColor"
+																>
+																	<path
+																		fillRule="evenodd"
+																		d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+																		clipRule="evenodd"
+																	/>
+																</svg>
+															</button>
+														</div>
+														{showFilters.uploadedByUID && (
+															<div className="mt-1">
+																<input
+																	type="text"
+																	placeholder="Tìm kiếm upload bởi..."
+																	value={filters.uploadedByUID}
+																	onChange={(e) => handleFilterChange('uploadedByUID', e.target.value)}
+																	className="w-full p-1 text-xs border rounded bg-white"
+																/>
+															</div>
+														)}
+													</th>
+													<th className="border p-2 text-start w-32 min-w-32">
+														<div className="flex items-center">
+															Tạo bởi
+															<button
+																onClick={() => toggleFilter('createdByUID')}
+																className="ml-2 text-gray-500 hover:text-gray-700 p-1.5"
+															>
+																<svg
+																	xmlns="http://www.w3.org/2000/svg"
+																	className={`h-4 w-4 transition-transform ${
+																		showFilters.createdByUID ? 'rotate-180' : ''
+																	}`}
+																	viewBox="0 0 20 20"
+																	fill="currentColor"
+																>
+																	<path
+																		fillRule="evenodd"
+																		d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+																		clipRule="evenodd"
+																	/>
+																</svg>
+															</button>
+														</div>
+														{showFilters.createdByUID && (
+															<div className="mt-1">
+																<input
+																	type="text"
+																	placeholder="Tìm kiếm tạo bởi..."
+																	value={filters.createdByUID}
+																	onChange={(e) => handleFilterChange('createdByUID', e.target.value)}
+																	className="w-full p-1 text-xs border rounded bg-white"
+																/>
+															</div>
+														)}
+													</th>
+													<th className="border p-2 text-center w-24 min-w-24">Actions</th>
+												</tr>
+											</thead>
+											<tbody>
+												{Object.entries(paginatedGroupedFiles).map(([groupId, files]) =>
+													files.map((file, index) => (
+														<tr key={`${groupId}-${index}`} className="hover:bg-gray-50">
+															<td className="border p-2 text-start break-words">{file.fileInfo?.fileName || 'N/A'}</td>
+															<td className="border p-2 text-start">
+																<div className="text-xs">{file.uploadDescription || 'N/A'}</div>
+															</td>
+															<td className="border p-2 text-start">
+																<div className="text-xs">
+																	{Array.isArray(file.fileCategory)
+																		? file.fileCategory
+																				.map((cat) =>
+																					cat === 'RawData'
+																						? 'Raw Data'
+																						: cat === 'PreparedReport'
+																						? 'Prepare Report'
+																						: cat === 'Calculation'
+																						? 'Calculation'
+																						: cat,
+																				)
+																				.join(', ')
+																		: file.fileCategory || 'N/A'}
+																</div>
+															</td>
+															<td className="border p-2 text-start">
+																<div className="text-xs">{file.uploadedByName || ''}</div>
+															</td>
+															<td className="border p-2 text-start">
+																<div className="text-xs">{file.createdByUID || 'N/A'}</div>
+															</td>
+															<td className="border p-2 text-center">
+																<div className="flex justify-center gap-1">
+																	<button
+																		className="text-blue-500 hover:text-blue-700 cursor-pointer p-1"
+																		title="Xem"
+																		onClick={() => handleView(file)}
+																	>
+																		<FaEye size={14} />
+																	</button>
+																	<button
+																		className="text-green-500 hover:text-green-700 cursor-pointer p-1"
+																		title="Tải xuống"
+																		onClick={() => handleDownload(file)}
+																	>
+																		<FaDownload size={14} />
+																	</button>{' '}
+																	{file.uploadedByUID === getIdentityUID() && (
+																		<button
+																			className="text-red-500 hover:text-red-700 cursor-pointer p-1"
+																			title="Xóa"
+																			onClick={() => handleDelete(file)}
+																		>
+																			<FaTrashAlt size={14} />
+																		</button>
+																	)}
+																</div>
+															</td>
+														</tr>
+													)),
+												)}
+											</tbody>
+										</table>
+									</div>
+
+									{/* Pagination Controls */}
+									{totalPages > 1 && (
+										<div className="flex justify-center items-center mt-6 gap-2">
+											{/* Previous Button */}
+											<button
+												onClick={() => handlePageChange(currentPage - 1)}
+												disabled={currentPage === 1}
+												className="px-3 py-1 border rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+											>
+												‹ Trước
+											</button>
+
+											{/* Page Numbers */}
+											{(() => {
+												const pageNumbers = [];
+												const maxVisiblePages = 5;
+												let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+												let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+												if (endPage - startPage + 1 < maxVisiblePages) {
+													startPage = Math.max(1, endPage - maxVisiblePages + 1);
+												}
+
+												for (let i = startPage; i <= endPage; i++) {
+													pageNumbers.push(
 														<button
-															className="text-green-500 hover:text-green-700 text-lg px-1 py-1"
-															onClick={() => handleRestoreFile(file.id)}
-															title="Restore"
+															key={i}
+															onClick={() => handlePageChange(i)}
+															className={`px-3 py-1 border rounded-lg ${
+																currentPage === i ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100'
+															}`}
 														>
-															<FaUndo />
-														</button>
-													)}
-												</div>
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-							{trashFiles.length === 0 && (
-								<tr>
-									<td colSpan={7} className="text-center py-8 text-gray-400">
-										{loading ? 'Đang tải...' : 'Không có file nào trong thùng rác'}
-									</td>
-								</tr>
-							)}
-						</div>
+															{i}
+														</button>,
+													);
+												}
+												return pageNumbers;
+											})()}
+
+											{/* Next Button */}
+											<button
+												onClick={() => handlePageChange(currentPage + 1)}
+												disabled={currentPage === totalPages}
+												className="px-3 py-1 border rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+											>
+												Sau ›
+											</button>
+										</div>
+									)}
+								</>
+							);
+						})()}
 					</>
 				) : (
-					<div className="flex-1 overflow-auto">
-						<div className="min-w-[1200px]">
-							<table className="w-full text-black border">
-								<thead>
-									<tr>
-										<th className="py-2 px-2 border text-left">
-											<div className="flex items-center">
-												Tên file
-												<button
-													onClick={() => toggleFilter('fileName')}
-													className="ml-2 text-gray-500 hover:text-gray-700 filter-button"
-												>
-													<FaFilter size={12} />
-												</button>
-											</div>
-											{showFilters.fileName && (
-												<div className="mt-1 filter-dropdown">
-													<input
-														type="text"
-														placeholder="Lọc theo tên file..."
-														value={filters.fileName}
-														onChange={(e) => handleFilterChange('fileName', e.target.value)}
-														className="w-full p-1 text-xs border rounded bg-white"
-													/>
-												</div>
-											)}
-										</th>
-										<th className="py-2 px-2 border text-left w-[250px] max-w-[250px]">
-											<div className="flex items-center">
-												Khóa liên kết
-												<button
-													onClick={() => toggleFilter('foreignKeyUIDs')}
-													className="ml-2 text-gray-500 hover:text-gray-700 filter-button"
-												>
-													<FaFilter size={12} />
-												</button>
-											</div>
-											{showFilters.foreignKeyUIDs && (
-												<div className="mt-1 filter-dropdown">
-													<select
-														value={filters.foreignKeyUIDs}
-														onChange={(e) => handleFilterChange('foreignKeyUIDs', e.target.value)}
-														className="w-full p-1 text-xs border rounded bg-white"
-													>
-														<option value="">Tất cả</option>
-														<option value="empty">Chưa có khóa</option>
-													</select>
-													<input
-														type="text"
-														placeholder="Hoặc nhập UID để tìm..."
-														value={filters.foreignKeyUIDs === 'empty' ? '' : filters.foreignKeyUIDs}
-														onChange={(e) => handleFilterChange('foreignKeyUIDs', e.target.value)}
-														className="w-full p-1 text-xs border rounded bg-white mt-1"
-													/>
-												</div>
-											)}
-										</th>
-										<th className="py-2 px-2 border text-left">
-											<div className="flex items-center">
-												Người tạo
-												<button
-													onClick={() => toggleFilter('identityName')}
-													className="ml-2 text-gray-500 hover:text-gray-700 filter-button"
-												>
-													<FaFilter size={12} />
-												</button>
-											</div>
-											{showFilters.identityName && (
-												<div className="mt-1 filter-dropdown">
-													<input
-														type="text"
-														placeholder="Lọc theo người tạo..."
-														value={filters.identityName}
-														onChange={(e) => handleFilterChange('identityName', e.target.value)}
-														className="w-full p-1 text-xs border rounded bg-white"
-													/>
-												</div>
-											)}
-										</th>
-										<th className="py-2 px-2 border text-left">Kích thước</th>
-										<th className="py-2 px-2 border text-left">Ngày sửa đổi</th>
-										<th className="py-2 px-2 border text-left relative">
-											<div className="flex items-center">
-												Danh mục
-												<button
-													onClick={() => toggleFilter('userTags')}
-													className="ml-2 text-gray-500 hover:text-gray-700 filter-button"
-												>
-													<FaFilter size={12} />
-												</button>
-											</div>
-											{showFilters.userTags && (
-												<div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded mt-1 shadow-lg max-h-60 overflow-y-auto z-10 filter-dropdown">
-													<div className="p-2">
-														{categoryOptions.map((category) => (
-															<label
-																key={category}
-																className="flex items-center py-1 px-1 hover:bg-gray-100 cursor-pointer"
-															>
-																<input
-																	type="checkbox"
-																	checked={filters.userTags.includes(category)}
-																	onChange={(e) => handleCategoryFilterChange(category, e.target.checked)}
-																	className="mr-2"
-																/>
-																<span className="text-sm">{category}</span>
-															</label>
-														))}
-														<label className="flex items-center py-1 px-1 hover:bg-gray-100 cursor-pointer">
-															<input
-																type="checkbox"
-																checked={filters.userTags.includes('empty')}
-																onChange={(e) => handleCategoryFilterChange('empty', e.target.checked)}
-																className="mr-2"
-															/>
-															<span className="text-sm">Chưa có danh mục</span>
-														</label>
-													</div>
-												</div>
-											)}
-										</th>
-										<th className="py-2 px-2 border text-left min-w-[140px] w-[140px]">Thao tác</th>
-									</tr>
-								</thead>
-								<tbody>
-									{(() => {
-										const { paginatedFiles, totalFiles, totalPages } = getPaginatedFiles();
-										return paginatedFiles.length > 0 ? (
-											paginatedFiles.map((file, index) => (
-												<tr key={index}>
-													<td className="py-2 px-2 border text-left">
-														{editingFile === file.id ? (
-															<input
-																type="text"
-																value={editData.originInfo.fileName}
-																onChange={(e) =>
-																	setEditData({
-																		...editData,
-																		originInfo: {
-																			...editData.originInfo,
-																			fileName: e.target.value,
-																		},
-																	})
-																}
-																className="w-full border rounded px-2 py-1 bg-white"
-															/>
-														) : (
-															file.originInfo?.fileName
-														)}
-													</td>
-													<td className="py-2 px-2 border text-left w-[250px] max-w-[250px]">
-														{editingFile === file.id ? (
-															<div className="space-y-1">
-																{/* Display existing foreign keys */}
-																<div className="flex flex-wrap gap-1">
-																	{(editData.foreignKeyUIDs || []).map((key, keyIndex) => (
-																		<div key={keyIndex} className="relative group">
-																			<span className="bg-blue-100 text-blue-800 text-xs px-1 py-0.5 rounded pr-4 relative">
-																				{key}
-																				<button
-																					onClick={() => handleRemoveForeignKey(file.id, key)}
-																					className="absolute top-0 right-0 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-xs w-3 h-3 flex items-center justify-center"
-																					style={{ fontSize: '8px' }}
-																				>
-																					×
-																				</button>
-																			</span>
-																		</div>
-																	))}
-																</div>
-																{/* Add new foreign key */}
-																{addingForeignKey === file.id ? (
-																	<div className="flex items-center gap-1 w-full">
-																		<input
-																			type="text"
-																			value={newForeignKey}
-																			onChange={(e) => setNewForeignKey(e.target.value)}
-																			placeholder="Enter UID"
-																			className="flex-1 min-w-0 border rounded px-1 py-0.5 text-xs bg-white"
-																		/>
-																		<button
-																			onClick={() => handleAddForeignKey(file.id)}
-																			className="text-green-600 hover:text-green-800 flex-shrink-0 p-1 rounded"
-																		>
-																			<FaCheck size={10} />
-																		</button>
-																		<button
-																			onClick={() => {
-																				setAddingForeignKey(null);
-																				setNewForeignKey('');
-																			}}
-																			className="text-red-600 hover:text-red-800 flex-shrink-0 p-1 rounded"
-																		>
-																			<FaTimes size={10} />
-																		</button>
-																	</div>
-																) : (
-																	<button
-																		onClick={() => setAddingForeignKey(file.id)}
-																		className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
-																	>
-																		<FaPlus size={8} /> Thêm UID
-																	</button>
-																)}
-															</div>
-														) : (
-															<div className="flex flex-wrap gap-1">
-																{(file.foreignKeyUIDs || []).length > 0 ? (
-																	file.foreignKeyUIDs.map((key, keyIndex) => (
-																		<span
-																			key={keyIndex}
-																			className="bg-gray-100 text-gray-800 text-xs px-1 py-0.5 rounded truncate"
-																		>
-																			{key}
-																		</span>
-																	))
-																) : (
-																	<span className="text-gray-400 text-xs">Không có UID</span>
-																)}
-															</div>
-														)}
-													</td>
-													<td className="py-2 px-2 border text-left">
-														{file.identityName || identityNames[file.identityUID] || '-'}
-													</td>
-													<td className="py-2 px-2 border text-left">
-														{file.originInfo?.fileSize ? (file.originInfo.fileSize / 1024).toFixed(2) + ' KB' : '-'}
-													</td>
-													<td className="py-2 px-2 border text-left">
-														{file.createdAt ? new Date(file.createdAt).toLocaleDateString() : '-'}
-													</td>
-													<td className="py-2 px-2 border text-left">
-														{editingFile === file.id ? (
-															<div className="flex flex-wrap gap-1">
-																{categoryOptions.map((category) => (
-																	<label key={category} className="flex items-center text-xs">
-																		<input
-																			type="checkbox"
-																			checked={editData.userTags.includes(category)}
-																			onChange={(e) => {
-																				if (e.target.checked) {
-																					setEditData({ ...editData, userTags: [...editData.userTags, category] });
-																				} else {
-																					setEditData({
-																						...editData,
-																						userTags: editData.userTags.filter((tag) => tag !== category),
-																					});
-																				}
-																			}}
-																			className="mr-1"
-																		/>
-																		{category}
-																	</label>
-																))}
-															</div>
-														) : (
-															file.userTags?.join(', ') || '-'
-														)}
-													</td>
-													<td className="py-2 px-2 border text-left min-w-[140px] w-[140px]">
-														<div className="flex space-x-1 flex-wrap">
-															{editingFile === file.id ? (
-																<>
-																	<button
-																		className="text-green-500 hover:text-green-700 text-lg px-2 py-1"
-																		onClick={() => handleUpdateFile(file.id)}
-																		title="Confirm"
-																	>
-																		<FaCheck />
-																	</button>
-																	<button
-																		className="text-gray-500 hover:text-gray-700 text-lg px-2 py-1"
-																		onClick={handleEditCancel}
-																		title="Cancel"
-																	>
-																		<FaTimes />
-																	</button>
-																</>
-															) : (
-																<>
-																	<button
-																		className="text-blue-500 hover:text-blue-700 text-lg px-1 py-1"
-																		onClick={() => handleFileAction(file, 'view')}
-																		title="View"
-																	>
-																		<FaEye />
-																	</button>
-																	<button
-																		className="text-green-500 hover:text-green-700 text-lg px-1 py-1"
-																		onClick={() => handleFileAction(file, 'download')}
-																		title="Download"
-																	>
-																		<FaDownload />
-																	</button>
-																	{isAdmin() && (
-																		<button
-																			className="text-orange-500 hover:text-orange-700 text-lg px-1 py-1"
-																			onClick={() => handleEditStart(file)}
-																			title="Update"
-																		>
-																			<FaEdit />
-																		</button>
-																	)}
-																	{isAdmin() && (
-																		<button
-																			className="text-red-500 hover:text-red-700 text-lg px-1 py-1"
-																			onClick={() => handleDeleteFile(file)}
-																			title="Delete"
-																		>
-																			<FaTrashAlt />
-																		</button>
-																	)}
-																</>
-															)}
-														</div>
-													</td>
-												</tr>
-											))
-										) : (
-											<tr>
-												<td colSpan={7} className="text-center py-8 text-gray-400">
-													{loading ? 'Đang tải...' : searchTerm ? 'Không tìm thấy file phù hợp' : 'Chưa có dữ liệu'}
-												</td>
-											</tr>
-										);
-									})()}
-								</tbody>
-							</table>
-						</div>
-					</div>
+					<div className="text-center py-8 text-gray-500">Không có file nào</div>
 				)}
-
-				{/* Pagination Controls */}
-				{!isTrashMode &&
-					(() => {
-						const { totalPages } = getPaginatedFiles();
-						return (
-							totalPages > 1 && (
-								<div className="flex justify-center items-center mt-6 gap-2">
-									{/* Previous Button */}
-									<button
-										onClick={() => handlePageChange(currentPage - 1)}
-										disabled={currentPage === 1}
-										className="px-3 py-1 border rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-									>
-										‹ Trước
-									</button>
-
-									{/* Page Numbers */}
-									{(() => {
-										const pageNumbers = [];
-										const maxVisiblePages = 5;
-										let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-										let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-										if (endPage - startPage + 1 < maxVisiblePages) {
-											startPage = Math.max(1, endPage - maxVisiblePages + 1);
-										}
-
-										for (let i = startPage; i <= endPage; i++) {
-											pageNumbers.push(
-												<button
-													key={i}
-													onClick={() => handlePageChange(i)}
-													className={`px-3 py-1 border rounded-lg ${
-														currentPage === i ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100'
-													}`}
-												>
-													{i}
-												</button>,
-											);
-										}
-										return pageNumbers;
-									})()}
-
-									{/* Next Button */}
-									<button
-										onClick={() => handlePageChange(currentPage + 1)}
-										disabled={currentPage === totalPages}
-										className="px-3 py-1 border rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-									>
-										Sau ›
-									</button>
-								</div>
-							)
-						);
-					})()}
-
-				{/* File count info */}
-				{!isTrashMode &&
-					(() => {
-						const { totalFiles } = getPaginatedFiles();
-						return (
-							<div className="flex justify-between items-center mt-4">
-								<div className="text-sm text-gray-600">
-									{isSearchMode ? (
-										<span>
-											Kết quả tìm kiếm: {totalFiles} file cho "{searchTerm}" | Trang {currentPage} /{' '}
-											{Math.ceil(totalFiles / filesPerPage) || 1}
-										</span>
-									) : (
-										<span>
-											Tổng số: {totalFiles} file | Trang {currentPage} / {Math.ceil(totalFiles / filesPerPage) || 1}
-										</span>
-									)}
-								</div>
-							</div>
-						);
-					})()}
 			</div>
 		</div>
 	);
