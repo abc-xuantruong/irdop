@@ -96,18 +96,14 @@ const SampleInfor = () => {
 	// Add new state variables for unique lists and dropdowns
 	const [uniqueParameterNames, setUniqueParameterNames] = useState([]);
 	const [uniqueMatrices, setUniqueMatrices] = useState([]);
-	const [uniqueProtocolCodes, setUniqueProtocolCodes] = useState([]);
 	const [uniqueUnits, setUniqueUnits] = useState([]);
 	const [matrixInput, setMatrixInput] = useState('');
-	const [protocolCodeInput, setProtocolCodeInput] = useState('');
 	const [unitInput, setUnitInput] = useState('');
 	const [showMatrixDropdown, setShowMatrixDropdown] = useState(false);
-	const [showProtocolCodeDropdown, setShowProtocolCodeDropdown] = useState(false);
 	const [showUnitDropdown, setShowUnitDropdown] = useState(false);
 	// Add state variables for pagination in dropdowns
 	const [parameterNamePage, setParameterNamePage] = useState(1);
 	const [matrixPage, setMatrixPage] = useState(1);
-	const [protocolCodePage, setProtocolCodePage] = useState(1);
 	const [unitPage, setUnitPage] = useState(1);
 	const itemsPerPage = 6; // 6 items per page for all dropdowns
 	// Add state to store original values for comparison
@@ -138,22 +134,6 @@ const SampleInfor = () => {
 			</div>
 		);
 	}
-	// // Check if scroll buttons should be shown
-	// useEffect(() => {
-	// 	const checkOverflow = () => {
-	// 		if (statusContainerRef.current) {
-	// 			const isOverflowing = statusContainerRef.current.scrollWidth > statusContainerRef.current.clientWidth;
-	// 		}
-	// 	};
-
-	// 	checkOverflow();
-	// 	// Add event listener for window resize to recheck overflow
-	// 	window.addEventListener('resize', checkOverflow);
-
-	// 	return () => {
-	// 		window.removeEventListener('resize', checkOverflow);
-	// 	};
-	// }, [sample, statusContainerRef.current]);
 
 	// Add function to handle accreditation toggle
 	const handleAccreditationToggle = async (analysisId) => {
@@ -1062,18 +1042,14 @@ const SampleInfor = () => {
 				setUniqueUnits(unitsResponse.data.filter(Boolean));
 			}
 
-			// Fetch parameter names and protocol codes from available analyses
+			// Fetch parameter names from available analyses
 			const parametersResponse = await apiGet('https://black.irdop.org/ha8i0uw2/db/get/parameter');
 			if (parametersResponse.data && Array.isArray(parametersResponse.data)) {
 				const parameterNames = [
 					...new Set(parametersResponse.data.map((item) => item.parameter_name || '').filter(Boolean)),
 				];
-				const protocolCodes = [
-					...new Set(parametersResponse.data.map((item) => item.protocol_code || '').filter(Boolean)),
-				];
 
 				setUniqueParameterNames(parameterNames);
-				setUniqueProtocolCodes(protocolCodes);
 			}
 		} catch (error) {
 			console.error('Error fetching dropdown lists:', error);
@@ -1089,11 +1065,6 @@ const SampleInfor = () => {
 	const filterMatrices = (input) => {
 		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
 		return uniqueMatrices.filter((matrix) => matrix && matrix.toLowerCase().includes((input || '').toLowerCase()));
-	};
-
-	const filterProtocolCodes = (input) => {
-		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
-		return uniqueProtocolCodes.filter((code) => code && code.toLowerCase().includes((input || '').toLowerCase()));
 	};
 
 	const filterUnits = (input) => {
@@ -1112,11 +1083,6 @@ const SampleInfor = () => {
 		return filtered.slice((matrixPage - 1) * itemsPerPage, matrixPage * itemsPerPage);
 	};
 
-	const getPaginatedProtocolCodes = (input) => {
-		const filtered = filterProtocolCodes(input);
-		return filtered.slice((protocolCodePage - 1) * itemsPerPage, protocolCodePage * itemsPerPage);
-	};
-
 	const getPaginatedUnits = (input) => {
 		const filtered = filterUnits(input);
 		return filtered.slice((unitPage - 1) * itemsPerPage, unitPage * itemsPerPage);
@@ -1129,10 +1095,6 @@ const SampleInfor = () => {
 
 	const handleMatrixPageChange = (pageNumber) => {
 		setMatrixPage(pageNumber);
-	};
-
-	const handleProtocolCodePageChange = (pageNumber) => {
-		setProtocolCodePage(pageNumber);
 	};
 
 	const handleUnitPageChange = (pageNumber) => {
@@ -2133,13 +2095,6 @@ const SampleInfor = () => {
 			handleMatrixChange(editingMatrixField, matrix);
 		}
 		setShowMatrixDropdown(false);
-	};
-
-	const handleProtocolCodeSelect = (code) => {
-		if (editingProtocolField !== null) {
-			handleProtocolChange(editingProtocolField, code);
-		}
-		setShowProtocolCodeDropdown(false);
 	};
 
 	const handleUnitSelect = (unit) => {
@@ -4102,87 +4057,16 @@ const SampleInfor = () => {
 													<option value={'EX'}>{'EX'}</option>
 												</select>{' '}
 												{editingProtocolField === order.id ? (
-													<>
-														{' '}
-														<input
-															type="text"
-															id={`protocol-code-${order.id}`}
-															className="w-full bg-white border rounded py-0 px-1 text-left"
-															placeholder="Mã phương pháp"
-															value={order.protocol_code || ''}
-															onChange={(e) => {
-																const newValue = e.target.value;
-																setProtocolCodeInput(newValue);
-																setProtocolCodePage(1);
-																setShowProtocolCodeDropdown(newValue.length >= 2);
-																handleProtocolChange(order.id, newValue);
-															}}
-															onBlur={() => {
-																setTimeout(() => {
-																	setShowProtocolCodeDropdown(false);
-																	handleProtocolBlur(order.id);
-																}, 200);
-															}}
-															onKeyDown={(e) => handleProtocolKeyDown(e, order.id)}
-															autoFocus
-														/>{' '}
-														{showProtocolCodeDropdown &&
-															getPaginatedProtocolCodes(protocolCodeInput).length > 0 &&
-															createPortal(
-																<div
-																	className="absolute bg-white border rounded shadow-lg z-[9999]"
-																	style={{
-																		width: document.getElementById(`protocol-code-${order.id}`)?.offsetWidth + 'px',
-																		top:
-																			document.getElementById(`protocol-code-${order.id}`)?.getBoundingClientRect()
-																				.bottom + window.scrollY,
-																		left:
-																			document.getElementById(`protocol-code-${order.id}`)?.getBoundingClientRect()
-																				.left + window.scrollX,
-																	}}
-																>
-																	{getPaginatedProtocolCodes(protocolCodeInput).map((code, index) => (
-																		<div
-																			key={index}
-																			className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-																			onClick={() => {
-																				handleProtocolChange(order.id, code);
-																				handleProtocolBlur(order.id);
-																				setShowProtocolCodeDropdown(false);
-																			}}
-																		>
-																			<p>{code}</p>
-																		</div>
-																	))}
-																	{filterProtocolCodes(protocolCodeInput).length > itemsPerPage && (
-																		<div className="flex justify-between p-2 bg-gray-100">
-																			<button
-																				className="px-2 py-1 border rounded disabled:opacity-50"
-																				onClick={() => handleProtocolCodePageChange(protocolCodePage - 1)}
-																				disabled={protocolCodePage === 1}
-																			>
-																				Prev
-																			</button>
-																			<span>
-																				{protocolCodePage}/
-																				{Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)}
-																			</span>
-																			<button
-																				className="px-2 py-1 border rounded disabled:opacity-50"
-																				onClick={() => handleProtocolCodePageChange(protocolCodePage + 1)}
-																				disabled={
-																					protocolCodePage >=
-																					Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)
-																				}
-																			>
-																				Next
-																			</button>
-																		</div>
-																	)}
-																</div>,
-																document.body,
-															)}
-													</>
+													<input
+														type="text"
+														className="w-full bg-white border rounded py-0 px-1 text-left"
+														placeholder="Mã phương pháp"
+														value={order.protocol_code || ''}
+														onChange={(e) => handleProtocolChange(order.id, e.target.value)}
+														onBlur={() => handleProtocolBlur(order.id)}
+														onKeyDown={(e) => handleProtocolKeyDown(e, order.id)}
+														autoFocus
+													/>
 												) : (
 													<div
 														className={`w-full py-0 px-1 cursor-pointer hover:border-indigo-500 border rounded overflow-y-auto 

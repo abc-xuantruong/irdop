@@ -238,9 +238,9 @@
 				background: white;
 				border-radius: 8px;
 				padding: 24px;
-				max-width: 600px;
-				width: 90%;
-				max-height: 80vh;
+				max-width: 800px;
+				width: 95%;
+				max-height: 85vh;
 				overflow-y: auto;
 			}
 
@@ -253,7 +253,7 @@
 			.file-drop-zone {
 				border: 2px dashed #d1d5db;
 				border-radius: 8px;
-				padding: 40px 20px;
+				padding: 30px 15px;
 				text-align: center;
 				margin-bottom: 16px;
 				cursor: pointer;
@@ -819,6 +819,12 @@
 								<option value="APPROVED">Đã duyệt</option>
 							</select>
 						</div>
+						<div class="form-group">
+							<label class="form-label">Hệ máy:</label>
+							<select class="form-select" id="systemFilter" onchange="handleSystemFilterChange()">
+								<option value="">Tất cả hệ máy</option>
+							</select>
+						</div>
 						<button class="btn btn-primary" onclick="openUploadModal()">
 							<i class="fas fa-upload"></i> Upload File
 						</button>
@@ -989,37 +995,72 @@
 
 				<input type="file" id="fileInput" multiple style="display: none" onchange="handleFileSelect(event)" />
 
-				<!-- Tag Selection -->
-				<div style="margin-bottom: 16px">
-					<label class="form-label" style="display: block; margin-bottom: 8px; font-weight: 600"
-						>Chọn loại tài liệu:</label
-					>
-					<div style="display: flex; gap: 12px; flex-wrap: wrap">
-						<label style="display: flex; align-items: center; gap: 6px; cursor: pointer">
-							<input type="radio" name="uploadTag" value="Dữ liệu gốc" checked style="margin: 0" onchange="handleTagChange()" />
-							<span>Dữ liệu gốc</span>
-						</label>
-						<label style="display: flex; align-items: center; gap: 6px; cursor: pointer">
-							<input type="radio" name="uploadTag" value="Biên bản kết quả thử nghiệm" style="margin: 0" onchange="handleTagChange()" />
-							<span>Biên bản kết quả thử nghiệm</span>
-						</label>
-						<label style="display: flex; align-items: center; gap: 6px; cursor: pointer">
-							<input type="radio" name="uploadTag" value="Tài liệu khác" style="margin: 0" onchange="handleTagChange()" />
-							<span>Tài liệu khác</span>
-						</label>
-					</div>
+				<!-- Sample Code Input -->
+				<div style="margin-bottom: 8px">
+					<label class="form-label" style="display: block; margin-bottom: 8px; font-weight: 600">Mã mẫu:</label>
+					<textarea
+						id="sampleCodeInput"
+						class="form-input"
+						style="width: 100%; height: 60px; resize: vertical; min-height: 60px"
+						placeholder="Nhập các mã mẫu cách nhau bằng dấu phẩy (ví dụ: SP25xXXXX-01, SP25xXXXX-02, ...)"
+					></textarea>
 				</div>
 
-				<!-- System Selection (only for Raw Data) -->
-				<div id="systemSelection" style="margin-bottom: 16px; display: block">
-					<label class="form-label" style="display: block; margin-bottom: 8px; font-weight: 600"
-						>Chọn máy: <span style="color: red;">*</span></label
-					>
-					<select id="systemSelect" class="form-select" style="width: 100%">
-						<option value="">-- Chọn hệ máy --</option>
-					</select>
-					<div id="systemError" style="color: #ef4444; font-size: 12px; margin-top: 4px; display: none;">
-						Vui lòng chọn loại máy
+				<!-- Tag Selection and System Selection -->
+				<div style="margin-bottom: 16px">
+					<div style="display: flex; gap: 32px; flex-wrap: wrap">
+						<!-- Tag Selection -->
+						<div style="flex: 1; min-width: 300px">
+							<label class="form-label" style="display: block; margin-bottom: 8px; font-weight: 600"
+								>Chọn loại tài liệu:</label
+							>
+							<div style="display: flex; gap: 12px; flex-wrap: wrap">
+								<label style="display: flex; align-items: center; gap: 6px; cursor: pointer">
+									<input
+										type="radio"
+										name="uploadTag"
+										value="Dữ liệu gốc"
+										checked
+										style="margin: 0"
+										onchange="handleTagChange()"
+									/>
+									<span>Dữ liệu gốc</span>
+								</label>
+								<label style="display: flex; align-items: center; gap: 6px; cursor: pointer">
+									<input
+										type="radio"
+										name="uploadTag"
+										value="Biên bản kết quả thử nghiệm"
+										style="margin: 0"
+										onchange="handleTagChange()"
+									/>
+									<span>Biên bản kết quả thử nghiệm</span>
+								</label>
+								<label style="display: flex; align-items: center; gap: 6px; cursor: pointer">
+									<input
+										type="radio"
+										name="uploadTag"
+										value="Tài liệu khác"
+										style="margin: 0"
+										onchange="handleTagChange()"
+									/>
+									<span>Tài liệu khác</span>
+								</label>
+							</div>
+						</div>
+
+						<!-- System Selection -->
+						<div id="systemSelection" style="flex: 1; min-width: 160px; max-width: 200px; display: block">
+							<label class="form-label" style="display: block; margin-bottom: 8px; font-weight: 600"
+								>Chọn máy: <span style="color: red">*</span></label
+							>
+							<select id="systemSelect" class="form-select" style="width: 100%">
+								<option value="">-- Chọn loại máy --</option>
+							</select>
+							<div id="systemError" style="color: #ef4444; font-size: 12px; margin-top: 4px; display: none">
+								Vui lòng chọn loại máy
+							</div>
+						</div>
 					</div>
 				</div>
 
@@ -1069,6 +1110,7 @@
 			let currentStatus = null; // Current status filter
 			let currentMode = 'personal'; // Current mode filter: 'personal' or 'all'
 			let currentSort = { column: 'createdAt', direction: 'desc' }; // Current sort settings
+			let currentSystemFilter = null; // Current system filter
 			let selectedFiles = []; // For upload modal
 			let uploading = false; // Upload state
 			let currentUser = null; // Current user info
@@ -1159,13 +1201,25 @@
 			// Update system select options
 			function updateSystemSelectOptions() {
 				const systemSelect = document.getElementById('systemSelect');
+				const systemFilter = document.getElementById('systemFilter');
+
 				if (systemSelect) {
 					systemSelect.innerHTML = '<option value="">-- Chọn hệ máy --</option>';
-					equipmentList.forEach(equipment => {
+					equipmentList.forEach((equipment) => {
 						const option = document.createElement('option');
 						option.value = equipment;
 						option.textContent = equipment;
 						systemSelect.appendChild(option);
+					});
+				}
+
+				if (systemFilter) {
+					systemFilter.innerHTML = '<option value="">Tất cả hệ máy</option>';
+					equipmentList.forEach((equipment) => {
+						const option = document.createElement('option');
+						option.value = equipment;
+						option.textContent = equipment;
+						systemFilter.appendChild(option);
 					});
 				}
 			}
@@ -1175,7 +1229,7 @@
 				const selectedTag = document.querySelector('input[name="uploadTag"]:checked').value;
 				const systemSelection = document.getElementById('systemSelection');
 				const systemError = document.getElementById('systemError');
-				
+
 				if (selectedTag === 'Dữ liệu gốc') {
 					systemSelection.style.display = 'block';
 				} else {
@@ -1544,6 +1598,11 @@
 						requestBody.status = currentStatus;
 					}
 
+					// Add system filter if selected
+					if (currentSystemFilter) {
+						requestBody.systemTags = [currentSystemFilter];
+					}
+
 					const response = await apiPost('https://red.irdop.org/v1/file/get/by_tag', requestBody);
 
 					if (response.status === 200 && Array.isArray(response.data)) {
@@ -1877,6 +1936,11 @@
 						requestBody.status = currentStatus;
 					}
 
+					// Add system filter if selected
+					if (currentSystemFilter) {
+						requestBody.systemTags = [currentSystemFilter];
+					}
+
 					const response = await apiPost('https://red.irdop.org/v1/file/get/by_tag', requestBody);
 
 					if (response.status === 200 && Array.isArray(response.data)) {
@@ -1910,6 +1974,25 @@
 				currentPage = 1;
 
 				// Reload files with new status filter
+				if (isSearchMode && searchTerm) {
+					searchFiles(searchTerm);
+				} else {
+					loadFiles();
+				}
+			}
+
+			// Handle system filter change
+			function handleSystemFilterChange() {
+				const select = document.getElementById('systemFilter');
+				const selectedValue = select.value;
+
+				// Set current system filter (empty string becomes null)
+				currentSystemFilter = selectedValue || null;
+
+				// Reset to first page when filtering
+				currentPage = 1;
+
+				// Reload files with new system filter
 				if (isSearchMode && searchTerm) {
 					searchFiles(searchTerm);
 				} else {
@@ -2013,6 +2096,14 @@
 				document.getElementById('uploadModal').style.display = 'flex';
 				selectedFiles = [];
 				updateSelectedFilesUI();
+
+				// Reset upload button state
+				const uploadButton = document.getElementById('uploadButton');
+				uploadButton.disabled = true; // Will be enabled when files are selected
+				uploadButton.innerHTML = '<i class="fas fa-upload"></i> Upload';
+
+				// Reset uploading state
+				uploading = false;
 			}
 
 			function closeUploadModal() {
@@ -2023,6 +2114,8 @@
 				// Reset tag selection to default
 				document.querySelector('input[name="uploadTag"][value="Dữ liệu gốc"]').checked = true;
 				handleTagChange();
+				// Clear sample code input
+				document.getElementById('sampleCodeInput').value = '';
 			}
 
 			// Handle file selection from input or drag & drop
@@ -2073,7 +2166,10 @@
 				}
 
 				container.style.display = 'block';
-				uploadButton.disabled = false;
+				// Enable upload button if not currently uploading and if button is not in "uploaded" state
+				if (!uploading && uploadButton.innerHTML.includes('Upload')) {
+					uploadButton.disabled = false;
+				}
 
 				tbody.innerHTML = selectedFiles
 					.map(
@@ -2101,6 +2197,15 @@
 				const selectedTag = document.querySelector('input[name="uploadTag"]:checked').value;
 				const selectedSystem = document.getElementById('systemSelect').value;
 				const systemError = document.getElementById('systemError');
+
+				// Get sample codes from textarea
+				const sampleCodesText = document.getElementById('sampleCodeInput').value.trim();
+				const sampleCodes = sampleCodesText
+					? sampleCodesText
+							.split(',')
+							.map((code) => code.trim())
+							.filter((code) => code)
+					: [];
 
 				// Validate system selection for "Dữ liệu gốc"
 				if (selectedTag === 'Dữ liệu gốc' && !selectedSystem) {
@@ -2136,7 +2241,7 @@
 								},
 								objectPath: 'activities/LAB',
 								userTags: [selectedTag],
-								foreignKeyUIDs: [],
+								foreignKeyUIDs: sampleCodes,
 							};
 
 							// Add systemTags if system is selected
@@ -2191,6 +2296,10 @@
 						statusElement.textContent = `Upload thành công ${successCount} file!`;
 						statusElement.style.color = '#10b981';
 
+						// Immediately disable upload button to prevent duplicate uploads
+						uploadButton.disabled = true;
+						uploadButton.innerHTML = '<i class="fas fa-check"></i> Đã upload';
+
 						// Refresh file list after successful upload
 						setTimeout(() => {
 							closeUploadModal();
@@ -2206,8 +2315,11 @@
 					statusElement.style.color = '#ef4444';
 				} finally {
 					uploading = false;
-					uploadButton.disabled = false;
-					uploadButton.innerHTML = '<i class="fas fa-upload"></i> Upload';
+					// Only re-enable the button if upload was not successful
+					if (errorCount > 0) {
+						uploadButton.disabled = false;
+						uploadButton.innerHTML = '<i class="fas fa-upload"></i> Upload';
+					}
 				}
 			}
 

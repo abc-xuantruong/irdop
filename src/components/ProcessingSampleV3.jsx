@@ -30,6 +30,18 @@ const ProcessingSample = () => {
 	const [showAllReceipts, setShowAllReceipts] = useState(false); // Whether to show all receipts
 	const [showLabReportPopup, setShowLabReportPopup] = useState(false); // State for lab report popup
 
+	// Function to fetch matrix options from API
+	const fetchMatrixOptions = async () => {
+		try {
+			const matricesResponse = await apiGet('https://black.irdop.org/get/list_enum/matrix');
+			if (matricesResponse?.data && Array.isArray(matricesResponse.data)) {
+				setMatrixOptions(matricesResponse.data);
+			}
+		} catch (error) {
+			console.error('Error fetching matrix options:', error);
+		}
+	};
+
 	// Add the missing handleBulkEditCellClick function
 	const handleBulkEditCellClick = (column, receiptId) => {
 		setBulkEditCell({ column, receiptId });
@@ -47,15 +59,18 @@ const ProcessingSample = () => {
 	const handleModeChange = (mode) => {
 		if (mode === 'file') {
 			setShowLabReportPopup(true);
-			toast.info('Đang hiển thị file biên bản...');
+			toast.info('Đang hiển thị file biên bản...', { autoClose: 800 });
 		} else {
 			setCurrentMode(mode);
-			toast.info('Đang hiển thị giao diện bàn giao...');
+			toast.info('Đang hiển thị giao diện bàn giao...', { autoClose: 800 });
 		}
 	};
 	const [searchTerm, setSearchTerm] = useState('');
 	const [sampleSearchTerm, setSampleSearchTerm] = useState('');
 	const [parameterSearchTerm, setParameterSearchTerm] = useState('');
+	const [matrixSearchTerm, setMatrixSearchTerm] = useState('');
+	const [matrixOptions, setMatrixOptions] = useState([]);
+	const [showMatrixSuggestions, setShowMatrixSuggestions] = useState(false);
 	// Category filter state
 	const [filters, setFilters] = useState({
 		categories: [],
@@ -221,10 +236,15 @@ const ProcessingSample = () => {
 
 				const sampleTerms = parseSearchTerms(sampleSearchTerm);
 				const parameterTerms = parseSearchTerms(parameterSearchTerm);
+				const matrixTerms = parseSearchTerms(matrixSearchTerm);
 
 				const filteredSamples = receipt.samples?.filter((sample) => {
 					const matchesSampleUid =
 						sampleTerms.length === 0 || sampleTerms.some((term) => sample.sample_uid?.toLowerCase().includes(term));
+
+					// Matrix filter
+					const matchesMatrix =
+						matrixTerms.length === 0 || matrixTerms.some((term) => sample.matrix?.toLowerCase().includes(term));
 
 					const filteredAnalyses = sample.analysis?.filter((analysis) => {
 						// Parameter name filter
@@ -239,7 +259,7 @@ const ProcessingSample = () => {
 						return matchesParameter && matchesCategory;
 					});
 
-					return matchesSampleUid && filteredAnalyses?.length > 0;
+					return matchesSampleUid && matchesMatrix && filteredAnalyses?.length > 0;
 				});
 
 				return filteredSamples?.length > 0;
@@ -247,6 +267,7 @@ const ProcessingSample = () => {
 			.map((receipt) => {
 				const sampleTerms = parseSearchTerms(sampleSearchTerm);
 				const parameterTerms = parseSearchTerms(parameterSearchTerm);
+				const matrixTerms = parseSearchTerms(matrixSearchTerm);
 
 				const filteredSamples = receipt.samples
 					?.map((sample) => {
@@ -271,7 +292,12 @@ const ProcessingSample = () => {
 					.filter((sample) => {
 						const matchesSampleUid =
 							sampleTerms.length === 0 || sampleTerms.some((term) => sample.sample_uid?.toLowerCase().includes(term));
-						return matchesSampleUid && sample.analysis?.length > 0;
+
+						// Matrix filter
+						const matchesMatrix =
+							matrixTerms.length === 0 || matrixTerms.some((term) => sample.matrix?.toLowerCase().includes(term));
+
+						return matchesSampleUid && matchesMatrix && sample.analysis?.length > 0;
 					});
 
 				return {
@@ -286,7 +312,7 @@ const ProcessingSample = () => {
 			const filteredData = setFilteredBySearch();
 			setFilteredProcessingSample(filteredData);
 		}
-	}, [searchTerm, sampleSearchTerm, parameterSearchTerm, filters.categories, processingSample]);
+	}, [searchTerm, sampleSearchTerm, parameterSearchTerm, matrixSearchTerm, filters.categories, processingSample]);
 
 	const handleSearchChange = (e) => {
 		setSearchTerm(e.target.value);
@@ -297,6 +323,35 @@ const ProcessingSample = () => {
 	};
 	const handleParameterSearchChange = (e) => {
 		setParameterSearchTerm(e.target.value);
+	};
+
+	const handleMatrixSearchChange = (e) => {
+		const value = e.target.value;
+		setMatrixSearchTerm(value);
+
+		// Show suggestions when user types at least 4 characters
+		if (value.length >= 4) {
+			setShowMatrixSuggestions(true);
+		} else {
+			setShowMatrixSuggestions(false);
+		}
+	};
+
+	const handleMatrixSearchKeyDown = (e) => {
+		if (e.key === 'Enter') {
+			setShowMatrixSuggestions(false);
+		}
+	};
+
+	const handleMatrixSuggestionClick = (matrix) => {
+		setMatrixSearchTerm(matrix);
+		setShowMatrixSuggestions(false);
+	};
+
+	// Function to get filtered matrix suggestions
+	const getFilteredMatrixSuggestions = () => {
+		if (matrixSearchTerm.length < 4) return [];
+		return matrixOptions.filter((matrix) => matrix.toLowerCase().includes(matrixSearchTerm.toLowerCase()));
 	};
 
 	// Function to get unique categories from all analyses
@@ -366,6 +421,9 @@ const ProcessingSample = () => {
 
 		// Fetch data based on current URL
 		fetchReceiptData();
+
+		// Fetch matrix options
+		fetchMatrixOptions();
 
 		// Set isFetch to true so we don't fetch again unnecessarily
 		isFetch = true;
@@ -1402,26 +1460,49 @@ const ProcessingSample = () => {
 				<>
 					<div className="w-full flex flex-col mb-4 gap-2">
 						<div className="flex flex-wrap justify-between items-center gap-2">
+							<div className="relative w-[23%]">
+								<input
+									type="text"
+									placeholder="Tìm kiếm theo nền mẫu..."
+									value={matrixSearchTerm}
+									onChange={handleMatrixSearchChange}
+									onKeyDown={handleMatrixSearchKeyDown}
+									className="p-1 border rounded-lg w-full bg-white"
+								/>
+								{showMatrixSuggestions && matrixSearchTerm.length >= 4 && (
+									<div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-b-lg shadow-lg z-50 max-h-40 overflow-y-auto">
+										{getFilteredMatrixSuggestions().map((matrix, index) => (
+											<div
+												key={index}
+												className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+												onClick={() => handleMatrixSuggestionClick(matrix)}
+											>
+												{matrix}
+											</div>
+										))}
+									</div>
+								)}
+							</div>
 							<input
 								type="text"
 								placeholder="Tìm kiếm theo mã TNM..."
 								value={searchTerm}
 								onChange={handleSearchChange}
-								className="p-1 border rounded-lg w-[30%] bg-white"
+								className="p-1 border rounded-lg w-[23%] bg-white"
 							/>
 							<input
 								type="text"
 								placeholder="Tìm kiếm theo mã mẫu..."
 								value={sampleSearchTerm}
 								onChange={handleSampleSearchChange}
-								className="p-1 border rounded-lg w-[30%] bg-white"
+								className="p-1 border rounded-lg w-[23%] bg-white"
 							/>
 							<input
 								type="text"
 								placeholder="Tìm kiếm theo chỉ tiêu..."
 								value={parameterSearchTerm}
 								onChange={handleParameterSearchChange}
-								className="p-1 border rounded-lg w-[30%] bg-white"
+								className="p-1 border rounded-lg w-[23%] bg-white"
 							/>
 						</div>
 
