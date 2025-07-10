@@ -33,8 +33,8 @@ const Header = () => {
 		if (currentUser && currentUser.role) {
 			// Check if the user is a technician but not an admin
 			if (currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin) {
-				// Check if we're not already on the processing page
-				if (!currentPath.includes('/processing')) {
+				// Allow access to /processing and /files, redirect from other pages
+				if (!currentPath.includes('/processing') && !currentPath.includes('/files')) {
 					navigate('/processing');
 				}
 			}

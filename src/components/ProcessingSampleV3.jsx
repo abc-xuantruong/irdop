@@ -1,30 +1,21 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom'; // Import createPortal
+import { createPortal } from 'react-dom';
 import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiGet, apiPost, apiPut } from '../contexts/helperFunctionCallAPI';
-import axios from 'axios';
 import TinyMceInput from './Input';
 import { toast, ToastContainer } from 'react-toastify';
 import { GrDocumentText, GrPrint } from 'react-icons/gr';
-import {
-	FaCheck,
-	FaSave,
-	FaUndo,
-	FaStickyNote,
-	FaCopy,
-	FaEdit,
-	FaCalendarDay,
-	FaTimes,
-	FaUpload,
-	FaTrashAlt,
-} from 'react-icons/fa';
+import { FaCheck, FaSave, FaUndo, FaStickyNote, FaCopy, FaEdit, FaCalendarDay, FaTimes } from 'react-icons/fa';
 import { useLocation, useNavigate } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
 const ProcessingSample = () => {
 	const { setCurrentTitlePage, status, currentUser, technicians, formatDate } = useContext(GlobalContext);
+	const location = useLocation();
+	const navigate = useNavigate(); // Add navigate hook for URL manipulation
+
 	const [processingSample, setProcessingSample] = useState(null); // Raw data from API
 	const [filteredProcessingSample, setFilteredProcessingSample] = useState(null); // Filtered data based on search
 	const [selectedCheckboxesV3, setSelectedCheckboxesV3] = useState([]); // State for viewMode v3 checkboxes
@@ -35,19 +26,32 @@ const ProcessingSample = () => {
 		top: 0,
 		left: 0,
 	});
-	const [showFileUploadModal, setShowFileUploadModal] = useState(false);
-	const [files, setFiles] = useState([]);
-	const [uploadedFiles, setUploadedFiles] = useState([]); // Store uploaded files with upload info
-	const [showFileAssociationForm, setShowFileAssociationForm] = useState(false);
-	const [fileAssociations, setFileAssociations] = useState([]);
-	const [associationSearchResults, setAssociationSearchResults] = useState({});
-	const fileInputRef = useRef(null);
 	const [displayCount, setDisplayCount] = useState(20); // Number of receipts to display
 	const [showAllReceipts, setShowAllReceipts] = useState(false); // Whether to show all receipts
+	const [showLabReportPopup, setShowLabReportPopup] = useState(false); // State for lab report popup
 
 	// Add the missing handleBulkEditCellClick function
 	const handleBulkEditCellClick = (column, receiptId) => {
 		setBulkEditCell({ column, receiptId });
+	};
+
+	// Get current mode from URL query parameter
+	const getCurrentMode = () => {
+		const searchParams = new URLSearchParams(location.search);
+		return searchParams.get('mode') || 'sample';
+	};
+
+	const [currentMode, setCurrentMode] = useState('sample');
+
+	// Function to handle mode change
+	const handleModeChange = (mode) => {
+		if (mode === 'file') {
+			setShowLabReportPopup(true);
+			toast.info('Đang hiển thị file biên bản...');
+		} else {
+			setCurrentMode(mode);
+			toast.info('Đang hiển thị giao diện bàn giao...');
+		}
 	};
 	const [searchTerm, setSearchTerm] = useState('');
 	const [sampleSearchTerm, setSampleSearchTerm] = useState('');
@@ -62,9 +66,6 @@ const ProcessingSample = () => {
 	const [editingNote, setEditingNote] = useState(null);
 	const [noteInput, setNoteInput] = useState('');
 	const [bulkEditValues, setBulkEditValues] = useState({}); // Add state to track bulk edit values
-	const [bulkDescription, setBulkDescription] = useState(''); // Add state for bulk description update
-	const [showCategoryDropdown, setShowCategoryDropdown] = useState(false); // Add state for category dropdown visibility
-	const [selectedHeaderCategories, setSelectedHeaderCategories] = useState([]); // Add state for header category selection
 	const [showBulkEditForm, setShowBulkEditForm] = useState(null); // Add state to track which receipt's bulk edit form is visible
 	const [showGlobalBulkEditForm, setShowGlobalBulkEditForm] = useState(false); // Add state for global bulk edit form
 	const [filterUrgent, setFilterUrgent] = useState(false); // Add state for urgent filter
@@ -75,8 +76,6 @@ const ProcessingSample = () => {
 	const [inputValue, setInputValue] = useState('');
 	// Add state for EX information
 	const [exInfo, setExInfo] = useState({}); // Track EX information for each analysis
-	const location = useLocation();
-	const navigate = useNavigate(); // Add navigate hook for URL manipulation
 	let isFetch = false;
 
 	const [showTodayDeadlines, setShowTodayDeadlines] = useState(false);
@@ -362,6 +361,9 @@ const ProcessingSample = () => {
 		// Update the title
 		setCurrentTitlePage('Mẫu đang xử lý');
 
+		// Update current mode from URL when location changes
+		setCurrentMode(getCurrentMode());
+
 		// Fetch data based on current URL
 		fetchReceiptData();
 
@@ -396,18 +398,21 @@ const ProcessingSample = () => {
 		const handleClickOutside = (event) => {
 			// Check if click is outside the category dropdown area
 			if (!event.target.closest('.category-dropdown-container')) {
-				setShowCategoryDropdown(false);
+				setShowFilters((prev) => ({
+					...prev,
+					categories: false,
+				}));
 			}
 		};
 
-		if (showCategoryDropdown) {
+		if (showFilters.categories) {
 			document.addEventListener('mousedown', handleClickOutside);
 		}
 
 		return () => {
 			document.removeEventListener('mousedown', handleClickOutside);
 		};
-	}, [showCategoryDropdown]);
+	}, [showFilters.categories]);
 
 	const parseSearchTerms = (searchString) => {
 		return searchString
@@ -419,6 +424,36 @@ const ProcessingSample = () => {
 	const handleEditNote = (receipt) => {
 		setEditingNote(receipt.id);
 		setNoteInput(receipt.note || '');
+	};
+
+	const handleSaveNote = async (receipt) => {
+		try {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/receipt', {
+				receipt: {
+					id: receipt.id,
+					note: noteInput,
+				},
+			});
+
+			if (response?.status === 200) {
+				// Update both data states
+				const updateReceipt = (prevData) => {
+					if (!prevData) return prevData;
+					return prevData.map((r) => (r.id === receipt.id ? { ...r, note: noteInput } : r));
+				};
+
+				setProcessingSample(updateReceipt);
+				setFilteredProcessingSample(updateReceipt);
+
+				toast.success('Cập nhật ghi chú thành công');
+				setEditingNote(null);
+			} else {
+				toast.error('Cập nhật ghi chú thất bại');
+			}
+		} catch (error) {
+			console.error('Error saving note:', error);
+			toast.error('Lỗi khi cập nhật ghi chú');
+		}
 	};
 
 	const handleSaveContentV3 = async (content, column, analysisId) => {
@@ -725,69 +760,11 @@ const ProcessingSample = () => {
 	// Add a function to handle bulk edit value changes
 	const handleBulkEditChange = (field, value) => {
 		setBulkEditValues((prev) => ({ ...prev, [field]: value }));
-	}; // Add a function to handle bulk update submission
+	};
+
+	// Add a function to handle bulk update submission
 	const handleBulkUpdate = async (selectedRows) => {
 		try {
-			// First, upload files to S3 if there are any uploaded files
-			if (uploadedFiles.length > 0) {
-				try {
-					// Generate UUID with 'gp_' prefix for fileGroupUID
-					const fileGroupUID = 'gp_' + crypto.randomUUID();
-
-					// Generate foreignKeys for each uploaded file
-					const foreignKeys = [];
-
-					// For each selected analysis, create foreign key string
-					selectedRows.forEach((analysisId) => {
-						// Find the analysis and its corresponding sample
-						let foundSample = null;
-
-						filteredProcessingSample?.forEach((receipt) => {
-							receipt.samples?.forEach((sample) => {
-								const analysis = sample.analysis?.find((a) => a.id === analysisId);
-								if (analysis) {
-									foundSample = sample;
-								}
-							});
-						});
-
-						if (foundSample && foundSample.sample_uid) {
-							// Remove first 2 characters from sample_uid and create foreign key
-							const sampleUidWithoutPrefix = foundSample.sample_uid.substring(2);
-							const foreignKey = `AN${sampleUidWithoutPrefix}^${analysisId}`;
-							foreignKeys.push(foreignKey);
-						}
-					});
-					for (const uploadedFile of uploadedFiles) {
-						// Add foreignKeys and fileGroupUID properties to each uploaded file
-						const fileWithForeignKeys = {
-							...uploadedFile,
-							foreignKeys: foreignKeys,
-							fileGroupUID: fileGroupUID, // Assign the generated fileGroupUID to each file
-						};
-
-						delete fileWithForeignKeys.metadata; // Remove metadata property if it exists
-						// Send each uploaded file object to the upload complete API
-						const s3Response = await apiPost(
-							'https://red.irdop.org/v1/file/uplink/upload_complete',
-							fileWithForeignKeys,
-						);
-
-						if (s3Response.status !== 200) {
-							console.warn(`Failed to send upload complete for file: ${uploadedFile.fileInfo.fileName}`);
-						} else {
-							console.log(`Successfully sent upload complete for file: ${uploadedFile.fileInfo.fileName}`);
-							console.log(`File assigned fileGroupUID: ${fileGroupUID}`);
-						}
-					}
-					toast.success(`Đã tải lên ${uploadedFiles.length} file thành công`);
-				} catch (fileError) {
-					console.error('Error uploading files to S3:', fileError);
-					toast.error('Có lỗi khi tải file lên S3');
-					// Continue with the analysis update even if file upload fails
-				}
-			}
-
 			// Then proceed with the bulk analysis update
 			const updatePromises = selectedRows.map((rowId) => {
 				// Prepare the update body with EX info if protocol_source is EX
@@ -885,14 +862,15 @@ const ProcessingSample = () => {
 			// Clear all checkboxes after update
 			document.querySelectorAll('.row-checkbox').forEach((checkbox) => {
 				checkbox.checked = false;
-			}); // Clear selectedCheckboxesV3 and selectedCheckboxesByReceipt
+			});
+
+			// Clear selectedCheckboxesV3 and selectedCheckboxesByReceipt
 			setSelectedCheckboxesV3([]);
 			setSelectedCheckboxesByReceipt({});
 
-			// Reset bulk edit values and uploaded files
+			// Reset bulk edit values
 			setBulkEditValues({});
 			setBulkEditCell({ column: null, receiptId: null });
-			setUploadedFiles([]); // Clear uploaded files after successful update
 		} catch (error) {
 			console.error('Error during bulk update:', error);
 			toast.error('Lỗi khi cập nhật hàng loạt');
@@ -1282,8 +1260,6 @@ const ProcessingSample = () => {
 	const formatDateForAPI = (date) => {
 		if (!date) return null;
 		const d = new Date(date);
-		// Add 7 hours to account for timezone if needed
-		// d.setHours(d.getHours() + 7);
 		return d.toISOString().split('T')[0]; // Returns YYYY-MM-DD
 	};
 
@@ -1295,356 +1271,6 @@ const ProcessingSample = () => {
 		const month = (d.getMonth() + 1).toString().padStart(2, '0');
 		const year = d.getFullYear();
 		return `${day}/${month}/${year}`;
-	};
-
-	// Function to reset the date filter
-	const handleResetDateFilter = () => {
-		// Reset filter info
-		setFilterInfo({
-			isFilterActive: false,
-			count: 0,
-			startDate: null,
-			endDate: null,
-		});
-
-		// Close the calendar if open
-		setIsCalendarOpen(false);
-		setShowTodayDeadlines(false);
-
-		// Clear deadline filters from URL
-		const searchParams = new URLSearchParams(location.search);
-		searchParams.delete('deadline_start');
-		searchParams.delete('deadline_end');
-
-		// Update URL without reloading the page
-		navigate(
-			{
-				pathname: location.pathname,
-				search: searchParams.toString(),
-			},
-			{ replace: true },
-		);
-
-		// Show toast notification
-		toast.info('Đã tắt bộ lọc ngày trả kết quả');
-
-		// The URL change will trigger the useEffect and fetchReceiptData will be called automatically
-	};
-
-	// Function to handle file drop
-	const handleFileDrop = (e) => {
-		e.preventDefault();
-		const droppedFiles = Array.from(e.dataTransfer.files);
-		setFiles((prevFiles) => [...prevFiles, ...droppedFiles]);
-	};
-
-	// Function to handle file selection via file input
-	const handleFileChange = (e) => {
-		const selectedFiles = Array.from(e.target.files);
-		setFiles((prevFiles) => [...prevFiles, ...selectedFiles]);
-	};
-
-	// Function to delete a file from the list
-	const handleFileDelete = (fileName) => {
-		setFiles((prevFiles) => prevFiles.filter((file) => file.name !== fileName));
-	};
-
-	// Function to cancel upload
-	const handleCancelUpload = () => {
-		setFiles([]);
-		setShowFileUploadModal(false);
-	}; // Function to confirm upload and show file name next to button
-	const handleConfirmUpload = async () => {
-		if (files.length === 0) {
-			toast.error('Không có file nào được chọn');
-			return;
-		}
-
-		try {
-			const uploadResults = []; // Store results for each file
-
-			// Process each file
-			for (const file of files) {
-				// First get the upload link using apiPost
-				const linkResponse = await apiPost('https://red.irdop.org/v1/file/uplink/lab/activities');
-
-				if (linkResponse.status !== 200) {
-					throw new Error(`Failed to get upload link: ${linkResponse.data?.message || 'Unknown error'}`);
-				}
-
-				const uploadInfo = linkResponse.data;
-				if (!uploadInfo || !uploadInfo.url) {
-					throw new Error('Không nhận được URL upload từ API');
-				}
-
-				// Convert file to buffer for upload
-				const fileBuffer = await file.arrayBuffer();
-
-				// Upload using axios.put with only fileBuffer and Content-Type header
-				const uploadResponse = await axios.put(uploadInfo.url, fileBuffer, {
-					headers: {
-						'Content-Type': file.type || 'application/octet-stream',
-					},
-				});
-
-				if (uploadResponse.status !== 200) {
-					throw new Error(`Failed to upload file: ${uploadResponse.data?.message || 'Unknown error'}`);
-				}
-				uploadResults.push({
-					fileInfo: {
-						fileName: file.name,
-						fileSize: file.size,
-						fileType: file.type,
-					},
-					...linkResponse.data, // Spread all key-value pairs from uploadResponse.data
-					fileCategory: [], // Default value as empty array for multiple categories
-					uploadDescription: bulkDescription || '', // Use bulk description if available
-					createdbyUID: '', // Default machine type value
-				});
-
-				toast.success(`Đã tải lên thành công: ${file.name}`);
-			} // Store uploaded files with their upload info - append to existing files
-			console;
-			setUploadedFiles((prevFiles) => [...prevFiles, ...uploadResults]);
-
-			// Clear the files list and close the modal
-			setFiles([]);
-			setShowFileUploadModal(false);
-		} catch (error) {
-			console.error('Error uploading files:', error);
-			toast.error(`Lỗi khi tải lên: ${error.message}`);
-		}
-	};
-
-	// Function to handle input change in association form
-	const handleAssociationInputChange = (index, field, value) => {
-		setFileAssociations((prev) => {
-			const updated = [...prev];
-			updated[index] = { ...updated[index], [field]: value };
-			return updated;
-		});
-	};
-
-	// Function to search for receipt, sample and parameters
-	const handleSearchForAssociations = async (index) => {
-		const { receiptCode, sampleCode, parameterName } = fileAssociations[index];
-
-		if (!receiptCode && !sampleCode && !parameterName) {
-			toast.error('Vui lòng nhập ít nhất một trường tìm kiếm');
-			return;
-		}
-
-		try {
-			// Parse search terms using the same function as the main search
-			const receiptTerms = parseSearchTerms(receiptCode);
-			const sampleTerms = parseSearchTerms(sampleCode);
-			const parameterTerms = parseSearchTerms(parameterName);
-
-			// Filter using the same logic as the main search
-			const results = filteredProcessingSample
-				.filter((receipt) => {
-					const matchesReceiptUid =
-						receiptTerms.length === 0 || receiptTerms.some((term) => receipt.receipt_uid?.toLowerCase().includes(term));
-
-					if (!matchesReceiptUid) return false;
-
-					const filteredSamples = receipt.samples?.filter((sample) => {
-						const matchesSampleUid =
-							sampleTerms.length === 0 || sampleTerms.some((term) => sample.sample_uid?.toLowerCase().includes(term));
-
-						const filteredAnalyses = sample.analysis?.filter((analysis) => {
-							return (
-								parameterTerms.length === 0 ||
-								parameterTerms.some((term) => analysis.parameter_name?.toLowerCase().includes(term))
-							);
-						});
-
-						return matchesSampleUid && filteredAnalyses?.length > 0;
-					});
-
-					return filteredSamples?.length > 0;
-				})
-				.map((receipt) => {
-					const filteredSamples = receipt.samples
-						?.map((sample) => {
-							const filteredAnalyses = sample.analysis?.filter((analysis) => {
-								return (
-									parameterTerms.length === 0 ||
-									parameterTerms.some((term) => analysis.parameter_name?.toLowerCase().includes(term))
-								);
-							});
-
-							return {
-								...sample,
-								analysis: filteredAnalyses,
-							};
-						})
-						.filter((sample) => {
-							const matchesSampleUid =
-								sampleTerms.length === 0 || sampleTerms.some((term) => sample.sample_uid?.toLowerCase().includes(term));
-							return matchesSampleUid && sample.analysis?.length > 0;
-						});
-
-					return {
-						...receipt,
-						samples: filteredSamples,
-					};
-				});
-
-			// Update search results for this file
-			setAssociationSearchResults((prev) => ({
-				...prev,
-				[index]: results,
-			}));
-
-			if (results.length === 0) {
-				toast.info('Không tìm thấy kết quả phù hợp');
-			} else {
-				toast.success(`Đã tìm thấy ${results.length} kết quả phù hợp`);
-			}
-		} catch (error) {
-			console.error('Error searching for associations:', error);
-			toast.error('Lỗi khi tìm kiếm');
-		}
-	};
-
-	// Function to handle selection of samples and parameters
-	const handleSelectSample = (fileIndex, receiptId, sampleId, analysisIds) => {
-		setFileAssociations((prev) => {
-			const updated = [...prev];
-
-			// Add or update the selection
-			const existingSelectionIndex = updated[fileIndex].selectedSamples.findIndex(
-				(selection) => selection.receiptId === receiptId && selection.sampleId === sampleId,
-			);
-
-			if (existingSelectionIndex >= 0) {
-				// Update existing selection
-				updated[fileIndex].selectedSamples[existingSelectionIndex].analysisIds = analysisIds;
-			} else {
-				// Add new selection
-				updated[fileIndex].selectedSamples.push({
-					receiptId,
-					sampleId,
-					analysisIds,
-				});
-			}
-
-			return updated;
-		});
-	};
-
-	// Function to complete association and upload files
-	const handleCompleteAssociation = () => {
-		// Here you would implement the actual file upload with associations
-		toast.success(`${files.length} biên bản đã được tải lên và liên kết thành công`);
-
-		// Reset all states
-		setFiles([]);
-		setFileAssociations([]);
-		setAssociationSearchResults({});
-		setShowFileAssociationForm(false);
-	};
-	// Function to cancel association
-	const handleCancelAssociation = () => {
-		setFileAssociations([]);
-		setShowFileAssociationForm(false);
-	}; // Function to handle uploaded file edit
-	const handleUploadedFileEdit = (index, field, value) => {
-		setUploadedFiles((prev) => {
-			const updated = [...prev];
-			updated[index] = { ...updated[index], [field]: value };
-
-			// Log the edited object
-
-			return updated;
-		});
-	};
-
-	// Function to handle uploaded file delete
-	const handleUploadedFileDelete = (index) => {
-		setUploadedFiles((prev) => {
-			const updated = [...prev];
-			const deletedFile = updated[index];
-			updated.splice(index, 1);
-			return updated;
-		});
-	};
-
-	// Function to handle bulk description update
-	const handleBulkDescriptionChange = (value) => {
-		setBulkDescription(value);
-		// Update all uploaded files with the new description
-		setUploadedFiles((prev) => {
-			const updated = prev.map((fileInfo) => ({
-				...fileInfo,
-				uploadDescription: value,
-			}));
-			return updated;
-		});
-	};
-	// Function to handle checkbox-based category selection
-	const handleCategoryCheckboxChange = (fileIndex, category, isChecked) => {
-		setUploadedFiles((prev) => {
-			const updated = [...prev];
-			const currentCategories = updated[fileIndex].fileCategory || [];
-
-			if (isChecked) {
-				// Add category if not already present
-				if (!currentCategories.includes(category)) {
-					updated[fileIndex] = {
-						...updated[fileIndex],
-						fileCategory: [...currentCategories, category],
-					};
-				}
-			} else {
-				// Remove category
-				updated[fileIndex] = {
-					...updated[fileIndex],
-					fileCategory: currentCategories.filter((cat) => cat !== category),
-				};
-			}
-
-			// Log the edited object
-			return updated;
-		});
-	};
-
-	// Function to handle header category dropdown toggle
-	const toggleCategoryDropdown = () => {
-		setShowCategoryDropdown(!showCategoryDropdown);
-	};
-
-	// Function to handle header category selection (bulk select all files)
-	const handleHeaderCategoryChange = (category, isChecked) => {
-		if (isChecked) {
-			setSelectedHeaderCategories((prev) => [...prev, category]);
-			// Apply to all uploaded files
-			setUploadedFiles((prev) => {
-				return prev.map((fileInfo) => {
-					const currentCategories = fileInfo.fileCategory || [];
-					if (!currentCategories.includes(category.replace(' ', ''))) {
-						return {
-							...fileInfo,
-							fileCategory: [...currentCategories, category.replace(' ', '')],
-						};
-					}
-					return fileInfo;
-				});
-			});
-		} else {
-			setSelectedHeaderCategories((prev) => prev.filter((cat) => cat !== category));
-			// Remove from all uploaded files
-			setUploadedFiles((prev) => {
-				return prev.map((fileInfo) => {
-					const currentCategories = fileInfo.fileCategory || [];
-					return {
-						...fileInfo,
-						fileCategory: currentCategories.filter((cat) => cat !== category.replace(' ', '')),
-					};
-				});
-			});
-		}
 	};
 
 	// Handle EX information changes
@@ -1748,534 +1374,262 @@ const ProcessingSample = () => {
 			<div className="w-full h-full flex justify-between items-center rounded-lg mb-2">
 				<div className="flex gap-2">
 					<button
-						onClick={() => navigate('/processing')}
-						className="px-4 py-0.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+						onClick={() => handleModeChange('sample')}
+						className={`px-4 py-0.5 rounded-lg transition-colors ${
+							currentMode === 'sample' && !showLabReportPopup
+								? 'bg-blue-500 text-white hover:bg-blue-600'
+								: 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+						}`}
 					>
 						Bàn giao
 					</button>
-					{/* <button
-						onClick={() => navigate('/processing/machine')}
-						className="px-4 py-0.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+					<button
+						onClick={() => handleModeChange('file')}
+						className={`px-4 py-0.5 rounded-lg transition-colors flex items-center gap-2 ${
+							showLabReportPopup
+								? 'bg-green-500 text-white hover:bg-green-600'
+								: 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+						}`}
 					>
-						Hệ máy
-					</button> */}
+						<GrDocumentText size={14} />
+						File biên bản
+					</button>
 				</div>
 			</div>
 
 			<div className="w-full h-full flex flex-col justify-center items-center bg-white rounded-lg p-4 shadow">
-				<div className="w-full flex flex-col mb-4 gap-2">
-					<div className="flex flex-wrap justify-between items-center gap-2">
-						<input
-							type="text"
-							placeholder="Tìm kiếm theo mã TNM..."
-							value={searchTerm}
-							onChange={handleSearchChange}
-							className="p-1 border rounded-lg w-[30%] bg-white"
-						/>
-						<input
-							type="text"
-							placeholder="Tìm kiếm theo mã mẫu..."
-							value={sampleSearchTerm}
-							onChange={handleSampleSearchChange}
-							className="p-1 border rounded-lg w-[30%] bg-white"
-						/>
-						<input
-							type="text"
-							placeholder="Tìm kiếm theo chỉ tiêu..."
-							value={parameterSearchTerm}
-							onChange={handleParameterSearchChange}
-							className="p-1 border rounded-lg w-[30%] bg-white"
-						/>
-					</div>
-
-					<div className="flex flex-wrap justify-between items-center gap-2 mt-2">
-						{/* Add filter buttons */}
-						<div className="flex flex-wrap gap-2">
-							{/* Add global bulk edit button */}
-							<button
-								className={`px-3 py-1 text-sm rounded-lg border ${
-									new URLSearchParams(location.search).has('urgent')
-										? 'bg-teritary border-primary'
-										: 'bg-gray-100 border-gray-300'
-								}`}
-								onClick={toggleUrgentFilter}
-								title="Hiển thị mẫu khẩn"
-							>
-								Mẫu khẩn
-							</button>
-							<button
-								className={`px-3 py-1 text-sm rounded-lg border ${
-									new URLSearchParams(location.search).has('no_results')
-										? 'bg-teritary border-primary'
-										: 'bg-gray-100 border-gray-300'
-								}`}
-								onClick={toggleNoResultsFilter}
-								title="Hiển thị chỉ tiêu chưa có kết quả"
-							>
-								Chưa có KQ
-							</button>
-							<button
-								className={`px-3 py-1 text-sm rounded-lg border ${
-									filterOverdue ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
-								}`}
-								onClick={() => {
-									// Get current URL search params
-									const searchParams = new URLSearchParams(location.search);
-
-									// Clear all existing filters first
-									searchParams.delete('deadline_start');
-									searchParams.delete('deadline_end');
-									searchParams.delete('no_results');
-									searchParams.delete('urgent');
-									searchParams.delete('overdue');
-									searchParams.delete('contractor');
-
-									// Reset filter info
-									setFilterInfo({
-										isFilterActive: false,
-										count: 0,
-										startDate: null,
-										endDate: null,
-									});
-
-									// Reset UI state for datepicker
-									setShowTodayDeadlines(false);
-
-									if (!filterOverdue) {
-										// Add the parameter if it doesn't exist
-										searchParams.set('overdue', 'true');
-										setFilterOverdue(true);
-										toast.info('Đã bật bộ lọc mẫu quá hạn');
-									} else {
-										// If already active, turn it off
-										setFilterOverdue(false);
-										toast.info('Đã tắt bộ lọc mẫu quá hạn');
-									}
-
-									// Update the URL without reloading the page
-									navigate({
-										pathname: location.pathname,
-										search: searchParams.toString(),
-									});
-								}}
-								title="Hiển thị mẫu quá hạn"
-							>
-								Quá hạn
-							</button>
-							<button
-								className={`px-3 py-1 text-sm rounded-lg border ${
-									filterContractor ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
-								}`}
-								onClick={toggleContractorFilter}
-								title="Hiển thị mẫu thầu phụ (EX)"
-							>
-								Thầu phụ
-							</button>{' '}
-							{/* Add deadline filter button */}
-							<div className="relative">
-								<button
-									className={`p-2 rounded-lg text-sm bg-gray-100 border-gray-300 flex items-center justify-center focus:outline-none gap-2 py-1 ${
-										showTodayDeadlines ? 'bg-teritary border-primary' : 'text-black'
-									}`}
-									onClick={filterTodayDeadlines}
-									title="Lọc theo hạn trả"
-								>
-									Ngày trả KQ
-									{showTodayDeadlines && (
-										<div
-											className="relative z-1000 text-black datepicker-container flex"
-											onClick={(e) => e.stopPropagation()}
-										>
-											<DatePicker
-												ref={datePickerRef}
-												selected={startDate}
-												onChange={handleDateRangeChange}
-												startDate={startDate}
-												endDate={endDate}
-												selectsRange
-												dateFormat="dd/MM/yyyy"
-												placeholderText="Chọn khoảng thời gian"
-												className="p-2 py-0 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-52 cursor-pointer"
-												open={isCalendarOpen}
-												onInputClick={() => setIsCalendarOpen(true)}
-												onClickOutside={() => {
-													// Only close if both dates are selected or clicked outside the calendar
-													if (startDate && endDate) {
-														setIsCalendarOpen(false);
-													}
-												}}
-												// Remove the onBlur handler that causes premature closing
-												shouldCloseOnSelect={false} // Don't close automatically on selection
-												dayClassName={(date) => (isToday(date) ? 'bg-blue-100 font-bold rounded-full' : undefined)}
-											/>
-											<button
-												className="ml-1 p-0.5 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
-												onClick={(e) => {
-													e.stopPropagation();
-													// Close the deadline filter
-													setShowTodayDeadlines(false);
-													setShowDateRangePicker(false);
-													setIsCalendarOpen(false);
-
-													// Clear deadline filters from URL
-													const searchParams = new URLSearchParams(location.search);
-													searchParams.delete('deadline_start');
-													searchParams.delete('deadline_end');
-
-													// Update URL without reloading the page
-													navigate(
-														{
-															pathname: location.pathname,
-															search: searchParams.toString(),
-														},
-														{ replace: true },
-													);
-
-													// Reset filter info
-													setFilterInfo({
-														isFilterActive: false,
-														count: 0,
-														startDate: null,
-														endDate: null,
-													});
-
-													// Show toast notification
-													toast.info('Đã tắt bộ lọc ngày trả kết quả');
-												}}
-												title="Đóng bộ lọc deadline"
-											>
-												<FaTimes size={14} />
-											</button>
-										</div>
-									)}
-								</button>
-							</div>
-						</div>
-						<button
-							className={`px-3 py-1 text-sm rounded-lg border flex items-center gap-1 ${
-								selectedCheckboxesV3.length > 0
-									? 'bg-teritary border-primary cursor-pointer'
-									: 'bg-gray-100 border-gray-300 opacity-50 cursor-not-allowed'
-							}`}
-							onClick={() => {
-								if (selectedCheckboxesV3.length > 0) {
-									setShowGlobalBulkEditForm(true);
-								}
-							}}
-							disabled={selectedCheckboxesV3.length === 0}
-							title={
-								selectedCheckboxesV3.length > 0
-									? `Chỉnh sửa hàng loạt ${selectedCheckboxesV3.length} chỉ tiêu đã chọn`
-									: 'Chọn ít nhất một chỉ tiêu để chỉnh sửa hàng loạt'
-							}
-						>
-							<FaEdit size={12} /> Sửa ({selectedCheckboxesV3.length})
-						</button>
-					</div>
-				</div>
-
-				{/* File Upload Modal */}
-				{showFileUploadModal && (
-					<div className="fixed inset-0 bg-black bg-opacity-50 z-[200]" onClick={() => setShowFileUploadModal(false)}>
-						<div
-							className="w-96 border-dashed border-2 border-gray-400 rounded-lg p-4 bg-white absolute z-[201]"
-							style={{
-								top: `${dropdownPosition.top}px`,
-								left: `${dropdownPosition.left}px`,
-								maxHeight: '80vh',
-								overflowY: 'auto',
-							}}
-							onClick={(e) => e.stopPropagation()}
-							onDrop={handleFileDrop}
-							onDragOver={(e) => e.preventDefault()}
-						>
+				{/* Always show sample processing interface */}
+				<>
+					<div className="w-full flex flex-col mb-4 gap-2">
+						<div className="flex flex-wrap justify-between items-center gap-2">
 							<input
-								type="file"
-								multiple
-								className="hidden"
-								id="fileInput"
-								ref={fileInputRef}
-								onChange={handleFileChange}
+								type="text"
+								placeholder="Tìm kiếm theo mã TNM..."
+								value={searchTerm}
+								onChange={handleSearchChange}
+								className="p-1 border rounded-lg w-[30%] bg-white"
 							/>
-							<label htmlFor="fileInput" className="cursor-pointer text-blue-500">
-								Kéo thả biên bản vào đây hoặc nhấn để chọn file <br></br>
-								<p className="text-sm text-red-500">(* .docx, .doc, .xlsx, .pdf)</p>
-							</label>
-							<div className="mt-4">
-								{files.map((file) => (
-									<div key={file.name} className="flex justify-between items-center border pl-2 w-full rounded-lg">
-										{/* Thêm lớp `break-words` hoặc `break-all` để nội dung xuống dòng */}
-										<span className="w-72 break-words text-start">{file.name}</span>
-
-										<button className="text-red-500 py-2 px-4" onClick={() => handleFileDelete(file.name)}>
-											X
-										</button>
-									</div>
-								))}
-							</div>
-							<div className="flex justify-end mt-8">
-								<button
-									className="bg-gray-500 text-white font-bold py-2 px-4 rounded mr-2"
-									onClick={handleCancelUpload}
-								>
-									Hủy bỏ
-								</button>
-								<button className="bg-blue-500 text-white font-bold py-2 px-4 rounded" onClick={handleConfirmUpload}>
-									Xác nhận
-								</button>
-							</div>
+							<input
+								type="text"
+								placeholder="Tìm kiếm theo mã mẫu..."
+								value={sampleSearchTerm}
+								onChange={handleSampleSearchChange}
+								className="p-1 border rounded-lg w-[30%] bg-white"
+							/>
+							<input
+								type="text"
+								placeholder="Tìm kiếm theo chỉ tiêu..."
+								value={parameterSearchTerm}
+								onChange={handleParameterSearchChange}
+								className="p-1 border rounded-lg w-[30%] bg-white"
+							/>
 						</div>
-					</div>
-				)}
 
-				{/* File Association Form */}
-				{showFileAssociationForm && (
-					<div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
-						<div className="bg-white p-6 rounded-lg shadow-lg w-5/6 max-h-[80vh] overflow-auto">
-							<h2 className="text-xl font-bold mb-4 text-left">Liên kết biên bản với mẫu và chỉ tiêu</h2>
-							{fileAssociations.map((association, index) => (
-								<div key={index} className="mb-6 border-b pb-4">
-									<div className="flex flex-row gap-4">
-										{/* Left column - file name and search fields */}
-										<div className="w-1/3 pr-4 flex flex-col gap-3">
-											<h3 className="text-lg font-semibold mb-2 text-blue-600 break-words text-left">
-												{association.fileName}
-											</h3>
+						<div className="flex flex-wrap justify-between items-center gap-2 mt-2">
+							{/* Add filter buttons */}
+							<div className="flex flex-wrap gap-2">
+								{/* Add global bulk edit button */}
+								<button
+									className={`px-3 py-1 text-sm rounded-lg border ${
+										new URLSearchParams(location.search).has('urgent')
+											? 'bg-teritary border-primary'
+											: 'bg-gray-100 border-gray-300'
+									}`}
+									onClick={toggleUrgentFilter}
+									title="Hiển thị mẫu khẩn"
+								>
+									Mẫu khẩn
+								</button>
+								<button
+									className={`px-3 py-1 text-sm rounded-lg border ${
+										new URLSearchParams(location.search).has('no_results')
+											? 'bg-teritary border-primary'
+											: 'bg-gray-100 border-gray-300'
+									}`}
+									onClick={toggleNoResultsFilter}
+									title="Hiển thị chỉ tiêu chưa có kết quả"
+								>
+									Chưa có KQ
+								</button>
+								<button
+									className={`px-3 py-1 text-sm rounded-lg border ${
+										filterOverdue ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
+									}`}
+									onClick={() => {
+										// Get current URL search params
+										const searchParams = new URLSearchParams(location.search);
 
-											<div className="flex flex-col gap-2">
-												<input
-													type="text"
-													placeholder="Mã TNM"
-													value={association.receiptCode}
-													onChange={(e) => handleAssociationInputChange(index, 'receiptCode', e.target.value)}
-													className="p-2 border rounded-lg bg-white w-full text-left"
+										// Clear all existing filters first
+										searchParams.delete('deadline_start');
+										searchParams.delete('deadline_end');
+										searchParams.delete('no_results');
+										searchParams.delete('urgent');
+										searchParams.delete('overdue');
+										searchParams.delete('contractor');
+
+										// Reset filter info
+										setFilterInfo({
+											isFilterActive: false,
+											count: 0,
+											startDate: null,
+											endDate: null,
+										});
+
+										// Reset UI state for datepicker
+										setShowTodayDeadlines(false);
+
+										if (!filterOverdue) {
+											// Add the parameter if it doesn't exist
+											searchParams.set('overdue', 'true');
+											setFilterOverdue(true);
+											toast.info('Đã bật bộ lọc mẫu quá hạn');
+										} else {
+											// If already active, turn it off
+											setFilterOverdue(false);
+											toast.info('Đã tắt bộ lọc mẫu quá hạn');
+										}
+
+										// Update the URL without reloading the page
+										navigate({
+											pathname: location.pathname,
+											search: searchParams.toString(),
+										});
+									}}
+									title="Hiển thị mẫu quá hạn"
+								>
+									Quá hạn
+								</button>
+								<button
+									className={`px-3 py-1 text-sm rounded-lg border ${
+										filterContractor ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
+									}`}
+									onClick={toggleContractorFilter}
+									title="Hiển thị mẫu thầu phụ (EX)"
+								>
+									Thầu phụ
+								</button>{' '}
+								{/* Add deadline filter button */}
+								<div className="relative">
+									<button
+										className={`p-2 rounded-lg text-sm bg-gray-100 border-gray-300 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+											showTodayDeadlines ? 'bg-teritary border-primary' : 'text-black'
+										}`}
+										onClick={filterTodayDeadlines}
+										title="Lọc theo hạn trả"
+									>
+										Ngày trả KQ
+										{showTodayDeadlines && (
+											<div
+												className="relative z-1000 text-black datepicker-container flex"
+												onClick={(e) => e.stopPropagation()}
+											>
+												<DatePicker
+													ref={datePickerRef}
+													selected={startDate}
+													onChange={handleDateRangeChange}
+													startDate={startDate}
+													endDate={endDate}
+													selectsRange
+													dateFormat="dd/MM/yyyy"
+													placeholderText="Chọn khoảng thời gian"
+													className="p-2 py-0 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-52 cursor-pointer"
+													open={isCalendarOpen}
+													onInputClick={() => setIsCalendarOpen(true)}
+													onClickOutside={() => {
+														// Only close if both dates are selected or clicked outside the calendar
+														if (startDate && endDate) {
+															setIsCalendarOpen(false);
+														}
+													}}
+													// Remove the onBlur handler that causes premature closing
+													shouldCloseOnSelect={false} // Don't close automatically on selection
+													dayClassName={(date) => (isToday(date) ? 'bg-blue-100 font-bold rounded-full' : undefined)}
 												/>
-
-												<input
-													type="text"
-													placeholder="Mã mẫu"
-													value={association.sampleCode}
-													onChange={(e) => handleAssociationInputChange(index, 'sampleCode', e.target.value)}
-													className="p-2 border rounded-lg bg-white w-full text-left"
-												/>
-
-												<input
-													type="text"
-													placeholder="Tên chỉ tiêu"
-													value={association.parameterName}
-													onChange={(e) => handleAssociationInputChange(index, 'parameterName', e.target.value)}
-													className="p-2 border rounded-lg bg-white w-full text-left"
-												/>
-
 												<button
-													className="bg-blue-500 text-white font-bold py-2 px-4 rounded w-full text-left"
-													onClick={() => handleSearchForAssociations(index)}
+													className="ml-1 p-0.5 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
+													onClick={(e) => {
+														e.stopPropagation();
+														// Close the deadline filter
+														setShowTodayDeadlines(false);
+														setShowDateRangePicker(false);
+														setIsCalendarOpen(false);
+
+														// Clear deadline filters from URL
+														const searchParams = new URLSearchParams(location.search);
+														searchParams.delete('deadline_start');
+														searchParams.delete('deadline_end');
+
+														// Update URL without reloading the page
+														navigate(
+															{
+																pathname: location.pathname,
+																search: searchParams.toString(),
+															},
+															{ replace: true },
+														);
+
+														// Reset filter info
+														setFilterInfo({
+															isFilterActive: false,
+															count: 0,
+															startDate: null,
+															endDate: null,
+														});
+
+														// Show toast notification
+														toast.info('Đã tắt bộ lọc ngày trả kết quả');
+													}}
+													title="Đóng bộ lọc deadline"
 												>
-													Tìm kiếm
+													<FaTimes size={14} />
 												</button>
 											</div>
-										</div>
-
-										{/* Right column - search results */}
-										<div className="w-2/3 border-l pl-4 min-h-[200px]">
-											{associationSearchResults[index] && associationSearchResults[index].length > 0 ? (
-												<div className="max-h-[300px] overflow-auto border rounded-lg p-2">
-													{associationSearchResults[index].map((receipt) => (
-														<div key={receipt.id} className="mb-4">
-															<div className="flex items-center bg-gray-100 p-1">
-																<input
-																	type="checkbox"
-																	className="mr-2"
-																	onChange={(e) => {
-																		const isChecked = e.target.checked;
-
-																		// Create array to hold all analysis IDs from this receipt
-																		const allReceiptAnalysisIds = [];
-																		const updatedSelections = [...association.selectedSamples];
-
-																		receipt.samples.forEach((sample) => {
-																			const analysisIds = sample.analysis.map((analysis) => analysis.id);
-																			allReceiptAnalysisIds.push(...analysisIds);
-
-																			// Find existing selection for this sample
-																			const existingSelectionIndex = updatedSelections.findIndex(
-																				(selection) =>
-																					selection.receiptId === receipt.id && selection.sampleId === sample.id,
-																			);
-
-																			if (isChecked) {
-																				if (existingSelectionIndex >= 0) {
-																					updatedSelections[existingSelectionIndex].analysisIds = analysisIds;
-																				} else {
-																					updatedSelections.push({
-																						receiptId: receipt.id,
-																						sampleId: sample.id,
-																						analysisIds: analysisIds,
-																					});
-																				}
-																			} else {
-																				if (existingSelectionIndex >= 0) {
-																					updatedSelections.splice(existingSelectionIndex, 1);
-																				}
-																			}
-																		});
-
-																		// Update all samples for this receipt at once
-																		setFileAssociations((prev) => {
-																			const updated = [...prev];
-																			updated[index].selectedSamples = updatedSelections;
-																			return updated;
-																		});
-																	}}
-																	// Check if all analyses in this receipt are selected
-																	checked={receipt.samples.every((sample) =>
-																		sample.analysis.every((analysis) =>
-																			association.selectedSamples.some(
-																				(selection) =>
-																					selection.receiptId === receipt.id &&
-																					selection.sampleId === sample.id &&
-																					selection.analysisIds.includes(analysis.id),
-																			),
-																		),
-																	)}
-																/>
-																<h4 className="font-semibold text-left">{receipt.receipt_uid}</h4>
-															</div>
-															{receipt.samples.map((sample) => (
-																<div key={sample.id} className="ml-4 mb-2 border-l-2 border-blue-200 pl-2">
-																	<div className="flex items-center">
-																		<input
-																			type="checkbox"
-																			className="mr-2"
-																			onChange={(e) => {
-																				const isChecked = e.target.checked;
-																				const analysisIds = sample.analysis.map((analysis) => analysis.id);
-
-																				setFileAssociations((prev) => {
-																					const updated = [...prev];
-
-																					// Find existing selection
-																					const existingSelectionIndex = updated[index].selectedSamples.findIndex(
-																						(selection) =>
-																							selection.receiptId === receipt.id && selection.sampleId === sample.id,
-																					);
-
-																					if (isChecked) {
-																						if (existingSelectionIndex >= 0) {
-																							updated[index].selectedSamples[existingSelectionIndex].analysisIds =
-																								analysisIds;
-																						} else {
-																							updated[index].selectedSamples.push({
-																								receiptId: receipt.id,
-																								sampleId: sample.id,
-																								analysisIds: analysisIds,
-																							});
-																						}
-																					} else {
-																						if (existingSelectionIndex >= 0) {
-																							updated[index].selectedSamples.splice(existingSelectionIndex, 1);
-																						}
-																					}
-
-																					return updated;
-																				});
-																			}}
-																			// Check if all analyses in this sample are selected
-																			checked={sample.analysis.every((analysis) =>
-																				association.selectedSamples.some(
-																					(selection) =>
-																						selection.receiptId === receipt.id &&
-																						selection.sampleId === sample.id &&
-																						selection.analysisIds.includes(analysis.id),
-																				),
-																			)}
-																		/>
-																		<h5 className="font-semibold text-left">{sample.sample_uid}</h5>
-																	</div>
-																	{sample.analysis.map((analysis) => (
-																		<div
-																			key={analysis.id}
-																			className="ml-4 flex items-center py-1 border-b border-gray-100"
-																		>
-																			<input
-																				type="checkbox"
-																				className="mr-2"
-																				checked={association.selectedSamples.some(
-																					(selection) =>
-																						selection.receiptId === receipt.id &&
-																						selection.sampleId === sample.id &&
-																						selection.analysisIds.includes(analysis.id),
-																				)}
-																				onChange={(e) => {
-																					const isChecked = e.target.checked;
-																					const currentSelection = association.selectedSamples.find(
-																						(selection) =>
-																							selection.receiptId === receipt.id && selection.sampleId === sample.id,
-																					);
-
-																					const analysisIds = isChecked
-																						? [...(currentSelection?.analysisIds || []), analysis.id]
-																						: (currentSelection?.analysisIds || []).filter((id) => id !== analysis.id);
-
-																					handleSelectSample(index, receipt.id, sample.id, analysisIds);
-																				}}
-																			/>
-																			<span className="text-left">{analysis.parameter_name}</span>
-																		</div>
-																	))}
-																</div>
-															))}
-														</div>
-													))}
-												</div>
-											) : (
-												<div className="flex items-center justify-center h-[200px] text-gray-500 italic border rounded-lg text-left">
-													Chưa có kết quả tìm kiếm
-												</div>
-											)}
-										</div>
-									</div>
+										)}
+									</button>
 								</div>
-							))}
-							<div className="flex justify-end mt-4">
-								<button
-									className="bg-gray-500 text-white font-bold py-2 px-4 rounded mr-2 text-left"
-									onClick={handleCancelAssociation}
-								>
-									Hủy bỏ
-								</button>
-								<button
-									className="bg-blue-500 text-white font-bold py-2 px-4 rounded text-left"
-									onClick={handleCompleteAssociation}
-								>
-									Hoàn tất
-								</button>
 							</div>
+							<button
+								className={`px-3 py-1 text-sm rounded-lg border flex items-center gap-1 ${
+									selectedCheckboxesV3.length > 0
+										? 'bg-teritary border-primary cursor-pointer'
+										: 'bg-gray-100 border-gray-300 opacity-50 cursor-not-allowed'
+								}`}
+								onClick={() => {
+									if (selectedCheckboxesV3.length > 0) {
+										setShowGlobalBulkEditForm(true);
+									}
+								}}
+								disabled={selectedCheckboxesV3.length === 0}
+								title={
+									selectedCheckboxesV3.length > 0
+										? `Chỉnh sửa hàng loạt ${selectedCheckboxesV3.length} chỉ tiêu đã chọn`
+										: 'Chọn ít nhất một chỉ tiêu để chỉnh sửa hàng loạt'
+								}
+							>
+								<FaEdit size={12} /> Sửa ({selectedCheckboxesV3.length})
+							</button>
 						</div>
 					</div>
-				)}
 
-				<div className="w-full">
-					<div className="w-full min-h-20 flex flex-col mt-1 ">
-						{Array.isArray(filteredProcessingSample) && filteredProcessingSample.length > 0 ? (
-							filteredProcessingSample
-								.slice(0, showAllReceipts ? filteredProcessingSample.length : displayCount)
-								.map((receipt) => (
-									<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto relative">
-										{' '}
-										<div className="text-start mb-2 flex justify-between items-center">
-											<div>
-												<div className="flex items-center gap-2">
-													<p className="text-primary font-semibold">{receipt.receipt_uid || 'N/A'}</p>
-													<FaStickyNote
-														className="text-gray-500 cursor-pointer hover:text-blue-500"
-														onClick={() => handleEditNote(receipt)}
-														title="Thêm/Sửa ghi chú"
-														size={14}
-													/>
-												</div>
-												{
-													editingNote === receipt.id && (
+					<div className="w-full">
+						<div className="w-full min-h-20 flex flex-col mt-1 ">
+							{Array.isArray(filteredProcessingSample) && filteredProcessingSample.length > 0 ? (
+								filteredProcessingSample
+									.slice(0, showAllReceipts ? filteredProcessingSample.length : displayCount)
+									.map((receipt) => (
+										<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto relative">
+											<div className="text-start mb-2 flex justify-between items-center">
+												<div>
+													<div className="flex items-center gap-2">
+														<p className="text-primary font-semibold">{receipt.receipt_uid || 'N/A'}</p>
+														<FaStickyNote
+															className="text-gray-500 cursor-pointer hover:text-blue-500"
+															onClick={() => handleEditNote(receipt)}
+															title="Thêm/Sửa ghi chú"
+															size={14}
+														/>
+													</div>
+													{editingNote === receipt.id && (
 														<div className="flex items-center gap-2 mt-2">
 															<textarea
 																value={noteInput}
@@ -2299,819 +1653,634 @@ const ProcessingSample = () => {
 																</button>
 															</div>
 														</div>
-													)
-													// : (
-													// 	receipt.note && (
-													// 		<p
-													// 			className="text-gray-600 italic cursor-pointer hover:underline w-fit mt-1"
-													// 			onClick={() => handleEditNote(receipt)}
-													// 		>
-													// 			Ghi chú: {receipt.note}
-													// 		</p>
-													// 	)
-													// )
-												}
-											</div>
-
-											<div className="flex items-center gap-3">
-												{/* Select all checkbox - with new handlers */}
-												<div className="flex items-center">
-													<span className="text-sm min-w-20">Chọn tất cả</span>
-													<input
-														type="checkbox"
-														className="w-5 h-5 receipt-checkbox"
-														title="Chọn tất cả các mẫu hiển thị trong đơn này"
-														checked={isReceiptFullySelected(receipt)}
-														onChange={(e) => handleReceiptCheckboxChange(e, receipt)}
-													/>
+													)}
 												</div>
 
-												{/* Bulk edit button */}
-												{selectedCheckboxesByReceipt[receipt.id] &&
-													selectedCheckboxesByReceipt[receipt.id].length > 0 && (
-														<button
-															className="border-2 border-gray-600  p-1 rounded-lg hover:bg-blue-300 flex items-center h-10"
-															onClick={() => toggleBulkEditForm(receipt.id)}
-														>
-															<FaEdit className="mr-2" /> Chỉnh sửa hàng loạt
-														</button>
-													)}
+												<div className="flex items-center gap-3">
+													{/* Select all checkbox - with new handlers */}
+													<div className="flex items-center">
+														<span className="text-sm min-w-20">Chọn tất cả</span>
+														<input
+															type="checkbox"
+															className="w-5 h-5 receipt-checkbox"
+															title="Chọn tất cả các mẫu hiển thị trong đơn này"
+															checked={isReceiptFullySelected(receipt)}
+															onChange={(e) => handleReceiptCheckboxChange(e, receipt)}
+														/>
+													</div>
+
+													{/* Bulk edit button */}
+													{selectedCheckboxesByReceipt[receipt.id] &&
+														selectedCheckboxesByReceipt[receipt.id].length > 0 && (
+															<button
+																className="border-2 border-gray-600 p-1 rounded-lg hover:bg-blue-300 flex items-center h-10"
+																onClick={() => toggleBulkEditForm(receipt.id)}
+															>
+																<FaEdit className="mr-2" /> Chỉnh sửa hàng loạt
+															</button>
+														)}
+												</div>
 											</div>
-										</div>
-										{/* Bulk Edit Form */}
-										{showBulkEditForm === receipt.id && (
-											<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-												<div className="bg-white p-6 rounded-lg shadow-lg min-w-[400px] w-5/6">
-													<h2 className="text-xl font-bold mb-4 flex justify-between items-center">
-														<span>Chỉnh sửa hàng loạt</span>
-														<span className="text-sm font-normal text-gray-600">
-															({selectedCheckboxesByReceipt[receipt.id]?.length || 0} chỉ tiêu được chọn)
-														</span>
-													</h2>
-													{/* Form with labels on top */}
-													<div className="flex flex-row gap-4 mb-6 overflow-x-auto">
-														{/* Combined Protocol source and code fields */}
-														<div className="flex flex-col min-w-[180px]">
-															<label className="mb-1 font-medium text-sm text-left">Phương pháp thử</label>
-															<div className="flex gap-1">
-																<select
-																	className="p-2 border rounded-lg bg-white w-1/3 text-sm"
-																	value={bulkEditValues.protocol_source || ''}
-																	onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
-																>
-																	<option value="">--</option>
-																	<option value="IRDOP">IRDOP</option>
-																	<option value="IRDOP VS">IRDOP VS</option>
-																	<option value="EX">EX</option>
-																</select>
-																<input
-																	type="text"
-																	className="p-2 border rounded-lg bg-white w-2/3 text-sm"
-																	placeholder="Mã PTT"
-																	value={bulkEditValues.protocol_code || ''}
-																	onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
-																/>
-															</div>
-														</div>
-														{/* Reference field */}
-														<div className="flex flex-col min-w-[140px]">
-															<label className="mb-1 font-medium text-sm text-left">Tham chiếu</label>
-															<input
-																type="text"
-																className="p-2 border rounded-lg bg-white text-sm"
-																placeholder="Nhập tham chiếu"
-																value={bulkEditValues.reference || ''}
-																onChange={(e) => handleBulkEditChange('reference', e.target.value)}
-															/>
-														</div>
-														{/* EX Name field - only show if protocol_source is EX */}
-														{bulkEditValues.protocol_source === 'EX' && (
-															<div className="flex items-center gap-2 min-w-[200px]">
-																<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Tên EX:</label>
-																<input
-																	type="text"
-																	className="flex-1 p-2 border rounded-lg bg-white text-sm"
-																	placeholder="Nhập tên EX"
-																	value={bulkEditValues.ex_name || ''}
-																	onChange={(e) => handleBulkEditChange('ex_name', e.target.value)}
-																/>
-															</div>
-														)}
-														{/* EX Send Date field - only show if protocol_source is EX */}
-														{bulkEditValues.protocol_source === 'EX' && (
-															<div className="flex items-center gap-2 min-w-[200px]">
-																<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Ngày gửi:</label>
-																<input
-																	type="date"
-																	className="flex-1 p-2 border rounded-lg bg-white text-sm"
-																	value={
-																		bulkEditValues.send_at
-																			? new Date(bulkEditValues.send_at).toISOString().split('T')[0]
-																			: ''
-																	}
-																	onChange={(e) => {
-																		const dateValue = e.target.value
-																			? new Date(e.target.value + 'T00:00:00').toISOString()
-																			: '';
-																		handleBulkEditChange('send_at', dateValue);
-																	}}
-																/>
-															</div>
-														)}
-														{/* Deadline field */}
-														<div className="flex flex-col min-w-[120px]">
-															<label className="mb-1 font-medium text-sm text-left">Hạn trả</label>
-															<input
-																type="date"
-																className="p-2 border rounded-lg bg-white text-sm"
-																value={bulkEditValues.deadline ? bulkEditValues.deadline.split('T')[0] : ''}
-																onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
-															/>
-														</div>
-														{/* Result value field */}
-														<div className="flex flex-col min-w-[140px]">
-															<label className="mb-1 font-medium text-sm text-left">Kết quả</label>
-															<div
-																className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
-																onClick={() => handleBulkEditCellClick('result_value', 'global')}
-																onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
-															>
-																{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === 'global' ? (
-																	<TinyMceInput
-																		value={bulkEditValues.result_value || ''}
-																		onUpdate={(content) => handleBulkEditChange('result_value', content)}
-																	/>
-																) : (
-																	<div
-																		dangerouslySetInnerHTML={{
-																			__html: bulkEditValues.result_value || 'Nhấp để sửa...',
-																		}}
-																		className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
-																	/>
-																)}
-															</div>
-														</div>
-														{/* Result unit field */}
-														<div className="flex flex-col min-w-[120px]">
-															<label className="mb-1 font-medium text-sm text-left">Đơn vị</label>
-															<div
-																className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
-																onClick={() => handleBulkEditCellClick('result_unit', 'global')}
-																onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
-															>
-																{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === 'global' ? (
-																	<TinyMceInput
-																		value={bulkEditValues.result_unit || ''}
-																		onUpdate={(content) => handleBulkEditChange('result_unit', content)}
-																		onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
-																	/>
-																) : (
-																	<div
-																		dangerouslySetInnerHTML={{
-																			__html: bulkEditValues.result_unit || 'Nhấp để sửa...',
-																		}}
-																		className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
-																	/>
-																)}
-															</div>
-														</div>{' '}
-														{/* Technician field */}
-														<div className="flex flex-col min-w-[180px]">
-															<label className="mb-1 font-medium text-sm text-left">Người thực hiện</label>
-															<select
-																className="p-2 border rounded-lg bg-white text-sm"
-																value={bulkEditValues.technician_uid || ''}
-																onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
-															>
-																<option value="">-- Không thay đổi --</option>
-																{technicians.map((tech) => (
-																	<option key={tech.identity_uid} value={tech.identity_uid}>
-																		{tech.identity_name}
-																	</option>
-																))}
-															</select>
-														</div>{' '}
-														{/* File upload button */}
-														<div className="flex flex-col min-w-[180px] relative">
-															<label
-																className="mb-1 font-medium text-sm text-left flex items-center gap-1 cursor-pointer hover:text-blue-500"
-																onClick={(e) => {
-																	setShowFileUploadModal(true);
-																	// Store button position for positioning the modal
-																	const buttonRect = e.target.getBoundingClientRect();
-																	setDropdownPosition({
-																		top: buttonRect.bottom + window.scrollY + 5,
-																		left: buttonRect.left + window.scrollX - 200,
-																	});
-																}}
-																title="Tải lên biên bản"
-															>
-																Upload file <FaUpload size={12} />
-															</label>
-															<div className="flex items-center">
-																{uploadedFiles.length > 0 && (
-																	<span
-																		className="text-sm text-green-600 truncate max-w-[150px]"
-																		title={`${uploadedFiles.length} file(s) uploaded`}
+											{/* Bulk Edit Form */}
+											{showBulkEditForm === receipt.id && (
+												<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+													<div className="bg-white p-6 rounded-lg shadow-lg min-w-[400px] w-5/6">
+														<h2 className="text-xl font-bold mb-4 flex justify-between items-center">
+															<span>Chỉnh sửa hàng loạt</span>
+															<span className="text-sm font-normal text-gray-600">
+																({selectedCheckboxesByReceipt[receipt.id]?.length || 0} chỉ tiêu được chọn)
+															</span>
+														</h2>
+														{/* Form with labels on top */}
+														<div className="flex flex-row gap-4 mb-6 overflow-x-auto">
+															{/* Combined Protocol source and code fields */}
+															<div className="flex flex-col min-w-[180px]">
+																<label className="mb-1 font-medium text-sm text-left">Phương pháp thử</label>
+																<div className="flex gap-1">
+																	<select
+																		className="p-2 border rounded-lg bg-white w-1/3 text-sm"
+																		value={bulkEditValues.protocol_source || ''}
+																		onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
 																	>
-																		{uploadedFiles.length} file(s) uploaded
-																	</span>
-																)}
+																		<option value="">--</option>
+																		<option value="IRDOP">IRDOP</option>
+																		<option value="IRDOP VS">IRDOP VS</option>
+																		<option value="EX">EX</option>
+																	</select>
+																	<input
+																		type="text"
+																		className="p-2 border rounded-lg bg-white w-2/3 text-sm"
+																		placeholder="Mã PTT"
+																		value={bulkEditValues.protocol_code || ''}
+																		onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
+																	/>
+																</div>
 															</div>
-														</div>
-													</div>
-													{/* Table of selected analyses with preview */}
-													<div className="mb-6 max-h-[300px] overflow-auto">
-														<h3 className="text-md font-semibold mb-2">Xem trước thay đổi</h3>
-														<table className="w-full border-collapse border border-gray-300">
-															<thead className="bg-gray-100">
-																<tr>
-																	<th className="border p-1 text-start w-32 min-w-32">Mã mẫu</th>
-																	<th className="border p-1 text-start w-1/5 min-w-40">Chỉ tiêu</th>
-																	<th className="border p-1 text-start w-1/5 min-w-40">Phương pháp</th>
-																	<th className="border p-1 text-start min-w-32">Kết quả</th>
-																	<th className="border p-1 text-start min-w-28">Đơn vị</th>
-																	<th className="border p-1 text-start w-24 min-w-24">Hạn trả</th>
-																	<th className="border p-1 text-start w-32 min-w-32">KTV</th>
-																	<th className="border p-1 text-start w-32">Tham chiếu</th>
-																</tr>
-															</thead>
-															<tbody>
-																{selectedCheckboxesByReceipt[receipt.id]?.map((analysisId) => {
-																	// Find the analysis in the receipt data
-																	let foundAnalysis = null;
-																	let foundSample = null;
-
-																	// Search through all samples to find the analysis
-																	receipt.samples?.forEach((sample) => {
-																		const analysis = sample.analysis?.find((a) => a.id === analysisId);
-																		if (analysis) {
-																			foundAnalysis = analysis;
-																			foundSample = sample;
-																		}
-																	});
-
-																	return foundAnalysis ? (
-																		<tr key={analysisId} className="hover:bg-gray-50">
-																			<td className="border p-1 text-start">{foundSample?.sample_uid}</td>
-																			<td className="border p-1 text-start">{foundAnalysis.parameter_name}</td>
-																			<td className="border p-1 text-start">
-																				<div className="flex flex-col gap-1">
-																					<div>
-																						<span className="preview-protocol-source">
-																							{bulkEditValues.protocol_source || foundAnalysis.protocol_source || '--'}
-																						</span>
-																						&nbsp;
-																						<span className="preview-protocol-code">
-																							{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
-																						</span>
-																					</div>
-																					{/* Show EX info if protocol_source is EX */}
-																					{(bulkEditValues.protocol_source === 'EX' ||
-																						foundAnalysis.protocol_source === 'EX') && (
-																						<div className="text-xs text-gray-600 bg-gray-50 p-1 rounded border mt-1">
-																							<div>
-																								<strong>Tên EX:</strong>{' '}
-																								{bulkEditValues.ex_name || foundAnalysis.ex_info?.ex_name || '--'}
-																							</div>
-																							<div>
-																								<strong>Ngày gửi:</strong>{' '}
-																								{bulkEditValues.send_at
-																									? new Date(bulkEditValues.send_at).toLocaleDateString('vi-VN')
-																									: foundAnalysis.ex_info?.send_at
-																									? new Date(foundAnalysis.ex_info.send_at).toLocaleDateString('vi-VN')
-																									: '--'}
-																							</div>
-																						</div>
-																					)}
-																				</div>
-																			</td>
-																			<td className="border p-1 text-start">
-																				<div
-																					className="preview-result-value"
-																					dangerouslySetInnerHTML={{
-																						__html: bulkEditValues.result_value || foundAnalysis.result_value || '--',
-																					}}
-																				/>
-																			</td>
-																			<td className="border p-1 text-start">
-																				<div
-																					className="preview-result-unit"
-																					dangerouslySetInnerHTML={{
-																						__html: bulkEditValues.result_unit || foundAnalysis.result_unit || '--',
-																					}}
-																				/>
-																			</td>
-																			<td className="border p-1 text-start preview-deadline">
-																				{bulkEditValues.deadline
-																					? formatDate(bulkEditValues.deadline)
-																					: foundAnalysis.deadline
-																					? formatDate(foundAnalysis.deadline)
-																					: '--'}
-																			</td>
-																			<td className="border p-1 text-start preview-technician">
-																				{bulkEditValues.technician_uid
-																					? getTechnicianName(bulkEditValues.technician_uid)
-																					: getTechnicianName(foundAnalysis.technician_uid)}
-																			</td>
-																			<td className="border p-1 text-start preview-reference">
-																				{bulkEditValues.reference || foundAnalysis.reference || '--'}
-																			</td>
-																		</tr>
-																	) : null;
-																})}{' '}
-															</tbody>
-														</table>
-													</div>{' '}
-													{/* Uploaded Files Table for Individual Receipt */}
-													{uploadedFiles.length > 0 && (
-														<div className="mb-6">
-															{' '}
-															<h3 className="text-md font-semibold mb-2">Danh sách file đã tải lên</h3>
-															<div className="max-h-[240px] overflow-auto">
-																<table className="w-full border-collapse border border-gray-300">
-																	<thead className="bg-gray-100">
-																		<tr>
-																			<th className="border p-1 text-center w-16">STT</th>
-																			<th className="border p-1 text-start">Tên file</th>
-																			<th className="border p-1 text-start">File UID</th>
-																			<th className="border p-1 text-start w-32 relative">
-																				{' '}
-																				<div
-																					className="flex items-center gap-1 cursor-pointer hover:bg-gray-50 p-1 rounded category-dropdown-container"
-																					onClick={toggleCategoryDropdown}
-																				>
-																					<span>Danh mục</span>
-																					<svg
-																						className={`w-4 h-4 transition-transform ${
-																							showCategoryDropdown ? 'rotate-180' : ''
-																						}`}
-																						fill="none"
-																						stroke="currentColor"
-																						viewBox="0 0 24 24"
-																					>
-																						<path
-																							strokeLinecap="round"
-																							strokeLinejoin="round"
-																							strokeWidth={2}
-																							d="M19 9l-7 7-7-7"
-																						/>
-																					</svg>
-																				</div>
-																				{showCategoryDropdown && (
-																					<div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[160px] category-dropdown-container">
-																						<div className="p-2">
-																							{['Raw Data', 'Prepare Report', 'Calculation'].map((category) => (
-																								<label
-																									key={category}
-																									className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer"
-																								>
-																									<input
-																										type="checkbox"
-																										checked={selectedHeaderCategories.includes(category)}
-																										onChange={(e) =>
-																											handleHeaderCategoryChange(category, e.target.checked)
-																										}
-																										className="w-4 h-4"
-																									/>
-																									<span className="text-sm">{category}</span>
-																								</label>
-																							))}
-																						</div>
-																					</div>
-																				)}
-																			</th>
-																			<th className="border p-1 text-start w-32">Loại máy</th>
-																			<th className="border p-1 text-start">
-																				{' '}
-																				<div className="flex flex-col gap-1">
-																					<span>Mô tả</span>
-																					<input
-																						type="text"
-																						value={bulkDescription}
-																						onChange={(e) => handleBulkDescriptionChange(e.target.value)}
-																						className="w-full p-1 text-xs border rounded bg-white"
-																						placeholder="Cập nhật tất cả mô tả..."
-																					/>
-																				</div>
-																			</th>
-																			<th className="border p-1 text-center w-16">Xóa</th>
-																		</tr>
-																	</thead>
-																	<tbody>
-																		{uploadedFiles.map((fileInfo, index) => (
-																			<tr key={index} className="hover:bg-gray-50">
-																				<td className="border p-2 text-center">{index + 1}</td>
-																				<td className="border p-2 text-start break-words">
-																					{fileInfo.fileInfo.fileName}
-																				</td>
-																				<td className="border p-2 text-start font-mono text-sm">
-																					{fileInfo.fileUID || fileInfo.key || 'N/A'}
-																				</td>{' '}
-																				<td className="border p-1">
-																					<div className="flex flex-col gap-1 min-w-32">
-																						{/* Checkbox-based category selection */}
-																						<div className="flex flex-col gap-1">
-																							<label className="flex items-center gap-1 text-xs">
-																								<input
-																									type="checkbox"
-																									checked={(fileInfo.fileCategory || []).includes('RawData')}
-																									onChange={(e) =>
-																										handleCategoryCheckboxChange(index, 'RawData', e.target.checked)
-																									}
-																									className="w-3 h-3"
-																								/>
-																								Raw Data
-																							</label>
-																							<label className="flex items-center gap-1 text-xs">
-																								<input
-																									type="checkbox"
-																									checked={(fileInfo.fileCategory || []).includes('PreparedReport')}
-																									onChange={(e) =>
-																										handleCategoryCheckboxChange(
-																											index,
-																											'PreparedReport',
-																											e.target.checked,
-																										)
-																									}
-																									className="w-3 h-3"
-																								/>
-																								Prepare Report
-																							</label>
-																							<label className="flex items-center gap-1 text-xs">
-																								<input
-																									type="checkbox"
-																									checked={(fileInfo.fileCategory || []).includes('Calculation')}
-																									onChange={(e) =>
-																										handleCategoryCheckboxChange(index, 'Calculation', e.target.checked)
-																									}
-																									className="w-3 h-3"
-																								/>
-																								Calculation
-																							</label>
-																						</div>
-																					</div>
-																				</td>
-																				<td className="border p-1">
-																					<select
-																						value={fileInfo.createdbyUID || ''}
-																						onChange={(e) =>
-																							handleUploadedFileEdit(index, 'createdbyUID', e.target.value)
-																						}
-																						className="w-full p-1 text-xs border rounded bg-white"
-																					>
-																						<option value="">-- Chọn loại máy --</option>
-																						<option value="HPLC01">HPLC01</option>
-																						<option value="GCMS01">GCMS01</option>
-																						<option value="AAS01">AAS01</option>
-																						<option value="AAS02">AAS02</option>
-																					</select>
-																				</td>
-																				<td className="border p-1">
-																					<input
-																						type="text"
-																						value={fileInfo.uploadDescription || ''}
-																						onChange={(e) =>
-																							handleUploadedFileEdit(index, 'uploadDescription', e.target.value)
-																						}
-																						className="w-full p-1 text-xs border rounded bg-white"
-																						placeholder="Nhập mô tả..."
-																					/>
-																				</td>
-																				<td className="border p-2 text-center">
-																					<button
-																						onClick={() => handleUploadedFileDelete(index)}
-																						className="text-red-500 hover:text-red-700 p-1"
-																						title="Xóa file"
-																					>
-																						<FaTrashAlt size={14} />
-																					</button>
-																				</td>
-																			</tr>
-																		))}
-																	</tbody>
-																</table>
+															{/* Reference field */}
+															<div className="flex flex-col min-w-[140px]">
+																<label className="mb-1 font-medium text-sm text-left">Tham chiếu</label>
+																<input
+																	type="text"
+																	className="p-2 border rounded-lg bg-white text-sm"
+																	placeholder="Nhập tham chiếu"
+																	value={bulkEditValues.reference || ''}
+																	onChange={(e) => handleBulkEditChange('reference', e.target.value)}
+																/>
 															</div>
-														</div>
-													)}
-													<div className="flex justify-end gap-3">
-														<button
-															className="px-2 py-1 border-2 border-gray-600 text-gray-600 rounded hover:bg-gray-400 w-fit"
-															onClick={closeBulkEditForm}
-														>
-															Hủy bỏ
-														</button>{' '}
-														<button
-															className="px-2 py-1 border-2 border-gray-600  rounded hover:bg-blue-600 flex items-center w-fit "
-															onClick={() => {
-																handleBulkUpdate(selectedCheckboxesByReceipt[receipt.id]);
-																setFiles([]); // Clear files after confirmation
-																closeBulkEditForm();
-															}}
-														>
-															<FaSave className="mr-2" /> Xác nhận cập nhật
-														</button>
-													</div>
-												</div>
-											</div>
-										)}
-										{/* Organize by samples */}
-										{receipt.samples && receipt.samples.length > 0 ? (
-											receipt.samples.map((sample) => (
-												<div key={sample.id} className="mb-4 border-l-2 border-teritary px-1 overflow-auto">
-													{' '}
-													<div className="  mb-2 flex justify-between items-center">
-														<div className="flex flex-col">
-															<div className="min-w-40">
-																<span className="font-semibold">{sample.sample_uid}</span>:{' '}
-																{sample.sample_name || 'N/A'}
-															</div>
-															<div className="min-w-40">
-																<span className="font-semibold">Nền mẫu:</span> {sample.matrix || 'N/A'}
-															</div>
-
-															<div className="min-w-40">
-																<span className="font-semibold">Mô tả:</span> {sample.sample_description || 'N/A'}
-															</div>
-
-															{sample.additional_request && (
-																<div className="mt-1 mb-2">
-																	<span className="font-semibold">Yêu cầu khách hàng:</span> {sample.additional_request}
+															{/* EX Name field - only show if protocol_source is EX */}
+															{bulkEditValues.protocol_source === 'EX' && (
+																<div className="flex items-center gap-2 min-w-[200px]">
+																	<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Tên EX:</label>
+																	<input
+																		type="text"
+																		className="flex-1 p-2 border rounded-lg bg-white text-sm"
+																		placeholder="Nhập tên EX"
+																		value={bulkEditValues.ex_name || ''}
+																		onChange={(e) => handleBulkEditChange('ex_name', e.target.value)}
+																	/>
 																</div>
 															)}
-														</div>
-														{/* Add PKQ button in the opposite corner */}
-														<button
-															className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-end active:bg-sky-100 focus:outline-none"
-															onClick={() => window.open(`/result?sample_uid=${sample?.sample_uid}`, '_blank')}
-														>
-															<div className="flex items-center justify-between">
-																{'PKQ'} <GrDocumentText size={15} className="ml-1.5" />
+															{/* EX Send Date field - only show if protocol_source is EX */}
+															{bulkEditValues.protocol_source === 'EX' && (
+																<div className="flex items-center gap-2 min-w-[200px]">
+																	<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Ngày gửi:</label>
+																	<input
+																		type="date"
+																		className="flex-1 p-2 border rounded-lg bg-white text-sm"
+																		value={
+																			bulkEditValues.send_at
+																				? new Date(bulkEditValues.send_at).toISOString().split('T')[0]
+																				: ''
+																		}
+																		onChange={(e) => {
+																			const dateValue = e.target.value
+																				? new Date(e.target.value + 'T00:00:00').toISOString()
+																				: '';
+																			handleBulkEditChange('send_at', dateValue);
+																		}}
+																	/>
+																</div>
+															)}
+															{/* Deadline field */}
+															<div className="flex flex-col min-w-[120px]">
+																<label className="mb-1 font-medium text-sm text-left">Hạn trả</label>
+																<input
+																	type="date"
+																	className="p-2 border rounded-lg bg-white text-sm"
+																	value={bulkEditValues.deadline ? bulkEditValues.deadline.split('T')[0] : ''}
+																	onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
+																/>
 															</div>
-														</button>
-													</div>
-													{/* Analysis table for this sample */}
-													{sample.analysis && sample.analysis.length > 0 ? (
-														<table className="w-full border-collapse border border-gray-200">
-															<thead>
-																{' '}
-																<tr className="bg-gray-100  text-sm text-gray-600">
-																	<th className="font-normal p-1 text-start min-w-20 w-20">Mã chỉ tiêu</th>
-																	<th className="font-normal p-1 text-start min-w-60 w-1/4">Chỉ tiêu</th>
-
-																	<th className="font-normal p-1 text-start min-w-60 w-1/4">Phương pháp</th>
-																	<th className="font-normal p-1 text-start min-w-40">Kết quả</th>
-																	<th className="font-normal p-1 text-start min-w-32">Đơn vị</th>
-																	<th className="font-normal p-1 text-start w-28 min-w-28">Hạn trả</th>
-																	<th className="font-normal p-1 text-start w-36 min-w-40">Người thực hiện</th>
-																	{/* <th className="font-normal p-1 text-start min-w-32 w-36">Tham chiếu</th> */}
-																	<th className="font-normal p-1 text-center w-12 min-w-12">
-																		<input
-																			type="checkbox"
-																			className="w-4 h-4 sample-checkbox"
-																			data-receipt-id={receipt.id}
-																			data-sample-id={sample.id}
-																			checked={isSampleFullySelected(sample.id, sample.analysis)}
-																			onChange={(e) =>
-																				handleSampleCheckboxChange(e, receipt.id, sample.id, sample.analysis)
-																			}
+															{/* Result value field */}
+															<div className="flex flex-col min-w-[140px]">
+																<label className="mb-1 font-medium text-sm text-left">Kết quả</label>
+																<div
+																	className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
+																	onClick={() => handleBulkEditCellClick('result_value', 'global')}
+																	onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+																>
+																	{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === 'global' ? (
+																		<TinyMceInput
+																			value={bulkEditValues.result_value || ''}
+																			onUpdate={(content) => handleBulkEditChange('result_value', content)}
 																		/>
-																	</th>
-																</tr>
-															</thead>
-															<tbody>
-																{sample.analysis.map((item) => (
-																	<tr
-																		key={item.id}
-																		className={`${
-																			selectedCheckboxesV3.includes(item.id) ? 'bg-gray-100' : ''
-																		} hover:bg-gray-50`}
-																	>
-																		<td className="border p-1 text-start">{item.id || 'N/A'}</td>
-																		<td className="border p-1 text-start">{item.parameter_name || 'N/A'}</td>
+																	) : (
+																		<div
+																			dangerouslySetInnerHTML={{
+																				__html: bulkEditValues.result_value || 'Nhấp để sửa...',
+																			}}
+																			className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
+																		/>
+																	)}
+																</div>
+															</div>
+															{/* Result unit field */}
+															<div className="flex flex-col min-w-[120px]">
+																<label className="mb-1 font-medium text-sm text-left">Đơn vị</label>
+																<div
+																	className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
+																	onClick={() => handleBulkEditCellClick('result_unit', 'global')}
+																	onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+																>
+																	{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === 'global' ? (
+																		<TinyMceInput
+																			value={bulkEditValues.result_unit || ''}
+																			onUpdate={(content) => handleBulkEditChange('result_unit', content)}
+																			onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+																		/>
+																	) : (
+																		<div
+																			dangerouslySetInnerHTML={{
+																				__html: bulkEditValues.result_unit || 'Nhấp để sửa...',
+																			}}
+																			className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
+																		/>
+																	)}
+																</div>
+															</div>
+															{/* Technician field */}
+															<div className="flex flex-col min-w-[180px]">
+																<label className="mb-1 font-medium text-sm text-left">Người thực hiện</label>
+																<select
+																	className="p-2 border rounded-lg bg-white text-sm"
+																	value={bulkEditValues.technician_uid || ''}
+																	onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
+																>
+																	<option value="">-- Không thay đổi --</option>
+																	{technicians.map((tech) => (
+																		<option key={tech.identity_uid} value={tech.identity_uid}>
+																			{tech.identity_name}
+																		</option>
+																	))}
+																</select>
+															</div>
+														</div>
+														{/* Table of selected analyses with preview */}
+														<div className="mb-6 max-h-[300px] overflow-auto">
+															<h3 className="text-md font-semibold mb-2">Xem trước thay đổi</h3>
+															<table className="w-full border-collapse border border-gray-300">
+																<thead className="bg-gray-100">
+																	<tr>
+																		<th className="border p-1 text-start w-32 min-w-32">Mã mẫu</th>
+																		<th className="border p-1 text-start w-1/5 min-w-40">Chỉ tiêu</th>
+																		<th className="border p-1 text-start w-1/5 min-w-40">Phương pháp</th>
+																		<th className="border p-1 text-start min-w-32">Kết quả</th>
+																		<th className="border p-1 text-start min-w-28">Đơn vị</th>
+																		<th className="border p-1 text-start w-24 min-w-24">Hạn trả</th>
+																		<th className="border p-1 text-start w-32 min-w-32">KTV</th>
+																		<th className="border p-1 text-start w-32">Tham chiếu</th>
+																	</tr>
+																</thead>
+																<tbody>
+																	{selectedCheckboxesByReceipt[receipt.id]?.map((analysisId) => {
+																		// Find the analysis in the receipt data
+																		let foundAnalysis = null;
+																		let foundSample = null;
 
-																		<td className="border p-1 text-start ">
-																			<div className="flex flex-col gap-1">
-																				<div className="flex items-center gap-0.5">
-																					<select
-																						className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
-																						onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
-																						value={item.protocol_source || ''}
-																					>
-																						<option value="">--</option>
-																						<option value="IRDOP">IRDOP</option>
-																						<option value="IRDOP VS">IRDOP VS</option>
-																						<option value="EX">EX</option>
-																					</select>
-																					<input
-																						type="text"
-																						className="w-full bg-white border border-white hover:border-purple-500 rounded  p-1 py-0 text-left"
-																						placeholder="Mã phương pháp"
-																						value={
-																							editableCell.analysisId === item.id &&
-																							editableCell.column === 'protocol_code'
-																								? inputValue
-																								: item.protocol_code || ''
-																						}
-																						onChange={(e) => handleProtocolCodeChange(item.id, e.target.value)}
-																						onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value)}
-																						onKeyDown={(e) => handleProtocolCodeKeyDown(e, item.id, e.target.value)}
-																					/>
-																				</div>
-																				{/* EX Information - only show if protocol_source is EX */}
-																				{item.protocol_source === 'EX' && (
-																					<div className="flex flex-col gap-2 mt-1 p-2 bg-gray-50 rounded border">
-																						<div className="flex items-center gap-2">
-																							<label className="text-xs font-medium text-gray-600 min-w-[50px]">
-																								Tên EX:
-																							</label>
-																							<input
-																								type="text"
-																								className="flex-1 text-xs bg-white border border-gray-300 hover:border-purple-500 rounded p-1 text-left"
-																								placeholder="Nhập tên EX"
-																								value={
-																									exInfo[item.id]?.ex_name !== undefined
-																										? exInfo[item.id].ex_name
-																										: item.ex_info?.ex_name || ''
-																								}
-																								onChange={(e) => handleExInfoChange(item.id, 'ex_name', e.target.value)}
-																								onBlur={(e) => handleExInfoSave(item.id, 'ex_name', e.target.value)}
-																								onKeyDown={(e) =>
-																									handleExInfoKeyDown(e, item.id, 'ex_name', e.target.value)
-																								}
-																							/>
+																		// Search through all samples to find the analysis
+																		receipt.samples?.forEach((sample) => {
+																			const analysis = sample.analysis?.find((a) => a.id === analysisId);
+																			if (analysis) {
+																				foundAnalysis = analysis;
+																				foundSample = sample;
+																			}
+																		});
+
+																		return foundAnalysis ? (
+																			<tr key={analysisId} className="hover:bg-gray-50">
+																				<td className="border p-1 text-start">{foundSample?.sample_uid}</td>
+																				<td className="border p-1 text-start">{foundAnalysis.parameter_name}</td>
+																				<td className="border p-1 text-start">
+																					<div className="flex flex-col gap-1">
+																						<div>
+																							<span className="preview-protocol-source">
+																								{bulkEditValues.protocol_source ||
+																									foundAnalysis.protocol_source ||
+																									'--'}
+																							</span>
+																							&nbsp;
+																							<span className="preview-protocol-code">
+																								{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
+																							</span>
 																						</div>
-																						<div className="flex items-center gap-2">
-																							<label className="text-xs font-medium text-gray-600 min-w-[50px]">
-																								Ngày gửi:
-																							</label>
-																							<input
-																								type="date"
-																								className="flex-1 text-xs bg-white border border-gray-300 hover:border-purple-500 rounded p-1 text-left"
-																								value={
-																									exInfo[item.id]?.send_at !== undefined
-																										? new Date(exInfo[item.id].send_at).toISOString().split('T')[0]
-																										: item.ex_info?.send_at
-																										? new Date(item.ex_info.send_at).toISOString().split('T')[0]
-																										: ''
-																								}
-																								onChange={(e) => {
-																									const dateValue = e.target.value
-																										? new Date(e.target.value + 'T00:00:00').toISOString()
-																										: '';
-																									handleExInfoChange(item.id, 'send_at', dateValue);
-																								}}
-																								onBlur={(e) => {
-																									const dateValue = e.target.value
-																										? new Date(e.target.value + 'T00:00:00').toISOString()
-																										: '';
-																									handleExInfoSave(item.id, 'send_at', dateValue);
-																								}}
-																								onKeyDown={(e) => {
-																									if (e.key === 'Enter') {
+																						{/* Show EX info if protocol_source is EX */}
+																						{(bulkEditValues.protocol_source === 'EX' ||
+																							foundAnalysis.protocol_source === 'EX') && (
+																							<div className="text-xs text-gray-600 bg-gray-50 p-1 rounded border mt-1">
+																								<div>
+																									<strong>Tên EX:</strong>{' '}
+																									{bulkEditValues.ex_name || foundAnalysis.ex_info?.ex_name || '--'}
+																								</div>
+																								<div>
+																									<strong>Ngày gửi:</strong>{' '}
+																									{bulkEditValues.send_at
+																										? new Date(bulkEditValues.send_at).toLocaleDateString('vi-VN')
+																										: foundAnalysis.ex_info?.send_at
+																										? new Date(foundAnalysis.ex_info.send_at).toLocaleDateString(
+																												'vi-VN',
+																										  )
+																										: '--'}
+																								</div>
+																							</div>
+																						)}
+																					</div>
+																				</td>
+																				<td className="border p-1 text-start">
+																					<div
+																						className="preview-result-value"
+																						dangerouslySetInnerHTML={{
+																							__html: bulkEditValues.result_value || foundAnalysis.result_value || '--',
+																						}}
+																					/>
+																				</td>
+																				<td className="border p-1 text-start">
+																					<div
+																						className="preview-result-unit"
+																						dangerouslySetInnerHTML={{
+																							__html: bulkEditValues.result_unit || foundAnalysis.result_unit || '--',
+																						}}
+																					/>
+																				</td>
+																				<td className="border p-1 text-start preview-deadline">
+																					{bulkEditValues.deadline
+																						? formatDate(bulkEditValues.deadline)
+																						: foundAnalysis.deadline
+																						? formatDate(foundAnalysis.deadline)
+																						: '--'}
+																				</td>
+																				<td className="border p-1 text-start preview-technician">
+																					{bulkEditValues.technician_uid
+																						? getTechnicianName(bulkEditValues.technician_uid)
+																						: getTechnicianName(foundAnalysis.technician_uid)}
+																				</td>
+																				<td className="border p-1 text-start preview-reference">
+																					{bulkEditValues.reference || foundAnalysis.reference || '--'}
+																				</td>
+																			</tr>
+																		) : null;
+																	})}
+																</tbody>
+															</table>
+														</div>
+														<div className="flex justify-end gap-3">
+															<button
+																className="px-2 py-1 border-2 border-gray-600 text-gray-600 rounded hover:bg-gray-400 w-fit"
+																onClick={closeBulkEditForm}
+															>
+																Hủy bỏ
+															</button>
+															<button
+																className="px-2 py-1 border-2 border-gray-600 rounded hover:bg-blue-600 flex items-center w-fit"
+																onClick={() => {
+																	handleBulkUpdate(selectedCheckboxesByReceipt[receipt.id]);
+																	closeBulkEditForm();
+																}}
+															>
+																<FaSave className="mr-2" /> Xác nhận cập nhật
+															</button>
+														</div>
+													</div>
+												</div>
+											)}
+											{/* Organize by samples */}
+											{receipt.samples && receipt.samples.length > 0 ? (
+												receipt.samples.map((sample) => (
+													<div key={sample.id} className="mb-4 border-l-2 border-teritary px-1 overflow-auto">
+														<div className="mb-2 flex justify-between items-center">
+															<div className="flex flex-col">
+																<div className="min-w-40">
+																	<span className="font-semibold">{sample.sample_uid}</span>:{' '}
+																	{sample.sample_name || 'N/A'}
+																</div>
+																<div className="min-w-40">
+																	<span className="font-semibold">Nền mẫu:</span> {sample.matrix || 'N/A'}
+																</div>
+
+																<div className="min-w-40">
+																	<span className="font-semibold">Mô tả:</span> {sample.sample_description || 'N/A'}
+																</div>
+
+																{sample.additional_request && (
+																	<div className="mt-1 mb-2">
+																		<span className="font-semibold">Yêu cầu khách hàng:</span>{' '}
+																		{sample.additional_request}
+																	</div>
+																)}
+															</div>
+															{/* Add PKQ button in the opposite corner */}
+															<button
+																className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-end active:bg-sky-100 focus:outline-none"
+																onClick={() => window.open(`/result?sample_uid=${sample?.sample_uid}`, '_blank')}
+															>
+																<div className="flex items-center justify-between">
+																	{'PKQ'} <GrDocumentText size={15} className="ml-1.5" />
+																</div>
+															</button>
+														</div>
+														{/* Analysis table for this sample */}
+														{sample.analysis && sample.analysis.length > 0 ? (
+															<table className="w-full border-collapse border border-gray-200">
+																<thead>
+																	<tr className="bg-gray-100 text-sm text-gray-600">
+																		<th className="font-normal p-1 text-start min-w-20 w-20">Mã chỉ tiêu</th>
+																		<th className="font-normal p-1 text-start min-w-60 w-1/4">Chỉ tiêu</th>
+																		<th className="font-normal p-1 text-start min-w-60 w-1/4">Phương pháp</th>
+																		<th className="font-normal p-1 text-start min-w-40">Kết quả</th>
+																		<th className="font-normal p-1 text-start min-w-32">Đơn vị</th>
+																		<th className="font-normal p-1 text-start w-28 min-w-28">Hạn trả</th>
+																		<th className="font-normal p-1 text-start w-36 min-w-40">Người thực hiện</th>
+																		<th className="font-normal p-1 text-center w-12 min-w-12">
+																			<input
+																				type="checkbox"
+																				className="w-4 h-4 sample-checkbox"
+																				data-receipt-id={receipt.id}
+																				data-sample-id={sample.id}
+																				checked={isSampleFullySelected(sample.id, sample.analysis)}
+																				onChange={(e) =>
+																					handleSampleCheckboxChange(e, receipt.id, sample.id, sample.analysis)
+																				}
+																			/>
+																		</th>
+																	</tr>
+																</thead>
+																<tbody>
+																	{sample.analysis.map((item) => (
+																		<tr
+																			key={item.id}
+																			className={`${
+																				selectedCheckboxesV3.includes(item.id) ? 'bg-gray-100' : ''
+																			} hover:bg-gray-50`}
+																		>
+																			<td className="border p-1 text-start">{item.id || 'N/A'}</td>
+																			<td className="border p-1 text-start">{item.parameter_name || 'N/A'}</td>
+																			<td className="border p-1 text-start ">
+																				<div className="flex flex-col gap-1">
+																					<div className="flex items-center gap-0.5">
+																						<select
+																							className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
+																							onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
+																							value={item.protocol_source || ''}
+																						>
+																							<option value="">--</option>
+																							<option value="IRDOP">IRDOP</option>
+																							<option value="IRDOP VS">IRDOP VS</option>
+																							<option value="EX">EX</option>
+																						</select>
+																						<input
+																							type="text"
+																							className="w-full bg-white border border-white hover:border-purple-500 rounded p-1 py-0 text-left"
+																							placeholder="Mã phương pháp"
+																							value={
+																								editableCell.analysisId === item.id &&
+																								editableCell.column === 'protocol_code'
+																									? inputValue
+																									: item.protocol_code || ''
+																							}
+																							onChange={(e) => handleProtocolCodeChange(item.id, e.target.value)}
+																							onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value)}
+																							onKeyDown={(e) => handleProtocolCodeKeyDown(e, item.id, e.target.value)}
+																						/>
+																					</div>
+																					{/* EX Information - only show if protocol_source is EX */}
+																					{item.protocol_source === 'EX' && (
+																						<div className="flex flex-col gap-2 mt-1 p-2 bg-gray-50 rounded border">
+																							<div className="flex items-center gap-2">
+																								<label className="text-xs font-medium text-gray-600 min-w-[50px]">
+																									Tên EX:
+																								</label>
+																								<input
+																									type="text"
+																									className="flex-1 text-xs bg-white border border-gray-300 hover:border-purple-500 rounded p-1 text-left"
+																									placeholder="Nhập tên EX"
+																									value={
+																										exInfo[item.id]?.ex_name !== undefined
+																											? exInfo[item.id].ex_name
+																											: item.ex_info?.ex_name || ''
+																									}
+																									onChange={(e) =>
+																										handleExInfoChange(item.id, 'ex_name', e.target.value)
+																									}
+																									onBlur={(e) => handleExInfoSave(item.id, 'ex_name', e.target.value)}
+																									onKeyDown={(e) =>
+																										handleExInfoKeyDown(e, item.id, 'ex_name', e.target.value)
+																									}
+																								/>
+																							</div>
+																							<div className="flex items-center gap-2">
+																								<label className="text-xs font-medium text-gray-600 min-w-[50px]">
+																									Ngày gửi:
+																								</label>
+																								<input
+																									type="date"
+																									className="flex-1 text-xs bg-white border border-gray-300 hover:border-purple-500 rounded p-1 text-left"
+																									value={
+																										exInfo[item.id]?.send_at !== undefined
+																											? new Date(exInfo[item.id].send_at).toISOString().split('T')[0]
+																											: item.ex_info?.send_at
+																											? new Date(item.ex_info.send_at).toISOString().split('T')[0]
+																											: ''
+																									}
+																									onChange={(e) => {
+																										const dateValue = e.target.value
+																											? new Date(e.target.value + 'T00:00:00').toISOString()
+																											: '';
+																										handleExInfoChange(item.id, 'send_at', dateValue);
+																									}}
+																									onBlur={(e) => {
 																										const dateValue = e.target.value
 																											? new Date(e.target.value + 'T00:00:00').toISOString()
 																											: '';
 																										handleExInfoSave(item.id, 'send_at', dateValue);
-																									}
-																								}}
-																							/>
+																									}}
+																									onKeyDown={(e) => {
+																										if (e.key === 'Enter') {
+																											const dateValue = e.target.value
+																												? new Date(e.target.value + 'T00:00:00').toISOString()
+																												: '';
+																											handleExInfoSave(item.id, 'send_at', dateValue);
+																										}
+																									}}
+																								/>
+																							</div>
 																						</div>
-																					</div>
-																				)}
-																			</div>
-																		</td>
-																		<td
-																			className="border p-1 text-start"
-																			onClick={() => handleCellClickV3(item.id, 'result_value', item.result_value)}
-																		>
-																			<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
-																				{editableCell.analysisId === item.id &&
-																				editableCell.column === 'result_value' ? (
-																					<TinyMceInput
-																						value={inputValue}
-																						onUpdate={(content) =>
-																							handleSaveContentV3(content, 'result_value', item.id)
-																						}
-																						onKey={handleKeyDownV3}
-																					/>
-																				) : (
-																					<div dangerouslySetInnerHTML={{ __html: `${item.result_value || '--'}` }} />
-																				)}
-																			</div>
-																		</td>
-																		<td
-																			className="border p-1 text-start"
-																			onClick={() => handleCellClickV3(item.id, 'result_unit', item.result_unit)}
-																		>
-																			<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
-																				{editableCell.analysisId === item.id &&
-																				editableCell.column === 'result_unit' ? (
-																					<TinyMceInput
-																						value={inputValue}
-																						onUpdate={(content) => handleSaveContentV3(content, 'result_unit', item.id)}
-																						onKey={handleKeyDownV3}
-																					/>
-																				) : (
-																					<div dangerouslySetInnerHTML={{ __html: `${item.result_unit || '--'}` }} />
-																				)}
-																			</div>
-																		</td>
-																		<td className="border p-1 text-start">
-																			{item.deadline ? formatDate(item.deadline) : 'N/A'}
-																		</td>
-																		<td className="border p-1 text-start">
-																			<div className="relative">
-																				<button
-																					className="font-normal text-start p-1 py-0 w-full dropdown-button rounded"
-																					onClick={(e) => toggleTechnicianDropdown(item.id, e)}
-																				>
-																					{getTechnicianName(item.technician_uid)}
-																				</button>
-																				{technicianDropdownVisible === item.id &&
-																					createPortal(
-																						<ul
-																							className="fixed bg-white border rounded shadow-lg z-[99]"
-																							style={{
-																								top: dropdownPosition.top + 'px',
-																								left: dropdownPosition.left + 'px',
-																								position: 'absolute',
-																								maxHeight: '200px',
-																								overflowY: 'auto',
-																								minWidth: '200px',
-																							}}
-																						>
-																							{technicians.map((identity) => (
-																								<li
-																									key={identity.identity_uid}
-																									className="p-1 cursor-pointer hover:bg-gray-200 dropdown-item"
-																									onClick={() => handleTechnicianChange(item.id, identity.identity_uid)}
-																								>
-																									<p className="font-bold text-primary text-sm">
-																										{identity.alias || ''}
-																									</p>
-																									<p>{identity.identity_name || ''}</p>
-																								</li>
-																							))}
-																						</ul>,
-																						document.body,
 																					)}
-																			</div>
-																		</td>
-																		{/* <td className="border p-1 text-start">
-																			<input
-																				type="text"
-																				className=" bg-white w-full border hover:border-purple-500 rounded p-1 py-0 text-left"
-																				value={item.reference || ''}
-																				onChange={(e) => handleReferenceChange(item.id, e.target.value)}
-																				onKeyDown={(e) => handleReferenceKeyDown(e, item.id, e.target.value)}
-																				onBlur={(e) => handleReferenceBlur(e, item.id, e.target.value)}
-																			/>
-																		</td> */}
-																		<td className="border p-1 text-center">
-																			<input
-																				type="checkbox"
-																				className="w-4 h-4 row-checkbox"
-																				data-receipt-id={receipt.id}
-																				data-analysis-id={item.id}
-																				data-sample-id={sample.id}
-																				checked={selectedCheckboxesV3.includes(item.id)}
-																				onChange={(e) => handleAnalysisCheckboxChange(e, receipt.id, item.id)}
-																			/>
-																		</td>
-																	</tr>
-																))}
-															</tbody>
-														</table>
-													) : (
-														<p className="text-gray-500">Không có dữ liệu phân tích cho mẫu này</p>
-													)}
-												</div>
-											))
-										) : (
-											<p className="text-gray-500">Không có dữ liệu mẫu</p>
-										)}
-									</div>
-								))
-						) : (
-							<div className="w-full text-center py-4 text-gray-500">Không có dữ liệu tiếp nhận mẫu</div>
-						)}
-						{/* Add "Xem thêm" button */}
-						{!showAllReceipts &&
-							Array.isArray(filteredProcessingSample) &&
-							filteredProcessingSample.length > displayCount && (
-								<div className="w-full text-center py-4">
-									<button
-										className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-										onClick={() => setShowAllReceipts(true)}
-									>
-										Xem thêm
-									</button>
-								</div>
+																				</div>
+																			</td>
+																			<td
+																				className="border p-1 text-start"
+																				onClick={() => handleCellClickV3(item.id, 'result_value', item.result_value)}
+																			>
+																				<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
+																					{editableCell.analysisId === item.id &&
+																					editableCell.column === 'result_value' ? (
+																						<TinyMceInput
+																							value={inputValue}
+																							onUpdate={(content) =>
+																								handleSaveContentV3(content, 'result_value', item.id)
+																							}
+																							onKey={handleKeyDownV3}
+																						/>
+																					) : (
+																						<div dangerouslySetInnerHTML={{ __html: `${item.result_value || '--'}` }} />
+																					)}
+																				</div>
+																			</td>
+																			<td
+																				className="border p-1 text-start"
+																				onClick={() => handleCellClickV3(item.id, 'result_unit', item.result_unit)}
+																			>
+																				<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
+																					{editableCell.analysisId === item.id &&
+																					editableCell.column === 'result_unit' ? (
+																						<TinyMceInput
+																							value={inputValue}
+																							onUpdate={(content) =>
+																								handleSaveContentV3(content, 'result_unit', item.id)
+																							}
+																							onKey={handleKeyDownV3}
+																						/>
+																					) : (
+																						<div dangerouslySetInnerHTML={{ __html: `${item.result_unit || '--'}` }} />
+																					)}
+																				</div>
+																			</td>
+																			<td className="border p-1 text-start">
+																				{item.deadline ? formatDate(item.deadline) : 'N/A'}
+																			</td>
+																			<td className="border p-1 text-start">
+																				<div className="relative">
+																					<button
+																						className="font-normal text-start p-1 py-0 w-full dropdown-button rounded"
+																						onClick={(e) => toggleTechnicianDropdown(item.id, e)}
+																					>
+																						{getTechnicianName(item.technician_uid)}
+																					</button>
+																					{technicianDropdownVisible === item.id &&
+																						createPortal(
+																							<ul
+																								className="fixed bg-white border rounded shadow-lg z-[99]"
+																								style={{
+																									top: dropdownPosition.top + 'px',
+																									left: dropdownPosition.left + 'px',
+																									position: 'absolute',
+																									maxHeight: '200px',
+																									overflowY: 'auto',
+																									minWidth: '200px',
+																								}}
+																							>
+																								{technicians.map((identity) => (
+																									<li
+																										key={identity.identity_uid}
+																										className="p-1 cursor-pointer hover:bg-gray-200 dropdown-item"
+																										onClick={() =>
+																											handleTechnicianChange(item.id, identity.identity_uid)
+																										}
+																									>
+																										<p className="font-bold text-primary text-sm">
+																											{identity.alias || ''}
+																										</p>
+																										<p>{identity.identity_name || ''}</p>
+																									</li>
+																								))}
+																							</ul>,
+																							document.body,
+																						)}
+																				</div>
+																			</td>
+																			<td className="border p-1 text-center">
+																				<input
+																					type="checkbox"
+																					className="w-4 h-4 row-checkbox"
+																					data-receipt-id={receipt.id}
+																					data-analysis-id={item.id}
+																					data-sample-id={sample.id}
+																					checked={selectedCheckboxesV3.includes(item.id)}
+																					onChange={(e) => handleAnalysisCheckboxChange(e, receipt.id, item.id)}
+																				/>
+																			</td>
+																		</tr>
+																	))}
+																</tbody>
+															</table>
+														) : (
+															<p className="text-gray-500">Không có dữ liệu phân tích cho mẫu này</p>
+														)}
+													</div>
+												))
+											) : (
+												<p className="text-gray-500">Không có dữ liệu mẫu</p>
+											)}
+										</div>
+									))
+							) : (
+								<div className="w-full text-center py-4 text-gray-500">Không có dữ liệu tiếp nhận mẫu</div>
 							)}
+							{/* Add "Xem thêm" button */}
+							{!showAllReceipts &&
+								Array.isArray(filteredProcessingSample) &&
+								filteredProcessingSample.length > displayCount && (
+									<div className="w-full text-center py-4">
+										<button
+											className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+											onClick={() => setShowAllReceipts(true)}
+										>
+											Xem thêm
+										</button>
+									</div>
+								)}
+						</div>
+					</div>
+				</>
+			</div>
+
+			{/* Lab Report Popup Modal */}
+			{showLabReportPopup && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[200]">
+					<div className="bg-white rounded-lg shadow-lg w-[95%] h-[95%] flex flex-col">
+						<div className="flex justify-between items-center p-1 border-b">
+							<h2 className="text-xl font-bold p-1">File biên bản</h2>
+							<button
+								onClick={() => setShowLabReportPopup(false)}
+								className="text-gray-500 hover:text-gray-700 text-2xl p-2 px-4"
+							>
+								×
+							</button>
+						</div>
+						<div className="flex-1 p-2">
+							<iframe
+								src="/LabReportFile.html"
+								style={{
+									width: '100%',
+									height: '100%',
+									border: '1px solid #ccc',
+									borderRadius: '8px',
+								}}
+								title="Lab Report File"
+							/>
+						</div>
 					</div>
 				</div>
-			</div>
+			)}
 
 			{/* Global Bulk Edit Modal */}
 			{showGlobalBulkEditForm && (
@@ -3122,7 +2291,7 @@ const ProcessingSample = () => {
 							<span className="text-sm font-normal text-gray-600">
 								({selectedCheckboxesV3.length} chỉ tiêu được chọn)
 							</span>
-						</h2>{' '}
+						</h2>
 						{/* Flex container for Overview and Inputs */}
 						<div className="flex flex-col gap-2 mb-2">
 							{/* Selected items display in new format - positioned on upper left */}
@@ -3266,7 +2435,7 @@ const ProcessingSample = () => {
 												/>
 											)}
 										</div>
-									</div>{' '}
+									</div>
 									{/* Technician field */}
 									<div className="flex flex-col min-w-[180px]">
 										<label className="mb-1 font-medium text-sm text-left">Người thực hiện</label>
@@ -3282,34 +2451,6 @@ const ProcessingSample = () => {
 												</option>
 											))}
 										</select>
-									</div>{' '}
-									{/* File upload button */}
-									<div className="flex flex-col min-w-[180px] relative">
-										<label
-											className="mb-1 font-medium text-sm text-left flex items-center gap-1 cursor-pointer hover:text-blue-500"
-											onClick={(e) => {
-												setShowFileUploadModal(true);
-												// Store button position for positioning the modal
-												const buttonRect = e.target.getBoundingClientRect();
-												setDropdownPosition({
-													top: buttonRect.bottom + window.scrollY + 5,
-													left: buttonRect.left + window.scrollX - 200,
-												});
-											}}
-											title="Tải lên biên bản"
-										>
-											Upload file <FaUpload size={12} />
-										</label>
-										<div className="flex items-center">
-											{uploadedFiles.length > 0 && (
-												<span
-													className="text-sm text-green-600 truncate max-w-[150px]"
-													title={`${uploadedFiles.length} file(s) uploaded`}
-												>
-													{uploadedFiles.length} file(s) uploaded
-												</span>
-											)}
-										</div>
 									</div>
 								</div>
 							</div>
@@ -3356,7 +2497,6 @@ const ProcessingSample = () => {
 												<td className="border p-1 text-start">{foundSample?.sample_uid}</td>
 												<td className="border p-1 text-start">{foundAnalysis.parameter_name}</td>
 												<td className="border p-1 text-start">
-													{' '}
 													<div className="flex flex-col gap-1">
 														<div>
 															<span className="preview-protocol-source">
@@ -3419,158 +2559,25 @@ const ProcessingSample = () => {
 												</td>
 											</tr>
 										) : null;
-									})}{' '}
+									})}
 								</tbody>
 							</table>
-						</div>{' '}
-						{/* Uploaded Files Table */}
-						{uploadedFiles.length > 0 && (
-							<div className="mb-6">
-								<h3 className="text-md font-semibold mb-2">Danh sách file đã tải lên</h3>
-								<div className="max-h-[240px] overflow-auto">
-									{' '}
-									<table className="w-full border-collapse border border-gray-300">
-										<thead className="bg-gray-100">
-											<tr>
-												<th className="border p-1 text-center w-16">STT</th>
-												<th className="border p-1 text-start">Tên file</th>
-												<th className="border p-1 text-start">File UID</th>
-												<th className="border p-1 text-start w-32 relative">
-													{' '}
-													<div
-														className="flex items-center gap-1 cursor-pointer hover:bg-gray-50 p-1 rounded category-dropdown-container"
-														onClick={toggleCategoryDropdown}
-													>
-														<span>Danh mục</span>
-														<svg
-															className={`w-4 h-4 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`}
-															fill="none"
-															stroke="currentColor"
-															viewBox="0 0 24 24"
-														>
-															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-														</svg>
-													</div>
-													{showCategoryDropdown && (
-														<div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[160px] category-dropdown-container">
-															<div className="p-2">
-																{['Raw Data', 'Prepare Report', 'Calculation'].map((category) => (
-																	<label
-																		key={category}
-																		className="flex items-center gap-2 p-0.5 hover:bg-gray-50 cursor-pointer font-normal"
-																	>
-																		<input
-																			type="checkbox"
-																			checked={selectedHeaderCategories.includes(category)}
-																			onChange={(e) => handleHeaderCategoryChange(category, e.target.checked)}
-																			className="w-4 h-4"
-																		/>
-																		<span className="text-sm">{category}</span>
-																	</label>
-																))}
-															</div>
-														</div>
-													)}
-												</th>
-												<th className="border p-1 text-start w-32">Loại máy</th>{' '}
-												<th className="border p-1 text-start">
-													<div className="flex gap-1">
-														<span className="min-w-12">Mô tả</span>
-														<input
-															type="text"
-															value={bulkDescription}
-															onChange={(e) => handleBulkDescriptionChange(e.target.value)}
-															className="w-full p-1 text-xs border rounded bg-white"
-															placeholder="Nhập mô tả chung..."
-														/>
-													</div>
-												</th>
-												<th className="border p-1 text-center w-16">Xóa</th>
-											</tr>
-										</thead>
-										<tbody>
-											{uploadedFiles.map((fileInfo, index) => (
-												<tr key={index} className="hover:bg-gray-50">
-													<td className="border p-2 text-center">{index + 1}</td>{' '}
-													<td className="border p-2 text-start break-words">{fileInfo.fileInfo.fileName}</td>
-													<td className="border p-2 text-start font-mono text-sm">
-														{fileInfo.fileUID || fileInfo.key || 'N/A'}
-													</td>
-													<td className="border p-1">
-														<div className="flex flex-col gap-1 min-w-32">
-															{/* Category checkboxes */}
-															{['Raw Data', 'Prepare Report', 'Calculation'].map((category) => (
-																<label key={category} className="flex items-center gap-1 text-xs">
-																	<input
-																		type="checkbox"
-																		checked={(fileInfo.fileCategory || []).includes(category.replace(' ', ''))}
-																		onChange={(e) =>
-																			handleCategoryCheckboxChange(index, category.replace(' ', ''), e.target.checked)
-																		}
-																		className="w-3 h-3"
-																	/>
-																	<span>{category}</span>
-																</label>
-															))}
-														</div>
-													</td>
-													<td className="border p-1">
-														<select
-															value={fileInfo.createdbyUID || ''}
-															onChange={(e) => handleUploadedFileEdit(index, 'createdbyUID', e.target.value)}
-															className="w-full p-1 text-xs border rounded bg-white"
-														>
-															<option value="">-- Chọn loại máy --</option>
-															<option value="HPLC01">HPLC01</option>
-															<option value="GCMS01">GCMS01</option>
-															<option value="AAS01">AAS01</option>
-															<option value="AAS02">AAS02</option>
-														</select>
-													</td>{' '}
-													<td className="border p-1">
-														<input
-															type="text"
-															value={fileInfo.uploadDescription || ''}
-															onChange={(e) => handleUploadedFileEdit(index, 'uploadDescription', e.target.value)}
-															className="w-full p-1 text-xs border rounded bg-white"
-															placeholder="Nhập mô tả..."
-														/>
-													</td>
-													<td className="border p-2 text-center">
-														<button
-															onClick={() => handleUploadedFileDelete(index)}
-															className="text-red-500 hover:text-red-700 p-1"
-															title="Xóa file"
-														>
-															<FaTrashAlt size={14} />
-														</button>
-													</td>
-												</tr>
-											))}
-										</tbody>
-									</table>
-								</div>
-							</div>
-						)}
+						</div>
 						<div className="flex justify-end gap-3">
-							{' '}
 							<button
 								className="px-4 py-2 border-2 border-gray-600 text-gray-600 rounded hover:bg-gray-400"
 								onClick={() => {
 									setShowGlobalBulkEditForm(false);
 									setBulkEditValues({});
 									setBulkEditCell({ column: null, receiptId: null });
-									setUploadedFiles([]); // Clear uploaded files when canceling
 								}}
 							>
 								Hủy bỏ
-							</button>{' '}
+							</button>
 							<button
 								className="px-4 py-2 border-2 border-blue-600 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center"
 								onClick={() => {
 									handleBulkUpdate(selectedCheckboxesV3);
-									setFiles([]); // Clear files after confirmation
-									setUploadedFiles([]); // Clear uploaded files after confirmation
 									setShowGlobalBulkEditForm(false);
 								}}
 							>
@@ -3580,7 +2587,6 @@ const ProcessingSample = () => {
 					</div>
 				</div>
 			)}
-			<script></script>
 		</div>
 	);
 };
