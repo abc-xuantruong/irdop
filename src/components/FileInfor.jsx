@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiPost, apiGet } from '../contexts/helperFunctionCallAPI';
@@ -65,6 +65,7 @@ const FileInfor = () => {
 	const [showSelectColumn, setShowSelectColumn] = useState(false);
 	const [selectedFiles, setSelectedFiles] = useState(new Set());
 	const [processing, setProcessing] = useState(false);
+	const [initialized, setInitialized] = useState(false);
 
 	// Function to fetch identity names for files without identityName
 	const fetchIdentityNames = async (files) => {
@@ -94,46 +95,25 @@ const FileInfor = () => {
 		return currentUser?.role?.staff_admin;
 	};
 
-	// Set the title page and fetch files
+	// Initialize component
 	useEffect(() => {
 		setCurrentTitlePage('Danh sách File');
+		setInitialized(true);
+	}, [setCurrentTitlePage]);
 
-		// Check URL parameters for search term
+	// Handle URL search parameter and set initial search state
+	useEffect(() => {
 		const urlParams = new URLSearchParams(location.search);
 		const searchFromUrl = urlParams.get('searchTerm');
 
-		if (searchFromUrl) {
+		if (searchFromUrl && !isSearchMode) {
 			setSearchTerm(searchFromUrl);
-			handleSearch(searchFromUrl);
-		} else {
-			fetchFiles();
+			setIsSearchMode(true);
 		}
-	}, [setCurrentTitlePage]);
-
-	// Helper function to refresh current data view
-	const refreshCurrentData = () => {
-		if (isTrashMode) {
-			fetchTrashFiles();
-		} else if (isSearchMode) {
-			handleSearch();
-		} else {
-			fetchFiles();
-		}
-	};
-
-	// Refetch data when mode, status, sort, page, filesPerPage, search/trash mode, or fileNameInclude changes
-	useEffect(() => {
-		if (isTrashMode) {
-			fetchTrashFiles();
-		} else if (isSearchMode) {
-			handleSearch();
-		} else {
-			fetchFiles();
-		}
-	}, [currentMode, currentStatus, currentSort, currentPage, filesPerPage, isTrashMode, isSearchMode, filters.fileNameInclude]);
+	}, [location.search, isSearchMode]);
 
 	// Function to fetch trash files
-	const fetchTrashFiles = async () => {
+	const fetchTrashFiles = useCallback(async () => {
 		setLoading(true);
 		try {
 			const requestBody = {
@@ -164,7 +144,7 @@ const FileInfor = () => {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [currentMode, filters.fileNameInclude]);
 
 	// Function to handle status change
 	const handleStatusChange = (newStatus) => {
@@ -233,12 +213,12 @@ const FileInfor = () => {
 					deletedAt: null,
 				},
 			});
-		if (response.status === 200) {
-			toast.success('Khôi phục file thành công', { autoClose: 1000 });
-			refreshCurrentData();
-		} else {
-			toast.error('Lỗi khi khôi phục file', { autoClose: 1000 });
-		}
+			if (response.status === 200) {
+				toast.success('Khôi phục file thành công', { autoClose: 1000 });
+				refreshCurrentData();
+			} else {
+				toast.error('Lỗi khi khôi phục file', { autoClose: 1000 });
+			}
 		} catch (error) {
 			console.error('Error restoring file:', error);
 			toast.error('Lỗi khi khôi phục file', { autoClose: 1000 });
@@ -246,110 +226,145 @@ const FileInfor = () => {
 	};
 
 	// Function to fetch files by page
-	const fetchFiles = async (page = currentPage, itemsPerPage = filesPerPage) => {
-		setLoading(true);
-		try {
-			const requestBody = {
-				mode: currentMode,
-				page: page,
-				filesPerPage: itemsPerPage,
-			};
+	const fetchFiles = useCallback(
+		async (page = currentPage, itemsPerPage = filesPerPage) => {
+			setLoading(true);
+			try {
+				const requestBody = {
+					mode: currentMode,
+					page: page,
+					filesPerPage: itemsPerPage,
+				};
 
-			// Add sort parameters only if sorting is active
-			if (currentSort.column && currentSort.direction) {
-				requestBody.columnSort = currentSort.column;
-				requestBody.sortBy = currentSort.direction;
-			}
+				// Add sort parameters only if sorting is active
+				if (currentSort.column && currentSort.direction) {
+					requestBody.columnSort = currentSort.column;
+					requestBody.sortBy = currentSort.direction;
+				}
 
-			// Add status filter if selected
-			if (currentStatus) {
-				requestBody.status = currentStatus;
-			}
+				// Add status filter if selected
+				if (currentStatus) {
+					requestBody.status = currentStatus;
+				}
 
-			// Add fileNameInclude filter if selected
-			if (filters.fileNameInclude) {
-				requestBody.fileNameInclude = filters.fileNameInclude;
-			}
+				// Add fileNameInclude filter if selected
+				if (filters.fileNameInclude) {
+					requestBody.fileNameInclude = filters.fileNameInclude;
+				}
 
-			const response = await apiPost('https://red.irdop.org/v1/file/get_by_page', requestBody);
+				const response = await apiPost('https://red.irdop.org/v1/file/get_by_page', requestBody);
 
-			if (response.status === 200 && response.data) {
-				setFileList(response.data.listFiles || []);
-				setTotalPages(response.data.totalPage || 1);
-				setIsSearchMode(false);
-				fetchIdentityNames(response.data.listFiles || []);
-			} else {
+				if (response.status === 200 && response.data) {
+					setFileList(response.data.listFiles || []);
+					setTotalPages(response.data.totalPage || 1);
+					setIsSearchMode(false);
+					fetchIdentityNames(response.data.listFiles || []);
+				} else {
+					setFileList([]);
+					setTotalPages(1);
+				}
+			} catch (error) {
+				console.error('Error fetching files:', error);
+				toast.error('Lỗi kết nối khi tải danh sách file');
 				setFileList([]);
 				setTotalPages(1);
+			} finally {
+				setLoading(false);
 			}
-		} catch (error) {
-			console.error('Error fetching files:', error);
-			toast.error('Lỗi kết nối khi tải danh sách file');
-			setFileList([]);
-			setTotalPages(1);
-		} finally {
-			setLoading(false);
-		}
-	};
+		},
+		[currentMode, currentPage, filesPerPage, currentSort, currentStatus, filters.fileNameInclude],
+	);
 
 	// Function to handle search
-	const handleSearch = async (term = searchTerm) => {
-		if (!term.trim()) return;
+	const handleSearch = useCallback(
+		async (term = searchTerm) => {
+			if (!term.trim()) return;
 
-		setLoading(true);
-		try {
-			const requestBody = {
-				mode: currentMode,
-				page: currentPage,
-				filesPerPage: filesPerPage,
-				searchTerm: term.trim(),
-			};
+			setLoading(true);
+			try {
+				const requestBody = {
+					mode: currentMode,
+					page: currentPage,
+					filesPerPage: filesPerPage,
+					searchTerm: term.trim(),
+				};
 
-			// Add sort parameters only if sorting is active
-			if (currentSort.column && currentSort.direction) {
-				requestBody.columnSort = currentSort.column;
-				requestBody.sortBy = currentSort.direction;
-			}
+				// Add sort parameters only if sorting is active
+				if (currentSort.column && currentSort.direction) {
+					requestBody.columnSort = currentSort.column;
+					requestBody.sortBy = currentSort.direction;
+				}
 
-			// Add status filter if selected
-			if (currentStatus) {
-				requestBody.status = currentStatus;
-			}
+				// Add status filter if selected
+				if (currentStatus) {
+					requestBody.status = currentStatus;
+				}
 
-			// Add fileNameInclude filter if selected
-			if (filters.fileNameInclude) {
-				requestBody.fileNameInclude = filters.fileNameInclude;
-			}
+				// Add fileNameInclude filter if selected
+				if (filters.fileNameInclude) {
+					requestBody.fileNameInclude = filters.fileNameInclude;
+				}
 
-			const response = await apiPost('https://red.irdop.org/v1/file/get_by_page', requestBody);
+				const response = await apiPost('https://red.irdop.org/v1/file/get_by_page', requestBody);
 
-			if (response.status === 200 && response.data) {
-				const searchData = response.data.listFiles || [];
-				setSearchResults(searchData);
-				setTotalPages(response.data.totalPage || 1);
-				setIsSearchMode(true);
-				setCurrentPage(1);
-				fetchIdentityNames(searchData);
+				if (response.status === 200 && response.data) {
+					const searchData = response.data.listFiles || [];
+					setSearchResults(searchData);
+					setTotalPages(response.data.totalPage || 1);
+					setIsSearchMode(true);
+					setCurrentPage(1);
+					fetchIdentityNames(searchData);
 
-				// Update URL with search term
-				const urlParams = new URLSearchParams(location.search);
-				urlParams.set('searchTerm', term.trim());
-				navigate(`${location.pathname}?${urlParams.toString()}`, { replace: true });
-			} else {
+					// Update URL with search term
+					const urlParams = new URLSearchParams(location.search);
+					urlParams.set('searchTerm', term.trim());
+					navigate(`${location.pathname}?${urlParams.toString()}`, { replace: true });
+				} else {
+					setSearchResults([]);
+					setTotalPages(1);
+					setIsSearchMode(true);
+				}
+			} catch (error) {
+				console.error('Error searching files:', error);
+				toast.error('Lỗi kết nối khi tìm kiếm file');
 				setSearchResults([]);
 				setTotalPages(1);
 				setIsSearchMode(true);
+			} finally {
+				setLoading(false);
 			}
-		} catch (error) {
-			console.error('Error searching files:', error);
-			toast.error('Lỗi kết nối khi tìm kiếm file');
-			setSearchResults([]);
-			setTotalPages(1);
-			setIsSearchMode(true);
-		} finally {
-			setLoading(false);
+		},
+		[
+			searchTerm,
+			currentMode,
+			currentPage,
+			filesPerPage,
+			currentSort,
+			currentStatus,
+			filters.fileNameInclude,
+			location.search,
+			navigate,
+		],
+	);
+
+	// Helper function to refresh current data view
+	const refreshCurrentData = useCallback(() => {
+		if (isTrashMode) {
+			fetchTrashFiles();
+		} else if (isSearchMode && searchTerm.trim()) {
+			handleSearch(searchTerm);
+		} else if (!isSearchMode) {
+			fetchFiles();
 		}
-	};
+		// If isSearchMode is true but searchTerm is empty, do nothing
+	}, [isTrashMode, isSearchMode, searchTerm, fetchTrashFiles, handleSearch, fetchFiles]);
+
+	// Refetch data when dependencies change, but only after initialization
+	useEffect(() => {
+		if (initialized) {
+			refreshCurrentData();
+		}
+	}, [initialized, refreshCurrentData]);
 
 	// Function to clear search
 	const handleClearSearch = () => {
@@ -785,13 +800,7 @@ const FileInfor = () => {
 			});
 
 			// Refresh file list
-			if (isTrashMode) {
-				fetchTrashFiles();
-			} else if (isSearchMode) {
-				handleSearch();
-			} else {
-				fetchFiles();
-			}
+			refreshCurrentData();
 		} catch (error) {
 			console.error('Upload error:', error);
 			toast.error('Lỗi kết nối khi tải file lên');
@@ -925,13 +934,7 @@ const FileInfor = () => {
 				setSelectedFiles(new Set());
 
 				// Refresh file list
-				if (isTrashMode) {
-					fetchTrashFiles();
-				} else if (isSearchMode) {
-					handleSearch();
-				} else {
-					fetchFiles();
-				}
+				refreshCurrentData();
 			} else {
 				toast.error('Lỗi khi xử lý file');
 			}
@@ -962,7 +965,7 @@ const FileInfor = () => {
 									handleClearTrashMode();
 								} else {
 									setIsTrashMode(true);
-									fetchTrashFiles();
+									setCurrentPage(1);
 								}
 							}}
 							className="px-3 py-1 h-8 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm whitespace-nowrap flex items-center gap-2 max-w-[120px]"
@@ -1016,15 +1019,7 @@ const FileInfor = () => {
 
 								{/* Reload Button */}
 								<button
-									onClick={() => {
-										if (isTrashMode) {
-											fetchTrashFiles();
-										} else if (isSearchMode) {
-											handleSearch();
-										} else {
-											fetchFiles();
-										}
-									}}
+									onClick={() => refreshCurrentData()}
 									className="max-w-28 px-3 py-1 h-8 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-1 whitespace-nowrap btn-fixed"
 									title="Tải lại danh sách"
 								>

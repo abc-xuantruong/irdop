@@ -2075,9 +2075,12 @@
 					th.style.fontSize = '12pt';
 					th.style.fontWeight = 'bold';
 					th.style.border = '1px solid #000';
-					th.style.padding = '8px';
+					th.style.padding = '2px';
 					th.style.backgroundColor = '#f0f0f0';
 					th.style.textAlign = 'left';
+					th.style.margin = '0';
+					th.style.textIndent = '0';
+					th.style.textDecoration = 'none';
 				});
 
 				// Style cells
@@ -2086,8 +2089,16 @@
 					td.style.fontFamily = 'Times New Roman, serif';
 					td.style.fontSize = '12pt';
 					td.style.border = '1px solid #000';
-					td.style.padding = '8px';
+					td.style.padding = '2px';
 					td.style.textAlign = 'left';
+					td.style.margin = '0';
+					td.style.textIndent = '0';
+					td.style.textDecoration = 'none';
+
+					// Replace '-' with empty string
+					if (td.textContent.trim() === '-') {
+						td.textContent = '';
+					}
 				});
 
 				return styledTable;
@@ -2112,7 +2123,7 @@
 					const headerCells = table.querySelectorAll('#modalTableHeader th');
 					htmlContent += '<tr>';
 					headerCells.forEach((cell) => {
-						htmlContent += `<th style="font-family: 'Times New Roman', serif; font-size: 12pt; font-weight: bold; border: 1px solid #000; padding: 8px; background-color: #f0f0f0; text-align: left;">${cell.textContent.trim()}</th>`;
+						htmlContent += `<th style="font-family: 'Times New Roman', serif; font-size: 12pt; font-weight: bold; border: 1px solid #000; padding: 2px; background-color: #f0f0f0; text-align: left; margin: 0; text-indent: 0; text-decoration: none;">${cell.textContent.trim()}</th>`;
 					});
 					htmlContent += '</tr></thead><tbody>';
 
@@ -2122,7 +2133,9 @@
 						htmlContent += '<tr>';
 						const cells = row.querySelectorAll('td');
 						cells.forEach((cell) => {
-							htmlContent += `<td style="font-family: 'Times New Roman', serif; font-size: 12pt; border: 1px solid #000; padding: 8px; text-align: left;">${cell.textContent.trim()}</td>`;
+							const cellText = cell.textContent.trim();
+							const displayText = cellText === '-' ? '' : cellText;
+							htmlContent += `<td style="font-family: 'Times New Roman', serif; font-size: 12pt; border: 1px solid #000; padding: 2px; text-align: left; margin: 0; text-indent: 0; text-decoration: none;">${displayText}</td>`;
 						});
 						htmlContent += '</tr>';
 					});
@@ -2173,7 +2186,9 @@
 						const rowData = [];
 						const cells = row.querySelectorAll('td');
 						cells.forEach((cell) => {
-							rowData.push(cell.textContent.trim());
+							const cellText = cell.textContent.trim();
+							const displayText = cellText === '-' ? '' : cellText;
+							rowData.push(displayText);
 						});
 						tableText += rowData.join('\t') + '\n';
 					});
