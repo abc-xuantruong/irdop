@@ -71,8 +71,8 @@ export const checkAuth = async () => {
 		if (error.response?.status === 401 || error.response?.statusCode === 401) {
 			Cookies.remove('auth');
 			Cookies.remove('identityUID');
+			redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
 		}
-		redirectToLogin('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại...');
 		return { status: 401, data: { message: 'Session expired' } };
 	}
 };

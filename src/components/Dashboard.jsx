@@ -2300,6 +2300,18 @@ const Dashboard = () => {
 	const isAccountant = () => {
 		// Admin users have accountant permissions, accountants have permissions
 		return currentUser?.role?.staff_admin || currentUser?.role?.staff_accountant;
+	};
+
+	// Add this function to check if user can see deadline information
+	const canViewDeadline = () => {
+		// Admin users can always see deadline
+		if (currentUser?.role?.staff_admin) return true;
+		// Sample managers can see deadline
+		if (currentUser?.role?.sample_manager) return true;
+		// Technicians who are not sample managers cannot see deadline
+		if (currentUser?.role?.staff_technician && !currentUser?.role?.sample_manager) return false;
+		// Other roles can see deadline
+		return true;
 	}; // Add function to handle note icon click
 	const handleNoteClick = (receipt) => {
 		// Open a dialog with the current note content
@@ -3750,6 +3762,7 @@ const Dashboard = () => {
 												onMouseEnter={() => handleReceiptMouseEnter(receipt.receipt_uid)}
 												onMouseLeave={handleReceiptMouseLeave}
 											>
+												{' '}
 												{/* Common columns for empty receipt */}
 												<td className="p-1 text-start align-top">
 													<div className="flex justify-between items-center">
@@ -3794,7 +3807,11 @@ const Dashboard = () => {
 															{receipt.created_by_name || getUserName(receipt.created_by_uid)}
 														</p>
 													</div>{' '}
-												</td>{' '}
+												</td>
+												{/* Add deadline column for empty receipts in non-payment views */}
+												{!isPaymentActive && (
+													<td className="p-1 text-start text-gray-500">{canViewDeadline() ? '--' : '--'}</td>
+												)}{' '}
 												{/* Additional empty columns for payment view - removed SYC column */}{' '}
 												{isPaymentActive && (
 													<>
@@ -3954,7 +3971,7 @@ const Dashboard = () => {
 																			{receipt.created_by_name || getUserName(receipt.created_by_uid)}
 																		</p>
 																	</div>{' '}
-																</td>
+																</td>{' '}
 																{/* Show deadline column only for non-payment views */}
 																{!isPaymentActive && (
 																	<td
@@ -3962,11 +3979,12 @@ const Dashboard = () => {
 																			hoveredReceiptId === receipt.receipt_uid ? 'bg-gray-50' : ''
 																		}`}
 																		rowSpan={samplesToShow.length}
-																		onClick={() => handleFieldClick(receipt.id, null, 'deadline')}
+																		onClick={() => canViewDeadline() && handleFieldClick(receipt.id, null, 'deadline')}
 																	>
 																		{editingField.receiptId === receipt.id &&
 																		editingField.sampleId === null &&
-																		editingField.field === 'deadline' ? (
+																		editingField.field === 'deadline' &&
+																		canViewDeadline() ? (
 																			<div
 																				onClick={(e) => e.stopPropagation()}
 																				onMouseEnter={(e) => e.stopPropagation()}
@@ -3996,9 +4014,15 @@ const Dashboard = () => {
 																			</div>
 																		) : (
 																			<div className="w-full h-full p-1 py-0 rounded">
-																				{showRelativeTime
-																					? formatDeadlineAsRelative(receipt.deadline, receipt)
-																					: formatDeadlineWithStyle(receipt.deadline, receipt)}
+																				{canViewDeadline() ? (
+																					showRelativeTime ? (
+																						formatDeadlineAsRelative(receipt.deadline, receipt)
+																					) : (
+																						formatDeadlineWithStyle(receipt.deadline, receipt)
+																					)
+																				) : (
+																					<span className="text-start block">--</span>
+																				)}
 																			</div>
 																		)}
 																	</td>

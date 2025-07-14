@@ -1,5 +1,5 @@
 import * as React from 'react';
-const { useContext, useState, useEffect } = React;
+const { useContext, useState, useEffect, useRef } = React;
 import TinyMceInput from './Input';
 import { GlobalContext } from '../contexts/GlobalContext';
 import Breadcrumb from './Breadcrumb';
@@ -20,6 +20,8 @@ import {
 	FaUpload,
 	FaFile,
 	FaFolder,
+	FaQrcode,
+	FaCamera,
 } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -30,6 +32,7 @@ import axios from 'axios'; // Add axios import
 import FileForm from './FileForm';
 import EmailForm from './EmailForm';
 import SampleImageUpload from './SampleImageUpload';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 // Import the generateReportToHTML function
 
 const ReceiptInfor = ({ receipt }) => {
@@ -111,6 +114,13 @@ const ReceiptInfor = ({ receipt }) => {
 	const [sampleImageUrl, setSampleImageUrl] = useState('');
 	const [isLoadingImage, setIsLoadingImage] = useState(false);
 	const [imageError, setImageError] = useState(false);
+	
+	// QR Code states
+	const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+	const [currentUrl, setCurrentUrl] = useState('');
+	const [cameraPermission, setCameraPermission] = useState(null); // null, 'granted', 'denied'
+	const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+	const qrScannerRef = useRef(null);
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -291,6 +301,48 @@ const ReceiptInfor = ({ receipt }) => {
 
 	useEffect(() => {
 		setCurrentTitlePage('Tiếp nhận mẫu');
+	}, []);
+
+	// Get current URL for QR code
+	useEffect(() => {
+		setCurrentUrl(window.location.href);
+	}, [window.location.href]);
+
+	// Check camera permission on component mount
+	useEffect(() => {
+		const checkCameraPermission = async () => {
+			try {
+				// Chỉ kiểm tra nếu trình duyệt hỗ trợ
+				if (navigator.permissions && navigator.permissions.query && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+					const permission = await navigator.permissions.query({ name: 'camera' });
+					setCameraPermission(permission.state);
+					
+					// Listen for permission changes
+					permission.onchange = () => {
+						setCameraPermission(permission.state);
+					};
+				} else {
+					// Trình duyệt không hỗ trợ, để null
+					setCameraPermission(null);
+				}
+			} catch (error) {
+				console.log('Cannot check camera permission:', error);
+				setCameraPermission(null);
+			}
+		};
+		
+		checkCameraPermission();
+	}, []);
+
+	// Cleanup QR scanner when component unmounts
+	useEffect(() => {
+		return () => {
+			if (qrScannerRef.current) {
+				qrScannerRef.current.clear().catch(error => {
+					console.error("Failed to clear QR scanner on cleanup:", error);
+				});
+			}
+		};
 	}, []);
 
 	// Function to adjust received dates for timezone (+7 hours for Vietnam)
@@ -1413,7 +1465,173 @@ const ReceiptInfor = ({ receipt }) => {
 
 		const date = new Date(dateString);
 		return isNaN(date.getTime()) ? new Date() : date;
-	}; // Function to handle Excel download
+	}; 
+	
+	// QR Code functions
+	const generateQRCode = (url) => {
+		const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}`;
+		return qrUrl;
+	};
+
+	const requestCameraPermission = async () => {
+		setIsRequestingPermission(true);
+		
+		// Kiểm tra xem trình duyệt có hỗ trợ getUserMedia không
+		if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+			setIsRequestingPermission(false);
+			setCameraPermission('denied');
+			
+			Swal.fire({
+				icon: 'error',
+				title: 'Trình duyệt không hỗ trợ',
+				html: `
+					<p>Trình duyệt của bạn không hỗ trợ chức năng camera hoặc trang web cần chạy qua HTTPS.</p>
+					<p><strong>Giải pháp:</strong></p>
+					<ul style="text-align: left; margin: 10px 0;">
+						<li>Đảm bảo trang web chạy qua HTTPS</li>
+						<li>Sử dụng trình duyệt hiện đại (Chrome, Firefox, Safari)</li>
+						<li>Kiểm tra cài đặt camera của trình duyệt</li>
+					</ul>
+				`,
+				confirmButtonText: 'Đã hiểu'
+			});
+			return false;
+		}
+		
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+			// Đóng stream ngay lập tức vì chúng ta chỉ cần kiểm tra quyền
+			stream.getTracks().forEach(track => track.stop());
+			setCameraPermission('granted');
+			return true;
+		} catch (error) {
+			console.log('Camera permission denied:', error);
+			setCameraPermission('denied');
+			
+			// Hiển thị thông báo hướng dẫn người dùng
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cần quyền truy cập camera',
+				html: `
+					<p>Để sử dụng chức năng quét mã QR, vui lòng:</p>
+					<ol style="text-align: left; margin: 10px 0;">
+						<li>Nhấp vào biểu tượng camera trong thanh địa chỉ</li>
+						<li>Chọn "Cho phép" để cấp quyền camera</li>
+						<li>Làm mới trang và thử lại</li>
+					</ol>
+					<p><strong>Lỗi:</strong> ${error.message}</p>
+				`,
+				confirmButtonText: 'Đã hiểu'
+			});
+			return false;
+		} finally {
+			setIsRequestingPermission(false);
+		}
+	};
+
+	const handleQRScan = async () => {
+		// Luôn mở modal và hiển thị yêu cầu quyền camera
+		setIsQRScannerOpen(true);
+		
+		// Yêu cầu quyền camera ngay lập tức
+		setTimeout(async () => {
+			const hasPermission = await requestCameraPermission();
+			if (hasPermission) {
+				// Khởi tạo QR scanner nếu có quyền
+				setTimeout(() => {
+					initQRScanner();
+				}, 100);
+			}
+		}, 100);
+	};
+
+	const initQRScanner = () => {
+		// Kiểm tra xem có quyền camera không
+		if (cameraPermission !== 'granted') {
+			console.log('Camera permission not granted');
+			return;
+		}
+		
+		if (qrScannerRef.current) {
+			qrScannerRef.current.clear();
+		}
+		
+		try {
+			qrScannerRef.current = new Html5QrcodeScanner(
+				"qr-reader",
+				{ 
+					fps: 10, 
+					qrbox: { width: 250, height: 250 },
+					aspectRatio: 1.0
+				},
+				false
+			);
+			
+			qrScannerRef.current.render(handleQRScanSuccess, handleQRScanError);
+		} catch (error) {
+			console.error('Failed to initialize QR scanner:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi khởi tạo scanner',
+				text: 'Không thể khởi tạo QR scanner. Vui lòng thử lại.',
+			});
+		}
+	};
+
+	const closeQRScanner = () => {
+		if (qrScannerRef.current) {
+			qrScannerRef.current.clear().then(() => {
+				qrScannerRef.current = null;
+			}).catch(error => {
+				console.error("Failed to clear QR scanner:", error);
+			});
+		}
+		setIsQRScannerOpen(false);
+	};
+
+	const handleQRScanSuccess = (decodedText) => {
+		// Dừng scanner trước
+		if (qrScannerRef.current) {
+			qrScannerRef.current.clear().then(() => {
+				qrScannerRef.current = null;
+			}).catch(error => {
+				console.error("Failed to clear QR scanner:", error);
+			});
+		}
+		
+		try {
+			// Validate if the decoded text is a valid URL
+			new URL(decodedText);
+			setIsQRScannerOpen(false);
+			
+			// Show confirmation before navigating
+			Swal.fire({
+				icon: 'question',
+				title: 'Xác nhận điều hướng',
+				text: `Bạn có muốn chuyển đến: ${decodedText}?`,
+				showCancelButton: true,
+				confirmButtonText: 'Có',
+				cancelButtonText: 'Không'
+			}).then((result) => {
+				if (result.isConfirmed) {
+					window.location.href = decodedText;
+				}
+			});
+		} catch (error) {
+			setIsQRScannerOpen(false);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Mã QR không chứa URL hợp lệ',
+			});
+		}
+	};
+
+	const handleQRScanError = (error) => {
+		console.log('QR Scan Error:', error);
+	};
+
+	// Function to handle Excel download
 	const handleExcelDownload = async () => {
 		// Check if receipt status is undefined or empty
 		if (!currentReceipt?.status || currentReceipt.status.trim() === '' || currentReceipt.status === 'Chưa xác định') {
@@ -2555,6 +2773,18 @@ const ReceiptInfor = ({ receipt }) => {
 		return currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin;
 	};
 
+	// Add this function to check if user can see deadline information
+	const canViewDeadline = () => {
+		// Admin users can always see deadline
+		if (currentUser?.role?.staff_admin) return true;
+		// Sample managers can see deadline
+		if (currentUser?.role?.sample_manager) return true;
+		// Technicians who are not sample managers cannot see deadline
+		if (currentUser?.role?.staff_technician && !currentUser?.role?.sample_manager) return false;
+		// Other roles can see deadline
+		return true;
+	};
+
 	// Add this function before the return statement, near other helper functions
 	const isToday = (date) => {
 		const today = new Date();
@@ -2616,6 +2846,66 @@ const ReceiptInfor = ({ receipt }) => {
 				.colored-toast .swal2-html-container {
 					color: white;
 				}
+				
+				/* QR Scanner custom styles */
+				#qr-reader {
+					position: relative !important;
+				}
+				
+				#qr-reader video {
+					width: 100% !important;
+					height: 100% !important;
+					object-fit: cover !important;
+					border-radius: 8px !important;
+				}
+				
+				#qr-reader canvas {
+					display: none !important;
+				}
+				
+				#qr-reader__dashboard {
+					position: absolute !important;
+					bottom: 0 !important;
+					left: 0 !important;
+					right: 0 !important;
+					background: rgba(0, 0, 0, 0.8) !important;
+					padding: 10px !important;
+					border-radius: 0 0 8px 8px !important;
+				}
+				
+				#qr-reader__dashboard_section {
+					margin: 0 !important;
+				}
+				
+				#qr-reader__dashboard_section_info {
+					color: white !important;
+					font-size: 12px !important;
+					text-align: center !important;
+				}
+				
+				#qr-reader__camera_selection {
+					background: white !important;
+					border: 1px solid #ccc !important;
+					border-radius: 4px !important;
+					padding: 5px !important;
+					margin: 5px 0 !important;
+					width: 100% !important;
+				}
+				
+				#qr-reader__start_button, #qr-reader__stop_button {
+					background: #3b82f6 !important;
+					color: white !important;
+					border: none !important;
+					padding: 8px 16px !important;
+					border-radius: 4px !important;
+					cursor: pointer !important;
+					font-size: 14px !important;
+					margin: 2px !important;
+				}
+				
+				#qr-reader__start_button:hover, #qr-reader__stop_button:hover {
+					background: #2563eb !important;
+				}
 			`}</style>{' '}
 			<Breadcrumb
 				paths={[
@@ -2629,78 +2919,81 @@ const ReceiptInfor = ({ receipt }) => {
 			/>
 			{/* Only show action buttons for non-technicians */}
 			{!isTechnician() && (
-				<div className="w-full flex justify-end md:justify-between items-center max-h-20 mb-1">
-					<div className=""></div>
-					<div className="flex items-center flex-wrap ">
-						<button
-							className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20"
-							onClick={handleExcelDownload}
-						>
-							<div className="flex items-center ">
-								{'Excel'} <PiDownloadSimpleBold size={20} className="ml-1" />
+				<div className="w-full flex flex-col sm:flex-row justify-end sm:justify-between items-start sm:items-center mb-1">
+					<div className="hidden sm:block"></div>
+					{!isTechnician() && (
+						<div className="w-full flex flex-col sm:flex-row justify-end sm:justify-between items-start sm:items-center mb-1">
+							<div className="hidden sm:block"></div>
+							<div className="flex flex-row items-center gap-2 w-full sm:w-auto justify-start">
+								<button
+									className="bg-background border-gray-300 text-primary font-medium py-1 px-2 rounded-lg text-sm whitespace-nowrap max-w-[80px]"
+									onClick={handleExcelDownload}
+								>
+									<div className="flex items-center justify-center gap-1">
+										Excel <PiDownloadSimpleBold size={16} />
+									</div>
+								</button>
+								<button
+									className="bg-background border-gray-300 text-primary font-medium py-1 px-2 rounded-lg text-sm whitespace-nowrap max-w-[80px]"
+									onClick={() =>
+										window.open(`/dashboard/receipt/print_sp?receipt_uid=${currentReceipt?.receipt_uid}`, '_blank')
+									}
+								>
+									<div className="flex items-center justify-center gap-1">
+										Tag <FaTag size={16} />
+									</div>
+								</button>
+								<button
+									className="bg-background border-gray-300 text-primary font-medium py-1 px-2 rounded-lg text-sm whitespace-nowrap max-w-[80px]"
+									onClick={fetchEmailFormData}
+									disabled={isLoadingEmailData}
+								>
+									<div className="flex items-center justify-center gap-1">
+										{isLoadingEmailData ? (
+											<>
+												<svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+													<circle
+														className="opacity-25"
+														cx="12"
+														cy="12"
+														r="10"
+														stroke="currentColor"
+														strokeWidth="4"
+													></circle>
+													<path
+														className="opacity-75"
+														fill="currentColor"
+														d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+													></path>
+												</svg>
+												Loading
+											</>
+										) : (
+											<>
+												Email <MdOutlineContactPhone size={16} />
+											</>
+										)}
+									</div>
+								</button>
+								<button
+									className="bg-background border-gray-300 text-primary font-medium py-1 px-2 rounded-lg text-sm whitespace-nowrap max-w-[80px]"
+									onClick={() => setIsFileFormVisible(true)}
+								>
+									<div className="flex items-center justify-center gap-1">
+										File <FaFolder size={14} />
+									</div>
+								</button>
+								<button
+									className="bg-background border-gray-300 text-red-500 font-medium py-1 px-2 rounded-lg text-sm whitespace-nowrap max-w-[80px]"
+									onClick={handleDeleteReceipt}
+								>
+									<div className="flex items-center justify-center gap-1">
+										Xóa <FaTrashAlt size={14} />
+									</div>
+								</button>
 							</div>
-						</button>{' '}
-						<button
-							className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20 ml-2"
-							onClick={() =>
-								window.open(`/dashboard/receipt/print_sp?receipt_uid=${currentReceipt?.receipt_uid}`, '_blank')
-							}
-						>
-							<div className="flex items-center ">
-								{'PRINT'} <FaTag size={20} className="ml-1" />
-							</div>
-						</button>{' '}
-						<button
-							className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20 ml-2"
-							onClick={fetchEmailFormData}
-							disabled={isLoadingEmailData}
-						>
-							{' '}
-							<div className="flex items-center ">
-								{isLoadingEmailData ? (
-									<>
-										<svg className="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24">
-											<circle
-												className="opacity-25"
-												cx="12"
-												cy="12"
-												r="10"
-												stroke="currentColor"
-												strokeWidth="4"
-											></circle>
-											<path
-												className="opacity-75"
-												fill="currentColor"
-												d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-											></path>
-										</svg>
-										Loading
-									</>
-								) : (
-									<>
-										{'Email'} <MdOutlineContactPhone size={20} className="ml-1" />
-									</>
-								)}
-							</div>
-						</button>
-						<button
-							className="bg-background border-gray-300 text-primary font-medium py-0 px-2 rounded-lg w-20 ml-2"
-							onClick={() => setIsFileFormVisible(true)}
-						>
-							<div className="flex items-center justify-between">
-								{'File'} <FaFolder size={15} className="ml-1" />
-							</div>
-						</button>
-						<CreateReceipt receipt={currentReceipt} setUpdatedReceipt={setCurrentReceipt} />
-						<button
-							className="bg-background border-gray-300 text-red-500 font-medium py-0 px-2 rounded-lg w-20"
-							onClick={handleDeleteReceipt}
-						>
-							<div className="flex items-center justify-between ">
-								{'Xóa'} <FaTrashAlt size={15} className="mr-1.5" />
-							</div>
-						</button>
-					</div>
+						</div>
+					)}
 				</div>
 			)}{' '}
 			{/* Only show general and order information sections for non-technicians */}
@@ -2772,29 +3065,33 @@ const ReceiptInfor = ({ receipt }) => {
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Hạn trả</label>
-									{editingGeneralField === 'deadline' ? (
-										<DatePicker
-											selected={currentReceipt?.deadline}
-											onChange={handleDeadlineChange}
-											onBlur={() => {
-												handleReceiptApiUpdate('deadline', currentReceipt?.deadline);
-												setEditingGeneralField(null);
-											}}
-											onKeyDown={handleDeadlineKeyDown}
-											dateFormat="dd/MM/yyyy"
-											className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
-											calendarClassName="text-black"
-											placeholderText="Chọn hạn trả"
-											autoFocus
-											dayClassName={(date) => (isToday(date) ? 'bg-blue-100 font-bold rounded-full' : undefined)}
-										/>
+									{canViewDeadline() ? (
+										editingGeneralField === 'deadline' ? (
+											<DatePicker
+												selected={currentReceipt?.deadline}
+												onChange={handleDeadlineChange}
+												onBlur={() => {
+													handleReceiptApiUpdate('deadline', currentReceipt?.deadline);
+													setEditingGeneralField(null);
+												}}
+												onKeyDown={handleDeadlineKeyDown}
+												dateFormat="dd/MM/yyyy"
+												className="p-1 border rounded-md w-full text-sm bg-white datepicker-full-width"
+												calendarClassName="text-black"
+												placeholderText="Chọn hạn trả"
+												autoFocus
+												dayClassName={(date) => (isToday(date) ? 'bg-blue-100 font-bold rounded-full' : undefined)}
+											/>
+										) : (
+											<div
+												className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
+												onClick={() => setEditingGeneralField('deadline')}
+											>
+												{currentReceipt?.deadline ? formatDate(currentReceipt.deadline) : '--'}
+											</div>
+										)
 									) : (
-										<div
-											className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
-											onClick={() => setEditingGeneralField('deadline')}
-										>
-											{currentReceipt?.deadline ? formatDate(currentReceipt.deadline) : '--'}
-										</div>
+										<div className="w-2/3 px-2 py-0 text-sm text-left border border-white rounded-lg">--</div>
 									)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
@@ -2864,6 +3161,37 @@ const ReceiptInfor = ({ receipt }) => {
 												) : null}
 											</div>
 										)}
+									</div>
+								</div>
+								
+								{/* QR Code Section */}
+								<div className="flex justify-start items-start mb-1">
+									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Truy cập nhanh</label>
+									<div className="w-2/3">
+										{/* Show QR Code on medium screens and larger */}
+										<div className="hidden md:block">
+											{currentUrl && (
+												<div className="border border-gray-300 rounded-lg p-2 w-fit">
+													<img
+														src={generateQRCode(currentUrl)}
+														alt="QR Code"
+														className="w-24 h-24"
+													/>
+													<p className="text-xs text-gray-600 mt-1 text-center">Quét để truy cập</p>
+												</div>
+											)}
+										</div>
+										
+										{/* Show Scan Button on small screens */}
+										<div className="block md:hidden">
+											<button
+												onClick={handleQRScan}
+												className="flex items-center gap-2 bg-blue-500 text-white px-3 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+											>
+												<FaCamera size={16} />
+												<span>Quét mã QR</span>
+											</button>
+										</div>
 									</div>
 								</div>
 							</div>
@@ -3262,7 +3590,9 @@ const ReceiptInfor = ({ receipt }) => {
 														/>
 													)}
 												</td>
-												<td className="p-1 border text-start">{formatDate(order.deadline)}</td>
+												<td className="p-1 border text-start">
+													{canViewDeadline() ? formatDate(order.deadline) : '--'}
+												</td>
 												<td className="p-1 border text-start">{getTechnicianName(order.technician_uid)}</td>
 												<td className="p-1 border text-center text-red-500">
 													<button
@@ -3487,6 +3817,95 @@ const ReceiptInfor = ({ receipt }) => {
 				isVisible={isFileFormVisible}
 				onClose={() => setIsFileFormVisible(false)}
 			/>
+			
+			{/* QR Scanner Modal */}
+			{isQRScannerOpen && (
+				<div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50">
+					<div className="bg-white p-4 rounded-lg w-[90%] max-w-2xl h-[80vh] max-h-[600px] relative flex flex-col">
+						<button
+							className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10"
+							onClick={closeQRScanner}
+						>
+							×
+						</button>
+						<h3 className="text-lg font-semibold mb-3 flex items-center">
+							<FaCamera className="mr-2 text-blue-500" />
+							Quét mã QR
+						</h3>
+						
+						{/* Camera view area - takes most of the space */}
+						<div className="flex-1 flex flex-col">
+							<p className="text-gray-600 mb-3 text-center text-sm">
+								Hướng camera vào mã QR để quét và điều hướng
+							</p>
+							
+							{/* QR Scanner area - maximized */}
+							<div className="flex-1 relative">
+								<div 
+									id="qr-reader" 
+									className="w-full h-full min-h-[300px] border-2 border-dashed border-gray-300 rounded-lg overflow-hidden"
+								>
+									{/* Placeholder content when scanner is not active */}
+									{cameraPermission !== 'granted' && (
+										<div className="w-full h-full flex items-center justify-center text-gray-400">
+											<div className="text-center">
+												<FaQrcode size={48} className="mx-auto mb-3" />
+												<p className="text-sm">Cấp quyền camera để bắt đầu quét</p>
+											</div>
+										</div>
+									)}
+								</div>
+							</div>
+						</div>
+						
+						{/* Control buttons area */}
+						<div className="mt-4 border-t pt-4">
+							{/* Camera permission status */}
+							{(cameraPermission === 'denied' || cameraPermission === null) && (
+								<div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-3">
+									<div className="flex items-center justify-center mb-2">
+										<FaCamera className="text-yellow-600 mr-2" />
+										<p className="text-sm text-yellow-800">
+											{cameraPermission === null 
+												? 'Cần kiểm tra và cấp quyền camera'
+												: 'Cần cấp quyền camera để sử dụng chức năng này'
+											}
+										</p>
+									</div>
+									<div className="text-center">
+										<button
+											onClick={requestCameraPermission}
+											disabled={isRequestingPermission}
+											className="bg-yellow-600 text-white px-4 py-2 rounded text-sm hover:bg-yellow-700 disabled:opacity-50 font-medium"
+										>
+											{isRequestingPermission ? 'Đang yêu cầu...' : 'Cấp quyền camera'}
+										</button>
+									</div>
+								</div>
+							)}
+							
+							{/* Success message when camera is granted */}
+							{cameraPermission === 'granted' && (
+								<div className="bg-green-50 border border-green-200 rounded-md p-3 mb-3">
+									<div className="flex items-center justify-center">
+										<FaCamera className="text-green-600 mr-2" />
+										<p className="text-sm text-green-800">
+											Camera đã sẵn sàng - Hướng vào mã QR để quét
+										</p>
+									</div>
+								</div>
+							)}
+							
+							{/* Help text */}
+							<div className="text-xs text-gray-500 space-y-1 text-center">
+								<p>💡 Đảm bảo mã QR chứa URL hợp lệ</p>
+								<p>🔒 Quyền camera chỉ được sử dụng để quét mã QR</p>
+								<p>📱 Hướng camera về phía mã QR và giữ ổn định</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };

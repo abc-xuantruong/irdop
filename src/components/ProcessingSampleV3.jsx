@@ -29,6 +29,7 @@ const ProcessingSample = () => {
 	const [displayCount, setDisplayCount] = useState(20); // Number of receipts to display
 	const [showAllReceipts, setShowAllReceipts] = useState(false); // Whether to show all receipts
 	const [showLabReportPopup, setShowLabReportPopup] = useState(false); // State for lab report popup
+	const [showMatchAnalysisPopup, setShowMatchAnalysisPopup] = useState(false); // State for match analysis popup
 
 	// Function to fetch matrix options from API
 	const fetchMatrixOptions = async () => {
@@ -59,9 +60,16 @@ const ProcessingSample = () => {
 	const handleModeChange = (mode) => {
 		if (mode === 'file') {
 			setShowLabReportPopup(true);
+			setShowMatchAnalysisPopup(false);
 			toast.info('Đang hiển thị file biên bản...', { autoClose: 800 });
+		} else if (mode === 'match') {
+			setShowMatchAnalysisPopup(true);
+			setShowLabReportPopup(false);
+			toast.info('Đang hiển thị phân tích chỉ tiêu...', { autoClose: 800 });
 		} else {
 			setCurrentMode(mode);
+			setShowLabReportPopup(false);
+			setShowMatchAnalysisPopup(false);
 			toast.info('Đang hiển thị giao diện bàn giao...', { autoClose: 800 });
 		}
 	};
@@ -1452,6 +1460,17 @@ const ProcessingSample = () => {
 						<GrDocumentText size={14} />
 						File biên bản
 					</button>
+					<button
+						onClick={() => handleModeChange('match')}
+						className={`px-4 py-0.5 rounded-lg transition-colors flex items-center gap-2 ${
+							showMatchAnalysisPopup
+								? 'bg-purple-500 text-white hover:bg-purple-600'
+								: 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+						}`}
+					>
+						<GrDocumentText size={14} />
+						Chỉ tiêu
+					</button>
 				</div>
 			</div>
 
@@ -2357,6 +2376,35 @@ const ProcessingSample = () => {
 									borderRadius: '8px',
 								}}
 								title="Lab Report File"
+							/>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Match Analysis Popup Modal */}
+			{showMatchAnalysisPopup && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[200]">
+					<div className="bg-white rounded-lg shadow-lg w-[95%] h-[95%] flex flex-col">
+						<div className="flex justify-between items-center p-1 border-b">
+							<h2 className="text-xl font-bold p-1">Phân tích chỉ tiêu</h2>
+							<button
+								onClick={() => setShowMatchAnalysisPopup(false)}
+								className="text-gray-500 hover:text-gray-700 text-2xl p-2 px-4"
+							>
+								×
+							</button>
+						</div>
+						<div className="flex-1 p-2">
+							<iframe
+								src="/MatchAnalysis.html"
+								style={{
+									width: '100%',
+									height: '100%',
+									border: '1px solid #ccc',
+									borderRadius: '8px',
+								}}
+								title="Match Analysis"
 							/>
 						</div>
 					</div>

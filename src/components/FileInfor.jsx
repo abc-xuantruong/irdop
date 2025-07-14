@@ -53,7 +53,7 @@ const FileInfor = () => {
 	});
 	const [currentMode, setCurrentMode] = useState('personal');
 	const [currentStatus, setCurrentStatus] = useState('');
-	const [currentSort, setCurrentSort] = useState({ column: 'createdAt', direction: 'desc' });
+	const [currentSort, setCurrentSort] = useState({ column: null, direction: null });
 	const [showSortMenu, setShowSortMenu] = useState(false);
 	const [showUploadModal, setShowUploadModal] = useState(false);
 	const [uploadData, setUploadData] = useState({
@@ -110,7 +110,18 @@ const FileInfor = () => {
 		}
 	}, [setCurrentTitlePage]);
 
-	// Refetch data when mode, status, sort, or fileNameInclude changes
+	// Helper function to refresh current data view
+	const refreshCurrentData = () => {
+		if (isTrashMode) {
+			fetchTrashFiles();
+		} else if (isSearchMode) {
+			handleSearch();
+		} else {
+			fetchFiles();
+		}
+	};
+
+	// Refetch data when mode, status, sort, page, filesPerPage, search/trash mode, or fileNameInclude changes
 	useEffect(() => {
 		if (isTrashMode) {
 			fetchTrashFiles();
@@ -119,7 +130,7 @@ const FileInfor = () => {
 		} else {
 			fetchFiles();
 		}
-	}, [currentMode, currentStatus, currentSort, filters.fileNameInclude]);
+	}, [currentMode, currentStatus, currentSort, currentPage, filesPerPage, isTrashMode, isSearchMode, filters.fileNameInclude]);
 
 	// Function to fetch trash files
 	const fetchTrashFiles = async () => {
@@ -159,54 +170,59 @@ const FileInfor = () => {
 	const handleStatusChange = (newStatus) => {
 		setCurrentStatus(newStatus);
 		setCurrentPage(1);
-
-		if (isTrashMode) {
-			fetchTrashFiles();
-		} else if (isSearchMode) {
-			handleSearch();
-		} else {
-			fetchFiles(1, filesPerPage);
-		}
+		// Let useEffect handle the API calls
 	};
 
 	// Function to handle mode toggle
 	const handleModeToggle = (mode) => {
 		setCurrentMode(mode);
 		setCurrentPage(1);
-		// Remove direct API calls - let useEffect handle them
+		// Let useEffect handle the API calls
 	};
 
-	// Function to toggle sort menu
-	const toggleSortMenu = () => {
-		setShowSortMenu(!showSortMenu);
-	};
+	// Function to handle column header click for sorting
+	const handleColumnSort = (column) => {
+		let newSort = { column: null, direction: null };
 
-	// Function to set sort option
-	const setSortOption = (column, direction) => {
-		setCurrentSort({ column, direction });
-		setShowSortMenu(false);
+		if (currentSort.column === column) {
+			// Same column clicked - cycle through states
+			if (currentSort.direction === 'desc') {
+				newSort = { column, direction: 'asc' };
+			} else if (currentSort.direction === 'asc') {
+				newSort = { column: null, direction: null }; // Clear sort
+			} else {
+				newSort = { column, direction: 'desc' };
+			}
+		} else {
+			// Different column clicked - start with DESC
+			newSort = { column, direction: 'desc' };
+		}
+
+		setCurrentSort(newSort);
 		setCurrentPage(1);
+		// Let useEffect handle the API calls
+	};
+
+	// Function to get sort indicator for column
+	const getSortIndicator = (column) => {
+		if (currentSort.column !== column) return '';
+		if (currentSort.direction === 'desc') return ' ↓';
+		if (currentSort.direction === 'asc') return ' ↑';
+		return '';
 	};
 
 	// Function to handle sort change
 	const handleSortChange = (column, direction) => {
 		setCurrentSort({ column, direction });
 		setCurrentPage(1);
-
-		if (isTrashMode) {
-			fetchTrashFiles();
-		} else if (isSearchMode) {
-			handleSearch();
-		} else {
-			fetchFiles(1, filesPerPage);
-		}
+		// Let useEffect handle the API calls
 	};
 
 	// Function to clear trash mode
 	const handleClearTrashMode = () => {
 		setIsTrashMode(false);
 		setCurrentPage(1);
-		fetchFiles(1);
+		// Let useEffect handle the API call
 	};
 
 	const handleRestoreFile = async (fileId) => {
@@ -217,13 +233,12 @@ const FileInfor = () => {
 					deletedAt: null,
 				},
 			});
-
-			if (response.status === 200) {
-				toast.success('Khôi phục file thành công', { autoClose: 1000 });
-				fetchTrashFiles();
-			} else {
-				toast.error('Lỗi khi khôi phục file', { autoClose: 1000 });
-			}
+		if (response.status === 200) {
+			toast.success('Khôi phục file thành công', { autoClose: 1000 });
+			refreshCurrentData();
+		} else {
+			toast.error('Lỗi khi khôi phục file', { autoClose: 1000 });
+		}
 		} catch (error) {
 			console.error('Error restoring file:', error);
 			toast.error('Lỗi khi khôi phục file', { autoClose: 1000 });
@@ -238,9 +253,13 @@ const FileInfor = () => {
 				mode: currentMode,
 				page: page,
 				filesPerPage: itemsPerPage,
-				columnSort: currentSort.column,
-				sortBy: currentSort.direction,
 			};
+
+			// Add sort parameters only if sorting is active
+			if (currentSort.column && currentSort.direction) {
+				requestBody.columnSort = currentSort.column;
+				requestBody.sortBy = currentSort.direction;
+			}
 
 			// Add status filter if selected
 			if (currentStatus) {
@@ -283,10 +302,14 @@ const FileInfor = () => {
 				mode: currentMode,
 				page: currentPage,
 				filesPerPage: filesPerPage,
-				columnSort: currentSort.column,
-				sortBy: currentSort.direction,
 				searchTerm: term.trim(),
 			};
+
+			// Add sort parameters only if sorting is active
+			if (currentSort.column && currentSort.direction) {
+				requestBody.columnSort = currentSort.column;
+				requestBody.sortBy = currentSort.direction;
+			}
 
 			// Add status filter if selected
 			if (currentStatus) {
@@ -341,8 +364,7 @@ const FileInfor = () => {
 		const newUrl = urlParams.toString() ? `${location.pathname}?${urlParams.toString()}` : location.pathname;
 		navigate(newUrl, { replace: true });
 
-		// Fetch regular files
-		fetchFiles(1, filesPerPage);
+		// Let useEffect handle the API call
 	};
 
 	// Function to handle search input submit
@@ -356,9 +378,7 @@ const FileInfor = () => {
 	const handleFilesPerPageChange = (newFilesPerPage) => {
 		setFilesPerPage(newFilesPerPage);
 		setCurrentPage(1);
-		if (!isSearchMode && !isTrashMode) {
-			fetchFiles(1, newFilesPerPage);
-		}
+		// Let useEffect handle the API call when filesPerPage changes
 	};
 
 	// Fetch identity names when fileList, searchResults, or trashFiles changes
@@ -479,13 +499,7 @@ const FileInfor = () => {
 			if (response.status === 200) {
 				toast.success('Cập nhật file thành công', { autoClose: 1000 });
 				// Refresh file list based on current mode
-				if (isTrashMode) {
-					fetchTrashFiles();
-				} else if (isSearchMode) {
-					handleSearch();
-				} else {
-					fetchFiles();
-				}
+				refreshCurrentData();
 				setEditingFile(null);
 				setEditData({});
 				setAddingForeignKey(null);
@@ -544,13 +558,7 @@ const FileInfor = () => {
 				if (response.status === 200) {
 					toast.success('Xóa file thành công', { autoClose: 1000 });
 					// Refresh file list based on current mode
-					if (isTrashMode) {
-						fetchTrashFiles();
-					} else if (isSearchMode) {
-						handleSearch();
-					} else {
-						fetchFiles();
-					}
+					refreshCurrentData();
 				} else {
 					toast.error('Lỗi khi xóa file', { autoClose: 1000 });
 				}
@@ -582,7 +590,7 @@ const FileInfor = () => {
 
 				if (response.status === 200) {
 					toast.success('Xóa file vĩnh viễn thành công', { autoClose: 1000 });
-					fetchTrashFiles();
+					refreshCurrentData();
 				} else {
 					toast.error('Lỗi khi xóa file vĩnh viễn', { autoClose: 1000 });
 				}
@@ -711,12 +719,7 @@ const FileInfor = () => {
 	// Function to handle page change
 	const handlePageChange = (newPage) => {
 		setCurrentPage(newPage);
-
-		if (!isSearchMode) {
-			// For regular mode, fetch new page from server
-			fetchFiles(newPage, filesPerPage);
-		}
-
+		// Let useEffect handle the API call when currentPage changes
 		window.scrollTo({ top: 0, behavior: 'smooth' });
 	};
 
@@ -949,264 +952,170 @@ const FileInfor = () => {
 			{/* File Management Section */}
 			<div className="bg-white rounded-lg shadow-lg p-6 mb-6">
 				{/* Top Controls Row */}
-				<div className="flex flex-wrap items-center gap-2 mb-4">
-					{/* Main Mode Buttons */}
-					<div className="flex items-center gap-1">
+				<div className="flex flex-col flex-wrap items-center justify-between gap-2 mb-4">
+					{/* Left side - Mode and Filter buttons */}
+					<div className="flex flex-wrap-reverse items-center w-full justify-start gap-2">
+						{/* Main Mode Toggle - Combined button */}
 						<button
 							onClick={() => {
 								if (isTrashMode) {
 									handleClearTrashMode();
-								}
-							}}
-							className={`px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm ${
-								!isTrashMode
-									? 'bg-blue-600 text-white focus:ring-blue-500'
-									: 'bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-gray-300'
-							}`}
-						>
-							File hiện có
-						</button>
-						<button
-							onClick={() => {
-								if (!isTrashMode) {
+								} else {
 									setIsTrashMode(true);
 									fetchTrashFiles();
 								}
 							}}
-							className={`px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm ${
-								isTrashMode
-									? 'bg-blue-600 text-white focus:ring-blue-500'
-									: 'bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-gray-300'
+							className="px-3 py-1 h-8 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm whitespace-nowrap flex items-center gap-2 max-w-[120px]"
+							title={`Hiện tại: ${isTrashMode ? 'File chờ xóa' : 'File hiện có'}. Click để chuyển sang ${
+								isTrashMode ? 'File hiện có' : 'File chờ xóa'
 							}`}
 						>
-							File chờ xóa
+							<span className={`w-2 h-2 rounded-full ${isTrashMode ? 'bg-red-500' : 'bg-blue-500'}`}></span>
+							<span>{isTrashMode ? 'File chờ xóa' : 'File hiện có'}</span>
 						</button>
-					</div>
 
-					{/* Filters and Controls */}
-					{!isTrashMode && (
-						<>
-							{/* Status Filter */}
-							<div className="flex items-center gap-1 whitespace-nowrap">
-								<label className="text-sm text-gray-600 shrink-0">Trạng thái:</label>
-								<select
-									value={currentStatus}
-									onChange={(e) => handleStatusChange(e.target.value)}
-									className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm min-w-20"
-								>
-									<option value="">Tất cả</option>
-									<option value="IDLE">Chờ xử lý</option>
-									<option value="SCHEDULED">Đã đặt lịch</option>
-									<option value="ERROR">Lỗi</option>
-									<option value="PENDING_APPROVAL">Chờ duyệt</option>
-									<option value="REJECTED">Từ chối</option>
-									<option value="APPROVED">Đã duyệt</option>
-								</select>
-							</div>
+						{/* Filters and Controls */}
+						{!isTrashMode && (
+							<>
+								{/* Status Filter */}
+								<div className="flex items-center gap-1 whitespace-nowrap max-w-fit">
+									<label className="text-sm text-gray-600 shrink-0">Trạng thái:</label>
+									<select
+										value={currentStatus}
+										onChange={(e) => handleStatusChange(e.target.value)}
+										className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm min-w-20"
+									>
+										<option value="">Tất cả</option>
+										<option value="IDLE">Chờ xử lý</option>
+										<option value="SCHEDULED">Đã đặt lịch</option>
+										<option value="ERROR">Lỗi</option>
+										<option value="PENDING_APPROVAL">Chờ duyệt</option>
+										<option value="REJECTED">Từ chối</option>
+										<option value="APPROVED">Đã duyệt</option>
+									</select>
+								</div>
 
-							{/* Name Start Filter */}
-							<div className="flex items-center gap-1 whitespace-nowrap">
-								<label className="text-sm text-gray-600 shrink-0">Loại file:</label>
-								<select
-									value={filters.fileNameInclude}
-									onChange={(e) => {
-										setFilters({ ...filters, fileNameInclude: e.target.value });
-										setCurrentPage(1);
+								{/* Name Start Filter */}
+								<div className="flex items-center gap-1 whitespace-nowrap max-w-fit">
+									<label className="text-sm text-gray-600 shrink-0">Loại file:</label>
+									<select
+										value={filters.fileNameInclude}
+										onChange={(e) => {
+											setFilters({ ...filters, fileNameInclude: e.target.value });
+											setCurrentPage(1);
+										}}
+										className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm min-w-24"
+									>
+										<option value="">Tất cả</option>
+										<option value="TEST_REQUEST___">Phiếu gửi mẫu</option>
+										<option value="COA_REPORT___">Phiếu phân tích</option>
+										<option value="LAB_TEST_REPORT___">Biên bản kiểm nghiệm</option>
+										<option value="SAMPLE_IMG___">Ảnh mẫu</option>
+									</select>
+								</div>
+
+								{/* Reload Button */}
+								<button
+									onClick={() => {
+										if (isTrashMode) {
+											fetchTrashFiles();
+										} else if (isSearchMode) {
+											handleSearch();
+										} else {
+											fetchFiles();
+										}
 									}}
-									className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm min-w-24"
+									className="max-w-28 px-3 py-1 h-8 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-1 whitespace-nowrap btn-fixed"
+									title="Tải lại danh sách"
 								>
-									<option value="">Tất cả</option>
-									<option value="TEST_REQUEST___">Phiếu gửi mẫu</option>
-									<option value="COA_REPORT___">Phiếu phân tích</option>
-									<option value="LAB_TEST_REPORT___">Biên bản kiểm nghiệm</option>
-									<option value="SAMPLE_IMG___">Ảnh mẫu</option>
-								</select>
-							</div>
-
-							{/* Sort Menu */}
-							<div className="relative">
-								<button
-									onClick={toggleSortMenu}
-									className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 sort-button whitespace-nowrap flex items-center gap-1"
-								>
-									<span>Sắp xếp</span>
-									<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-									</svg>
+									<FaSync size={12} />
+									Tải lại
 								</button>
-								{showSortMenu && (
-									<div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-40 sort-menu">
-										<div className="py-1">
-											<button
-												onClick={() => setSortOption('createdAt', 'desc')}
-												className={`w-full text-left px-3 py-1 text-sm hover:bg-gray-100 ${
-													currentSort.column === 'createdAt' && currentSort.direction === 'desc'
-														? 'bg-blue-50 text-blue-600'
-														: ''
-												}`}
-											>
-												Ngày tạo (Mới nhất)
-											</button>
-											<button
-												onClick={() => setSortOption('createdAt', 'asc')}
-												className={`w-full text-left px-3 py-1 text-sm hover:bg-gray-100 ${
-													currentSort.column === 'createdAt' && currentSort.direction === 'asc'
-														? 'bg-blue-50 text-blue-600'
-														: ''
-												}`}
-											>
-												Ngày tạo (Cũ nhất)
-											</button>
-											<button
-												onClick={() => setSortOption('fileName', 'asc')}
-												className={`w-full text-left px-3 py-1 text-sm hover:bg-gray-100 ${
-													currentSort.column === 'fileName' && currentSort.direction === 'asc'
-														? 'bg-blue-50 text-blue-600'
-														: ''
-												}`}
-											>
-												Tên file (A-Z)
-											</button>
-											<button
-												onClick={() => setSortOption('fileName', 'desc')}
-												className={`w-full text-left px-3 py-1 text-sm hover:bg-gray-100 ${
-													currentSort.column === 'fileName' && currentSort.direction === 'desc'
-														? 'bg-blue-50 text-blue-600'
-														: ''
-												}`}
-											>
-												Tên file (Z-A)
-											</button>
-											<button
-												onClick={() => setSortOption('fileSize', 'desc')}
-												className={`w-full text-left px-3 py-1 text-sm hover:bg-gray-100 ${
-													currentSort.column === 'fileSize' && currentSort.direction === 'desc'
-														? 'bg-blue-50 text-blue-600'
-														: ''
-												}`}
-											>
-												Kích thước (Lớn nhất)
-											</button>
-											<button
-												onClick={() => setSortOption('fileSize', 'asc')}
-												className={`w-full text-left px-3 py-1 text-sm hover:bg-gray-100 ${
-													currentSort.column === 'fileSize' && currentSort.direction === 'asc'
-														? 'bg-blue-50 text-blue-600'
-														: ''
-												}`}
-											>
-												Kích thước (Nhỏ nhất)
-											</button>
-										</div>
-									</div>
-								)}
-							</div>
-
-							{/* Reload Button */}
-							<button
-								onClick={() => {
-									if (isTrashMode) {
-										fetchTrashFiles();
-									} else if (isSearchMode) {
-										handleSearch();
-									} else {
-										fetchFiles();
-									}
-								}}
-								className="max-w-28 px-3 py-1 h-8 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-1 whitespace-nowrap btn-fixed"
-								title="Tải lại danh sách"
-							>
-								<FaSync size={12} />
-								Tải lại
-							</button>
-							{/* Upload File Button */}
-							<button
-								onClick={() => setShowUploadModal(true)}
-								className=" max-w-28 px-3 py-1 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 whitespace-nowrap flex items-center gap-2"
-							>
-								<FaPlus size={12} />
-								Tải lên
-							</button>
-							{/* Mode Toggle - Show for all users */}
-							<div className="flex items-center gap-1 whitespace-nowrap">
-								<label className="text-sm text-gray-600 shrink-0">Chế độ:</label>
-								<select
-									value={currentMode}
-									onChange={(e) => handleModeToggle(e.target.value)}
-									className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm min-w-20"
-								>
-									<option value="personal">Cá nhân</option>
-									<option value="all">Toàn bộ</option>
-								</select>
-							</div>
-						</>
-					)}
-
-					{/* Action Buttons */}
-					{!isTrashMode && (
-						<>
-							<button
-								onClick={toggleSelectColumn}
-								className={`max-w-24 px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${
-									showSelectColumn
-										? 'bg-blue-600 text-white focus:ring-blue-500'
-										: 'bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-gray-300'
-								}`}
-							>
-								<FaCheck size={12} />
-								Chọn file
-							</button>
-
-							{showSelectColumn && (
+								{/* Upload File Button */}
 								<button
-									onClick={handleProcessFiles}
-									disabled={selectedFiles.size === 0 || processing}
-									className={`max-w-28 px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${
-										selectedFiles.size > 0 && !processing
-											? 'bg-orange-500 text-white hover:bg-orange-600 focus:ring-orange-500'
-											: 'bg-gray-300 text-gray-500 cursor-not-allowed'
+									onClick={() => setShowUploadModal(true)}
+									className=" max-w-28 px-3 py-1 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 whitespace-nowrap flex items-center gap-2"
+								>
+									<FaPlus size={12} />
+									Tải lên
+								</button>
+								{/* Mode Toggle - Combined button */}
+								<button
+									onClick={() => handleModeToggle(currentMode === 'personal' ? 'all' : 'personal')}
+									className="px-3 py-1 h-8 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm whitespace-nowrap flex items-center gap-2 max-w-[100px]"
+									title={`Hiện tại: ${currentMode === 'personal' ? 'Cá nhân' : 'Toàn bộ'}. Click để chuyển sang ${
+										currentMode === 'personal' ? 'Toàn bộ' : 'Cá nhân'
 									}`}
 								>
-									{processing && <FaSync className="animate-spin" size={12} />}
-									{!processing && <FaSync size={12} />}
-									Xử lý file ({selectedFiles.size})
+									<span
+										className={`w-2 h-2 rounded-full ${currentMode === 'personal' ? 'bg-blue-500' : 'bg-green-500'}`}
+									></span>
+									<span>{currentMode === 'personal' ? 'Cá nhân' : 'Toàn bộ'}</span>
 								</button>
-							)}
-						</>
-					)}
-				</div>
 
-				{/* Search bar and pagination controls */}
-				<div className="flex flex-wrap items-center gap-2 mb-4">
-					<div className="flex items-center gap-1 whitespace-nowrap">
-						<label className="text-sm text-gray-600 shrink-0">Số file/trang:</label>
-						<select
-							value={filesPerPage}
-							onChange={(e) => handleFilesPerPageChange(parseInt(e.target.value))}
-							className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm w-16"
-						>
-							<option value={10}>10</option>
-							<option value={20}>20</option>
-							<option value={50}>50</option>
-							<option value={100}>100</option>
-						</select>
+								{/* Action Buttons */}
+								<button
+									onClick={toggleSelectColumn}
+									className={`max-w-24 px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${
+										showSelectColumn
+											? 'bg-blue-600 text-white focus:ring-blue-500'
+											: 'bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-gray-300'
+									}`}
+								>
+									<FaCheck size={12} />
+									Chọn file
+								</button>
+
+								{showSelectColumn && (
+									<button
+										onClick={handleProcessFiles}
+										disabled={selectedFiles.size === 0 || processing}
+										className={`max-w-28 px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${
+											selectedFiles.size > 0 && !processing
+												? 'bg-orange-500 text-white hover:bg-orange-600 focus:ring-orange-500'
+												: 'bg-gray-300 text-gray-500 cursor-not-allowed'
+										}`}
+									>
+										{processing && <FaSync className="animate-spin" size={12} />}
+										{!processing && <FaSync size={12} />}
+										Xử lý file ({selectedFiles.size})
+									</button>
+								)}
+								<div className="flex items-center gap-1 whitespace-nowrap">
+									<label className="text-sm text-gray-600 shrink-0">Số file/trang:</label>
+									<select
+										value={filesPerPage}
+										onChange={(e) => handleFilesPerPageChange(parseInt(e.target.value))}
+										className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm w-16"
+									>
+										<option value={10}>10</option>
+										<option value={20}>20</option>
+										<option value={50}>50</option>
+										<option value={100}>100</option>
+									</select>
+								</div>
+							</>
+						)}
 					</div>
 
-					<div className="flex items-center gap-1">
-						<input
-							type="text"
-							placeholder="Tìm kiếm file theo tên..."
-							value={searchTerm}
-							onChange={(e) => setSearchTerm(e.target.value)}
-							onKeyPress={handleSearchSubmit}
-							className="px-3 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white min-w-[200px] max-w-[320px] w-64"
-						/>
-						<button
-							onClick={handleSearchSubmit}
-							className="px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 whitespace-nowrap"
-						>
-							Tìm
-						</button>
+					{/* Right side - Search and pagination controls */}
+					<div className="flex justify-end gap-2 w-full">
+						<div className="flex items-center gap-1">
+							<input
+								type="text"
+								placeholder="Tìm kiếm file theo tên..."
+								value={searchTerm}
+								onChange={(e) => setSearchTerm(e.target.value)}
+								onKeyPress={handleSearchSubmit}
+								className="px-3 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white min-w-[200px] max-w-[320px] w-64"
+							/>
+							<button
+								onClick={handleSearchSubmit}
+								className="px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 whitespace-nowrap"
+							>
+								Tìm
+							</button>
+						</div>
 					</div>
 				</div>
 
@@ -1349,7 +1258,12 @@ const FileInfor = () => {
 										)}
 										<th className="py-1 px-2 border text-left max-w-[430px]">
 											<div className="flex items-center">
-												Tên file
+												<button
+													onClick={() => handleColumnSort('fileName')}
+													className="flex items-center text-left hover:text-blue-600 cursor-pointer font-medium"
+												>
+													Tên file{getSortIndicator('fileName')}
+												</button>
 												<button
 													onClick={() => toggleFilter('fileName')}
 													className="ml-2 text-gray-500 hover:text-gray-700 filter-button"
@@ -1421,8 +1335,22 @@ const FileInfor = () => {
 												</div>
 											)}
 										</th>
-										<th className="py-1 px-2 border text-left">Kích thước</th>
-										<th className="py-1 px-2 border text-left">Ngày sửa đổi</th>
+										<th className="py-1 px-2 border text-left">
+											<button
+												onClick={() => handleColumnSort('fileSize')}
+												className="text-left hover:text-blue-600 cursor-pointer font-medium"
+											>
+												Kích thước{getSortIndicator('fileSize')}
+											</button>
+										</th>
+										<th className="py-1 px-2 border text-left">
+											<button
+												onClick={() => handleColumnSort('createdAt')}
+												className="text-left hover:text-blue-600 cursor-pointer font-medium"
+											>
+												Ngày sửa đổi{getSortIndicator('createdAt')}
+											</button>
+										</th>
 										<th className="py-1 px-2 border text-left relative max-w-[350px]">
 											<div className="flex items-center">
 												Danh mục

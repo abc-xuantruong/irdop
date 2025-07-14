@@ -82,7 +82,7 @@ const TinyMceInput = ({ value, onUpdate, onKey }) => {
 						const content = editor.getContent();
 						onKey(e, content);
 						// onUpdate(content);
-					} else if (e.key.toLowerCase() === 'x') {
+					} else if (e.key === '*') {
 						e.preventDefault();
 						editor.execCommand('mceInsertContent', false, '×');
 					}
