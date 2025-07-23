@@ -27,6 +27,6 @@ export default defineConfig({
 	preview: {
 		host: true, // or '0.0.0.0' for all interfaces
 		port: 4173,
-		allowedHosts: ['prev.irdop.org', '.irdop.org'],
+		allowedHosts: ['prev.irdop.org', '.irdop.org',"0f57e2f8b545.ngrok-free.app"],
 	},
 });

@@ -3270,7 +3270,7 @@ const ReceiptInfor = ({ receipt }) => {
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Giá trị</label>
-									<div className="flex items-center w-1/3">
+									<div className="flex items-center">
 										{renderField('total_amount', currentReceipt?.total_amount, false, 'number', true)}
 										<div className="flex items-center ml-2 cursor-pointer" onClick={handlePayStatusToggle}>
 											<div

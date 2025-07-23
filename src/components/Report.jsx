@@ -361,11 +361,11 @@ export default function MultiPageEditor() {
 		 style="padding-top:6mm; position:relative; ">
 		<div style="position:relative; text-align:left;">
 			<p contenteditable="true" class=" content-header-title" 
-			   style="font-weight:700; font-size:24pt; color:#0058A3; height: 28px;">
+			   style="font-weight:840; font-size:24pt; color:#0058A3; height: 28px;">
 				PHIẾU KẾT QUẢ THỬ NGHIỆM
 			</p>
 			<p class=" content-header-title_eng" 
-			   style="font-weight:700; font-size:21pt; color:#0058A3; height: 28px;">
+			   style="font-weight:820; font-size:21pt; color:#0058A3; height: 28px;">
 				/ Certificate of Analysis
 			</p>
 			<div class=" display-flex" 
@@ -713,7 +713,7 @@ export default function MultiPageEditor() {
 			<p style="font-size: 11px; line-height: 1.2; margin:0; text-align: right; color: black; text-decoration: none;">${clientUid}</p>
 		</div>		
 		<div style="display: flex; flex-direction: column; gap: 2px; height: fit-content;">
-			<p style="font-weight: bold; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;">${clientName}</p>
+			<p style="font-weight: 760; margin: 0; text-align: left; font-size: 16px; line-height: 1.2;">${clientName}</p>
 			<p style="margin: 0; font-size: 12px; text-align: left; line-height: 1.2;">${clientAddress || '--'}</p>
 		</div>
 	</div>
@@ -1193,7 +1193,7 @@ export default function MultiPageEditor() {
 
 	const [content, setContent] = useState(initialContent);
 	const [header, setHeader] = useState(`
-<div class=" content_page_header_box" id="thead" style="position:relative; height: fit-content;">
+<div class=" content_page_header_box" id="thead" style="position:relative; height: fit-content; font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
 	<div class=" " style="position:relative; display:flex;  overflow:visible;">
 		<div>
 			<img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg" 
@@ -1202,16 +1202,16 @@ export default function MultiPageEditor() {
 				 style="width:5cm;">
 		</div>
 		<div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
-			<p class="" 
-			style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
+			<p class="nunito-700" 
+			style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
 				Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
 			</p>
-			<p class="" 
-			style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
+			<p class="nunito-400" 
+			style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400; font-size:14px; margin: 0; line-height: 15px;">
 				/ Institute for Research and Development of Organic Products
 			</p>
-			<span class="" 
-				style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
+			<span class="nunito-400" 
+				style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
 						width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
 				Phòng Phân tích - Kiểm nghiệm / Analysis and Testing Dept.
 			</span>
@@ -1219,26 +1219,26 @@ export default function MultiPageEditor() {
 
 	</div>
 	<div class=" " 
-		 style="padding-top:6mm; position:relative; ">
+		 style="padding-top:1mm; position:relative; ">
 		<div style="position:relative; text-align:left;">
-			<p contenteditable="true" class=" content-header-title" 
-			   style="font-weight:700; font-size:24pt; color:#0058A3; height: 28px;">
+			<p contenteditable="true" class="nunito-840 content-header-title" 
+			   style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 840; font-size:24pt; color:#0058A3; height: 28px;">
 				PHIẾU KẾT QUẢ THỬ NGHIỆM
 			</p>
-			<p class=" content-header-title_eng" 
-			   style="font-weight:700; font-size:21pt; color:#0058A3; height: 28px;">
+			<p class="nunito-820 content-header-title_eng" 
+			   style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 820; font-size:21pt; color:#0058A3; height: 28px;">
 				/ Certificate of Analysis
 			</p>
-			<div class=" display-flex" 
-				 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px;; height: 28px;">
-				<span class=" std_ref-title">Xuất bản / ref.:</span>
+			<div class="nunito-400 display-flex" 
+				 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400; margin-top: 0px;; height: 28px;">
+				<span class="nunito-400 std_ref-title">Xuất bản / ref.:</span>
 				<p contenteditable="true" 
-				   class="  ref_code" 
-				   style="min-width:5pt; margin: 0; margin-right: 2mm;">
+				   class="nunito-400 ref_code" 
+				   style="min-width:5pt; margin: 0; margin-right: 2mm; font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400;">
 					SƠ BỘ / DRAFT
 				</p>
-				<span class="  published_date" 
-					  style="min-width:5pt; margin: 0;">
+				<span class="nunito-400 published_date" 
+					  style="min-width:5pt; margin: 0; font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400;">
 					  Ngày / Date: ${formatDate(new Date())}
 				</span>
 			</div>
@@ -1254,13 +1254,13 @@ export default function MultiPageEditor() {
 </div>
 	`);
 	const [footer, setFooter] = useState(`
-<div style="border-top: 1px solid #4CB748; height: 50px; display: flex; padding-top: 0pt; align-items: center;">
+<div style="border-top: 1px solid #4CB748; height: 50px; display: flex; padding-top: 0pt; align-items: center; font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
 <div style="flex-grow: 1; text-align: left;">
-<p style="color: #0058a3; margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</p>
-<p style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center;">IRDOP.ORG</p>
-<p style="opacity: 0.5; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center;">Form: BM06-QT010-KN / Version: 06 / Effective date: 02/06/2025</p>
+<p class="nunito-600" style="color: #0058a3; margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center; font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 600;">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</p>
+<p class="nunito-400" style="margin: 0; padding: 0; line-height: 1; font-size: 12px; height: 15px; display: flex; align-items: center; font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400;">IRDOP.ORG</p>
+<p class="nunito-400" style="opacity: 0.5; margin: 0; padding: 0; line-height: 1; font-size: 11px; height: 14px; display: flex; align-items: center; font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400;">Form: BM06-QT010-KN / Version: 06 / Effective date: 02/06/2025</p>
 </div>
-<div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;">
+<div class="nunito-400" style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400;">
 <div style="display: flex; align-items: center; height: 14px;"><span style="font-size: 11px; margin: 0; padding: 0; line-height: 1; margin-right: 2px;">Trang / Pages:</span>
 <div style="display: flex; align-items: center; height: 14px;"><span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">00</span> <span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">/</span> <span style="font-size: 11px; margin: 0; padding: 0; line-height: 1;">00</span></div>
 </div>
@@ -1282,70 +1282,69 @@ export default function MultiPageEditor() {
 	const editorRef = useRef(null);
 	const contentRef = useRef(null);
 
-	// Add font loading effect to ensure Gilroy is available
+	// Add font loading effect to ensure Nunito Sans is available
 	useEffect(() => {
-		// Create a style element for font-face declarations
+		// Create a style element for font-face declarations and Google Fonts link
 		const fontStyle = document.createElement('style');
 		fontStyle.textContent = `
-			@font-face {
-				font-family: 'Gilroy';
-				src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
-				font-weight: 400;
-				font-style: normal;
-				font-display: swap;
-			}
+			/* Nunito Sans Google Fonts */
+			@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
 			
-			@font-face {
-				font-family: 'Gilroy';
-				src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-				font-weight: 500;
-				font-style: normal;
-				font-display: swap;
-			}
-			
-			@font-face {
-				font-family: 'Gilroy';
-				src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-				font-weight: 700;
-				font-style: normal;
-				font-display: swap;
-			}
+			/* Font weight classes for Nunito Sans */
+			.nunito-200 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 200; font-style: normal; }
+			.nunito-300 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 300; font-style: normal; }
+			.nunito-400 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 400; font-style: normal; }
+			.nunito-500 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 500; font-style: normal; }
+			.nunito-600 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 600; font-style: normal; }
+			.nunito-700 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 700; font-style: normal; }
+			.nunito-760 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 760; font-style: normal; }
+			.nunito-800 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 800; font-style: normal; }
+			.nunito-820 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 820; font-style: normal; }
+			.nunito-840 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 840; font-style: normal; }
+			.nunito-900 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 900; font-style: normal; }
 			
 			body, .editable, .header-editable, .content-editable, .footer-editable {
-				font-family: 'Gilroy', sans-serif !important;
+				font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 			}
 			`;
 		document.head.appendChild(fontStyle);
 
-		// Load the font files programmatically to ensure they're available
-		const fontUrls = [
-			'/public/fonts/SVN-Gilroy Regular.otf',
-			'/public/fonts/SVN-Gilroy SemiBold.otf',
-			'/public/fonts/SVN-Gilroy Bold.otf',
+		// Add Google Fonts preconnect links for better performance
+		const preconnectLinks = [
+			{ rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+			{ rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
 		];
 
-		// Preload fonts
-		const fontPromises = fontUrls.map((url) => {
-			return new Promise((resolve, reject) => {
-				const link = document.createElement('link');
-				link.rel = 'preload';
-				link.href = url;
-				link.as = 'font';
-				link.type = 'font/otf';
-				link.crossOrigin = 'anonymous';
-				link.onload = resolve;
-				link.onerror = reject;
-				document.head.appendChild(link);
+		const linkElements = [];
+		preconnectLinks.forEach((linkConfig) => {
+			const link = document.createElement('link');
+			Object.keys(linkConfig).forEach((key) => {
+				if (key === 'crossOrigin') {
+					link.crossOrigin = linkConfig[key];
+				} else {
+					link[key] = linkConfig[key];
+				}
 			});
+			document.head.appendChild(link);
+			linkElements.push(link);
 		});
 
-		// Wait for fonts to load
-		Promise.all(fontPromises)
-			.then(() => console.log('All Gilroy fonts loaded successfully'))
-			.catch((err) => console.error('Error loading Gilroy fonts:', err));
+		// Wait for font to load
+		document.fonts.ready
+			.then(() => {
+				console.log('Nunito Sans font loaded successfully');
+			})
+			.catch((err) => {
+				console.error('Error loading Nunito Sans font:', err);
+			});
 
 		return () => {
 			document.head.removeChild(fontStyle);
+			linkElements.forEach((link) => {
+				if (document.head.contains(link)) {
+					document.head.removeChild(link);
+				}
+			});
 		};
 	}, []);
 
@@ -1386,32 +1385,24 @@ export default function MultiPageEditor() {
 			extended_valid_elements: 'span[style]',
 			charmap: [[8727, 'multiplication sign (∗)']],
 			content_style: `
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
-					font-weight: 400;
-					font-style: normal;
-					font-display: swap;
-				}
+				/* Nunito Sans Google Fonts */
+				@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
 				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-					font-weight: 500;
-					font-style: normal;
-					font-display: swap;
-				}
-				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-					font-weight: 700;
-					font-style: normal;
-					font-display: swap;
-				}
+				/* Font weight classes for Nunito Sans */
+				.nunito-200 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 200; font-style: normal; }
+				.nunito-300 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 300; font-style: normal; }
+				.nunito-400 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 400; font-style: normal; }
+				.nunito-500 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 500; font-style: normal; }
+				.nunito-600 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 600; font-style: normal; }
+				.nunito-700 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 700; font-style: normal; }
+				.nunito-760 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 760; font-style: normal; }
+				.nunito-800 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 800; font-style: normal; }
+				.nunito-820 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 820; font-style: normal; }
+				.nunito-840 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 840; font-style: normal; }
+				.nunito-900 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 900; font-style: normal; }
 				
 				body, *[contenteditable="true"] {
-					font-family: 'Gilroy', sans-serif !important;
+					font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 				}
 				
 				${isReadOnly ? '.editable { cursor: default !important; }' : ''}
@@ -2531,32 +2522,24 @@ export default function MultiPageEditor() {
 		// Get paginated content
 		const paginationResult = paginateContent();
 
-		// Prepare custom font support for print window
+		// Prepare custom font support for print window with Nunito Sans
 		const fontFaces = `
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
-					font-weight: 400;
-					font-style: normal;
-					font-display: swap;
-				}
-				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-					font-weight: 500;
-					font-style: normal;
-					font-display: swap;
-				}
-				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-					font-weight: 700;
-					font-style: normal;
-					font-display: swap;
-				}
-			`;
+			/* Nunito Sans Google Fonts */
+			@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+			
+			/* Font weight classes for Nunito Sans */
+			.nunito-200 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 200; font-style: normal; }
+			.nunito-300 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 300; font-style: normal; }
+			.nunito-400 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 400; font-style: normal; }
+			.nunito-500 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 500; font-style: normal; }
+			.nunito-600 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 600; font-style: normal; }
+			.nunito-700 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 700; font-style: normal; }
+			.nunito-760 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 760; font-style: normal; }
+			.nunito-800 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 800; font-style: normal; }
+			.nunito-820 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 820; font-style: normal; }
+			.nunito-840 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 840; font-style: normal; }
+			.nunito-900 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 900; font-style: normal; }
+		`;
 
 		// Write the print document with proper CSS for printing
 		printWindow.document.write(`
@@ -2565,6 +2548,8 @@ export default function MultiPageEditor() {
 				<head>
 					<title>${documentTitle}</title>
 					<meta charset="utf-8">
+					<link rel="preconnect" href="https://fonts.googleapis.com">
+					<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 					<style>
 						${fontFaces}
 						
@@ -2576,7 +2561,7 @@ export default function MultiPageEditor() {
 						html, body {
 							margin: 0;
 							padding: 0;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							background-color: #f0f0f0;
 						}
 						
@@ -2591,7 +2576,7 @@ export default function MultiPageEditor() {
 							width: 794px; /* Exact A4 width at 96 DPI (210mm = 8.27in = 794px) */
 							margin: 20px auto;
 							background-color: white;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 						}
 						
 						.page {
@@ -2602,7 +2587,7 @@ export default function MultiPageEditor() {
 							page-break-after: always;
 							background-color: white;
 							border-bottom: 1px dashed #ccc;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							/* Apply margins as padding */
 							padding: ${A4.topMargin * 3.78}px ${A4.sideMargin * 3.78}px ${A4.bottomMargin * 3.78}px ${A4.sideMargin * 3.78}px;
 							overflow: hidden;
@@ -2620,7 +2605,7 @@ export default function MultiPageEditor() {
 						/* Additional styles for table rows to preserve height */
 						table {
 							border-collapse: collapse;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							table-layout: fixed; /* Helps with consistent row heights */
 							width: 100%;
 						}
@@ -2646,7 +2631,7 @@ export default function MultiPageEditor() {
 							margin: 0 !important;
 							padding: 0 !important;
 							line-height: 1.2 !important;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							font-size: 12px !important;
 						}
 						
@@ -2659,19 +2644,19 @@ export default function MultiPageEditor() {
 							width: calc(100% - ${2 * A4.sideMargin * 3.78}px);
 							box-sizing: border-box;
 							padding-bottom: ${A4.headerSpacing * 3.78}px !important;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							overflow: visible !important; /* Allow header content to overflow */
 						}
 						
 						/* Font sizes for header elements */
 						.header .content-header-title {
 							font-size: 24pt !important;
-							font-weight: 700 !important;
+							font-weight: 840 !important;
 						}
 						
 						.header .content-header-title_eng {
 							font-size: 21pt !important;
-							font-weight: 700 !important;
+							font-weight: 820 !important;
 						}
 						
 						.header .std_ref-title, 
@@ -2695,7 +2680,7 @@ export default function MultiPageEditor() {
 							width: calc(100% - ${2 * A4.sideMargin * 3.78}px);
 							box-sizing: border-box;
 							overflow: visible;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							/* Height is automatically calculated based on content */
 						}
 						
@@ -2705,7 +2690,7 @@ export default function MultiPageEditor() {
 							padding-bottom: 0 !important;
 							margin-top: 0 !important;
 							margin-bottom: 0 !important;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 						}
 						
 						/* Customer section typography */
@@ -2774,7 +2759,7 @@ export default function MultiPageEditor() {
 							width: calc(100% - ${2 * A4.sideMargin * 3.78}px);
 							box-sizing: border-box;
 							padding-top: 0 !important;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 						}
 						
 						/* Footer typography */
@@ -2801,7 +2786,7 @@ export default function MultiPageEditor() {
 							margin-top: 0;
 							margin-bottom: 0;
 							line-height: inherit;
-							font-family: 'Gilroy', sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 						}
 						
 						img {
@@ -2813,7 +2798,7 @@ export default function MultiPageEditor() {
 								background-color: white;
 								-webkit-print-color-adjust: exact;
 								print-color-adjust: exact;
-								font-family: 'Gilroy', sans-serif !important;
+								font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							}
 							
 							/* Ensure anchor styling is maintained in print */
@@ -3534,29 +3519,21 @@ export default function MultiPageEditor() {
 			// Apply initial line heights to the editor for WYSIWYG experience
 			const editorStyleElement = document.createElement('style');
 			editorStyleElement.textContent = `
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
-					font-weight: 400;
-					font-style: normal;
-					font-display: swap;
-				}
+				/* Nunito Sans Google Fonts */
+				@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
 				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
-					font-weight: 500;
-					font-style: normal;
-					font-display: swap;
-					}
-				
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
-					font-weight: 700;
-					font-style: normal;
-					font-display: swap;
-				}
+				/* Font weight classes for Nunito Sans */
+				.nunito-200 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 200; font-style: normal; }
+				.nunito-300 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 300; font-style: normal; }
+				.nunito-400 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 400; font-style: normal; }
+				.nunito-500 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 500; font-style: normal; }
+				.nunito-600 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 600; font-style: normal; }
+				.nunito-700 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 700; font-style: normal; }
+				.nunito-760 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 760; font-style: normal; }
+				.nunito-800 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 800; font-style: normal; }
+				.nunito-820 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 820; font-style: normal; }
+				.nunito-840 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 840; font-style: normal; }
+				.nunito-900 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 900; font-style: normal; }
 				
 				p {
 					overflow-wrap: break-word !important;
@@ -3570,7 +3547,7 @@ export default function MultiPageEditor() {
 					line-height: inherit;
 					margin-top: 0;
 					margin-bottom: 0;
-					font-family: 'Gilroy', sans-serif !important;
+					font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 					overflow-wrap: break-word !important;
 					word-wrap: break-word !important;
 				}
@@ -3579,7 +3556,7 @@ export default function MultiPageEditor() {
 				.content-editable table {
 					border-collapse: collapse;
 					table-layout: fixed;
-					font-family: 'Gilroy', sans-serif !important;
+					font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 				}
 				
 				/* Table cell paragraph styling in editor */
@@ -3593,7 +3570,7 @@ export default function MultiPageEditor() {
 				}
 
 				.editable, .header-editable, .content-editable, .footer-editable {
-					font-family: 'Gilroy', sans-serif !important;
+					font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 				}
 			`;
 			document.head.appendChild(editorStyleElement);
@@ -3738,7 +3715,7 @@ export default function MultiPageEditor() {
 			z-index: 10;
 			opacity: 0.15;
 			transform: rotate(-45deg);
-			font-family: 'Gilroy', sans-serif;
+			font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 		">
 			<div style="
 				font-size: 90px;
@@ -3895,7 +3872,8 @@ ft chat bubble for Ghi chú/Note */}
 					<div
 						className="bg-white flex flex-col"
 						style={{
-							fontFamily: 'Gilroy, sans-serif',
+							fontFamily:
+								"'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 							width: '718px',
 							margin: '0 auto',
 						}}
@@ -3906,7 +3884,8 @@ ft chat bubble for Ghi chú/Note */}
 								isReadOnly ? 'read-only' : ''
 							}`}
 							style={{
-								fontFamily: 'Gilroy, sans-serif',
+								fontFamily:
+									"'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 								width: '100%',
 							}}
 							dangerouslySetInnerHTML={{
@@ -3918,7 +3897,8 @@ ft chat bubble for Ghi chú/Note */}
 							ref={contentRef}
 							className={`content-editable editable border-0 px-0 py-2 text-base my-4 ${isReadOnly ? 'read-only' : ''}`}
 							style={{
-								fontFamily: 'Gilroy, sans-serif',
+								fontFamily:
+									"'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 								width: '100%',
 							}}
 							dangerouslySetInnerHTML={{ __html: content }}
@@ -3927,7 +3907,8 @@ ft chat bubble for Ghi chú/Note */}
 							id="footer-edit"
 							className={`footer-editable editable px-0 pb-8 pt-4 ${isReadOnly ? 'read-only' : ''}`}
 							style={{
-								fontFamily: 'Gilroy, sans-serif',
+								fontFamily:
+									"'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 								width: '100%',
 							}}
 							dangerouslySetInnerHTML={{ __html: footer }}
@@ -3937,28 +3918,64 @@ ft chat bubble for Ghi chú/Note */}
 			</div>
 
 			<style jsx>{`
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Regular.otf') format('opentype');
+				/* Nunito Sans Google Fonts */
+				@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+
+				/* Font weight classes for Nunito Sans */
+				.nunito-200 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
+					font-weight: 200;
+					font-style: normal;
+				}
+				.nunito-300 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
+					font-weight: 300;
+					font-style: normal;
+				}
+				.nunito-400 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
 					font-weight: 400;
 					font-style: normal;
-					font-display: swap;
 				}
-
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy SemiBold.otf') format('opentype');
+				.nunito-500 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
 					font-weight: 500;
 					font-style: normal;
-					font-display: swap;
 				}
-
-				@font-face {
-					font-family: 'Gilroy';
-					src: url('/public/fonts/SVN-Gilroy Bold.otf') format('opentype');
+				.nunito-600 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
+					font-weight: 600;
+					font-style: normal;
+				}
+				.nunito-700 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
 					font-weight: 700;
 					font-style: normal;
-					font-display: swap;
+				}
+				.nunito-760 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
+					font-weight: 760;
+					font-style: normal;
+				}
+				.nunito-800 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
+					font-weight: 800;
+					font-style: normal;
+				}
+				.nunito-820 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
+					font-weight: 820;
+					font-style: normal;
+				}
+				.nunito-840 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
+					font-weight: 840;
+					font-style: normal;
+				}
+				.nunito-900 {
+					font-family: 'Nunito Sans', Arial, sans-serif;
+					font-weight: 900;
+					font-style: normal;
 				}
 
 				.read-only {
@@ -3968,12 +3985,14 @@ ft chat bubble for Ghi chú/Note */}
 				@media print {
 					body * {
 						visibility: hidden;
-						font-family: 'Gilroy', sans-serif !important;
+						font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+							sans-serif !important;
 					}
 					.print-content,
 					.print-content * {
 						visibility: visible;
-						font-family: 'Gilroy', sans-serif !important;
+						font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+							sans-serif !important;
 					}
 					.print-content {
 						position: absolute;

@@ -1,5 +1,6 @@
 import * as React from 'react';
-const { useContext, useState, useEffect } = React;
+const { useContext, useState, useEffect, useRef } = React;
+import { createPortal } from 'react-dom';
 import FilterBar from './FilterBar';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
@@ -26,8 +27,8 @@ const AnalyteInfor = () => {
 		protocol_code: '',
 		parameter_uid: '',
 		protocol_source: 'IRDOP',
-		threshold_limit: '',
-		price: 0, // Added price field
+		display_style: '',
+		price: 0,
 	});
 	const [protocolSearch, setProtocolSearch] = useState('');
 
@@ -36,7 +37,7 @@ const AnalyteInfor = () => {
 	const [currentPage, setCurrentPage] = useState(1);
 	const [protocolPage, setProtocolPage] = useState(1);
 	const [listProtocol, setListProtocol] = useState([]);
-	const [protocols, setProtocols] = useState([]); // Added missing protocols state
+	const [protocols, setProtocols] = useState([]);
 	const [technicianDropdownVisible, setTechnicianDropdownVisible] = useState(null);
 	const [expandedRow, setExpandedRow] = useState(null);
 	const [selectedAnalyteId, setSelectedAnalyteId] = useState(null);
@@ -45,20 +46,20 @@ const AnalyteInfor = () => {
 	const [uniqueParameterNames, setUniqueParameterNames] = useState([]);
 	const [uniqueMatrices, setUniqueMatrices] = useState([]);
 	const [uniqueProtocolCodes, setUniqueProtocolCodes] = useState([]);
-	const [uniqueUnits, setUniqueUnits] = useState([]); // Added for default_unit
+	const [uniqueUnits, setUniqueUnits] = useState([]);
 	const [protocolSources, setProtocolSources] = useState([]);
 	const [parameterNameInput, setParameterNameInput] = useState('');
 	const [matrixInput, setMatrixInput] = useState('');
 	const [protocolCodeInput, setProtocolCodeInput] = useState('');
-	const [unitInput, setUnitInput] = useState(''); // Added for default_unit
+	const [unitInput, setUnitInput] = useState('');
 	const [showParameterNameDropdown, setShowParameterNameDropdown] = useState(false);
 	const [showMatrixDropdown, setShowMatrixDropdown] = useState(false);
 	const [showProtocolCodeDropdown, setShowProtocolCodeDropdown] = useState(false);
-	const [showUnitDropdown, setShowUnitDropdown] = useState(false); // Added for default_unit
+	const [showUnitDropdown, setShowUnitDropdown] = useState(false);
 	const [editingParameterName, setEditingParameterName] = useState(null);
 	const [editingMatrix, setEditingMatrix] = useState(null);
 	const [editingProtocolCode, setEditingProtocolCode] = useState(null);
-	const [editingUnit, setEditingUnit] = useState(null); // Added for default_unit
+	const [editingUnit, setEditingUnit] = useState(null);
 
 	// Add filter states
 	const [fieldFilter, setFieldFilter] = useState('');
@@ -69,16 +70,24 @@ const AnalyteInfor = () => {
 	const [showSourceDropdown, setShowSourceDropdown] = useState(false);
 	const [filteredAnalytes, setFilteredAnalytes] = useState([]);
 
+	// Add technician states
+	const [techniciansList, setTechniciansList] = useState([]);
+	const [technicianDropdowns, setTechnicianDropdowns] = useState({});
+
+	// TinyMCE refs for managing editors
+	const editorRefs = useRef({});
+	const newAnalyteEditorRef = useRef(null);
+
 	const protocolsPerPage = 5;
-	const analytesPerPage = 100; // Changed to show 10 rows per page
+	const analytesPerPage = 100;
 	let isFetch = false;
 
 	// Add new state variables for pagination in dropdowns
 	const [parameterNamePage, setParameterNamePage] = useState(1);
 	const [matrixPage, setMatrixPage] = useState(1);
 	const [protocolCodePage, setProtocolCodePage] = useState(1);
-	const [unitPage, setUnitPage] = useState(1); // Added for default_unit
-	const itemsPerPage = 10; // 10 items per page for all dropdowns
+	const [unitPage, setUnitPage] = useState(1);
+	const itemsPerPage = 10;
 
 	useEffect(() => {
 		setCurrentTitlePage('Chỉ tiêu');
@@ -91,6 +100,10 @@ const AnalyteInfor = () => {
 				setShowFieldDropdown(false);
 				setShowMatrixFilterDropdown(false);
 				setShowSourceDropdown(false);
+			}
+			// Close technician dropdowns when clicking outside
+			if (!event.target.closest('.technician-dropdown') && !event.target.closest('.technician-portal')) {
+				setTechnicianDropdowns({});
 			}
 		};
 
@@ -107,6 +120,7 @@ const AnalyteInfor = () => {
 			fetchMatricesList();
 			fetchProtocolSourcesList();
 			fetchUnitsList();
+			fetchTechnicians();
 		}
 	}, [technicians]);
 
@@ -129,6 +143,283 @@ const AnalyteInfor = () => {
 		setFilteredAnalytes(filtered);
 	}, [analytes, fieldFilter, matrixFilter, sourceFilter]);
 
+// TinyMCE initialization function
+const initTinyMCE = (selector, initialValue = '', onChange) => {
+	
+	if (typeof window !== 'undefined' && window.tinymce) {
+		const element = document.getElementById(selector);
+		
+		if (!element) {
+			console.error('Element not found for selector:', selector);
+			return;
+		}
+
+		// Remove existing editor if it exists
+		if (window.tinymce.get(selector)) {
+			console.log('Removing existing editor for:', selector);
+			window.tinymce.get(selector).remove();
+		}
+
+		window.tinymce.init({
+			selector: `#${selector}`,
+			plugins: '', // Không sử dụng plugins
+			toolbar: false, // Ẩn hoàn toàn toolbar
+			menubar: false,
+			height: '100%',
+			width: '100%',
+			statusbar: false,
+			resize: false,
+			border_width: 0, // Loại bỏ viền
+			content_style: `
+				body { 
+					margin: 0 !important; 
+					padding: 0 !important; 
+					border: none !important;
+					line-height: 1.2 !important;
+					font-family: Arial, sans-serif; 
+					font-size: 14px;
+					overflow: hidden !important;
+					border-radius: 0 !important;
+				}
+				body::-webkit-scrollbar {
+					display: none !important;
+				}
+				body {
+					-ms-overflow-style: none !important;
+					scrollbar-width: none !important;
+				}
+					p{
+					margin: 0 !important;
+					line-height: 1.2 !important;
+					}
+			`,
+			body_class: 'no-scroll',
+			setup: function (editor) {
+				
+				editor.on('init', function () {
+					editor.setContent(initialValue || '');
+					
+					// Điều chỉnh container và iframe
+					const container = editor.getContainer();
+					const iframe = container.querySelector('iframe');
+					
+					if (container) {
+						container.style.height = '100%';
+						container.style.width = '100%';
+						container.style.border = 'none';
+						container.style.padding = '0';
+						container.style.margin = '0';
+						container.style.borderRadius = '0';
+						
+						// Loại bỏ border radius của table container
+						const tableContainer = container.querySelector('.mce-container');
+						if (tableContainer) {
+							tableContainer.style.borderRadius = '0';
+						}
+						
+						// Loại bỏ border radius của tất cả elements con
+						const allElements = container.querySelectorAll('*');
+						allElements.forEach(el => {
+							el.style.borderRadius = '0';
+						});
+					}
+					
+					if (iframe) {
+						iframe.style.border = 'none';
+						iframe.style.padding = '0';
+						iframe.style.margin = '0';
+						iframe.style.borderRadius = '0';
+						
+						// Điều chỉnh body bên trong iframe
+						const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+						if (iframeDoc && iframeDoc.body) {
+							iframeDoc.body.style.margin = '0';
+							iframeDoc.body.style.padding = '0';
+							iframeDoc.body.style.border = 'none';
+							iframeDoc.body.style.lineHeight = '1.2';
+							iframeDoc.body.style.overflow = 'hidden';
+							iframeDoc.body.style.borderRadius = '0';
+							
+							// Loại bỏ scrollbar
+							const style = iframeDoc.createElement('style');
+							style.textContent = `
+								body::-webkit-scrollbar { display: none !important; }
+								body { -ms-overflow-style: none !important; scrollbar-width: none !important; }
+								html { overflow: hidden !important; }
+								* { border-radius: 0 !important; }
+							`;
+							iframeDoc.head.appendChild(style);
+						}
+					}
+				});
+
+				editor.on('change input keyup', function () {
+					const content = editor.getContent();
+					if (onChange) {
+						onChange(content);
+					}
+				});
+
+				// Xử lý keyboard shortcuts cho sub/sup và replace *
+				editor.on('keydown', function (e) {
+					
+					// Handle ^ key for superscript (Shift + 6 hoặc caret key)
+					if ((e.shiftKey && e.keyCode === 54) || e.key === '^') {
+						e.preventDefault();
+						
+						const selectedText = editor.selection.getContent();
+						if (selectedText) {
+							// Nếu có text được chọn, wrap với sup
+							editor.selection.setContent(`<sup>${selectedText}</sup>`);
+						} else {
+							// Nếu không có text được chọn, chèn empty sup tag và đặt cursor vào
+							editor.insertContent('<sup>&nbsp;</sup>');
+							// Di chuyển cursor vào trong sup tag
+							const range = editor.selection.getRng();
+							const supElement = editor.dom.select('sup')[editor.dom.select('sup').length - 1];
+							if (supElement) {
+								range.selectNodeContents(supElement);
+								range.collapse(true);
+								editor.selection.setRng(range);
+							}
+						}
+						return false;
+					}
+					
+					// Handle _ key for subscript (Shift + - hoặc underscore key)
+					if ((e.shiftKey && e.keyCode === 189) || e.key === '_') {
+						e.preventDefault();
+						console.log('Subscript triggered');
+						
+						const selectedText = editor.selection.getContent();
+						if (selectedText) {
+							// Nếu có text được chọn, wrap với sub
+							editor.selection.setContent(`<sub>${selectedText}</sub>`);
+						} else {
+							// Nếu không có text được chọn, chèn empty sub tag và đặt cursor vào
+							editor.insertContent('<sub>&nbsp;</sub>');
+							// Di chuyển cursor vào trong sub tag
+							const range = editor.selection.getRng();
+							const subElement = editor.dom.select('sub')[editor.dom.select('sub').length - 1];
+							if (subElement) {
+								range.selectNodeContents(subElement);
+								range.collapse(true);
+								editor.selection.setRng(range);
+							}
+						}
+						return false;
+					}
+				});
+
+				// Replace * với × khi người dùng gõ
+				editor.on('input', function (e) {
+					setTimeout(() => {
+						const content = editor.getContent();
+						if (content.includes('*')) {
+							const newContent = content.replace(/\*/g, '×');
+							const bookmark = editor.selection.getBookmark();
+							editor.setContent(newContent);
+							editor.selection.moveToBookmark(bookmark);
+						}
+					}, 0);
+				});
+
+				// Thêm event listener cho paste để xử lý content được paste
+				editor.on('paste', function (e) {
+					setTimeout(() => {
+						const content = editor.getContent();
+						if (content.includes('*')) {
+							const newContent = content.replace(/\*/g, '×');
+							editor.setContent(newContent);
+						}
+					}, 0);
+				});
+			},
+		}).then((editors) => {
+			console.log('TinyMCE initialized successfully for:', selector, editors);
+		}).catch((error) => {
+			console.error('TinyMCE initialization failed for:', selector, error);
+		});
+	} else {
+		console.error('TinyMCE not available or element not found');
+	}
+};
+
+	// Clean up TinyMCE editors
+	const cleanupTinyMCE = (selector) => {
+		if (typeof window !== 'undefined' && window.tinymce && window.tinymce.get(selector)) {
+			window.tinymce.get(selector).remove();
+		}
+	};
+
+	// Initialize TinyMCE when editing starts
+	useEffect(() => {
+		if (editingRow !== null) {
+			const selector = `tinymce-${editingRow}`;
+			const analyte = analytes.find((a) => a.id === editingRow);
+
+			const initEditor = () => {
+				// Kiểm tra xem element có tồn tại không
+				const element = document.getElementById(selector);
+				if (element && window.tinymce) {
+					initTinyMCE(selector, analyte?.display_style || '', (content) => {
+						handleInputChange(editingRow, 'display_style', content);
+					});
+				} else {
+					// Retry sau một thời gian ngắn nếu element chưa có
+					setTimeout(initEditor, 100);
+				}
+			};
+
+			// Delay để đảm bảo DOM đã render
+			setTimeout(initEditor, 200);
+
+			// Cleanup khi editingRow thay đổi
+			return () => {
+				if (window.tinymce && window.tinymce.get(selector)) {
+					window.tinymce.get(selector).remove();
+				}
+			};
+		}
+	}, [editingRow]);
+
+	// Initialize TinyMCE for new analyte
+	useEffect(() => {
+		if (isAddingNew) {
+			const initEditor = () => {
+				const element = document.getElementById('tinymce-new');
+				if (element && window.tinymce) {
+					initTinyMCE('tinymce-new', newAnalyte.display_style || '', (content) => {
+						handleNewAnalyteChange('display_style', content);
+					});
+				} else {
+					setTimeout(initEditor, 100);
+				}
+			};
+
+			setTimeout(initEditor, 200);
+
+			return () => {
+				if (window.tinymce && window.tinymce.get('tinymce-new')) {
+					window.tinymce.get('tinymce-new').remove();
+				}
+			};
+		}
+	}, [isAddingNew]);
+
+	// Cleanup editors when component unmounts or editing ends
+	useEffect(() => {
+		return () => {
+			// Cleanup all editors on unmount
+			Object.keys(editorRefs.current).forEach((selector) => {
+				cleanupTinyMCE(selector);
+			});
+			if (newAnalyteEditorRef.current) {
+				cleanupTinyMCE('tinymce-new');
+			}
+		};
+	}, []);
+
 	const fetchAnalytes = async () => {
 		try {
 			const response = await apiGet('https://black.irdop.org/ha8i0uw2/db/get/parameter');
@@ -145,6 +436,17 @@ const AnalyteInfor = () => {
 			extractUniqueLists(data);
 		} catch (error) {
 			console.error('Error fetching analytes:', error);
+		}
+	};
+
+	const fetchTechnicians = async () => {
+		try {
+			const response = await apiGet('https://pink.irdop.org/db/get/techinician');
+			if (response.data && Array.isArray(response.data)) {
+				setTechniciansList(response.data);
+			}
+		} catch (error) {
+			console.error('Error fetching technicians:', error);
 		}
 	};
 
@@ -188,7 +490,6 @@ const AnalyteInfor = () => {
 
 		setUniqueParameterNames(parameterNames);
 		setUniqueProtocolCodes(protocolCodes);
-		// Note: uniqueMatrices and uniqueUnits are now fetched from API
 	};
 
 	// Add filter helper functions
@@ -250,23 +551,22 @@ const AnalyteInfor = () => {
 
 	// Modified filter functions with minimum character requirement
 	const filterParameterNames = (input) => {
-		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
+		if (!input || input.length < 2) return [];
 		return uniqueParameterNames.filter((name) => name && name.toLowerCase().includes((input || '').toLowerCase()));
 	};
 
 	const filterMatrices = (input) => {
-		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
+		if (!input || input.length < 2) return [];
 		return uniqueMatrices.filter((matrix) => matrix && matrix.toLowerCase().includes((input || '').toLowerCase()));
 	};
 
 	const filterProtocolCodes = (input) => {
-		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
+		if (!input || input.length < 2) return [];
 		return uniqueProtocolCodes.filter((code) => code && code.toLowerCase().includes((input || '').toLowerCase()));
 	};
 
-	// Filter for units - shows suggestions from first character but only when at least one character is entered
 	const filterUnits = (input) => {
-		if (!input || input.trim() === '') return []; // Only show suggestions if at least one character is typed
+		if (!input || input.trim() === '') return [];
 		return uniqueUnits.filter((unit) => unit && unit.toLowerCase().includes((input || '').toLowerCase()));
 	};
 
@@ -348,7 +648,7 @@ const AnalyteInfor = () => {
 	// Modified input change handlers
 	const handleParameterNameInput = (id, value) => {
 		setParameterNameInput(value);
-		setParameterNamePage(1); // Reset to first page when typing
+		setParameterNamePage(1);
 		if (editingRow !== null) {
 			handleInputChange(id, 'parameter_name', value);
 			setEditingParameterName(id);
@@ -360,7 +660,7 @@ const AnalyteInfor = () => {
 
 	const handleMatrixInput = (id, value) => {
 		setMatrixInput(value);
-		setMatrixPage(1); // Reset to first page when typing
+		setMatrixPage(1);
 		if (editingRow !== null) {
 			handleInputChange(id, 'matrix', value);
 			setEditingMatrix(id);
@@ -372,7 +672,7 @@ const AnalyteInfor = () => {
 
 	const handleProtocolCodeInputChange = (id, value) => {
 		setProtocolCodeInput(value);
-		setProtocolCodePage(1); // Reset to first page when typing
+		setProtocolCodePage(1);
 		if (editingRow !== null) {
 			handleInputChange(id, 'protocol_code', value);
 			setEditingProtocolCode(id);
@@ -384,22 +684,75 @@ const AnalyteInfor = () => {
 
 	const handleUnitInput = (id, value) => {
 		setUnitInput(value);
-		setUnitPage(1); // Reset to first page when typing
+		setUnitPage(1);
 		if (editingRow !== null) {
 			handleInputChange(id, 'default_unit', value);
 			setEditingUnit(id);
 		} else {
 			handleNewAnalyteChange('default_unit', value);
 		}
-		// Only show dropdown if there are filtered units to display
 		const filteredUnits = filterUnits(value);
 		setShowUnitDropdown(filteredUnits.length > 0);
 	};
 
-	const technician = (param) => {
-		const iden = technicians.find((identity) => identity.identity_uid === param.technician_uid);
-		const ktv = iden ? iden.identity_name + ' (' + iden.alias + ')' : null;
-		return ktv;
+	// Add technician helper functions
+	const getTechnicianByAlias = (alias) => {
+		return techniciansList.find((tech) => tech.alias === alias);
+	};
+
+	const getTechnicianDisplayName = (alias) => {
+		const tech = getTechnicianByAlias(alias);
+		return tech ? `${tech.alias}: ${tech.identity_name}` : '';
+	};
+
+	const handleTechnicianDropdownToggle = (analyteId) => {
+		setTechnicianDropdowns((prev) => ({
+			...prev,
+			[analyteId]: !prev[analyteId],
+		}));
+	};
+
+	const handleTechnicianSelect = async (analyteId, technician) => {
+		try {
+			// Update local state immediately
+			const updatedAnalytes = analytes.map((analyte) => {
+				if (analyte.id === analyteId) {
+					return { ...analyte, technician_uid: technician.alias }; // Store alias instead of identity_uid
+				}
+				return analyte;
+			});
+			setAnalytes(updatedAnalytes);
+
+			// Close dropdown
+			setTechnicianDropdowns((prev) => ({
+				...prev,
+				[analyteId]: false,
+			}));
+
+			// Update database
+			const analyteToUpdate = updatedAnalytes.find((a) => a.id === analyteId);
+			const { tat_expected, ...analyteWithoutTat } = analyteToUpdate;
+			const finalAnalyte = {
+				...analyteWithoutTat,
+				modified_by_uid: currentUser.identity_uid,
+			};
+
+			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/update/parameter', {
+				parameter: finalAnalyte,
+			});
+
+			if (response.status === 200) {
+				toast.success('Technician updated successfully');
+				setOriginalAnalytes(updatedAnalytes);
+			} else {
+				toast.error('Failed to update technician');
+				setAnalytes(originalAnalytes);
+			}
+		} catch (error) {
+			console.error('Error updating technician:', error);
+			toast.error('Failed to update technician');
+			setAnalytes(originalAnalytes);
+		}
 	};
 
 	const fetchProtocols = async (searchTerm) => {
@@ -419,7 +772,6 @@ const AnalyteInfor = () => {
 	};
 
 	const handleEditClick = (id) => {
-		// Cancel add new state if active
 		if (isAddingNew) {
 			handleCancelNewAnalyte();
 		}
@@ -428,26 +780,32 @@ const AnalyteInfor = () => {
 	};
 
 	const handleSaveClick = async (id) => {
+		// Get content from TinyMCE editor before saving
+		const editorId = `tinymce-${id}`;
+		if (window.tinymce && window.tinymce.get(editorId)) {
+			const editorContent = window.tinymce.get(editorId).getContent();
+			handleInputChange(id, 'display_style', editorContent);
+		}
+
 		const updatedAnalyte = analytes.find((analyte) => analyte.id === id);
-		// Temporarily remove tat_expected from the object to avoid database errors
 		const { tat_expected, ...analyteWithoutTat } = updatedAnalyte;
 		const finalAnalyte = analyteWithoutTat;
-		finalAnalyte.matrix = finalAnalyte.matrix === 'Khác' ? customMatrix[id] : finalAnalyte.matrix;
 
 		try {
-			// Add modified_by_uid to the parameter object
 			finalAnalyte.modified_by_uid = currentUser.identity_uid;
 
 			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/update/parameter', {
 				parameter: finalAnalyte,
 			});
+
+			// Cleanup TinyMCE editor
+			cleanupTinyMCE(editorId);
+
 			setEditingRow(null);
 			if (response.status === 200) {
 				toast.success('Analyte updated successfully');
 				setOriginalAnalytes(analytes);
-				// Update unique lists with new data
 				extractUniqueLists(analytes);
-				// Reset current page when filters change
 				setCurrentPage(1);
 			} else {
 				toast.error('Analyte update failed');
@@ -459,6 +817,10 @@ const AnalyteInfor = () => {
 	};
 
 	const handleCancelClick = () => {
+		// Cleanup TinyMCE editor
+		if (editingRow !== null) {
+			cleanupTinyMCE(`tinymce-${editingRow}`);
+		}
 		setAnalytes(originalAnalytes);
 		setEditingRow(null);
 	};
@@ -488,9 +850,7 @@ const AnalyteInfor = () => {
 					const updatedAnalytes = analytes.filter((analyte) => analyte.id !== id);
 					setAnalytes(updatedAnalytes);
 					setOriginalAnalytes(updatedAnalytes);
-					// Update unique lists with new data
 					extractUniqueLists(updatedAnalytes);
-					// Reset current page when data changes
 					setCurrentPage(1);
 				} else {
 					toast.error('Analyte deletion failed');
@@ -503,7 +863,6 @@ const AnalyteInfor = () => {
 	};
 
 	const handleAddNewClick = () => {
-		// Cancel editing state if active
 		if (editingRow !== null) {
 			handleCancelClick();
 		}
@@ -521,12 +880,15 @@ const AnalyteInfor = () => {
 	};
 
 	const handleSaveNewAnalyte = async () => {
-		// Temporarily remove tat_expected from the object to avoid database errors
+		// Get content from TinyMCE editor before saving
+		if (window.tinymce && window.tinymce.get('tinymce-new')) {
+			const editorContent = window.tinymce.get('tinymce-new').getContent();
+			setNewAnalyte((prev) => ({ ...prev, display_style: editorContent }));
+		}
+
 		const { tat_expected, ...analyteWithoutTat } = newAnalyte;
 		const finalAnalyte = analyteWithoutTat;
-		finalAnalyte.matrix = finalAnalyte.matrix === 'Khác' ? customMatrix['new'] : finalAnalyte.matrix;
 
-		// Add created_by_uid and modified_by_uid to the finalAnalyte object
 		finalAnalyte.created_by_uid = currentUser.identity_uid;
 		finalAnalyte.modified_by_uid = currentUser.identity_uid;
 
@@ -536,11 +898,14 @@ const AnalyteInfor = () => {
 			});
 			if (response.status === 200) {
 				toast.success('New analyte added successfully');
-				// Update states directly instead of refetching
 				const newAnalyteWithId = { ...finalAnalyte, id: response.data?.insertedIds?.[0] || Date.now() };
 				const updatedAnalytes = [...analytes, newAnalyteWithId];
 				setAnalytes(updatedAnalytes);
 				setOriginalAnalytes(updatedAnalytes);
+
+				// Cleanup TinyMCE editor
+				cleanupTinyMCE('tinymce-new');
+
 				setIsAddingNew(false);
 				setNewAnalyte({
 					parameter_name: '',
@@ -550,16 +915,14 @@ const AnalyteInfor = () => {
 					tat_expected: '1 day',
 					default_unit: '',
 					accreditation: '',
-					technician_uid: technicians[0].identity_uid,
+					technician_uid: techniciansList[0]?.alias || '',
 					protocol_code: '',
 					parameter_uid: '',
 					protocol_source: 'IRDOP',
-					threshold_limit: '',
-					price: '', // Added price field
+					display_style: '',
+					price: '',
 				});
-				// Update unique lists with new data
 				extractUniqueLists(updatedAnalytes);
-				// Reset current page when data changes
 				setCurrentPage(1);
 			} else {
 				toast.error('Failed to add new analyte');
@@ -571,6 +934,9 @@ const AnalyteInfor = () => {
 	};
 
 	const handleCancelNewAnalyte = () => {
+		// Cleanup TinyMCE editor
+		cleanupTinyMCE('tinymce-new');
+
 		setIsAddingNew(false);
 		setNewAnalyte({
 			parameter_name: '',
@@ -580,12 +946,12 @@ const AnalyteInfor = () => {
 			tat_expected: '1 day',
 			default_unit: '',
 			accreditation: '',
-			technician_uid: technicians[0].identity_uid,
+			technician_uid: techniciansList[0]?.alias || '',
 			protocol_code: '',
 			parameter_uid: '',
 			protocol_source: 'IRDOP',
-			threshold_limit: '',
-			price: '', // Added price field
+			display_style: '',
+			price: '',
 		});
 	};
 
@@ -684,7 +1050,7 @@ const AnalyteInfor = () => {
 			return analyte;
 		});
 		setAnalytes(updatedAnalytes);
-		setTechnicianDropdownVisible(null); // Close dropdown after selection
+		setTechnicianDropdownVisible(null);
 	};
 
 	const handleTatExpectedChange = (id, value) => {
@@ -711,8 +1077,8 @@ const AnalyteInfor = () => {
 		const onMouseMove = (e) => {
 			const x = e.pageX - table.offsetLeft;
 			const y = e.pageY - table.offsetTop;
-			const walkX = (x - startX) * -1; // Scroll opposite direction
-			const walkY = (y - startY) * -1; // Scroll opposite direction
+			const walkX = (x - startX) * -1;
+			const walkY = (y - startY) * -1;
 			table.scrollLeft = scrollLeft + walkX;
 			table.scrollTop = scrollTop + walkY;
 		};
@@ -901,9 +1267,11 @@ const AnalyteInfor = () => {
 								</th>
 								<th className="py-2 text-start pl-2 min-w-44 w-44">Code</th>
 								<th className="py-2 text-start pl-2 min-w-20 w-20">Đơn vị</th>
-								<th className="py-2 text-start pl-2 min-w-40 w-40">Ngưỡng giới hạn</th>
+								<th className="py-2 text-start pl-2 min-w-48 w-48">Định dạng hiển thị</th>
 								<th className="py-2 text-start pl-2 min-w-32 w-32">Giá thành</th>
-								<th className="py-2 text-start pl-2 min-w-32 w-32">Chứng nhận</th>
+								<th className="py-2 text-start pl-2 min-w-28 w-28">Chứng nhận</th>
+								<th className="py-2 text-start pl-2 min-w-28 w-28">Kỹ thuật viên</th>
+								<th className="py-2 text-start pl-2 min-w-[70px] w-[70px]">Thao tác</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -919,45 +1287,54 @@ const AnalyteInfor = () => {
 											value={newAnalyte.parameter_name}
 											onChange={(e) => handleParameterNameInput('new', e.target.value)}
 										/>
-										{showParameterNameDropdown && (
-											<div className="absolute w-full bg-white border rounded shadow-lg z-10">
-												{getPaginatedParameterNames(parameterNameInput).map((name, index) => (
-													<div
-														key={index}
-														className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-														onClick={() => handleParameterNameSelect(name)}
-													>
-														<p>{name}</p>
-													</div>
-												))}
-												{/* Pagination controls for parameter name */}
-												{filterParameterNames(parameterNameInput).length > itemsPerPage && (
-													<div className="flex justify-between p-2 bg-gray-100">
-														<button
-															className="px-2 py-1 border rounded disabled:opacity-50"
-															onClick={() => handleParameterNamePageChange(parameterNamePage - 1)}
-															disabled={parameterNamePage === 1}
+										{showParameterNameDropdown && 
+											createPortal(
+												<div
+													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+													style={{
+														width: document.getElementById(`param-name-new`)?.offsetWidth + 'px',
+														top: document.getElementById(`param-name-new`)?.getBoundingClientRect().bottom + window.scrollY,
+														left: document.getElementById(`param-name-new`)?.getBoundingClientRect().left + window.scrollX,
+													}}
+												>
+													{getPaginatedParameterNames(parameterNameInput).map((name, index) => (
+														<div
+															key={index}
+															className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+															onClick={() => handleParameterNameSelect(name)}
 														>
-															Prev
-														</button>
-														<span>
-															{parameterNamePage}/
-															{Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)}
-														</span>
-														<button
-															className="px-2 py-1 border rounded disabled:opacity-50"
-															onClick={() => handleParameterNamePageChange(parameterNamePage + 1)}
-															disabled={
-																parameterNamePage >=
-																Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)
-															}
-														>
-															Next
-														</button>
-													</div>
-												)}
-											</div>
-										)}
+															<p>{name}</p>
+														</div>
+													))}
+													{filterParameterNames(parameterNameInput).length > itemsPerPage && (
+														<div className="flex justify-between p-2 bg-gray-100">
+															<button
+																className="px-2 py-1 border rounded disabled:opacity-50"
+																onClick={() => handleParameterNamePageChange(parameterNamePage - 1)}
+																disabled={parameterNamePage === 1}
+															>
+																Prev
+															</button>
+															<span>
+																{parameterNamePage}/
+																{Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)}
+															</span>
+															<button
+																className="px-2 py-1 border rounded disabled:opacity-50"
+																onClick={() => handleParameterNamePageChange(parameterNamePage + 1)}
+																disabled={
+																	parameterNamePage >=
+																	Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)
+																}
+															>
+																Next
+															</button>
+														</div>
+													)}
+												</div>,
+												document.body
+											)
+										}
 									</td>
 									<td className="p-1 text-start">
 										<select
@@ -971,46 +1348,56 @@ const AnalyteInfor = () => {
 									</td>
 									<td className="p-1 text-start relative">
 										<textarea
+											id="matrix-new"
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
 											value={newAnalyte.matrix}
 											onChange={(e) => handleMatrixInput('new', e.target.value)}
 										/>
-										{showMatrixDropdown && (
-											<div className="absolute w-full bg-white border rounded shadow-lg z-10">
-												{getPaginatedMatrices(matrixInput).map((matrix, index) => (
-													<div
-														key={index}
-														className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-														onClick={() => handleMatrixSelect(matrix)}
-													>
-														<p>{matrix}</p>
-													</div>
-												))}
-												{/* Pagination controls for matrix */}
-												{filterMatrices(matrixInput).length > itemsPerPage && (
-													<div className="flex justify-between p-2 bg-gray-100">
-														<button
-															className="px-2 py-1 border rounded disabled:opacity-50"
-															onClick={() => handleMatrixPageChange(matrixPage - 1)}
-															disabled={matrixPage === 1}
+										{showMatrixDropdown && 
+											createPortal(
+												<div
+													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+													style={{
+														width: document.getElementById(`matrix-new`)?.offsetWidth + 'px',
+														top: document.getElementById(`matrix-new`)?.getBoundingClientRect().bottom + window.scrollY,
+														left: document.getElementById(`matrix-new`)?.getBoundingClientRect().left + window.scrollX,
+													}}
+												>
+													{getPaginatedMatrices(matrixInput).map((matrix, index) => (
+														<div
+															key={index}
+															className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+															onClick={() => handleMatrixSelect(matrix)}
 														>
-															Prev
-														</button>
-														<span>
-															{matrixPage}/{Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
-														</span>
-														<button
-															className="px-2 py-1 border rounded disabled:opacity-50"
-															onClick={() => handleMatrixPageChange(matrixPage + 1)}
-															disabled={matrixPage >= Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
-														>
-															Next
-														</button>
-													</div>
-												)}
-											</div>
-										)}
+															<p>{matrix}</p>
+														</div>
+													))}
+													{filterMatrices(matrixInput).length > itemsPerPage && (
+														<div className="flex justify-between p-2 bg-gray-100">
+															<button
+																className="px-2 py-1 border rounded disabled:opacity-50"
+																onClick={() => handleMatrixPageChange(matrixPage - 1)}
+																disabled={matrixPage === 1}
+															>
+																Prev
+															</button>
+															<span>
+																{matrixPage}/{Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+															</span>
+															<button
+																className="px-2 py-1 border rounded disabled:opacity-50"
+																onClick={() => handleMatrixPageChange(matrixPage + 1)}
+																disabled={matrixPage >= Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+															>
+																Next
+															</button>
+														</div>
+													)}
+												</div>,
+												document.body
+											)
+										}
 									</td>
 									<td className="p-1 text-start">
 										<select
@@ -1027,140 +1414,173 @@ const AnalyteInfor = () => {
 									</td>
 									<td className="p-1 text-start relative">
 										<textarea
+											id="protocol-code-new"
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
 											value={newAnalyte.protocol_code}
 											onChange={(e) => handleProtocolCodeInputChange('new', e.target.value)}
 										/>
-										{showProtocolCodeDropdown && (
-											<div className="absolute w-full bg-white border rounded shadow-lg z-10">
-												{getPaginatedProtocolCodes(protocolCodeInput).map((code, index) => (
-													<div
-														key={index}
-														className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-														onClick={() => handleProtocolCodeSelect(code)}
-													>
-														<p>{code}</p>
-													</div>
-												))}
-												{/* Pagination controls for protocol code */}
-												{filterProtocolCodes(protocolCodeInput).length > itemsPerPage && (
-													<div className="flex justify-between p-2 bg-gray-100">
-														<button
-															className="px-2 py-1 border rounded disabled:opacity-50"
-															onClick={() => handleProtocolCodePageChange(protocolCodePage - 1)}
-															disabled={protocolCodePage === 1}
+										{showProtocolCodeDropdown && 
+											createPortal(
+												<div
+													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+													style={{
+														width: document.getElementById(`protocol-code-new`)?.offsetWidth + 'px',
+														top: document.getElementById(`protocol-code-new`)?.getBoundingClientRect().bottom + window.scrollY,
+														left: document.getElementById(`protocol-code-new`)?.getBoundingClientRect().left + window.scrollX,
+													}}
+												>
+													{getPaginatedProtocolCodes(protocolCodeInput).map((code, index) => (
+														<div
+															key={index}
+															className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+															onClick={() => handleProtocolCodeSelect(code)}
 														>
-															Prev
-														</button>
-														<span>
-															{protocolCodePage}/
-															{Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)}
-														</span>
-														<button
-															className="px-2 py-1 border rounded disabled:opacity-50"
-															onClick={() => handleProtocolCodePageChange(protocolCodePage + 1)}
-															disabled={
-																protocolCodePage >=
-																Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)
-															}
+															<p>{code}</p>
+														</div>
+													))}
+													{filterProtocolCodes(protocolCodeInput).length > itemsPerPage && (
+														<div className="flex justify-between p-2 bg-gray-100">
+															<button
+																className="px-2 py-1 border rounded disabled:opacity-50"
+																onClick={() => handleProtocolCodePageChange(protocolCodePage - 1)}
+																disabled={protocolCodePage === 1}
+															>
+																Prev
+															</button>
+															<span>
+																{protocolCodePage}/
+																{Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)}
+															</span>
+															<button
+																className="px-2 py-1 border rounded disabled:opacity-50"
+																onClick={() => handleProtocolCodePageChange(protocolCodePage + 1)}
+																disabled={
+																	protocolCodePage >=
+																	Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)
+																}
+															>
+																Next
+															</button>
+														</div>
+													)}
+												</div>,
+												document.body
+											)
+										}
+										{isProtocolDropdownVisible && 
+											createPortal(
+												<div
+													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+													style={{
+														width: '320px',
+														top: document.getElementById(`protocol-code-new`)?.getBoundingClientRect().bottom + window.scrollY,
+														left: document.getElementById(`protocol-code-new`)?.getBoundingClientRect().left + window.scrollX,
+													}}
+												>
+													{paginatedProtocols.map((protocol, index) => (
+														<div
+															key={index}
+															className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+															onClick={() => handleNewProtocolSelect(protocol)}
 														>
-															Next
-														</button>
-													</div>
-												)}
-											</div>
-										)}
-										{isProtocolDropdownVisible && (
-											<div className="absolute w-80 bg-white border rounded shadow-lg z-10">
-												{paginatedProtocols.map((protocol, index) => (
-													<div
-														key={index}
-														className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-														onClick={() => handleNewProtocolSelect(protocol)}
-													>
-														<p>{protocol.protocol_name}</p>
-														<p className="text-sm text-gray-500">{protocol.protocol_code}</p>
-													</div>
-												))}
-												{protocols.filter((protocol) => protocol.protocol_code?.includes(protocolSearch)).length >
-													protocolsPerPage && (
-													<div className="flex justify-between p-2">
-														<button
-															className="px-2 py-1 border rounded"
-															onClick={() => handleProtocolPageChange(protocolPage - 1)}
-															disabled={protocolPage === 1}
-														>
-															Previous
-														</button>
-														<button
-															className="px-2 py-1 border rounded"
-															onClick={() => (window.location.href = '/library/protocol')}
-														>
-															Thêm mới
-														</button>
-														<button
-															className="px-2 py-1 border rounded"
-															onClick={() => handleProtocolPageChange(protocolPage + 1)}
-															disabled={protocolPage * protocolsPerPage >= protocols.length}
-														>
-															Next
-														</button>
-													</div>
-												)}
-											</div>
-										)}
+															<p>{protocol.protocol_name}</p>
+															<p className="text-sm text-gray-500">{protocol.protocol_code}</p>
+														</div>
+													))}
+													{protocols.filter((protocol) => protocol.protocol_code?.includes(protocolSearch)).length >
+														protocolsPerPage && (
+														<div className="flex justify-between p-2">
+															<button
+																className="px-2 py-1 border rounded"
+																onClick={() => handleProtocolPageChange(protocolPage - 1)}
+																disabled={protocolPage === 1}
+															>
+																Previous
+															</button>
+															<button
+																className="px-2 py-1 border rounded"
+																onClick={() => (window.location.href = '/library/protocol')}
+															>
+																Thêm mới
+															</button>
+															<button
+																className="px-2 py-1 border rounded"
+																onClick={() => handleProtocolPageChange(protocolPage + 1)}
+																disabled={protocolPage * protocolsPerPage >= protocols.length}
+															>
+																Next
+															</button>
+														</div>
+													)}
+												</div>,
+												document.body
+											)
+										}
 									</td>
 									<td className="p-1 text-center relative">
 										<textarea
+											id="unit-new"
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
 											value={newAnalyte.default_unit || ''}
 											onChange={(e) => handleUnitInput('new', e.target.value)}
 										/>
-										{showUnitDropdown && (
-											<div className="absolute w-full bg-white border rounded shadow-lg z-10">
-												{getPaginatedUnits(unitInput).map((unit, index) => (
-													<div
-														key={index}
-														className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-														onClick={() => handleUnitSelect(unit)}
-													>
-														<p>{unit}</p>
-													</div>
-												))}
-												{/* Pagination controls for unit */}
-												{filterUnits(unitInput).length > itemsPerPage && (
-													<div className="flex justify-between p-2 bg-gray-100">
-														<button
-															className="px-2 py-1 border rounded disabled:opacity-50"
-															onClick={() => handleUnitPageChange(unitPage - 1)}
-															disabled={unitPage === 1}
+										{showUnitDropdown && 
+											createPortal(
+												<div
+													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+													style={{
+														width: document.getElementById(`unit-new`)?.offsetWidth + 'px',
+														top: document.getElementById(`unit-new`)?.getBoundingClientRect().bottom + window.scrollY,
+														left: document.getElementById(`unit-new`)?.getBoundingClientRect().left + window.scrollX,
+													}}
+												>
+													{getPaginatedUnits(unitInput).map((unit, index) => (
+														<div
+															key={index}
+															className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+															onClick={() => handleUnitSelect(unit)}
 														>
-															Prev
-														</button>
-														<span>
-															{unitPage}/{Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
-														</span>
-														<button
-															className="px-2 py-1 border rounded disabled:opacity-50"
-															onClick={() => handleUnitPageChange(unitPage + 1)}
-															disabled={unitPage >= Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
-														>
-															Next
-														</button>
-													</div>
-												)}
-											</div>
-										)}
+															<p>{unit}</p>
+														</div>
+													))}
+													{filterUnits(unitInput).length > itemsPerPage && (
+														<div className="flex justify-between p-2 bg-gray-100">
+															<button
+																className="px-2 py-1 border rounded disabled:opacity-50"
+																onClick={() => handleUnitPageChange(unitPage - 1)}
+																disabled={unitPage === 1}
+															>
+																Prev
+															</button>
+															<span>
+																{unitPage}/{Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+															</span>
+															<button
+																className="px-2 py-1 border rounded disabled:opacity-50"
+																onClick={() => handleUnitPageChange(unitPage + 1)}
+																disabled={unitPage >= Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+															>
+																Next
+															</button>
+														</div>
+													)}
+												</div>,
+												document.body
+											)
+										}
 									</td>
 									<td className="p-1 text-start">
-										<textarea
-											className="w-full border px-2 py-1 rounded bg-white resize-none"
-											rows={2}
-											value={newAnalyte.threshold_limit || ''}
-											onChange={(e) => handleNewAnalyteChange('threshold_limit', e.target.value)}
-										/>
+										<div className="w-full h-12 bg-white rounded border" style={{ borderRadius: '0.375rem' }}>
+											<textarea
+												id={`tinymce-${'new'}`}
+												className="w-full h-full border-0 resize-none"
+												style={{ borderRadius: '0' }}
+												value={''}
+												onChange={(e) => handleInputChange(analyte.id, 'display_style', e.target.value)}
+											/>
+										</div>
 									</td>
 									<td className="p-1 text-start">
 										<textarea
@@ -1191,6 +1611,42 @@ const AnalyteInfor = () => {
 												<span>VILAS 997</span>
 											</label>
 										</div>
+									</td>
+									<td className="p-1 text-start relative technician-dropdown">
+										<div
+											id="technician-new"
+											className="w-full border px-2 py-1 rounded bg-white cursor-pointer min-h-[2.5rem] flex items-center"
+											onClick={() => handleTechnicianDropdownToggle('new')}
+										>
+											{getTechnicianDisplayName(newAnalyte.technician_uid) || 'Chọn kỹ thuật viên'}
+										</div>
+										{technicianDropdowns['new'] && 
+											createPortal(
+												<div
+													className="technician-portal absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+													style={{
+														width: Math.max(document.getElementById(`technician-new`)?.offsetWidth, 280) + 'px',
+														top: document.getElementById(`technician-new`)?.getBoundingClientRect().bottom + window.scrollY,
+														left: document.getElementById(`technician-new`)?.getBoundingClientRect().left + window.scrollX,
+													}}
+												>
+													{techniciansList.map((tech, index) => (
+														<div
+															key={index}
+															className="p-2 flex cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+															onClick={() => {
+																handleNewAnalyteChange('technician_uid', tech.alias);
+																setTechnicianDropdowns((prev) => ({ ...prev, new: false }));
+															}}
+														>
+															<div className="text-sm font-bold">{tech.alias}:</div>
+															<div className="text-sm">{tech.identity_name}</div>
+														</div>
+													))}
+												</div>,
+												document.body
+											)
+										}
 									</td>
 									<td className="p-1 text-center  ">
 										<button
@@ -1228,50 +1684,60 @@ const AnalyteInfor = () => {
 										{editingRow === analyte.id ? (
 											<>
 												<textarea
+													id={`param-name-${analyte.id}`}
 													className="w-full border px-2 py-1 rounded bg-white resize-none"
 													rows={2}
 													value={analyte.parameter_name}
 													onChange={(e) => handleParameterNameInput(analyte.id, e.target.value)}
 												/>
-												{showParameterNameDropdown && editingParameterName === analyte.id && (
-													<div className="absolute w-full bg-white border rounded shadow-lg z-10">
-														{getPaginatedParameterNames(parameterNameInput).map((name, index) => (
-															<div
-																key={index}
-																className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-																onClick={() => handleParameterNameSelect(name)}
-															>
-																<p>{name}</p>
-															</div>
-														))}
-														{/* Pagination controls for parameter name */}
-														{filterParameterNames(parameterNameInput).length > itemsPerPage && (
-															<div className="flex justify-between p-2 bg-gray-100">
-																<button
-																	className="px-2 py-1 border rounded disabled:opacity-50"
-																	onClick={() => handleParameterNamePageChange(parameterNamePage - 1)}
-																	disabled={parameterNamePage === 1}
+												{showParameterNameDropdown && editingParameterName === analyte.id && 
+													createPortal(
+														<div
+															className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+															style={{
+																width: document.getElementById(`param-name-${analyte.id}`)?.offsetWidth + 'px',
+																top: document.getElementById(`param-name-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
+																left: document.getElementById(`param-name-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+															}}
+														>
+															{getPaginatedParameterNames(parameterNameInput).map((name, index) => (
+																<div
+																	key={index}
+																	className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																	onClick={() => handleParameterNameSelect(name)}
 																>
-																	Prev
-																</button>
-																<span>
-																	{parameterNamePage}/
-																	{Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)}
-																</span>
-																<button
-																	className="px-2 py-1 border rounded disabled:opacity-50"
-																	onClick={() => handleParameterNamePageChange(parameterNamePage + 1)}
-																	disabled={
-																		parameterNamePage >=
-																		Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)
-																	}
-																>
-																	Next
-																</button>
-															</div>
-														)}
-													</div>
-												)}
+																	<p>{name}</p>
+																</div>
+															))}
+															{filterParameterNames(parameterNameInput).length > itemsPerPage && (
+																<div className="flex justify-between p-2 bg-gray-100">
+																	<button
+																		className="px-2 py-1 border rounded disabled:opacity-50"
+																		onClick={() => handleParameterNamePageChange(parameterNamePage - 1)}
+																		disabled={parameterNamePage === 1}
+																	>
+																		Prev
+																	</button>
+																	<span>
+																		{parameterNamePage}/
+																		{Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)}
+																	</span>
+																	<button
+																		className="px-2 py-1 border rounded disabled:opacity-50"
+																		onClick={() => handleParameterNamePageChange(parameterNamePage + 1)}
+																		disabled={
+																			parameterNamePage >=
+																			Math.ceil(filterParameterNames(parameterNameInput).length / itemsPerPage)
+																		}
+																	>
+																		Next
+																	</button>
+																</div>
+															)}
+														</div>,
+														document.body
+													)
+												}
 											</>
 										) : (
 											<span
@@ -1305,46 +1771,56 @@ const AnalyteInfor = () => {
 										{editingRow === analyte.id ? (
 											<>
 												<textarea
+													id={`matrix-${analyte.id}`}
 													className="w-full border px-2 py-1 rounded bg-white resize-none"
 													rows={2}
 													value={analyte.matrix}
 													onChange={(e) => handleMatrixInput(analyte.id, e.target.value)}
 												/>
-												{showMatrixDropdown && editingMatrix === analyte.id && (
-													<div className="absolute w-full bg-white border rounded shadow-lg z-10">
-														{getPaginatedMatrices(matrixInput).map((matrix, index) => (
-															<div
-																key={index}
-																className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-																onClick={() => handleMatrixSelect(matrix)}
-															>
-																<p>{matrix}</p>
-															</div>
-														))}
-														{/* Pagination controls for matrix */}
-														{filterMatrices(matrixInput).length > itemsPerPage && (
-															<div className="flex justify-between p-2 bg-gray-100">
-																<button
-																	className="px-2 py-1 border rounded disabled:opacity-50"
-																	onClick={() => handleMatrixPageChange(matrixPage - 1)}
-																	disabled={matrixPage === 1}
+												{showMatrixDropdown && editingMatrix === analyte.id && 
+													createPortal(
+														<div
+															className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+															style={{
+																width: document.getElementById(`matrix-${analyte.id}`)?.offsetWidth + 'px',
+																top: document.getElementById(`matrix-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
+																left: document.getElementById(`matrix-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+															}}
+														>
+															{getPaginatedMatrices(matrixInput).map((matrix, index) => (
+																<div
+																	key={index}
+																	className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																	onClick={() => handleMatrixSelect(matrix)}
 																>
-																	Prev
-																</button>
-																<span>
-																	{matrixPage}/{Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
-																</span>
-																<button
-																	className="px-2 py-1 border rounded disabled:opacity-50"
-																	onClick={() => handleMatrixPageChange(matrixPage + 1)}
-																	disabled={matrixPage >= Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
-																>
-																	Next
-																</button>
-															</div>
-														)}
-													</div>
-												)}
+																	<p>{matrix}</p>
+																</div>
+															))}
+															{filterMatrices(matrixInput).length > itemsPerPage && (
+																<div className="flex justify-between p-2 bg-gray-100">
+																	<button
+																		className="px-2 py-1 border rounded disabled:opacity-50"
+																		onClick={() => handleMatrixPageChange(matrixPage - 1)}
+																		disabled={matrixPage === 1}
+																	>
+																		Prev
+																	</button>
+																	<span>
+																		{matrixPage}/{Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+																	</span>
+																	<button
+																		className="px-2 py-1 border rounded disabled:opacity-50"
+																		onClick={() => handleMatrixPageChange(matrixPage + 1)}
+																		disabled={matrixPage >= Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+																	>
+																		Next
+																	</button>
+																</div>
+															)}
+														</div>,
+														document.body
+													)
+												}
 											</>
 										) : (
 											<span
@@ -1381,50 +1857,60 @@ const AnalyteInfor = () => {
 										{editingRow === analyte.id ? (
 											<>
 												<textarea
+													id={`protocol-code-${analyte.id}`}
 													className="w-full border px-2 py-1 rounded bg-white resize-none"
 													rows={2}
 													value={analyte.protocol_code}
 													onChange={(e) => handleProtocolCodeInputChange(analyte.id, e.target.value)}
 												/>
-												{showProtocolCodeDropdown && editingProtocolCode === analyte.id && (
-													<div className="absolute w-full bg-white border rounded shadow-lg z-10">
-														{getPaginatedProtocolCodes(protocolCodeInput).map((code, index) => (
-															<div
-																key={index}
-																className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-																onClick={() => handleProtocolCodeSelect(code)}
-															>
-																<p>{code}</p>
-															</div>
-														))}
-														{/* Pagination controls for protocol code */}
-														{filterProtocolCodes(protocolCodeInput).length > itemsPerPage && (
-															<div className="flex justify-between p-2 bg-gray-100">
-																<button
-																	className="px-2 py-1 border rounded disabled:opacity-50"
-																	onClick={() => handleProtocolCodePageChange(protocolCodePage - 1)}
-																	disabled={protocolCodePage === 1}
+												{showProtocolCodeDropdown && editingProtocolCode === analyte.id && 
+													createPortal(
+														<div
+															className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+															style={{
+																width: document.getElementById(`protocol-code-${analyte.id}`)?.offsetWidth + 'px',
+																top: document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
+																left: document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+															}}
+														>
+															{getPaginatedProtocolCodes(protocolCodeInput).map((code, index) => (
+																<div
+																	key={index}
+																	className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																	onClick={() => handleProtocolCodeSelect(code)}
 																>
-																	Prev
-																</button>
-																<span>
-																	{protocolCodePage}/
-																	{Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)}
-																</span>
-																<button
-																	className="px-2 py-1 border rounded disabled:opacity-50"
-																	onClick={() => handleProtocolCodePageChange(protocolCodePage + 1)}
-																	disabled={
-																		protocolCodePage >=
-																		Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)
-																	}
-																>
-																	Next
-																</button>
-															</div>
-														)}
-													</div>
-												)}
+																	<p>{code}</p>
+																</div>
+															))}
+															{filterProtocolCodes(protocolCodeInput).length > itemsPerPage && (
+																<div className="flex justify-between p-2 bg-gray-100">
+																	<button
+																		className="px-2 py-1 border rounded disabled:opacity-50"
+																		onClick={() => handleProtocolCodePageChange(protocolCodePage - 1)}
+																		disabled={protocolCodePage === 1}
+																	>
+																		Prev
+																	</button>
+																	<span>
+																		{protocolCodePage}/
+																		{Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)}
+																	</span>
+																	<button
+																		className="px-2 py-1 border rounded disabled:opacity-50"
+																		onClick={() => handleProtocolCodePageChange(protocolCodePage + 1)}
+																		disabled={
+																			protocolCodePage >=
+																			Math.ceil(filterProtocolCodes(protocolCodeInput).length / itemsPerPage)
+																		}
+																	>
+																		Next
+																	</button>
+																</div>
+															)}
+														</div>,
+														document.body
+													)
+												}
 											</>
 										) : (
 											<span
@@ -1434,90 +1920,110 @@ const AnalyteInfor = () => {
 												{analyte.protocol_code}
 											</span>
 										)}
-										{isProtocolDropdownVisible && editingRow === analyte.id && (
-											<div className="absolute w-80 bg-white border rounded shadow-lg z-10">
-												{paginatedProtocols.map((protocol, index) => (
-													<div
-														key={index}
-														className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-														onClick={() => handleProtocolSelect(analyte.id, protocol)}
-													>
-														<p>{protocol.protocol_name}</p>
-														<p className="text-sm text-gray-500">{protocol.protocol_code}</p>
-													</div>
-												))}
-												{protocols.filter((protocol) => protocol.protocol_code?.includes(protocolSearch)).length >
-													protocolsPerPage && (
-													<div className="flex justify-between p-2">
-														<button
-															className="px-2 py-1 border rounded"
-															onClick={() => handleProtocolPageChange(protocolPage - 1)}
-															disabled={protocolPage === 1}
+										{isProtocolDropdownVisible && editingRow === analyte.id && 
+											createPortal(
+												<div
+													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+													style={{
+														width: '320px',
+														top: document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
+														left: document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+													}}
+												>
+													{paginatedProtocols.map((protocol, index) => (
+														<div
+															key={index}
+															className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+															onClick={() => handleProtocolSelect(analyte.id, protocol)}
 														>
-															Previous
-														</button>
-														<button
-															className="px-2 py-1 border rounded"
-															onClick={() => (window.location.href = '/library/protocol')}
-														>
-															Thêm mới
-														</button>
-														<button
-															className="px-2 py-1 border rounded"
-															onClick={() => handleProtocolPageChange(protocolPage + 1)}
-															disabled={protocolPage * protocolsPerPage >= protocols.length}
-														>
-															Next
-														</button>
-													</div>
-												)}
-											</div>
-										)}
+															<p>{protocol.protocol_name}</p>
+															<p className="text-sm text-gray-500">{protocol.protocol_code}</p>
+														</div>
+													))}
+													{protocols.filter((protocol) => protocol.protocol_code?.includes(protocolSearch)).length >
+														protocolsPerPage && (
+														<div className="flex justify-between p-2">
+															<button
+																className="px-2 py-1 border rounded"
+																onClick={() => handleProtocolPageChange(protocolPage - 1)}
+																disabled={protocolPage === 1}
+															>
+																Previous
+															</button>
+															<button
+																className="px-2 py-1 border rounded"
+																onClick={() => (window.location.href = '/library/protocol')}
+															>
+																Thêm mới
+															</button>
+															<button
+																className="px-2 py-1 border rounded"
+																onClick={() => handleProtocolPageChange(protocolPage + 1)}
+																disabled={protocolPage * protocolsPerPage >= protocols.length}
+															>
+																Next
+															</button>
+														</div>
+													)}
+												</div>,
+												document.body
+											)
+										}
 									</td>
 									<td className="p-1 text-center relative">
 										{editingRow === analyte.id ? (
 											<>
 												<textarea
+													id={`unit-${analyte.id}`}
 													className="w-full border px-2 py-1 rounded bg-white resize-none"
 													rows={2}
 													value={analyte.default_unit || ''}
 													onChange={(e) => handleUnitInput(analyte.id, e.target.value)}
 												/>
-												{showUnitDropdown && editingUnit === analyte.id && (
-													<div className="absolute w-full bg-white border rounded shadow-lg z-10">
-														{getPaginatedUnits(unitInput).map((unit, index) => (
-															<div
-																key={index}
-																className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
-																onClick={() => handleUnitSelect(unit)}
-															>
-																<p>{unit}</p>
-															</div>
-														))}
-														{/* Pagination controls for unit */}
-														{filterUnits(unitInput).length > itemsPerPage && (
-															<div className="flex justify-between p-2 bg-gray-100">
-																<button
-																	className="px-2 py-1 border rounded disabled:opacity-50"
-																	onClick={() => handleUnitPageChange(unitPage - 1)}
-																	disabled={unitPage === 1}
+												{showUnitDropdown && editingUnit === analyte.id && 
+													createPortal(
+														<div
+															className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+															style={{
+																width: document.getElementById(`unit-${analyte.id}`)?.offsetWidth + 'px',
+																top: document.getElementById(`unit-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
+																left: document.getElementById(`unit-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+															}}
+														>
+															{getPaginatedUnits(unitInput).map((unit, index) => (
+																<div
+																	key={index}
+																	className="p-1 text-md cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																	onClick={() => handleUnitSelect(unit)}
 																>
-																	Prev
-																</button>
-																<span>
-																	{unitPage}/{Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
-																</span>
-																<button
-																	className="px-2 py-1 border rounded disabled:opacity-50"
-																	onClick={() => handleUnitPageChange(unitPage + 1)}
-																	disabled={unitPage >= Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
-																>
-																	Next
-																</button>
-															</div>
-														)}
-													</div>
-												)}
+																	<p>{unit}</p>
+																</div>
+															))}
+															{filterUnits(unitInput).length > itemsPerPage && (
+																<div className="flex justify-between p-2 bg-gray-100">
+																	<button
+																		className="px-2 py-1 border rounded disabled:opacity-50"
+																		onClick={() => handleUnitPageChange(unitPage - 1)}
+																		disabled={unitPage === 1}
+																	>
+																		Prev
+																	</button>
+																	<span>
+																		{unitPage}/{Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+																	</span>
+																	<button
+																		className="px-2 py-1 border rounded disabled:opacity-50"
+																		onClick={() => handleUnitPageChange(unitPage + 1)}
+																		disabled={unitPage >= Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+																	>
+																		Next
+																	</button>
+																</div>
+															)}
+														</div>,
+														document.body
+													)
+												}
 											</>
 										) : (
 											<span
@@ -1530,25 +2036,27 @@ const AnalyteInfor = () => {
 									</td>
 									<td className="p-1 text-start">
 										{editingRow === analyte.id ? (
-											<textarea
-												className="w-full border px-2 py-1 rounded bg-white resize-none"
-												rows={2}
-												value={analyte.threshold_limit || ''}
-												onChange={(e) => handleInputChange(analyte.id, 'threshold_limit', e.target.value)}
-											/>
+											<div className="w-full h-12 bg-white rounded border" style={{ borderRadius: '0.375rem' }}>
+												<textarea
+													id={`tinymce-${analyte.id}`}
+													className="w-full h-full"
+													style={{ borderRadius: '0' }}
+													value={newAnalyte.display_style || ''}
+													onChange={(e) => handleNewAnalyteChange('display_style', e.target.value)}
+												/>
+											</div>
 										) : (
-											<span
-												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
-												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
-											>
-												{analyte.threshold_limit || ''}
-											</span>
+											<div
+												className="block overflow-hidden text-ellipsis whitespace-pre-wrap max-h-16"
+												style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}
+												dangerouslySetInnerHTML={{ __html: analyte.display_style || '' }}
+											/>
 										)}
 									</td>
 									<td className="p-1 text-start">
 										{editingRow === analyte.id ? (
 											<textarea
-												className="w-full border px-2 py-1 rounded bg-white resize-none"
+												className="w-full h-10 border px-2 py-1 rounded bg-white resize-none"
 												rows={2}
 												value={analyte.price || ''}
 												onChange={(e) => handleInputChange(analyte.id, 'price', e.target.value)}
@@ -1592,6 +2100,45 @@ const AnalyteInfor = () => {
 												{analyte.accreditation || ''}
 											</span>
 										)}
+									</td>
+									<td className="p-1 text-start relative technician-dropdown">
+										<div
+											id={`technician-${analyte.id}`}
+											className="w-full border px-2 py-1 rounded bg-white cursor-pointer min-h-[2.5rem] flex items-center"
+											onClick={(e) => {
+												e.stopPropagation();
+												handleTechnicianDropdownToggle(analyte.id);
+											}}
+										>
+											{getTechnicianDisplayName(analyte.technician_uid) || 'Chọn kỹ thuật viên'}
+										</div>
+										{technicianDropdowns[analyte.id] && 
+											createPortal(
+												<div
+													className="technician-portal absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
+													style={{
+														width: Math.max(document.getElementById(`technician-${analyte.id}`)?.offsetWidth, 280) + 'px',
+														top: document.getElementById(`technician-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
+														left: document.getElementById(`technician-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+													}}
+												>
+													{techniciansList.map((tech, techIndex) => (
+														<div
+															key={techIndex}
+															className="p-2 flex cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+															onClick={(e) => {
+																e.stopPropagation();
+																handleTechnicianSelect(analyte.id, tech);
+															}}
+														>
+															<div className="text-sm font-bold">{tech.alias}:</div>
+															<div className="text-sm">{tech.identity_name}</div>
+														</div>
+													))}
+												</div>,
+												document.body
+											)
+										}
 									</td>
 									<td className="p-1 text-center ">
 										{editingRow === analyte.id ? (

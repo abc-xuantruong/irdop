@@ -398,6 +398,118 @@
 				padding: 8px;
 				background: #ef4444;
 				color: white;
+			}
+
+			/* Column width preview styles */
+			.column-width-preview {
+				margin-top: 20px;
+				background: white;
+				border: 1px solid #e5e7eb;
+				border-radius: 8px;
+				padding: 16px;
+			}
+			.preview-table {
+				width: 100%;
+				border-collapse: collapse;
+				table-layout: fixed;
+			}
+			.preview-table th {
+				background: #f9fafb;
+				border: 1px solid #e5e7eb;
+				padding: 12px 8px;
+				text-align: left;
+				font-weight: 600;
+				color: #374151;
+				position: relative;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.preview-table th .width-controls {
+				display: flex;
+				align-items: stretch;
+				height: 24px;
+				margin-top: 4px;
+				border: 1px solid #e5e7eb;
+				border-radius: 4px;
+				overflow: hidden;
+				background: white;
+			}
+			.width-indicator {
+				font-size: 11px;
+				color: #374151;
+				font-weight: 500;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: #f9fafb;
+				border-left: 1px solid #e5e7eb;
+				border-right: 1px solid #e5e7eb;
+				min-width: 40px;
+				flex-shrink: 0;
+			}
+			.width-btn {
+				flex: 1;
+				height: 100%;
+				border: none;
+				background: white;
+				color: #374151;
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-size: 12px;
+				font-weight: bold;
+				user-select: none;
+				transition: all 0.15s;
+			}
+			.width-btn:hover {
+				background: #f3f4f6;
+			}
+			.width-btn:active {
+				background: #e5e7eb;
+			}
+			.width-btn:first-child {
+				border-right: 1px solid #e5e7eb;
+			}
+			.width-btn:last-child {
+				border-left: 1px solid #e5e7eb;
+			}
+			.column-lock-btn {
+				position: absolute;
+				top: 4px;
+				right: 4px;
+				width: 16px;
+				height: 16px;
+				border: 1px solid #d1d5db;
+				background: white;
+				color: #6b7280;
+				border-radius: 3px;
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-size: 10px;
+				user-select: none;
+				transition: all 0.15s;
+				z-index: 10;
+			}
+			.column-lock-btn:hover {
+				background: #f3f4f6;
+				border-color: #9ca3af;
+			}
+			.column-lock-btn.locked {
+				background: #fef3c7;
+				border-color: #f59e0b;
+				color: #d97706;
+			}
+			.column-lock-btn.locked:hover {
+				background: #fde68a;
+			}
+			.remove-column-btn {
+				padding: 8px;
+				background: #ef4444;
+				color: white;
 				border: none;
 				border-radius: 4px;
 				cursor: pointer;
@@ -453,6 +565,217 @@
 			.form-btn.primary:hover {
 				background: #1d4ed8;
 			}
+
+			/* Table styling improvements */
+			.resizable-table {
+				border-collapse: separate;
+				border-spacing: 0;
+			}
+
+			.resizable-table th,
+			.resizable-table td {
+				border-left: 1px solid #d1d5db;
+				border-right: 1px solid #d1d5db;
+				position: relative;
+			}
+
+			.resizable-table th:first-child,
+			.resizable-table td:first-child {
+				border-left: 1px solid #d1d5db;
+			}
+
+			.resizable-table th:last-child,
+			.resizable-table td:last-child {
+				border-right: 1px solid #d1d5db;
+			}
+
+			/* Column resize handle */
+			.resize-handle {
+				position: absolute;
+				top: 0;
+				right: -2px;
+				width: 4px;
+				height: 100%;
+				background: transparent;
+				cursor: col-resize;
+				z-index: 10;
+			}
+
+			.resize-handle:hover {
+				background: #2563eb;
+			}
+
+			.resize-handle.resizing {
+				background: #1d4ed8;
+			}
+
+			/* Custom rows styling */
+			.custom-row {
+				background-color: #f8f9fa;
+				border-top: 2px solid #e9ecef;
+			}
+
+			.custom-row td {
+				font-weight: 500;
+				color: #495057;
+				border-left: 1px solid #dee2e6;
+				border-right: 1px solid #dee2e6;
+				border-bottom: 1px solid #dee2e6;
+			}
+
+			.custom-row td:first-child {
+				border-left: 1px solid #dee2e6;
+			}
+
+			.custom-row td:last-child {
+				border-right: 1px solid #dee2e6;
+			}
+
+			/* Merged empty cells styling */
+			.custom-row td[colspan] {
+				text-align: center;
+				font-style: italic;
+				color: #6c757d;
+				background-color: #f8f9fa;
+			}
+
+			/* Remove left border for merged cells (except first) */
+			.custom-row td[colspan]:not(:first-child) {
+				border-left: none;
+			}
+
+			.custom-row-controls {
+				margin-top: 16px;
+				padding: 16px;
+				background: #f8f9fa;
+				border-radius: 6px;
+				border: 1px solid #e5e7eb;
+			}
+
+			/* File Upload Styles */
+			.file-upload-container {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+			}
+
+			.file-input {
+				display: none;
+			}
+
+			.upload-btn {
+				display: inline-flex;
+				align-items: center;
+				padding: 8px 16px;
+				background: #3b82f6;
+				color: white;
+				border: none;
+				border-radius: 6px;
+				cursor: pointer;
+				font-size: 14px;
+				transition: background-color 0.2s;
+				width: fit-content;
+			}
+
+			.upload-btn:hover {
+				background: #2563eb;
+			}
+
+			.upload-btn:disabled {
+				background: #9ca3af;
+				cursor: not-allowed;
+			}
+
+			.file-name {
+				font-size: 14px;
+				color: #6b7280;
+				font-style: italic;
+			}
+
+			.upload-progress {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+
+			.upload-progress.hidden {
+				display: none;
+			}
+
+			.progress-bar {
+				flex: 1;
+				height: 8px;
+				background: #e5e7eb;
+				border-radius: 4px;
+				overflow: hidden;
+			}
+
+			/* Current file area styling */
+			.current-file-area {
+				margin-bottom: 16px;
+				padding: 12px;
+				background-color: #f8fafc;
+				border: 1px solid #e2e8f0;
+				border-radius: 8px;
+			}
+
+			.current-file-area .file-actions {
+				display: flex;
+				gap: 8px;
+			}
+
+			.current-file-area button {
+				padding: 4px 8px;
+				border-radius: 4px;
+				background: white;
+				font-size: 12px;
+				border: 1px solid;
+				cursor: pointer;
+				transition: all 0.2s;
+			}
+
+			.current-file-area button:hover {
+				transform: translateY(-1px);
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+			}
+
+			/* External file area styling */
+			.external-file-area {
+				display: inline-flex;
+				align-items: center;
+				margin-left: 8px;
+				margin-right: 8px;
+				padding: 6px 12px;
+				background-color: #f8fafc;
+				border: 1px solid #e2e8f0;
+				border-radius: 6px;
+			}
+
+			.external-file-area button {
+				padding: 2px 6px;
+				border-radius: 3px;
+				background: white;
+				font-size: 11px;
+				border: 1px solid;
+				cursor: pointer;
+				transition: all 0.2s;
+			}
+
+			.external-file-area button:hover {
+				transform: translateY(-1px);
+				box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+			}
+
+			.progress-fill {
+				height: 100%;
+				background: #3b82f6;
+				transition: width 0.3s ease;
+				width: 0%;
+			}
+
+			.hidden {
+				display: none;
+			}
 		</style>
 	</head>
 	<body class="p-0">
@@ -465,6 +788,10 @@
 
 			<!-- Dropdown Menu -->
 			<div id="actionDropdown" class="dropdown-menu hidden">
+				<div class="dropdown-item" id="clearSelectionAction">
+					<strong>Bỏ chọn tất cả</strong>
+					<div style="font-size: 12px; color: #6b7280">Xóa tất cả các hàng đang được chọn</div>
+				</div>
 				<div class="dropdown-item" id="createTemplateAction">
 					<strong>Tạo mẫu điền kết quả</strong>
 					<div style="font-size: 12px; color: #6b7280">Tạo template để điền kết quả</div>
@@ -504,11 +831,151 @@
 								</div>
 							</div>
 							<button id="editTemplateBtn" class="toolbar-btn hidden">Chỉnh sửa mẫu</button>
-							<button id="copyTableBtn" class="toolbar-btn">Sao chép bảng</button>
+
+							<!-- External File Display Area -->
+							<div
+								id="externalFileArea"
+								class="external-file-area hidden"
+								style="
+									display: inline-flex;
+									align-items: center;
+									margin-left: 8px;
+									margin-right: 8px;
+									padding: 6px 12px;
+									background-color: #f8fafc;
+									border: 1px solid #e2e8f0;
+									border-radius: 6px;
+								"
+							>
+								<svg
+									style="width: 16px; height: 16px; margin-right: 6px; color: #6b7280"
+									fill="currentColor"
+									viewBox="0 0 20 20"
+								>
+									<path
+										fill-rule="evenodd"
+										d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+										clip-rule="evenodd"
+									></path>
+								</svg>
+								<span
+									id="externalFileName"
+									style="color: #374151; font-weight: 500; font-size: 14px; margin-right: 8px"
+								></span>
+								<div style="display: flex; gap: 4px">
+									<button
+										type="button"
+										id="externalViewFileBtn"
+										class="text-blue-600 hover:text-blue-800"
+										style="
+											padding: 2px 6px;
+											border: 1px solid #3b82f6;
+											border-radius: 3px;
+											background: white;
+											font-size: 11px;
+										"
+										title="Xem file"
+									>
+										<svg
+											style="width: 12px; height: 12px; display: inline"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+											></path>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+											></path>
+										</svg>
+										Xem
+									</button>
+									<button
+										type="button"
+										id="externalDownloadFileBtn"
+										class="text-green-600 hover:text-green-800"
+										style="
+											padding: 2px 6px;
+											border: 1px solid #10b981;
+											border-radius: 3px;
+											background: white;
+											font-size: 11px;
+										"
+										title="Tải xuống"
+									>
+										<svg
+											style="width: 12px; height: 12px; display: inline"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+											></path>
+										</svg>
+										Tải xuống
+									</button>
+								</div>
+							</div>
+
+							<div style="display: flex; gap: 8px; align-items: center">
+								<button id="copyTableBtn" class="toolbar-btn">Sao chép bảng</button>
+								<button id="createReportBtn" class="toolbar-btn hidden" style="border-color: #059669">
+									Tải biên bản
+								</button>
+							</div>
 						</div>
 
 						<!-- Create Template Form -->
 						<div id="createTemplateForm" class="create-template-form" style="display: none">
+							<div class="flex items-center justify-between mb-4">
+								<h4 class="text-lg font-semibold text-gray-900">Tạo mẫu mới</h4>
+								<button
+									type="button"
+									id="closeCreateTemplateBtn"
+									class="px-2 py-2 text-gray-400 hover:text-gray-600 transition-colors"
+									title="Đóng"
+								>
+									<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+									</svg>
+								</button>
+							</div>
+							<div id="createTemplateFileSection" class="form-section">
+								<label class="form-label">Tệp đính kèm:</label>
+								<div class="file-upload-container">
+									<input type="file" id="templateFileInput" class="file-input hidden" accept=".docx" />
+									<button type="button" id="uploadFileBtn" class="upload-btn">
+										<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+											/>
+										</svg>
+										Chọn tệp
+									</button>
+									<span id="uploadFileName" class="file-name"></span>
+									<div id="uploadProgress" class="upload-progress hidden">
+										<div class="progress-bar">
+											<div id="uploadProgressBar" class="progress-fill"></div>
+										</div>
+										<span id="uploadProgressText">0%</span>
+									</div>
+								</div>
+							</div>
+
 							<div class="form-section">
 								<label class="form-label">Tên mẫu:</label>
 								<input type="text" id="templateName" class="form-input" placeholder="Nhập tên mẫu" />
@@ -525,9 +992,31 @@
 								<button type="button" id="addColumnBtn" class="add-column-btn">+ Thêm cột</button>
 							</div>
 
-							<div class="form-actions">
-								<button type="button" id="cancelCreateTemplate" class="form-btn secondary">Hủy</button>
-								<button type="button" id="submitCreateTemplate" class="form-btn primary">Tạo</button>
+							<!-- Column Width Preview -->
+							<div class="form-section">
+								<label class="form-label">Xem trước độ rộng cột:</label>
+								<div id="createColumnWidthPreview" class="column-width-preview">
+									<table id="createPreviewTable" class="preview-table">
+										<thead>
+											<tr id="createPreviewTableHeader">
+												<!-- Preview headers will be populated here -->
+											</tr>
+										</thead>
+									</table>
+									<div style="margin-top: 8px; font-size: 12px; color: #6b7280">
+										<i>Kéo cạnh phải của cột để điều chỉnh độ rộng</i>
+									</div>
+								</div>
+							</div>
+
+							<div class="form-section">
+								<button type="button" id="showCreateFileBtn" class="form-btn secondary" style="margin-bottom: 16px">
+									+ Thêm tệp đính kèm
+								</button>
+							</div>
+
+							<div class="form-actions" style="justify-content: flex-end; margin-top: 24px">
+								<button type="button" id="submitCreateTemplate" class="form-btn primary">Tạo mẫu</button>
 							</div>
 						</div>
 
@@ -535,13 +1024,145 @@
 						<div id="editTemplateForm" class="create-template-form" style="display: none">
 							<div class="flex items-center justify-between mb-4">
 								<h4 class="text-lg font-semibold text-gray-900">Chỉnh sửa mẫu</h4>
-								<button
-									type="button"
-									id="deleteTemplateBtn"
-									class="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition-colors"
+								<div class="flex items-center gap-2">
+									<button
+										type="button"
+										id="deleteTemplateBtn"
+										class="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition-colors"
+									>
+										Xóa mẫu
+									</button>
+									<button
+										type="button"
+										id="closeEditTemplateBtn"
+										class="px-2 py-2 text-gray-400 hover:text-gray-600 transition-colors"
+										title="Đóng"
+									>
+										<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</div>
+							</div>
+
+							<div id="editTemplateFileSection" class="form-section">
+								<label class="form-label">Tệp đính kèm:</label>
+
+								<!-- Current file display area -->
+								<div
+									id="editCurrentFileArea"
+									class="current-file-area hidden"
+									style="
+										margin-bottom: 16px;
+										padding: 12px;
+										background-color: #f8fafc;
+										border: 1px solid #e2e8f0;
+										border-radius: 8px;
+									"
 								>
-									Xóa mẫu
-								</button>
+									<div style="display: flex; align-items: center; justify-content: space-between">
+										<div style="display: flex; align-items: center; flex: 1">
+											<svg
+												style="width: 20px; height: 20px; margin-right: 8px; color: #6b7280"
+												fill="currentColor"
+												viewBox="0 0 20 20"
+											>
+												<path
+													fill-rule="evenodd"
+													d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+													clip-rule="evenodd"
+												></path>
+											</svg>
+											<span id="editCurrentFileName" style="color: #374151; font-weight: 500"></span>
+										</div>
+										<div style="display: flex; gap: 8px">
+											<button
+												type="button"
+												id="editViewFileBtn"
+												class="text-blue-600 hover:text-blue-800"
+												style="
+													padding: 4px 8px;
+													border: 1px solid #3b82f6;
+													border-radius: 4px;
+													background: white;
+													font-size: 12px;
+												"
+												title="Xem file"
+											>
+												<svg
+													style="width: 14px; height: 14px; display: inline"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+													></path>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+													></path>
+												</svg>
+												Xem
+											</button>
+											<button
+												type="button"
+												id="editDownloadFileBtn"
+												class="text-green-600 hover:text-green-800"
+												style="
+													padding: 4px 8px;
+													border: 1px solid #10b981;
+													border-radius: 4px;
+													background: white;
+													font-size: 12px;
+												"
+												title="Tải xuống"
+											>
+												<svg
+													style="width: 14px; height: 14px; display: inline"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+													></path>
+												</svg>
+												Tải xuống
+											</button>
+										</div>
+									</div>
+								</div>
+
+								<div class="file-upload-container">
+									<input type="file" id="editTemplateFileInput" class="file-input hidden" accept=".docx" />
+									<button type="button" id="editUploadFileBtn" class="upload-btn">
+										<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+											/>
+										</svg>
+										Chọn tệp mới
+									</button>
+									<span id="editUploadFileName" class="file-name"></span>
+									<div id="editUploadProgress" class="upload-progress hidden">
+										<div class="progress-bar">
+											<div id="editUploadProgressBar" class="progress-fill"></div>
+										</div>
+										<span id="editUploadProgressText">0%</span>
+									</div>
+								</div>
 							</div>
 
 							<div class="form-section">
@@ -576,16 +1197,38 @@
 								<button type="button" id="addEditColumnBtn" class="add-column-btn">+ Thêm cột</button>
 							</div>
 
-							<div class="form-actions">
-								<button type="button" id="cancelEditTemplate" class="form-btn secondary">Hủy</button>
-								<button type="button" id="submitEditTemplate" class="form-btn primary">Cập nhật</button>
+							<!-- Column Width Preview -->
+							<div class="form-section">
+								<label class="form-label">Xem trước độ rộng cột:</label>
+								<div id="editColumnWidthPreview" class="column-width-preview">
+									<table id="editPreviewTable" class="preview-table">
+										<thead>
+											<tr id="editPreviewTableHeader">
+												<!-- Preview headers will be populated here -->
+											</tr>
+										</thead>
+									</table>
+									<div style="margin-top: 8px; font-size: 12px; color: #6b7280">
+										<i>Kéo cạnh phải của cột để điều chỉnh độ rộng</i>
+									</div>
+								</div>
+							</div>
+
+							<div class="form-section">
+								<button type="button" id="showEditFileBtn" class="form-btn secondary" style="margin-bottom: 16px">
+									+ Thêm tệp đính kèm
+								</button>
+							</div>
+
+							<div class="form-actions" style="justify-content: flex-end; margin-top: 24px">
+								<button type="button" id="submitEditTemplate" class="form-btn primary">Cập nhật mẫu</button>
 							</div>
 						</div>
 
 						<!-- Selected Items Table -->
 						<div class="bg-gray-50 rounded-lg p-4">
 							<div class="overflow-x-auto">
-								<table class="w-full bg-white border border-gray-200 rounded-lg">
+								<table class="w-full bg-white border border-gray-200 rounded-lg resizable-table">
 									<thead class="bg-gray-50">
 										<tr id="modalTableHeader">
 											<!-- Headers will be populated dynamically -->
@@ -595,6 +1238,22 @@
 										<!-- Selected items will be populated here -->
 									</tbody>
 								</table>
+							</div>
+
+							<!-- Custom Rows Controls -->
+							<div class="custom-row-controls">
+								<div class="flex items-center justify-between mb-4">
+									<h4 class="text-lg font-semibold text-gray-900">Hàng tùy chỉnh</h4>
+									<button
+										id="addCustomRowBtn"
+										class="px-3 py-1.5 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition-colors"
+									>
+										+ Thêm hàng
+									</button>
+								</div>
+								<div id="customRowsList">
+									<!-- Custom rows will be rendered here -->
+								</div>
 							</div>
 						</div>
 					</div>
@@ -726,7 +1385,7 @@
 				<!-- Data Table -->
 				<div id="tableContainer" class="w-full shadow-lg rounded-lg">
 					<div class="overflow-x-auto">
-						<table class="w-full bg-white border border-gray-200">
+						<table class="w-full bg-white border border-gray-200 resizable-table">
 							<thead class="bg-blue-50" id="tableHeader">
 								<!-- Table headers will be dynamically generated -->
 							</thead>
@@ -821,6 +1480,14 @@
 			let dragStartRowIndex = -1;
 			let dragEndRowIndex = -1;
 
+			// Column width management
+			let columnWidths = {};
+			let customRows = [];
+			let isResizing = false;
+			let resizeStartX = 0;
+			let resizeColumn = null;
+			let resizeStartWidth = 0;
+
 			// Available columns with their display names
 			const availableColumns = {
 				sample_uid: 'Mã mẫu',
@@ -839,6 +1506,408 @@
 			const API_ENDPOINT = 'https://black.irdop.org/v1/analysis/processing/list';
 			const TEMPLATE_API_ENDPOINT = 'https://black.irdop.org/v1/lab/test_report/get_template';
 
+			// Column width management functions
+			function saveColumnWidths() {
+				localStorage.setItem('matchAnalysisColumnWidths', JSON.stringify(columnWidths));
+			}
+
+			function loadColumnWidths() {
+				const saved = localStorage.getItem('matchAnalysisColumnWidths');
+				if (saved) {
+					columnWidths = JSON.parse(saved);
+				}
+			}
+
+			function getColumnWidth(column) {
+				return columnWidths[column] || 'auto';
+			}
+
+			function setColumnWidth(column, width) {
+				columnWidths[column] = width;
+				saveColumnWidths();
+			}
+
+			// Column resizing functions
+			function startColumnResize(e, column) {
+				e.preventDefault();
+				isResizing = true;
+				resizeColumn = column;
+				resizeStartX = e.clientX;
+
+				const th = e.target.closest('th');
+				resizeStartWidth = th.offsetWidth;
+
+				document.body.style.cursor = 'col-resize';
+				document.body.style.userSelect = 'none';
+
+				// Add resize handle visual feedback
+				const handle = e.target;
+				handle.classList.add('resizing');
+
+				// Add global mouse event listeners
+				document.addEventListener('mousemove', handleColumnResize);
+				document.addEventListener('mouseup', endColumnResize);
+			}
+
+			function handleColumnResize(e) {
+				if (!isResizing || !resizeColumn) return;
+
+				const deltaX = e.clientX - resizeStartX;
+				const newWidth = Math.max(50, resizeStartWidth + deltaX); // Minimum width 50px
+
+				// Apply width to all cells in this column
+				const columnIndex = filters.columns.indexOf(resizeColumn);
+				if (columnIndex !== -1) {
+					const headers = document.querySelectorAll('#tableHeader th');
+					const cells = document.querySelectorAll('#tableBody td:nth-child(' + (columnIndex + 1) + ')');
+
+					if (headers[columnIndex]) {
+						headers[columnIndex].style.width = newWidth + 'px';
+						headers[columnIndex].style.minWidth = newWidth + 'px';
+					}
+
+					cells.forEach((cell) => {
+						cell.style.width = newWidth + 'px';
+						cell.style.minWidth = newWidth + 'px';
+					});
+
+					// Also apply to modal table if visible
+					const modalHeaders = document.querySelectorAll('#modalTableHeader th');
+					const modalCells = document.querySelectorAll('#modalTableBody td:nth-child(' + (columnIndex + 1) + ')');
+
+					if (modalHeaders[columnIndex]) {
+						modalHeaders[columnIndex].style.width = newWidth + 'px';
+						modalHeaders[columnIndex].style.minWidth = newWidth + 'px';
+					}
+
+					modalCells.forEach((cell) => {
+						cell.style.width = newWidth + 'px';
+						cell.style.minWidth = newWidth + 'px';
+					});
+				}
+			}
+
+			function endColumnResize(e) {
+				if (!isResizing || !resizeColumn) return;
+
+				const deltaX = e.clientX - resizeStartX;
+				const newWidth = Math.max(50, resizeStartWidth + deltaX);
+
+				// Save the new width
+				setColumnWidth(resizeColumn, newWidth);
+
+				// Clean up
+				isResizing = false;
+				resizeColumn = null;
+				resizeStartX = 0;
+				resizeStartWidth = 0;
+
+				document.body.style.cursor = '';
+				document.body.style.userSelect = '';
+
+				// Remove resize handle visual feedback
+				const handles = document.querySelectorAll('.resize-handle.resizing');
+				handles.forEach((handle) => handle.classList.remove('resizing'));
+
+				// Remove global mouse event listeners
+				document.removeEventListener('mousemove', handleColumnResize);
+				document.removeEventListener('mouseup', endColumnResize);
+			}
+
+			// Custom rows management
+			function addCustomRow() {
+				const customRow = {
+					id: 'custom_' + Date.now(),
+					label: 'Hàng tùy chỉnh',
+					type: 'custom',
+					values: {},
+				};
+
+				customRows.push(customRow);
+				renderCustomRowsList();
+
+				// Update the main modal table to reflect custom row changes
+				if (selectedTemplate && selectedTemplate.columns) {
+					applyTemplateToModal(selectedTemplate);
+				} else {
+					populateModalTable();
+				}
+			}
+
+			// Helper function to create custom row cells with proper merging logic
+			function createCustomRowCells(customRow, columns) {
+				const cells = [];
+				let i = 0;
+
+				while (i < columns.length) {
+					const col = columns[i];
+					const value = customRow.values[col] || '';
+					const cell = document.createElement('td');
+					cell.className = 'px-4 py-3 text-gray-800';
+
+					// Check if this is an empty cell and find consecutive empty cells
+					if (value.trim() === '') {
+						let colspan = 1;
+						let totalWidth = 0;
+
+						// Count consecutive empty cells
+						for (let j = i + 1; j < columns.length; j++) {
+							const nextCol = columns[j];
+							const nextValue = customRow.values[nextCol] || '';
+							if (nextValue.trim() === '') {
+								colspan++;
+							} else {
+								break;
+							}
+						}
+
+						// Calculate total width for merged cell
+						for (let k = i; k < i + colspan; k++) {
+							const colWidth = getColumnWidth(columns[k]);
+							if (colWidth !== 'auto') {
+								totalWidth += parseInt(colWidth);
+							}
+						}
+
+						// Set colspan for merged empty cells
+						if (colspan > 1) {
+							cell.setAttribute('colspan', colspan);
+							cell.style.textAlign = 'center';
+						}
+
+						// Apply width
+						if (totalWidth > 0) {
+							cell.style.width = totalWidth + 'px';
+							cell.style.minWidth = totalWidth + 'px';
+						} else {
+							const singleWidth = getColumnWidth(col);
+							if (singleWidth !== 'auto') {
+								cell.style.width = singleWidth + 'px';
+								cell.style.minWidth = singleWidth + 'px';
+							}
+						}
+
+						// Style empty merged cell
+						cell.style.backgroundColor = '#f8f9fa';
+						cell.style.borderLeft = i === 0 ? '1px solid #dee2e6' : 'none';
+						if (colspan > 1) {
+							cell.textContent = `(${colspan} cột trống)`;
+							cell.style.fontStyle = 'italic';
+							cell.style.color = '#6c757d';
+						} else {
+							cell.textContent = '';
+						}
+
+						i += colspan; // Skip the merged columns
+					} else {
+						// Non-empty cell - display normally
+						const width = getColumnWidth(col);
+						if (width !== 'auto') {
+							cell.style.width = width + 'px';
+							cell.style.minWidth = width + 'px';
+						}
+
+						cell.textContent = value;
+						i++;
+					}
+
+					cells.push(cell);
+				}
+
+				return cells;
+			}
+
+			// Helper function to create custom row cells for template columns
+			function createCustomRowCellsForTemplate(customRow, templateColumns) {
+				const cells = [];
+				let i = 0;
+
+				while (i < templateColumns.length) {
+					const templateCol = templateColumns[i];
+					const valueKey = templateCol.valueColumn;
+					const value = customRow.values[valueKey] || '';
+					const cell = document.createElement('td');
+					cell.className = 'px-4 py-3 text-gray-800';
+
+					// Check if this is an empty cell and find consecutive empty cells
+					if (value.trim() === '') {
+						let colspan = 1;
+						let totalWidth = 0;
+
+						// Count consecutive empty cells
+						for (let j = i + 1; j < templateColumns.length; j++) {
+							const nextTemplateCol = templateColumns[j];
+							const nextValueKey = nextTemplateCol.valueColumn;
+							const nextValue = customRow.values[nextValueKey] || '';
+							if (nextValue.trim() === '') {
+								colspan++;
+							} else {
+								break;
+							}
+						}
+
+						// Calculate total width for merged cell
+						for (let k = i; k < i + colspan; k++) {
+							const mappedColumn = templateColumns[k].valueColumn;
+							if (mappedColumn) {
+								const colWidth = getColumnWidth(mappedColumn);
+								if (colWidth !== 'auto') {
+									totalWidth += parseInt(colWidth);
+								}
+							}
+						}
+
+						// Set colspan for merged empty cells
+						if (colspan > 1) {
+							cell.setAttribute('colspan', colspan);
+							cell.style.textAlign = 'center';
+						}
+
+						// Apply width
+						if (totalWidth > 0) {
+							cell.style.width = totalWidth + 'px';
+							cell.style.minWidth = totalWidth + 'px';
+						} else {
+							const mappedColumn = templateCol.valueColumn;
+							if (mappedColumn) {
+								const singleWidth = getColumnWidth(mappedColumn);
+								if (singleWidth !== 'auto') {
+									cell.style.width = singleWidth + 'px';
+									cell.style.minWidth = singleWidth + 'px';
+								}
+							}
+						}
+
+						// Style empty merged cell
+						cell.style.backgroundColor = '#f8f9fa';
+						cell.style.borderLeft = i === 0 ? '1px solid #dee2e6' : 'none';
+						if (colspan > 1) {
+							cell.textContent = `(${colspan} cột trống)`;
+							cell.style.fontStyle = 'italic';
+							cell.style.color = '#6c757d';
+						} else {
+							cell.textContent = '';
+						}
+
+						i += colspan; // Skip the merged columns
+					} else {
+						// Non-empty cell - display normally
+						const mappedColumn = templateCol.valueColumn;
+						if (mappedColumn) {
+							const width = getColumnWidth(mappedColumn);
+							if (width !== 'auto') {
+								cell.style.width = width + 'px';
+								cell.style.minWidth = width + 'px';
+							}
+						}
+
+						cell.textContent = value;
+						i++;
+					}
+
+					cells.push(cell);
+				}
+
+				return cells;
+			}
+
+			function removeCustomRow(rowId) {
+				customRows = customRows.filter((row) => row.id !== rowId);
+				renderCustomRowsList();
+
+				// Update the main modal table to reflect custom row changes
+				if (selectedTemplate && selectedTemplate.columns) {
+					applyTemplateToModal(selectedTemplate);
+				} else {
+					populateModalTable();
+				}
+			}
+
+			function updateCustomRow(rowId, field, value) {
+				const row = customRows.find((r) => r.id === rowId);
+				if (row) {
+					if (field === 'label') {
+						row.label = value;
+					} else {
+						row.values[field] = value;
+					}
+					renderCustomRowsList();
+
+					// Update the main modal table to reflect custom row changes
+					if (selectedTemplate && selectedTemplate.columns) {
+						applyTemplateToModal(selectedTemplate);
+					} else {
+						populateModalTable();
+					}
+				}
+			}
+
+			function renderCustomRowsList() {
+				const container = document.getElementById('customRowsList');
+				if (!container) return;
+
+				container.innerHTML = '';
+
+				customRows.forEach((row) => {
+					const rowElement = document.createElement('div');
+					rowElement.className = 'mb-4 p-3 bg-white border border-gray-200 rounded';
+
+					// Determine which columns to use based on whether a template is selected
+					let columnsToUse = [];
+					if (selectedTemplate && selectedTemplate.columns) {
+						// Use template columns
+						columnsToUse = selectedTemplate.columns.map((col) => ({
+							key: col.valueColumn,
+							name: col.columnName,
+						}));
+					} else {
+						// Use default filter columns
+						columnsToUse = filters.columns.map((col) => ({
+							key: col,
+							name: availableColumns[col] || col,
+						}));
+					}
+
+					rowElement.innerHTML = `
+						<div class="flex items-center justify-between mb-2">
+							<input 
+								type="text" 
+								value="${row.label}" 
+								class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+								onchange="updateCustomRow('${row.id}', 'label', this.value)"
+								placeholder="Nhập tên hàng..."
+							>
+							<button 
+								onclick="removeCustomRow('${row.id}')"
+								class="ml-2 px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
+							>
+								Xóa
+							</button>
+						</div>
+						<div class="grid grid-cols-2 gap-2">
+							${columnsToUse
+								.map(
+									(col) => `
+								<div>
+									<label class="block text-xs text-gray-600 mb-1">${col.name}</label>
+									<input 
+										type="text" 
+										value="${row.values[col.key] || ''}" 
+										class="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+										onchange="updateCustomRow('${row.id}', '${col.key}', this.value)"
+										placeholder="Nhập giá trị..."
+									>
+								</div>
+							`,
+								)
+								.join('')}
+						</div>
+					`;
+
+					container.appendChild(rowElement);
+				});
+			}
+
 			// DOM elements
 			const elements = {
 				columnToggleBtn: document.getElementById('columnToggleBtn'),
@@ -855,6 +1924,7 @@
 				selectedCountBtn: document.getElementById('selectedCountBtn'),
 				selectedCountText: document.getElementById('selectedCountText'),
 				actionDropdown: document.getElementById('actionDropdown'),
+				clearSelectionAction: document.getElementById('clearSelectionAction'),
 				createTemplateAction: document.getElementById('createTemplateAction'),
 				fillResultAction: document.getElementById('fillResultAction'),
 				checkResultAction: document.getElementById('checkResultAction'),
@@ -867,6 +1937,7 @@
 				templateSearch: document.getElementById('templateSearch'),
 				templateItems: document.getElementById('templateItems'),
 				copyTableBtn: document.getElementById('copyTableBtn'),
+				createReportBtn: document.getElementById('createReportBtn'),
 				modalTableHeader: document.getElementById('modalTableHeader'),
 				modalTableBody: document.getElementById('modalTableBody'),
 				errorMessage: document.getElementById('errorMessage'),
@@ -889,6 +1960,7 @@
 				templateDescription: document.getElementById('templateDescription'),
 				templateColumns: document.getElementById('templateColumns'),
 				addColumnBtn: document.getElementById('addColumnBtn'),
+				closeCreateTemplateBtn: document.getElementById('closeCreateTemplateBtn'),
 				cancelCreateTemplate: document.getElementById('cancelCreateTemplate'),
 				submitCreateTemplate: document.getElementById('submitCreateTemplate'),
 				editTemplateForm: document.getElementById('editTemplateForm'),
@@ -897,10 +1969,49 @@
 				editTemplateDescription: document.getElementById('editTemplateDescription'),
 				editTemplateColumns: document.getElementById('editTemplateColumns'),
 				addEditColumnBtn: document.getElementById('addEditColumnBtn'),
+				closeEditTemplateBtn: document.getElementById('closeEditTemplateBtn'),
 				cancelEditTemplate: document.getElementById('cancelEditTemplate'),
 				submitEditTemplate: document.getElementById('submitEditTemplate'),
 				editTemplateBtn: document.getElementById('editTemplateBtn'),
 				deleteTemplateBtn: document.getElementById('deleteTemplateBtn'),
+				addCustomRowBtn: document.getElementById('addCustomRowBtn'),
+				customRowsList: document.getElementById('customRowsList'),
+				// File upload elements for create template
+				templateFileInput: document.getElementById('templateFileInput'),
+				uploadFileBtn: document.getElementById('uploadFileBtn'),
+				uploadFileName: document.getElementById('uploadFileName'),
+				uploadProgress: document.getElementById('uploadProgress'),
+				uploadProgressBar: document.getElementById('uploadProgressBar'),
+				uploadProgressText: document.getElementById('uploadProgressText'),
+				// File upload elements for edit template
+				editTemplateFileInput: document.getElementById('editTemplateFileInput'),
+				editUploadFileBtn: document.getElementById('editUploadFileBtn'),
+				editUploadFileName: document.getElementById('editUploadFileName'),
+				editUploadProgress: document.getElementById('editUploadProgress'),
+				editUploadProgressBar: document.getElementById('editUploadProgressBar'),
+				editUploadProgressText: document.getElementById('editUploadProgressText'),
+				// Current file display elements
+				editCurrentFileArea: document.getElementById('editCurrentFileArea'),
+				editCurrentFileName: document.getElementById('editCurrentFileName'),
+				editViewFileBtn: document.getElementById('editViewFileBtn'),
+				editDownloadFileBtn: document.getElementById('editDownloadFileBtn'),
+				// External file display elements
+				externalFileArea: document.getElementById('externalFileArea'),
+				externalFileName: document.getElementById('externalFileName'),
+				externalViewFileBtn: document.getElementById('externalViewFileBtn'),
+				externalDownloadFileBtn: document.getElementById('externalDownloadFileBtn'),
+				// File section elements
+				createTemplateFileSection: document.getElementById('createTemplateFileSection'),
+				editTemplateFileSection: document.getElementById('editTemplateFileSection'),
+				showCreateFileBtn: document.getElementById('showCreateFileBtn'),
+				showEditFileBtn: document.getElementById('showEditFileBtn'),
+				// Column width preview elements
+				createColumnWidthPreview: document.getElementById('createColumnWidthPreview'),
+				createPreviewTable: document.getElementById('createPreviewTable'),
+				createPreviewTableHeader: document.getElementById('createPreviewTableHeader'),
+				editColumnWidthPreview: document.getElementById('editColumnWidthPreview'),
+				editPreviewTable: document.getElementById('editPreviewTable'),
+				editPreviewTableHeader: document.getElementById('editPreviewTableHeader'),
 			};
 
 			// Initialize column checkboxes
@@ -1016,18 +2127,25 @@
 
 			// Handle drag selection start
 			function handleDragStart(e, rowIndex) {
-				isDragging = true;
 				dragStartY = e.clientY;
 				dragStartRowIndex = rowIndex;
 				dragEndRowIndex = rowIndex;
 
-				// Prevent text selection during drag
-				e.preventDefault();
-				document.body.style.userSelect = 'none';
+				// Reset dragging state
+				isDragging = false;
+
+				// Don't prevent default here - let click events work normally
 			}
 
 			// Handle drag selection move
 			function handleDragMove(e, rowIndex) {
+				// Only start dragging if mouse has moved significantly
+				if (!isDragging && Math.abs(e.clientY - dragStartY) > 5) {
+					isDragging = true;
+					document.body.style.userSelect = 'none';
+					e.preventDefault(); // Only prevent default when actually dragging
+				}
+
 				if (!isDragging) return;
 
 				e.preventDefault();
@@ -1039,17 +2157,22 @@
 
 			// Handle drag selection end
 			function handleDragEnd() {
-				if (!isDragging) return;
+				if (isDragging) {
+					// Finalize the selection
+					finalizeDragSelection();
+					isDragging = false;
+					document.body.style.userSelect = '';
+				}
 
-				isDragging = false;
-				document.body.style.userSelect = '';
-
-				// Finalize the selection
-				finalizeDragSelection();
+				// Reset drag state in case it wasn't properly set
+				dragStartRowIndex = -1;
+				dragEndRowIndex = -1;
 			}
 
 			// Update visual selection during drag
 			function updateDragSelection() {
+				if (dragStartRowIndex < 0 || dragEndRowIndex < 0) return;
+
 				const startIndex = Math.min(dragStartRowIndex, dragEndRowIndex);
 				const endIndex = Math.max(dragStartRowIndex, dragEndRowIndex);
 
@@ -1067,6 +2190,8 @@
 
 			// Finalize drag selection
 			function finalizeDragSelection() {
+				if (dragStartRowIndex < 0 || dragEndRowIndex < 0) return;
+
 				const startIndex = Math.min(dragStartRowIndex, dragEndRowIndex);
 				const endIndex = Math.max(dragStartRowIndex, dragEndRowIndex);
 
@@ -1138,9 +2263,17 @@
 				console.log('All visible rows selected. Total:', selectedRows.size);
 			}
 
-			// Expose debug function to window for testing
+			// Make functions globally accessible for inline event handlers
+			window.removeTemplateColumn = removeTemplateColumn;
+			window.removeEditTemplateColumn = removeEditTemplateColumn;
+			window.loadTemplatePage = loadTemplatePage;
 			window.selectAllVisibleRows = selectAllVisibleRows;
 			window.debugSelectionState = debugSelectionState;
+			window.startColumnResize = startColumnResize;
+			window.updateCustomRow = updateCustomRow;
+			window.removeCustomRow = removeCustomRow;
+			window.updateCreatePreviewTable = updateCreatePreviewTable;
+			window.updateEditPreviewTable = updateEditPreviewTable;
 
 			// Toggle action dropdown
 			function toggleActionDropdown() {
@@ -1234,11 +2367,30 @@
 
 			// Show create template form
 			function showCreateTemplateForm() {
+				// Hide edit form if visible
+				hideEditTemplateForm();
+
 				elements.createTemplateForm.style.display = 'block';
 				// Don't hide the table - keep it visible
-				// Initialize with one empty column
+				// Initialize with mandatory columns first, then one empty column
 				elements.templateColumns.innerHTML = '';
+
+				// Reset preview widths
+				createPreviewColumnWidths = {};
+
+				// Always show file section for template creation
+				elements.createTemplateFileSection.style.display = 'block';
+				elements.showCreateFileBtn.style.display = 'none';
+
+				// Add mandatory columns that cannot be removed
+				addMandatoryTemplateColumn('Mã mẫu', 'sample_uid');
+				addMandatoryTemplateColumn('Mã chỉ tiêu', 'id');
+
+				// Add one regular column
 				addTemplateColumn();
+
+				// Update preview table
+				setTimeout(() => updateCreatePreviewTable(), 100);
 			}
 
 			// Hide create template form
@@ -1249,6 +2401,40 @@
 				elements.templateName.value = '';
 				elements.templateDescription.value = '';
 				elements.templateColumns.innerHTML = '';
+				// Clear file upload
+				elements.templateFileInput.value = '';
+				elements.uploadFileName.textContent = '';
+				elements.uploadProgress.classList.add('hidden');
+				selectedFile = null; // Clear selected file
+				currentFileId = null;
+
+				// Reset preview widths
+				createPreviewColumnWidths = {};
+
+				// Reset file section visibility - always show file section
+				elements.createTemplateFileSection.style.display = 'block';
+				elements.showCreateFileBtn.style.display = 'none';
+			}
+
+			// Add a mandatory template column row (cannot be removed or edited)
+			function addMandatoryTemplateColumn(columnName, valueColumn) {
+				const columnContainer = elements.templateColumns;
+				const columnRow = document.createElement('div');
+				columnRow.className = 'column-row mandatory-column';
+
+				columnRow.innerHTML = `
+					<textarea class="column-textarea" placeholder="Tên cột" rows="2" readonly style="background-color: #f3f4f6; cursor: not-allowed;">${columnName}</textarea>
+					<select class="column-select" disabled style="background-color: #f3f4f6; cursor: not-allowed;">
+						<option value="${valueColumn}" selected>${availableColumns[valueColumn] || valueColumn}</option>
+					</select>
+					<button type="button" class="remove-column-btn" disabled style="opacity: 0.5; cursor: not-allowed;" title="Cột bắt buộc không thể xóa">
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				`;
+
+				columnContainer.appendChild(columnRow);
 			}
 
 			// Add a new template column row
@@ -1258,8 +2444,8 @@
 				columnRow.className = 'column-row';
 
 				columnRow.innerHTML = `
-					<textarea class="column-textarea" placeholder="Tên cột" rows="2"></textarea>
-					<select class="column-select">
+					<textarea class="column-textarea" placeholder="Tên cột" rows="2" oninput="updateCreatePreviewTable()"></textarea>
+					<select class="column-select" onchange="updateCreatePreviewTable()">
 						<option value="">Điền tay</option>
 						${Object.entries(availableColumns)
 							.map(([key, label]) => `<option value="${key}">${label}</option>`)
@@ -1273,16 +2459,391 @@
 				`;
 
 				columnContainer.appendChild(columnRow);
+
+				// Rebalance column widths when adding new column
+				rebalanceCreatePreviewWidths();
+
+				// Update preview table after adding column
+				updateCreatePreviewTable();
 			}
 
 			// Remove a template column row
 			function removeTemplateColumn(button) {
 				const columnRow = button.closest('.column-row');
+
+				// Prevent removing mandatory columns
+				if (columnRow.classList.contains('mandatory-column')) {
+					showAutoHideAlert('Cột bắt buộc không thể xóa', 'error');
+					return;
+				}
+
+				// Get column index before removing
+				const allRows = elements.templateColumns.querySelectorAll('.column-row');
+				const columnIndex = Array.from(allRows).indexOf(columnRow);
+
 				columnRow.remove();
 
-				// Ensure at least one column remains
-				if (elements.templateColumns.children.length === 0) {
+				// Remove the width data for the deleted column and reindex
+				const newWidths = {};
+				let newIndex = 0;
+
+				for (let i = 0; i < allRows.length; i++) {
+					if (i !== columnIndex) {
+						if (createPreviewColumnWidths[i]) {
+							newWidths[newIndex] = createPreviewColumnWidths[i];
+						}
+						newIndex++;
+					}
+				}
+				createPreviewColumnWidths = newWidths;
+
+				// Ensure at least one non-mandatory column remains
+				const nonMandatoryColumns = elements.templateColumns.querySelectorAll('.column-row:not(.mandatory-column)');
+				if (nonMandatoryColumns.length === 0) {
 					addTemplateColumn();
+					return; // addTemplateColumn will call updateCreatePreviewTable
+				}
+
+				// Rebalance remaining column widths
+				rebalanceCreatePreviewWidths();
+
+				// Update preview table after removing column
+				updateCreatePreviewTable();
+			}
+
+			// Rebalance create preview column widths to total 100%
+			function rebalanceCreatePreviewWidths() {
+				const totalColumns = elements.templateColumns.querySelectorAll('.column-row').length;
+				if (totalColumns === 0) return;
+
+				// Calculate equal distribution
+				const equalWidth = Math.floor(100 / totalColumns);
+				let remainder = 100 - equalWidth * totalColumns;
+
+				// Reset all widths
+				createPreviewColumnWidths = {};
+				for (let i = 0; i < totalColumns; i++) {
+					let width = equalWidth;
+					if (remainder > 0) {
+						width += 1;
+						remainder -= 1;
+					}
+					createPreviewColumnWidths[i] = `${width}%`;
+				}
+			}
+
+			// Rebalance edit preview column widths to total 100%
+			function rebalanceEditPreviewWidths() {
+				const totalColumns = elements.editTemplateColumns.querySelectorAll('.column-row').length;
+				if (totalColumns === 0) return;
+
+				// Calculate equal distribution
+				const equalWidth = Math.floor(100 / totalColumns);
+				let remainder = 100 - equalWidth * totalColumns;
+
+				// Reset all widths
+				editPreviewColumnWidths = {};
+				for (let i = 0; i < totalColumns; i++) {
+					let width = equalWidth;
+					if (remainder > 0) {
+						width += 1;
+						remainder -= 1;
+					}
+					editPreviewColumnWidths[i] = `${width}%`;
+				}
+			}
+
+			// Update create template preview table
+			function updateCreatePreviewTable() {
+				if (!elements.createPreviewTableHeader) return;
+
+				const columnRows = elements.templateColumns.querySelectorAll('.column-row');
+				const headerRow = elements.createPreviewTableHeader;
+				headerRow.innerHTML = '';
+
+				// Initialize widths evenly if not set
+				const totalColumns = columnRows.length;
+				if (totalColumns > 0) {
+					const equalWidth = Math.floor(100 / totalColumns);
+					let remainder = 100 - equalWidth * totalColumns;
+
+					for (let i = 0; i < totalColumns; i++) {
+						if (!createPreviewColumnWidths[i]) {
+							let width = equalWidth;
+							if (remainder > 0) {
+								width += 1;
+								remainder -= 1;
+							}
+							createPreviewColumnWidths[i] = `${width}%`;
+						}
+					}
+				}
+
+				columnRows.forEach((row, index) => {
+					const nameInput = row.querySelector('.column-textarea');
+					const columnName = nameInput.value.trim() || `Cột ${index + 1}`;
+
+					const th = document.createElement('th');
+					const width = createPreviewColumnWidths[index] || '25%';
+					th.style.width = width;
+					th.innerHTML = `
+						<div>${columnName}</div>
+						<div class="width-controls">
+							<button class="width-btn" data-column="${index}" data-form="create" data-action="decrease">−</button>
+							<div class="width-indicator">${width}</div>
+							<button class="width-btn" data-column="${index}" data-form="create" data-action="increase">+</button>
+						</div>
+						<button class="column-lock-btn" data-column="${index}" data-form="create" title="Khóa/Mở khóa cột">🔓</button>
+					`;
+
+					headerRow.appendChild(th);
+				});
+
+				// Initialize resize handlers
+				initializePreviewResize();
+			}
+
+			// Update edit template preview table
+			function updateEditPreviewTable() {
+				if (!elements.editPreviewTableHeader) return;
+
+				const columnRows = elements.editTemplateColumns.querySelectorAll('.column-row');
+				const headerRow = elements.editPreviewTableHeader;
+				headerRow.innerHTML = '';
+
+				// Initialize widths evenly if not set
+				const totalColumns = columnRows.length;
+				if (totalColumns > 0) {
+					const equalWidth = Math.floor(100 / totalColumns);
+					let remainder = 100 - equalWidth * totalColumns;
+
+					for (let i = 0; i < totalColumns; i++) {
+						if (!editPreviewColumnWidths[i]) {
+							let width = equalWidth;
+							if (remainder > 0) {
+								width += 1;
+								remainder -= 1;
+							}
+							editPreviewColumnWidths[i] = `${width}%`;
+						}
+					}
+				}
+
+				columnRows.forEach((row, index) => {
+					const nameInput = row.querySelector('.column-textarea');
+					const columnName = nameInput.value.trim() || `Cột ${index + 1}`;
+
+					const th = document.createElement('th');
+					const width = editPreviewColumnWidths[index] || '25%';
+					th.style.width = width;
+					th.innerHTML = `
+						<div>${columnName}</div>
+						<div class="width-controls">
+							<button class="width-btn" data-column="${index}" data-form="edit" data-action="decrease">−</button>
+							<div class="width-indicator">${width}</div>
+							<button class="width-btn" data-column="${index}" data-form="edit" data-action="increase">+</button>
+						</div>
+						<button class="column-lock-btn" data-column="${index}" data-form="edit" title="Khóa/Mở khóa cột">🔓</button>
+					`;
+
+					headerRow.appendChild(th);
+				});
+
+				// Initialize width control handlers
+				initializeWidthControls();
+			}
+
+			// Initialize width control functionality
+			function initializeWidthControls() {
+				const widthBtns = document.querySelectorAll('.preview-table .width-btn');
+				const lockBtns = document.querySelectorAll('.preview-table .column-lock-btn');
+
+				widthBtns.forEach((btn) => {
+					// Mouse events for click and hold
+					btn.addEventListener('mousedown', startWidthChange);
+					btn.addEventListener('mouseup', stopWidthChange);
+					btn.addEventListener('mouseleave', stopWidthChange);
+
+					// Touch events for mobile support
+					btn.addEventListener('touchstart', startWidthChange);
+					btn.addEventListener('touchend', stopWidthChange);
+				});
+
+				lockBtns.forEach((btn) => {
+					btn.addEventListener('click', toggleColumnLock);
+				});
+			}
+
+			// Toggle column lock
+			function toggleColumnLock(e) {
+				e.preventDefault();
+				e.stopPropagation();
+
+				const btn = e.target;
+				const column = parseInt(btn.dataset.column);
+				const form = btn.dataset.form;
+
+				const lockedStorage = form === 'create' ? createLockedColumns : editLockedColumns;
+				const headerRow = form === 'create' ? elements.createPreviewTableHeader : elements.editPreviewTableHeader;
+
+				const totalColumns = headerRow.children.length;
+
+				// Count currently locked columns
+				let lockedCount = 0;
+				for (let i = 0; i < totalColumns; i++) {
+					if (lockedStorage[i]) lockedCount++;
+				}
+
+				// If trying to lock and would result in less than 2 unlocked columns, prevent it
+				if (!lockedStorage[column] && lockedCount >= totalColumns - 2) {
+					showNotification('Phải có ít nhất 2 cột không bị khóa', 'error');
+					return;
+				}
+
+				// Toggle lock status
+				lockedStorage[column] = !lockedStorage[column];
+
+				// Update button appearance
+				if (lockedStorage[column]) {
+					btn.classList.add('locked');
+					btn.textContent = '🔒';
+					btn.title = 'Mở khóa cột';
+				} else {
+					btn.classList.remove('locked');
+					btn.textContent = '🔓';
+					btn.title = 'Khóa cột';
+				}
+			}
+
+			// Width adjustment variables
+			let widthChangeInterval = null;
+			let currentWidthColumn = null;
+			let currentWidthForm = null;
+			let currentWidthAction = null;
+
+			// Start width change (with hold support)
+			function startWidthChange(e) {
+				e.preventDefault();
+				e.stopPropagation();
+
+				const btn = e.target;
+				currentWidthColumn = parseInt(btn.dataset.column);
+				currentWidthForm = btn.dataset.form;
+				currentWidthAction = btn.dataset.action;
+
+				// Immediate first change
+				adjustColumnWidth();
+
+				// Set up interval for holding
+				widthChangeInterval = setInterval(adjustColumnWidth, 100); // Adjust every 100ms
+			}
+
+			// Stop width change
+			function stopWidthChange(e) {
+				if (widthChangeInterval) {
+					clearInterval(widthChangeInterval);
+					widthChangeInterval = null;
+				}
+
+				currentWidthColumn = null;
+				currentWidthForm = null;
+				currentWidthAction = null;
+			}
+
+			// Adjust column width
+			function adjustColumnWidth() {
+				if (currentWidthColumn === null || currentWidthForm === null || currentWidthAction === null) return;
+
+				const widthStorage = currentWidthForm === 'create' ? createPreviewColumnWidths : editPreviewColumnWidths;
+				const lockedStorage = currentWidthForm === 'create' ? createLockedColumns : editLockedColumns;
+				const headerRow =
+					currentWidthForm === 'create' ? elements.createPreviewTableHeader : elements.editPreviewTableHeader;
+
+				const totalColumns = headerRow.children.length;
+				if (totalColumns === 0) return;
+
+				// Get current widths
+				const currentWidths = [];
+				for (let i = 0; i < totalColumns; i++) {
+					const storedWidth = widthStorage[i] ? parseInt(widthStorage[i]) : Math.floor(100 / totalColumns);
+					currentWidths[i] = storedWidth;
+				}
+
+				// Calculate new width for the target column
+				const increment = currentWidthAction === 'increase' ? 1 : -1;
+				let newWidth = Math.max(5, Math.min(90, currentWidths[currentWidthColumn] + increment));
+
+				// If no change possible, return
+				if (newWidth === currentWidths[currentWidthColumn]) return;
+
+				currentWidths[currentWidthColumn] = newWidth;
+
+				// Redistribute remaining width among unlocked columns only
+				const remainingPercent = 100 - newWidth;
+				const unlockedColumns = [];
+				let totalUnlockedWidth = 0;
+
+				// Find unlocked columns (excluding current column)
+				for (let i = 0; i < totalColumns; i++) {
+					if (i !== currentWidthColumn && !lockedStorage[i]) {
+						unlockedColumns.push(i);
+						totalUnlockedWidth += parseInt(widthStorage[i] || Math.floor(100 / totalColumns));
+					}
+				}
+
+				// Calculate total width of locked columns (excluding current column)
+				let totalLockedWidth = 0;
+				for (let i = 0; i < totalColumns; i++) {
+					if (i !== currentWidthColumn && lockedStorage[i]) {
+						totalLockedWidth += currentWidths[i];
+					}
+				}
+
+				// Available width for unlocked columns
+				const availableForUnlocked = remainingPercent - totalLockedWidth;
+
+				if (unlockedColumns.length > 0 && totalUnlockedWidth > 0 && availableForUnlocked > 0) {
+					// Proportionally adjust unlocked columns
+					for (const i of unlockedColumns) {
+						const originalWidth = parseInt(widthStorage[i] || Math.floor(100 / totalColumns));
+						const proportion = originalWidth / totalUnlockedWidth;
+						currentWidths[i] = Math.max(5, Math.round(availableForUnlocked * proportion));
+					}
+
+					// Fine-tune to ensure total is exactly 100%
+					let actualTotal = currentWidths.reduce((sum, width) => sum + width, 0);
+					const difference = 100 - actualTotal;
+
+					if (Math.abs(difference) > 0 && unlockedColumns.length > 0) {
+						// Distribute difference among unlocked columns
+						const increment = difference > 0 ? 1 : -1;
+						let remaining = Math.abs(difference);
+						let index = 0;
+
+						while (remaining > 0 && index < unlockedColumns.length * 2) {
+							const i = unlockedColumns[index % unlockedColumns.length];
+							if (difference > 0 || currentWidths[i] > 5) {
+								currentWidths[i] += increment;
+								remaining--;
+							}
+							index++;
+						}
+					}
+				}
+
+				// Update all columns
+				for (let i = 0; i < totalColumns; i++) {
+					const width = `${currentWidths[i]}%`;
+					widthStorage[i] = width;
+
+					const th = headerRow.children[i];
+					if (th) {
+						th.style.width = width;
+						const indicator = th.querySelector('.width-indicator');
+						if (indicator) {
+							indicator.textContent = width;
+						}
+					}
 				}
 			}
 
@@ -1300,7 +2861,8 @@
 				const columns = [];
 				const columnRows = elements.templateColumns.querySelectorAll('.column-row');
 
-				for (let row of columnRows) {
+				for (let i = 0; i < columnRows.length; i++) {
+					const row = columnRows[i];
 					const nameInput = row.querySelector('.column-textarea');
 					const valueSelect = row.querySelector('.column-select');
 
@@ -1315,6 +2877,8 @@
 					columns.push({
 						columnName: columnName,
 						valueColumn: valueColumn,
+						width: createPreviewColumnWidths[i] || '20%',
+						resizable: true,
 					});
 				}
 
@@ -1323,17 +2887,57 @@
 					return;
 				}
 
+				// Validate mandatory columns
+				const hasSampleUid = columns.some((col) => col.valueColumn === 'sample_uid');
+				const hasId = columns.some((col) => col.valueColumn === 'id');
+
+				if (!hasSampleUid) {
+					showNotification('Cột "Mã mẫu" (sample_uid) là bắt buộc', 'error');
+					return;
+				}
+
+				if (!hasId) {
+					showNotification('Cột "Mã chỉ tiêu" (id) là bắt buộc', 'error');
+					return;
+				}
+
 				try {
+					let fileId = null;
+
+					// Upload file first if a file was selected
+					if (selectedFile) {
+						try {
+							showAutoHideAlert('Đang tải lên tệp...', 'info');
+							fileId = await handleFileUpload(selectedFile);
+							if (!fileId) {
+								showNotification('Lỗi khi tải lên tệp', 'error');
+								return;
+							}
+						} catch (error) {
+							showNotification('Lỗi khi tải lên tệp: ' + error.message, 'error');
+							return;
+						}
+					}
+
+					const requestBody = {
+						templateName: templateName,
+						templateDescription: templateDescription,
+						columns: columns,
+						customRows: customRows,
+					};
+
+					// Add fileId if file was uploaded
+					if (fileId) {
+						requestBody.fileId = fileId;
+						currentFileId = fileId;
+					}
+
 					const response = await fetch('https://black.irdop.org/v1/lab/test_report/create_template', {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json',
 						},
-						body: JSON.stringify({
-							templateName: templateName,
-							templateDescription: templateDescription,
-							columns: columns,
-						}),
+						body: JSON.stringify(requestBody),
 					});
 
 					if (!response.ok) {
@@ -1356,7 +2960,12 @@
 						templateName: templateName,
 						templateDescription: templateDescription,
 						columns: columns,
+						customRows: customRows,
+						fileId: fileId, // Include uploaded file ID
 					};
+
+					// Reset selected file
+					selectedFile = null;
 
 					// Update button text to show new template name
 					elements.selectTemplateBtn.textContent = templateName;
@@ -1364,7 +2973,23 @@
 					// Show edit button
 					elements.editTemplateBtn.classList.remove('hidden');
 
-					// Apply the new template to the modal table
+					// Update external file area and buttons based on fileId
+					if (fileId) {
+						elements.externalFileArea.classList.remove('hidden');
+						elements.externalFileName.textContent = selectedFile?.name || 'Tệp đính kèm';
+						// Show file action buttons
+						elements.externalViewFileBtn.style.display = 'inline-block';
+						elements.externalDownloadFileBtn.style.display = 'inline-block';
+						// Show create report button when template has file
+						elements.createReportBtn.classList.remove('hidden');
+					} else {
+						elements.externalFileArea.classList.add('hidden');
+						// Hide file action buttons
+						elements.externalViewFileBtn.style.display = 'none';
+						elements.externalDownloadFileBtn.style.display = 'none';
+						// Hide create report button when template has no file
+						elements.createReportBtn.classList.add('hidden');
+					} // Apply the new template to the modal table
 					applyTemplateToModal(selectedTemplate);
 					hideCreateTemplateForm();
 				} catch (error) {
@@ -1445,6 +3070,14 @@
 						filters.columns.forEach((col) => {
 							const cell = document.createElement('td');
 							cell.className = 'px-4 py-3 text-gray-800';
+
+							// Apply stored width if available
+							const width = getColumnWidth(col);
+							if (width !== 'auto') {
+								cell.style.width = width + 'px';
+								cell.style.minWidth = width + 'px';
+							}
+
 							const formattedValue = formatCellValue(item[col], col);
 
 							// Use innerHTML for result_value and result_unit to render HTML content
@@ -1459,7 +3092,21 @@
 
 						tbody.appendChild(row);
 					});
+
+					// Add custom rows
+					customRows.forEach((customRow) => {
+						const row = document.createElement('tr');
+						row.className = 'border-b hover:bg-gray-50 custom-row';
+
+						const cells = createCustomRowCells(customRow, filters.columns);
+						cells.forEach((cell) => row.appendChild(cell));
+
+						tbody.appendChild(row);
+					});
 				}
+
+				// Update custom rows list
+				renderCustomRowsList();
 			}
 
 			// Apply template structure to modal table
@@ -1477,10 +3124,21 @@
 				// Populate table headers based on template columns
 				const headerRow = elements.modalTableHeader;
 				headerRow.innerHTML = '';
-				template.columns.forEach((templateCol) => {
+				template.columns.forEach((templateCol, index) => {
 					const th = document.createElement('th');
 					th.className = 'px-4 py-3 border-b text-left font-semibold text-gray-700 bg-gray-50';
 					th.textContent = templateCol.columnName;
+
+					// Apply stored width for the mapped column
+					const mappedColumn = templateCol.valueColumn;
+					if (mappedColumn) {
+						const width = getColumnWidth(mappedColumn);
+						if (width !== 'auto') {
+							th.style.width = width + 'px';
+							th.style.minWidth = width + 'px';
+						}
+					}
+
 					headerRow.appendChild(th);
 					console.log('Added header:', templateCol.columnName);
 				});
@@ -1495,6 +3153,16 @@
 					template.columns.forEach((templateCol) => {
 						const cell = document.createElement('td');
 						cell.className = 'px-4 py-3 text-gray-800';
+
+						// Apply stored width for the mapped column
+						const mappedColumn = templateCol.valueColumn;
+						if (mappedColumn) {
+							const width = getColumnWidth(mappedColumn);
+							if (width !== 'auto') {
+								cell.style.width = width + 'px';
+								cell.style.minWidth = width + 'px';
+							}
+						}
 
 						// Map template valueColumn to actual data
 						const valueKey = templateCol.valueColumn;
@@ -1513,6 +3181,20 @@
 					tbody.appendChild(row);
 				});
 
+				// Add custom rows
+				customRows.forEach((customRow) => {
+					const row = document.createElement('tr');
+					row.className = 'border-b hover:bg-gray-50 custom-row';
+
+					const cells = createCustomRowCellsForTemplate(customRow, template.columns);
+					cells.forEach((cell) => row.appendChild(cell));
+
+					tbody.appendChild(row);
+				});
+
+				// Update custom rows list
+				renderCustomRowsList();
+
 				console.log('Applied template to modal:', template);
 			}
 
@@ -1520,11 +3202,24 @@
 			function clearSelectedTemplate() {
 				selectedTemplate = null;
 
+				// Reset custom rows when clearing template
+				customRows = [];
+
 				// Reset button text
 				elements.selectTemplateBtn.textContent = 'Chọn mẫu có sẵn';
 
 				// Hide edit button
 				elements.editTemplateBtn.classList.add('hidden');
+
+				// Hide external file area
+				elements.externalFileArea.classList.add('hidden');
+
+				// Hide file action buttons
+				elements.externalViewFileBtn.style.display = 'none';
+				elements.externalDownloadFileBtn.style.display = 'none';
+
+				// Hide create report button
+				elements.createReportBtn.classList.add('hidden');
 
 				// Refresh modal table to show default columns
 				if (!elements.createTemplateModal.classList.contains('hidden')) {
@@ -1562,6 +3257,9 @@
 				elements.editTemplateForm.style.display = 'block';
 				// Don't hide the table - keep it visible
 
+				// Reset preview widths
+				editPreviewColumnWidths = {};
+
 				// Populate form with template data
 				elements.editTemplateCode.value = selectedTemplate.templateCode || '';
 				elements.editTemplateName.value = selectedTemplate.templateName || '';
@@ -1570,14 +3268,70 @@
 
 				// Populate columns
 				elements.editTemplateColumns.innerHTML = '';
+
+				// First, add mandatory columns
+				let hasSampleUid = false;
+				let hasId = false;
+
 				if (selectedTemplate.columns && Array.isArray(selectedTemplate.columns)) {
-					selectedTemplate.columns.forEach((column) => {
-						addEditTemplateColumn(column.columnName, column.valueColumn);
+					selectedTemplate.columns.forEach((column, index) => {
+						// Load existing width if available
+						if (column.width) {
+							editPreviewColumnWidths[index] = column.width;
+						}
+
+						if (column.valueColumn === 'sample_uid') {
+							hasSampleUid = true;
+							addMandatoryEditTemplateColumn(column.columnName, column.valueColumn);
+						} else if (column.valueColumn === 'id') {
+							hasId = true;
+							addMandatoryEditTemplateColumn(column.columnName, column.valueColumn);
+						} else {
+							addEditTemplateColumn(column.columnName, column.valueColumn);
+						}
 					});
-				} else {
-					// Add one empty column if no columns exist
+				}
+
+				// Ensure mandatory columns are present
+				if (!hasSampleUid) {
+					addMandatoryEditTemplateColumn('Mã mẫu', 'sample_uid');
+				}
+				if (!hasId) {
+					addMandatoryEditTemplateColumn('Mã chỉ tiêu', 'id');
+				}
+
+				// Add one empty column if no non-mandatory columns exist
+				const nonMandatoryColumns = elements.editTemplateColumns.querySelectorAll('.column-row:not(.mandatory-column)');
+				if (nonMandatoryColumns.length === 0) {
 					addEditTemplateColumn();
 				}
+
+				// Handle file display for edit template form
+				if (selectedTemplate.fileId) {
+					currentFileId = selectedTemplate.fileId;
+					// Always show file section when template has fileId
+					elements.editTemplateFileSection.style.display = 'block';
+					elements.editCurrentFileArea.classList.remove('hidden');
+					elements.editCurrentFileName.textContent = selectedTemplate.fileName || 'Tệp đã tải lên';
+					// Also show in upload area for backward compatibility
+					elements.editUploadFileName.textContent = selectedTemplate.fileName || 'Tệp đã tải lên';
+					// Hide the "Add File" button since file exists
+					elements.showEditFileBtn.style.display = 'none';
+				} else {
+					// Always show file section even when no fileId (so user can upload)
+					elements.editTemplateFileSection.style.display = 'block';
+					elements.editCurrentFileArea.classList.add('hidden');
+					elements.editUploadFileName.textContent = '';
+					currentFileId = null;
+					// Hide the "Add File" button since section is already shown
+					elements.showEditFileBtn.style.display = 'none';
+				}
+
+				// Reset edit selected file
+				editSelectedFile = null;
+
+				// Update preview table after setup
+				setTimeout(() => updateEditPreviewTable(), 100);
 			}
 
 			// Hide edit template form
@@ -1589,6 +3343,41 @@
 				elements.editTemplateName.value = '';
 				elements.editTemplateDescription.value = '';
 				elements.editTemplateColumns.innerHTML = '';
+				// Clear file upload
+				elements.editTemplateFileInput.value = '';
+				elements.editUploadFileName.textContent = '';
+				elements.editUploadProgress.classList.add('hidden');
+				// Hide current file area but keep file section visible for next use
+				elements.editCurrentFileArea.classList.add('hidden');
+				elements.editTemplateFileSection.style.display = 'block';
+				// Keep "Add File" button hidden since section is shown
+				elements.showEditFileBtn.style.display = 'none';
+				editSelectedFile = null; // Clear selected file
+				currentFileId = null;
+
+				// Reset preview widths
+				editPreviewColumnWidths = {};
+			}
+
+			// Add a mandatory edit template column row (cannot be removed or edited)
+			function addMandatoryEditTemplateColumn(columnName, valueColumn) {
+				const columnContainer = elements.editTemplateColumns;
+				const columnRow = document.createElement('div');
+				columnRow.className = 'column-row mandatory-column';
+
+				columnRow.innerHTML = `
+					<textarea class="column-textarea" placeholder="Tên cột" rows="2" readonly style="background-color: #f3f4f6; cursor: not-allowed;">${columnName}</textarea>
+					<select class="column-select" disabled style="background-color: #f3f4f6; cursor: not-allowed;">
+						<option value="${valueColumn}" selected>${availableColumns[valueColumn] || valueColumn}</option>
+					</select>
+					<button type="button" class="remove-column-btn" disabled style="opacity: 0.5; cursor: not-allowed;" title="Cột bắt buộc không thể xóa">
+						<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				`;
+
+				columnContainer.appendChild(columnRow);
 			}
 
 			// Add a new edit template column row
@@ -1598,8 +3387,8 @@
 				columnRow.className = 'column-row';
 
 				columnRow.innerHTML = `
-					<textarea class="column-textarea" placeholder="Tên cột" rows="2">${columnName}</textarea>
-					<select class="column-select">
+					<textarea class="column-textarea" placeholder="Tên cột" rows="2" oninput="updateEditPreviewTable()">${columnName}</textarea>
+					<select class="column-select" onchange="updateEditPreviewTable()">
 						<option value="">Điền tay</option>
 						${Object.entries(availableColumns)
 							.map(
@@ -1615,17 +3404,56 @@
 				`;
 
 				columnContainer.appendChild(columnRow);
+
+				// Rebalance column widths when adding new column
+				rebalanceEditPreviewWidths();
+
+				// Update preview table after adding column
+				updateEditPreviewTable();
 			}
 
 			// Remove an edit template column row
 			function removeEditTemplateColumn(button) {
 				const columnRow = button.closest('.column-row');
+
+				// Prevent removing mandatory columns
+				if (columnRow.classList.contains('mandatory-column')) {
+					showAutoHideAlert('Cột bắt buộc không thể xóa', 'error');
+					return;
+				}
+
+				// Get column index before removing
+				const allRows = elements.editTemplateColumns.querySelectorAll('.column-row');
+				const columnIndex = Array.from(allRows).indexOf(columnRow);
+
 				columnRow.remove();
 
-				// Ensure at least one column remains
-				if (elements.editTemplateColumns.children.length === 0) {
-					addEditTemplateColumn();
+				// Remove the width data for the deleted column and reindex
+				const newWidths = {};
+				let newIndex = 0;
+
+				for (let i = 0; i < allRows.length; i++) {
+					if (i !== columnIndex) {
+						if (editPreviewColumnWidths[i]) {
+							newWidths[newIndex] = editPreviewColumnWidths[i];
+						}
+						newIndex++;
+					}
 				}
+				editPreviewColumnWidths = newWidths;
+
+				// Ensure at least one non-mandatory column remains
+				const nonMandatoryColumns = elements.editTemplateColumns.querySelectorAll('.column-row:not(.mandatory-column)');
+				if (nonMandatoryColumns.length === 0) {
+					addEditTemplateColumn();
+					return; // addEditTemplateColumn will call updateEditPreviewTable
+				}
+
+				// Rebalance remaining column widths
+				rebalanceEditPreviewWidths();
+
+				// Update preview table after removing column
+				updateEditPreviewTable();
 			}
 
 			// Handle edit template submission
@@ -1648,7 +3476,8 @@
 				const columns = [];
 				const columnRows = elements.editTemplateColumns.querySelectorAll('.column-row');
 
-				for (let row of columnRows) {
+				for (let i = 0; i < columnRows.length; i++) {
+					const row = columnRows[i];
 					const nameInput = row.querySelector('.column-textarea');
 					const valueSelect = row.querySelector('.column-select');
 
@@ -1663,6 +3492,8 @@
 					columns.push({
 						columnName: columnName,
 						valueColumn: valueColumn,
+						width: editPreviewColumnWidths[i] || '20%',
+						resizable: true,
 					});
 				}
 
@@ -1671,19 +3502,59 @@
 					return;
 				}
 
+				// Validate mandatory columns
+				const hasSampleUid = columns.some((col) => col.valueColumn === 'sample_uid');
+				const hasId = columns.some((col) => col.valueColumn === 'id');
+
+				if (!hasSampleUid) {
+					showAutoHideAlert('Cột "Mã mẫu" (sample_uid) là bắt buộc', 'error');
+					return;
+				}
+
+				if (!hasId) {
+					showAutoHideAlert('Cột "Mã chỉ tiêu" (id) là bắt buộc', 'error');
+					return;
+				}
+
 				try {
+					let fileId = currentFileId; // Keep existing fileId
+
+					// Upload new file if a file was selected
+					if (editSelectedFile) {
+						try {
+							showAutoHideAlert('Đang tải lên tệp...', 'info');
+							fileId = await handleFileUpload(editSelectedFile);
+							if (!fileId) {
+								showAutoHideAlert('Lỗi khi tải lên tệp', 'error');
+								return;
+							}
+						} catch (error) {
+							showAutoHideAlert('Lỗi khi tải lên tệp: ' + error.message, 'error');
+							return;
+						}
+					}
+
+					const requestBody = {
+						id: selectedTemplate.id,
+						templateCode: templateCode,
+						templateName: templateName,
+						templateDescription: templateDescription,
+						columns: columns,
+						customRows: customRows,
+					};
+
+					// Add fileId if available
+					if (fileId) {
+						requestBody.fileId = fileId;
+						currentFileId = fileId;
+					}
+
 					const response = await fetch('https://black.irdop.org/v1/lab/test_report/update_template', {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json',
 						},
-						body: JSON.stringify({
-							id: selectedTemplate.id,
-							templateCode: templateCode,
-							templateName: templateName,
-							templateDescription: templateDescription,
-							columns: columns,
-						}),
+						body: JSON.stringify(requestBody),
 					});
 
 					if (!response.ok) {
@@ -1704,10 +3575,34 @@
 						templateName: templateName,
 						templateDescription: templateDescription,
 						columns: columns,
+						customRows: customRows,
+						fileId: fileId, // Update file ID if changed
 					};
+
+					// Reset selected file
+					editSelectedFile = null;
 
 					// Update button text to show updated template name
 					elements.selectTemplateBtn.textContent = templateName;
+
+					// Update external file area and buttons based on fileId
+					if (fileId) {
+						elements.externalFileArea.classList.remove('hidden');
+						elements.externalFileName.textContent =
+							editSelectedFile?.name || selectedTemplate.fileName || 'Tệp đính kèm';
+						// Show file action buttons
+						elements.externalViewFileBtn.style.display = 'inline-block';
+						elements.externalDownloadFileBtn.style.display = 'inline-block';
+						// Show create report button when template has file
+						elements.createReportBtn.classList.remove('hidden');
+					} else {
+						elements.externalFileArea.classList.add('hidden');
+						// Hide file action buttons
+						elements.externalViewFileBtn.style.display = 'none';
+						elements.externalDownloadFileBtn.style.display = 'none';
+						// Hide create report button when template has no file
+						elements.createReportBtn.classList.add('hidden');
+					}
 
 					// Apply the updated template to the modal
 					applyTemplateToModal(selectedTemplate);
@@ -1774,6 +3669,10 @@
 			// Handle action dropdown clicks
 			function handleActionClick(action) {
 				switch (action) {
+					case 'clearSelection':
+						clearAllSelections();
+						hideActionDropdown();
+						break;
 					case 'createTemplate':
 						showCreateTemplateModal();
 						break;
@@ -1793,12 +3692,252 @@
 			// Template management functions
 			let templateData = [];
 			let selectedTemplate = null;
+			let currentFileId = null; // Store current uploaded file ID
+			let selectedFile = null; // Store selected file for upload
+			let editSelectedFile = null; // Store selected file for edit form
 			let templatePagination = {
 				currentPage: 1,
 				itemsPerPage: 5,
 				totalItems: 0,
 				totalPages: 1,
 			};
+
+			// Column width management for preview tables
+			let createPreviewColumnWidths = {}; // Store widths for create template form
+			let editPreviewColumnWidths = {}; // Store widths for edit template form
+			let createLockedColumns = {}; // Store locked status for create template form
+			let editLockedColumns = {}; // Store locked status for edit template form
+
+			// Generic API POST function
+			async function apiPost(url, body) {
+				try {
+					const response = await fetch(url, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${getCookie('auth')}`,
+							'x-fh-app-uid': 'LIMS-IRDOP-PRD',
+							'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
+						},
+						body: JSON.stringify(body),
+					});
+
+					// Check content type to determine how to parse response
+					const contentType = response.headers.get('content-type');
+					let data;
+
+					if (contentType && contentType.includes('application/json')) {
+						// Response is JSON
+						data = await response.json();
+					} else {
+						// Response is text/string
+						data = await response.text();
+					}
+
+					return {
+						status: response.status,
+						data: data,
+					};
+				} catch (error) {
+					console.error('API Error:', error);
+					throw error;
+				}
+			}
+
+			// Get cookie helper function
+			function getCookie(name) {
+				const value = `; ${document.cookie}`;
+				const parts = value.split(`; ${name}=`);
+				if (parts.length === 2) return parts.pop().split(';').shift();
+				return '';
+			}
+
+			// File upload functions
+			async function handleFileUpload(file) {
+				if (!file) return null;
+
+				try {
+					// Build upload payload
+					const uploadPayload = {
+						originInfo: {
+							fileName: file.name,
+							mimeType: file.type,
+							fileSize: file.size,
+						},
+						userTags: ['Mẫu nhật ký thử nghiệm'],
+						foreignKeyUIDs: [selectedTemplate?.templateCode || 'template'],
+					};
+
+					// Get upload URL from API
+					const uploadResponse = await apiPost('https://red.irdop.org/v1/file/get/upload_link', uploadPayload);
+
+					if (uploadResponse.status === 200 && uploadResponse.data) {
+						// Extract id and url from response
+						const { url, id } = uploadResponse.data;
+
+						// Upload file to the returned URL
+						const fileUploadResponse = await fetch(url, {
+							method: 'PUT',
+							body: file,
+							headers: {
+								'Content-Type': file.type,
+							},
+						});
+
+						// If file upload successful, update object status to OK
+						if (fileUploadResponse.status === 200 && id) {
+							await apiPost('https://red.irdop.org/v1/file/update/file', {
+								id: id,
+								updateData: {
+									objectStatus: 'OK',
+								},
+							});
+
+							return id;
+						} else {
+							throw new Error('Lỗi khi tải lên tệp');
+						}
+					} else {
+						throw new Error('Không thể lấy link tải lên');
+					}
+				} catch (error) {
+					console.error('File upload error:', error);
+					throw error;
+				}
+			}
+
+			// Initialize file upload handlers
+			function initializeFileUpload() {
+				// Create template file upload
+				elements.uploadFileBtn.addEventListener('click', () => {
+					elements.templateFileInput.click();
+				});
+
+				elements.templateFileInput.addEventListener('change', (e) => {
+					const file = e.target.files[0];
+					if (file) {
+						// Check file extension - only allow .docx files
+						const fileName = file.name.toLowerCase();
+						if (!fileName.endsWith('.docx')) {
+							showAutoHideAlert('Chỉ chấp nhận file có định dạng .docx', 'error');
+							e.target.value = ''; // Clear the input
+							elements.uploadFileName.textContent = '';
+							selectedFile = null;
+							return;
+						}
+
+						selectedFile = file; // Just store the file, don't upload yet
+						elements.uploadFileName.textContent = file.name;
+						showAutoHideAlert('Đã chọn tệp: ' + file.name, 'info');
+					}
+				});
+
+				// Edit template file upload
+				elements.editUploadFileBtn.addEventListener('click', () => {
+					elements.editTemplateFileInput.click();
+				});
+
+				elements.editTemplateFileInput.addEventListener('change', (e) => {
+					const file = e.target.files[0];
+					if (file) {
+						// Check file extension - only allow .docx files
+						const fileName = file.name.toLowerCase();
+						if (!fileName.endsWith('.docx')) {
+							showAutoHideAlert('Chỉ chấp nhận file có định dạng .docx', 'error');
+							e.target.value = ''; // Clear the input
+							elements.editUploadFileName.textContent = '';
+							editSelectedFile = null;
+							return;
+						}
+
+						editSelectedFile = file; // Just store the file, don't upload yet
+						elements.editUploadFileName.textContent = file.name;
+						showAutoHideAlert('Đã chọn tệp: ' + file.name, 'info');
+					}
+				});
+
+				// File view and download handlers
+				elements.editViewFileBtn.addEventListener('click', handleViewCurrentFile);
+				elements.editDownloadFileBtn.addEventListener('click', handleDownloadCurrentFile);
+
+				// External file view and download handlers
+				elements.externalViewFileBtn.addEventListener('click', handleViewCurrentFile);
+				elements.externalDownloadFileBtn.addEventListener('click', handleDownloadCurrentFile);
+			}
+
+			// Handle viewing current file
+			async function handleViewCurrentFile() {
+				if (!selectedTemplate || !selectedTemplate.fileId) {
+					showAutoHideAlert('Không có file để xem', 'error');
+					return;
+				}
+
+				try {
+					const fileRecord = {
+						id: selectedTemplate.fileId,
+						originInfo: {
+							fileName: selectedTemplate.fileName || 'template_file',
+							mimeType: 'application/octet-stream',
+						},
+					};
+
+					const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
+						expiry: 60 * 10,
+						mode: 'view',
+						fileRecord: fileRecord,
+					});
+
+					if (response.status === 200 && response.data) {
+						// Open file in new tab
+						window.open(response.data, '_blank');
+					} else {
+						throw new Error('Không thể lấy link xem file');
+					}
+				} catch (error) {
+					console.error('View file error:', error);
+					showAutoHideAlert('Lỗi khi xem file: ' + error.message, 'error');
+				}
+			}
+
+			// Handle downloading current file
+			async function handleDownloadCurrentFile() {
+				if (!selectedTemplate || !selectedTemplate.fileId) {
+					showAutoHideAlert('Không có file để tải xuống', 'error');
+					return;
+				}
+
+				try {
+					const fileRecord = {
+						id: selectedTemplate.fileId,
+						originInfo: {
+							fileName: selectedTemplate.fileName || 'template_file',
+							mimeType: 'application/octet-stream',
+						},
+					};
+
+					const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
+						expiry: 60 * 10,
+						mode: 'download',
+						fileRecord: fileRecord,
+					});
+
+					if (response.status === 200 && response.data) {
+						// Create download link and trigger download
+						const link = document.createElement('a');
+						link.href = response.data;
+						link.download = selectedTemplate.fileName || 'template_file';
+						document.body.appendChild(link);
+						link.click();
+						document.body.removeChild(link);
+						showAutoHideAlert('Đang tải xuống file...', 'success');
+					} else {
+						throw new Error('Không thể lấy link tải xuống');
+					}
+				} catch (error) {
+					console.error('Download file error:', error);
+					showAutoHideAlert('Lỗi khi tải xuống file: ' + error.message, 'error');
+				}
+			}
 
 			// Fetch templates from API
 			async function fetchTemplates(searchTerm = '', page = 1) {
@@ -1964,11 +4103,36 @@
 				if (fullTemplate) {
 					selectedTemplate = fullTemplate;
 
+					// Load custom rows from template if available
+					if (fullTemplate.customRows && Array.isArray(fullTemplate.customRows)) {
+						customRows = [...fullTemplate.customRows];
+					} else {
+						customRows = []; // Reset custom rows if template doesn't have any
+					}
+
 					// Update button text to show selected template name
 					elements.selectTemplateBtn.textContent = fullTemplate.templateName || fullTemplate.templateCode;
 
 					// Show edit button
 					elements.editTemplateBtn.classList.remove('hidden');
+
+					// Show external file area if template has file
+					if (fullTemplate.fileId) {
+						elements.externalFileArea.classList.remove('hidden');
+						elements.externalFileName.textContent = fullTemplate.fileName || 'Tệp đính kèm';
+						// Show file action buttons
+						elements.externalViewFileBtn.style.display = 'inline-block';
+						elements.externalDownloadFileBtn.style.display = 'inline-block';
+						// Show create report button when template has file
+						elements.createReportBtn.classList.remove('hidden');
+					} else {
+						elements.externalFileArea.classList.add('hidden');
+						// Hide file action buttons
+						elements.externalViewFileBtn.style.display = 'none';
+						elements.externalDownloadFileBtn.style.display = 'none';
+						// Hide create report button when template has no file
+						elements.createReportBtn.classList.add('hidden');
+					}
 
 					// Apply template columns to modal table immediately
 					applyTemplateToModal(fullTemplate);
@@ -2008,7 +4172,7 @@
 			}
 
 			// Make loadTemplatePage available globally for pagination buttons
-			window.loadTemplatePage = loadTemplatePage;
+			// (This is already defined above in the global section)
 
 			// Handle create template button
 			function handleCreateTemplateOld() {
@@ -2024,6 +4188,9 @@
 						showAutoHideAlert('Không tìm thấy bảng để sao chép', 'error');
 						return;
 					}
+
+					// Log table structure and data information
+					logTableStructure();
 
 					// Create a styled table for copying with Times New Roman font
 					const styledTable = createStyledTableForCopy(table);
@@ -2058,6 +4225,200 @@
 				}
 			}
 
+			// Handle create report button
+			async function handleCreateReport() {
+				try {
+					// Check if template is selected and has fileId
+					if (!selectedTemplate || !selectedTemplate.fileId) {
+						showAutoHideAlert('Vui lòng chọn mẫu có tệp đính kèm để tạo biên bản', 'error');
+						return;
+					}
+
+					// Get selected items data
+					const selectedItems = getSelectedItemsData();
+					if (selectedItems.length === 0) {
+						showAutoHideAlert('Vui lòng chọn ít nhất một dòng dữ liệu để tạo biên bản', 'error');
+						return;
+					}
+
+					// Show loading indicator
+					showAutoHideAlert('Đang tạo biên bản...', 'info');
+
+					// Prepare data for API
+					const requestBody = {
+						fileId: selectedTemplate.fileId,
+						templateCode: selectedTemplate.templateCode,
+						data: selectedItems,
+						columns: selectedTemplate.columns || [],
+						customRows: customRows || [],
+					};
+
+					// Call API to export template with lab results
+					const response = await fetch('https://red.irdop.org/v1/file/export/template_lab_result', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${getCookie('auth')}`,
+							'x-fh-app-uid': 'LIMS-IRDOP-PRD',
+							'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
+						},
+						body: JSON.stringify(requestBody),
+					});
+
+					if (!response.ok) {
+						throw new Error(`HTTP error! status: ${response.status}`);
+					}
+
+					// Get the file buffer from response
+					const buffer = await response.arrayBuffer();
+
+					// Create blob and download file
+					const blob = new Blob([buffer], {
+						type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+					});
+
+					// Create download link
+					const url = window.URL.createObjectURL(blob);
+					const link = document.createElement('a');
+					link.href = url;
+
+					// Generate filename with timestamp
+					const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+					const templateName = selectedTemplate.templateName || 'template';
+					link.download = `Bien_ban_${templateName}_${timestamp}.docx`;
+
+					// Trigger download
+					document.body.appendChild(link);
+					link.click();
+					document.body.removeChild(link);
+
+					// Clean up
+					window.URL.revokeObjectURL(url);
+
+					showAutoHideAlert('Đã tạo và tải xuống biên bản thành công', 'success');
+				} catch (error) {
+					console.error('Error creating report:', error);
+					showAutoHideAlert('Lỗi khi tạo biên bản: ' + error.message, 'error');
+				}
+			}
+
+			// Log table structure and data
+			function logTableStructure() {
+				try {
+					const table = document.querySelector('#createTemplateModal table');
+					if (!table) return;
+
+					const tableData = [];
+					const columns = [];
+					const customRowsData = [];
+
+					// Get table headers and build columns structure
+					const headerCells = document.querySelectorAll('#modalTableHeader th');
+
+					if (selectedTemplate && selectedTemplate.columns) {
+						// Use template columns structure
+						selectedTemplate.columns.forEach((templateCol, index) => {
+							const headerElement = headerCells[index];
+							const computedStyle = headerElement ? window.getComputedStyle(headerElement) : null;
+							const currentWidth = headerElement ? headerElement.offsetWidth : 0;
+
+							columns.push({
+								columnName: templateCol.columnName,
+								valueColumn: templateCol.valueColumn || '',
+								width: currentWidth > 0 ? Math.round((currentWidth / table.offsetWidth) * 100) + '%' : 'auto',
+								minWidth: computedStyle ? computedStyle.minWidth : '100px',
+								resizable: true,
+							});
+						});
+					} else {
+						// Use default columns structure
+						headerCells.forEach((headerCell, index) => {
+							const computedStyle = window.getComputedStyle(headerCell);
+							const currentWidth = headerCell.offsetWidth;
+							const column = filters.columns[index];
+
+							columns.push({
+								columnName: headerCell.textContent.trim(),
+								valueColumn: column || '',
+								width: currentWidth > 0 ? Math.round((currentWidth / table.offsetWidth) * 100) + '%' : 'auto',
+								minWidth: computedStyle.minWidth || '100px',
+								resizable: true,
+							});
+						});
+					}
+
+					// Get table body data
+					const bodyRows = document.querySelectorAll('#modalTableBody tr');
+					bodyRows.forEach((row) => {
+						const rowData = [];
+						const cells = row.querySelectorAll('td');
+
+						// Check if this is a custom row
+						if (row.classList.contains('custom-row')) {
+							// Handle custom row - find corresponding customRow data
+							const customRowIndex = Array.from(bodyRows)
+								.filter((r) => r.classList.contains('custom-row'))
+								.indexOf(row);
+							if (customRows[customRowIndex]) {
+								const customRow = customRows[customRowIndex];
+								customRowsData.push({
+									type: customRow.type || 'custom',
+									label: customRow.label || 'Hàng tùy chỉnh',
+									values: customRow.values || {},
+								});
+							}
+
+							// Still collect cell data for the data array
+							cells.forEach((cell) => {
+								let cellText = cell.textContent.trim();
+
+								// Clean placeholder text for merged cells
+								if (cellText.includes('cột trống')) {
+									cellText = '';
+								}
+
+								const displayText = cellText === '-' ? '' : cellText;
+
+								// Handle colspan for data representation
+								const colspan = parseInt(cell.getAttribute('colspan')) || 1;
+								rowData.push(displayText);
+
+								// Add empty values for colspan > 1 to maintain column alignment
+								for (let i = 1; i < colspan; i++) {
+									rowData.push('');
+								}
+							});
+						} else {
+							// Handle regular data row
+							cells.forEach((cell) => {
+								let cellText = cell.textContent.trim();
+								const displayText = cellText === '-' ? '' : cellText;
+
+								// Handle colspan for data representation
+								const colspan = parseInt(cell.getAttribute('colspan')) || 1;
+								rowData.push(displayText);
+
+								// Add empty values for colspan > 1 to maintain column alignment
+								for (let i = 1; i < colspan; i++) {
+									rowData.push('');
+								}
+							});
+						}
+
+						tableData.push(rowData);
+					});
+
+					// Log the structure
+					console.log('=== TABLE COPY INFORMATION ===');
+					console.log('data:', tableData);
+					console.log('columns:', columns);
+					console.log('customRows:', customRowsData);
+					console.log('==============================');
+				} catch (error) {
+					console.error('Error logging table structure:', error);
+				}
+			}
+
 			// Create a styled table for copying with Times New Roman font
 			function createStyledTableForCopy(originalTable) {
 				const styledTable = originalTable.cloneNode(true);
@@ -2070,7 +4431,7 @@
 
 				// Style headers
 				const headers = styledTable.querySelectorAll('th');
-				headers.forEach((th) => {
+				headers.forEach((th, index) => {
 					th.style.fontFamily = 'Times New Roman, serif';
 					th.style.fontSize = '12pt';
 					th.style.fontWeight = 'bold';
@@ -2081,11 +4442,18 @@
 					th.style.margin = '0';
 					th.style.textIndent = '0';
 					th.style.textDecoration = 'none';
+
+					// Preserve column width ratios
+					const originalWidth = th.style.width || th.offsetWidth;
+					if (originalWidth) {
+						th.style.width = originalWidth;
+						th.style.minWidth = originalWidth;
+					}
 				});
 
 				// Style cells
 				const cells = styledTable.querySelectorAll('td');
-				cells.forEach((td) => {
+				cells.forEach((td, index) => {
 					td.style.fontFamily = 'Times New Roman, serif';
 					td.style.fontSize = '12pt';
 					td.style.border = '1px solid #000';
@@ -2095,8 +4463,27 @@
 					td.style.textIndent = '0';
 					td.style.textDecoration = 'none';
 
-					// Replace '-' with empty string
-					if (td.textContent.trim() === '-') {
+					// Preserve colspan attribute for merged cells
+					const originalColspan = td.getAttribute('colspan');
+					if (originalColspan) {
+						td.setAttribute('colspan', originalColspan);
+						// Center align merged cells
+						td.style.textAlign = 'center';
+					}
+
+					// Preserve column width ratios
+					const originalWidth = td.style.width || td.offsetWidth;
+					if (originalWidth) {
+						td.style.width = originalWidth;
+						td.style.minWidth = originalWidth;
+					}
+
+					// Replace '-' with empty string and handle placeholder text
+					const cellText = td.textContent.trim();
+					if (cellText === '-') {
+						td.textContent = '';
+					} else if (cellText.includes('cột trống')) {
+						// Clear placeholder text for merged empty cells
 						td.textContent = '';
 					}
 				});
@@ -2134,8 +4521,21 @@
 						const cells = row.querySelectorAll('td');
 						cells.forEach((cell) => {
 							const cellText = cell.textContent.trim();
-							const displayText = cellText === '-' ? '' : cellText;
-							htmlContent += `<td style="font-family: 'Times New Roman', serif; font-size: 12pt; border: 1px solid #000; padding: 2px; text-align: left; margin: 0; text-indent: 0; text-decoration: none;">${displayText}</td>`;
+							let displayText = cellText === '-' ? '' : cellText;
+
+							// Clear placeholder text for merged cells
+							if (displayText.includes('cột trống')) {
+								displayText = '';
+							}
+
+							// Get colspan attribute if exists
+							const colspan = cell.getAttribute('colspan');
+							const colspanAttr = colspan ? ` colspan="${colspan}"` : '';
+
+							// Set text alignment for merged cells
+							const textAlign = colspan ? 'center' : 'left';
+
+							htmlContent += `<td${colspanAttr} style="font-family: 'Times New Roman', serif; font-size: 12pt; border: 1px solid #000; padding: 2px; text-align: ${textAlign}; margin: 0; text-indent: 0; text-decoration: none;">${displayText}</td>`;
 						});
 						htmlContent += '</tr>';
 					});
@@ -2185,11 +4585,29 @@
 					bodyRows.forEach((row) => {
 						const rowData = [];
 						const cells = row.querySelectorAll('td');
+
 						cells.forEach((cell) => {
-							const cellText = cell.textContent.trim();
+							let cellText = cell.textContent.trim();
+
+							// Clear placeholder text for merged cells
+							if (cellText.includes('cột trống')) {
+								cellText = '';
+							}
+
 							const displayText = cellText === '-' ? '' : cellText;
+
+							// Handle colspan for tab-separated format
+							const colspan = parseInt(cell.getAttribute('colspan')) || 1;
+
+							// Add the cell value
 							rowData.push(displayText);
+
+							// Add empty cells for colspan > 1 to maintain column alignment
+							for (let i = 1; i < colspan; i++) {
+								rowData.push('');
+							}
 						});
+
 						tableText += rowData.join('\t') + '\n';
 					});
 
@@ -2237,7 +4655,8 @@
 
 				// Create alert element
 				const alert = document.createElement('div');
-				alert.className = `auto-hide-alert fixed top-20 right-4 z-50 px-4 py-3 rounded-lg shadow-lg max-w-sm`;
+				alert.className = `auto-hide-alert fixed top-20 right-4 px-4 py-3 rounded-lg shadow-lg max-w-sm`;
+				alert.style.zIndex = '99998'; // High z-index, just below notification
 
 				// Set style based on type
 				switch (type) {
@@ -2304,9 +4723,18 @@
 					const th = document.createElement('th');
 					th.className = 'px-4 py-3 border-b cursor-pointer hover:bg-blue-100 text-left font-semibold text-gray-700';
 					th.onclick = () => handleSort(column);
+
+					// Apply stored width if available
+					const width = getColumnWidth(column);
+					if (width !== 'auto') {
+						th.style.width = width + 'px';
+						th.style.minWidth = width + 'px';
+					}
+
 					th.innerHTML = `
 						${availableColumns[column] || column}
 						<span id="sort-${column}"></span>
+						<div class="resize-handle" onmousedown="startColumnResize(event, '${column}')"></div>
 					`;
 					headerRow.appendChild(th);
 				});
@@ -2381,7 +4809,8 @@
 			function showNotification(message, type = 'info') {
 				// Create notification element
 				const notification = document.createElement('div');
-				notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+				notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+				notification.style.zIndex = '99999'; // Highest z-index to show on top of all elements
 
 				// Set background color based on type
 				const typeClasses = {
@@ -2477,14 +4906,66 @@
 						console.log(`Row ${index} is pre-selected`);
 					}
 
-					// Add click handler for row selection
+					// Add click handler for row selection with double-click handling
+					let clickTimeout = null;
+					let clickCount = 0;
+
 					row.addEventListener('click', (e) => {
-						e.preventDefault();
-						// Only toggle selection if not dragging
 						if (!isDragging) {
-							// Pass the item data to store it
-							toggleRowSelection(rowId, row, item);
+							clickCount++;
+
+							if (clickCount === 1) {
+								// Single click - set a timeout to handle selection
+								clickTimeout = setTimeout(() => {
+									if (clickCount === 1) {
+										// Single click confirmed - select row
+										toggleRowSelection(rowId, row, item);
+									}
+									clickCount = 0;
+								}, 250); // 250ms delay to detect double-click
+							}
 						}
+					});
+
+					// Add double-click handler for copying cell values
+					row.addEventListener('dblclick', (e) => {
+						e.preventDefault();
+						clickCount = 2;
+
+						// Clear the single-click timeout
+						if (clickTimeout) {
+							clearTimeout(clickTimeout);
+							clickTimeout = null;
+						}
+
+						const target = e.target;
+						if (target.tagName === 'TD') {
+							// Get the cell content
+							const cellContent = target.textContent.trim();
+							if (cellContent) {
+								// Copy to clipboard
+								navigator.clipboard
+									.writeText(cellContent)
+									.then(() => {
+										showAutoHideAlert(`Đã sao chép: "${cellContent}"`, 'success');
+									})
+									.catch(() => {
+										// Fallback for older browsers
+										const textArea = document.createElement('textarea');
+										textArea.value = cellContent;
+										document.body.appendChild(textArea);
+										textArea.select();
+										document.execCommand('copy');
+										document.body.removeChild(textArea);
+										showAutoHideAlert(`Đã sao chép: "${cellContent}"`, 'success');
+									});
+							}
+						}
+
+						// Reset click count after handling double-click
+						setTimeout(() => {
+							clickCount = 0;
+						}, 10);
 					});
 
 					// Add drag event handlers
@@ -2497,7 +4978,8 @@
 					});
 
 					row.addEventListener('mouseup', (e) => {
-						handleDragEnd();
+						// Don't handle mouseup on individual rows since we have global listener
+						// This prevents duplicate calls to handleDragEnd
 					});
 
 					// Add mouseenter for drag selection
@@ -2507,9 +4989,17 @@
 						}
 					});
 
-					filters.columns.forEach((col) => {
+					filters.columns.forEach((col, colIndex) => {
 						const cell = document.createElement('td');
 						cell.className = 'px-4 py-3 text-gray-800';
+
+						// Apply stored width if available
+						const width = getColumnWidth(col);
+						if (width !== 'auto') {
+							cell.style.width = width + 'px';
+							cell.style.minWidth = width + 'px';
+						}
+
 						const formattedValue = formatCellValue(item[col], col);
 
 						// Use innerHTML for result_value and result_unit to render HTML content
@@ -2640,9 +5130,15 @@
 
 			// Event listeners
 			document.addEventListener('DOMContentLoaded', function () {
+				// Load stored column widths
+				loadColumnWidths();
+
 				// Initialize column checkboxes and table headers
 				initializeColumnCheckboxes();
 				renderTableHeaders();
+
+				// Initialize file upload functionality
+				initializeFileUpload();
 
 				// Column dropdown events
 				elements.columnToggleBtn.addEventListener('click', toggleColumnDropdown);
@@ -2712,6 +5208,7 @@
 				});
 
 				// Action dropdown events
+				elements.clearSelectionAction.addEventListener('click', () => handleActionClick('clearSelection'));
 				elements.createTemplateAction.addEventListener('click', () => handleActionClick('createTemplate'));
 				elements.fillResultAction.addEventListener('click', () => handleActionClick('fillResult'));
 				elements.checkResultAction.addEventListener('click', () => handleActionClick('checkResult'));
@@ -2724,9 +5221,20 @@
 					}
 				});
 
-				// Template events
-				elements.copyTableBtn.addEventListener('click', handleCopyTable);
+				// Template events with form closing logic
+				elements.copyTableBtn.addEventListener('click', () => {
+					hideCreateTemplateForm();
+					hideEditTemplateForm();
+					handleCopyTable();
+				});
+				elements.createReportBtn.addEventListener('click', () => {
+					hideCreateTemplateForm();
+					hideEditTemplateForm();
+					handleCreateReport();
+				});
 				elements.selectTemplateBtn.addEventListener('click', (e) => {
+					hideCreateTemplateForm();
+					hideEditTemplateForm();
 					e.stopPropagation();
 					showTemplateDropdown();
 				});
@@ -2773,21 +5281,94 @@
 				elements.pageInput.addEventListener('blur', handlePageInputNavigation);
 
 				// Create Template Form events
-				elements.createTemplateBtn.addEventListener('click', toggleCreateTemplateForm);
-				elements.cancelCreateTemplate.addEventListener('click', hideCreateTemplateForm);
+				elements.createTemplateBtn.addEventListener('click', () => {
+					hideEditTemplateForm(); // Close edit form if open
+					toggleCreateTemplateForm();
+				});
+				elements.closeCreateTemplateBtn.addEventListener('click', hideCreateTemplateForm);
+				elements.cancelCreateTemplate?.addEventListener('click', hideCreateTemplateForm);
 				elements.submitCreateTemplate.addEventListener('click', handleCreateTemplate);
 				elements.addColumnBtn.addEventListener('click', addTemplateColumn);
+				elements.showCreateFileBtn.addEventListener('click', () => {
+					elements.createTemplateFileSection.style.display = 'block';
+					elements.showCreateFileBtn.style.display = 'none';
+				});
 
 				// Edit Template Form events
-				elements.editTemplateBtn.addEventListener('click', showEditTemplateForm);
-				elements.cancelEditTemplate.addEventListener('click', hideEditTemplateForm);
+				elements.editTemplateBtn.addEventListener('click', () => {
+					hideCreateTemplateForm(); // Close create form if open
+					showEditTemplateForm();
+				});
+				elements.closeEditTemplateBtn.addEventListener('click', hideEditTemplateForm);
+				elements.cancelEditTemplate?.addEventListener('click', hideEditTemplateForm);
 				elements.submitEditTemplate.addEventListener('click', handleEditTemplate);
 				elements.addEditColumnBtn.addEventListener('click', () => addEditTemplateColumn());
 				elements.deleteTemplateBtn.addEventListener('click', handleDeleteTemplate);
+				elements.showEditFileBtn.addEventListener('click', () => {
+					elements.editTemplateFileSection.style.display = 'block';
+					elements.showEditFileBtn.style.display = 'none';
+				});
+
+				// Custom rows events
+				elements.addCustomRowBtn.addEventListener('click', addCustomRow);
+
+				// Click outside modal to close functionality
+				addClickOutsideListeners();
 
 				// Initial load
 				fetchData();
 			});
+
+			// Click outside modal to close functionality
+			function addClickOutsideListeners() {
+				// Create Template Modal
+				if (elements.createTemplateModal) {
+					elements.createTemplateModal.addEventListener('click', function (event) {
+						if (event.target === elements.createTemplateModal) {
+							hideCreateTemplateModal();
+						}
+					});
+				}
+
+				// Action Dropdown and other dropdowns
+				document.addEventListener('click', function (event) {
+					// Close action dropdown when clicking outside
+					if (elements.actionDropdown && elements.selectedCountBtn) {
+						if (!elements.actionDropdown.classList.contains('hidden')) {
+							if (
+								!elements.actionDropdown.contains(event.target) &&
+								!elements.selectedCountBtn.contains(event.target)
+							) {
+								hideActionDropdown();
+							}
+						}
+					}
+
+					// Close template dropdown when clicking outside
+					const templateDropdown = document.querySelector('.template-list');
+					const templateButton = document.querySelector('.toolbar-btn[onclick*="Template"]');
+					if (templateDropdown && templateButton) {
+						if (templateDropdown.style.display === 'block') {
+							if (!templateDropdown.contains(event.target) && !templateButton.contains(event.target)) {
+								hideTemplateDropdown();
+							}
+						}
+					}
+
+					// Close column dropdown when clicking outside
+					if (elements.columnDropdown && elements.columnToggleBtn) {
+						if (!elements.columnDropdown.classList.contains('hidden')) {
+							if (!elements.columnDropdown.contains(event.target) && !elements.columnToggleBtn.contains(event.target)) {
+								// Close the dropdown by adding hidden class
+								elements.columnDropdown.classList.add('hidden');
+								if (elements.columnDropdownIcon) {
+									elements.columnDropdownIcon.classList.remove('dropdown-open');
+								}
+							}
+						}
+					}
+				});
+			}
 		</script>
 	</body>
 </html>

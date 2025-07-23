@@ -7,6 +7,7 @@ import ProtocolInfor from './ProtocolInfor';
 import AnalyteInfor from './AnalyteInfor';
 import ClientInfor from './ClientInfor';
 import AccountInfor from './AccountInfor';
+import TechnicianInfo from './TechnicianInfo';
 import { FaUserAlt, FaBook, FaFlask, FaClipboard } from 'react-icons/fa';
 
 const Library = () => {
@@ -14,9 +15,13 @@ const Library = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 
+	// Helper function to check if user is an admin
+	const isAdmin = () => {
+		return currentUser?.role?.staff_admin === true;
+	};
+
 	// Helper function to check if user is a technician
 	const isTechnician = () => {
-		// Admin users bypass technician restrictions
 		return currentUser?.role?.staff_technician === true && currentUser?.role?.staff_admin !== true;
 	};
 
@@ -25,17 +30,24 @@ const Library = () => {
 		return currentUser?.role?.staff_superAdmin === true;
 	};
 
+	// Show technician tab if (admin and technician) or superadmin
+	const showTechnicianTab = () => {
+		return (isAdmin() && currentUser?.role?.staff_technician === true) || isSuperAdmin();
+	};
+
 	// Determine active tab based on URL query parameter
 	const getActiveTabFromQuery = () => {
 		const searchParams = new URLSearchParams(location.search);
 		const view = searchParams.get('view');
 
-		// If view is 'account' but user is not superAdmin, default to 'analyte'
 		if (view === 'account' && !isSuperAdmin()) {
 			return 'analyte';
 		}
+		if (view === 'technician' && !showTechnicianTab()) {
+			return 'analyte';
+		}
 
-		return ['protocol', 'client', 'account'].includes(view) ? view : 'analyte'; // Default to 'analyte'
+		return ['protocol', 'client', 'account', 'technician'].includes(view) ? view : 'analyte';
 	};
 
 	const [activeTab, setActiveTab] = useState(getActiveTabFromQuery());
@@ -99,6 +111,16 @@ const Library = () => {
 							Khách hàng
 						</button>
 					)}
+					{showTechnicianTab() && (
+						<button
+							className={`w-40 p-1 m-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
+								activeTab === 'technician' ? 'bg-teritary' : 'bg-gray-200'
+							}`}
+							onClick={() => handleTabChange('technician')}
+						>
+							Kỹ thuật viên
+						</button>
+					)}
 					{isSuperAdmin() && (
 						<button
 							className={`w-40 p-1 m-1 text-sm font-medium focus:outline-none active:bg-sky-400 ${
@@ -120,6 +142,7 @@ const Library = () => {
 					{activeTab === 'analyte' && <AnalyteInfor />}
 					{activeTab === 'client' && !isTechnician() && <ClientInfor />}
 					{activeTab === 'account' && isSuperAdmin() && <AccountInfor />}
+					{activeTab === 'technician' && showTechnicianTab() && <TechnicianInfo />}
 				</div>
 			</div>
 		</div>

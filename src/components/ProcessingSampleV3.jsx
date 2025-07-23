@@ -1425,6 +1425,233 @@ const ProcessingSample = () => {
 		}
 	};
 
+	// Handle file preview for analysis - opens in new popup window
+	const handleFilePreview = async (fileId, fileName) => {
+		try {
+			const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
+				expiry: 60 * 10,
+				mode: 'view',
+				fileRecord: { id: fileId },
+			});
+
+			if (response?.status === 200 && response.data) {
+				// Create HTML content for the popup window
+				const popupContent = `
+					<!DOCTYPE html>
+					<html lang="vi">
+					<head>
+						<meta charset="UTF-8">
+						<meta name="viewport" content="width=device-width, initial-scale=1.0">
+						<title>Xem trước file: ${fileName || 'File'}</title>
+						<style>
+							* {
+								margin: 0;
+								padding: 0;
+								box-sizing: border-box;
+							}
+							
+							body {
+								font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+								background-color: #f8fafc;
+								display: flex;
+								flex-direction: column;
+								height: 100vh;
+							}
+							
+							.header {
+								display: flex;
+								justify-content: space-between;
+								align-items: center;
+								padding: 16px 24px;
+								background: white;
+								border-bottom: 1px solid #e5e7eb;
+								box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+							}
+							
+							.title {
+								font-size: 18px;
+								font-weight: 600;
+								color: #1f2937;
+								display: flex;
+								align-items: center;
+								gap: 8px;
+							}
+							
+							.icon {
+								color: #3b82f6;
+								font-size: 20px;
+							}
+							
+							.controls {
+								display: flex;
+								gap: 12px;
+								align-items: center;
+							}
+							
+							.btn {
+								padding: 8px 16px;
+								border: none;
+								border-radius: 6px;
+								cursor: pointer;
+								font-size: 14px;
+								font-weight: 500;
+								text-decoration: none;
+								display: inline-flex;
+								align-items: center;
+								gap: 6px;
+								transition: background-color 0.2s;
+							}
+							
+							.btn-blue {
+								background: #3b82f6;
+								color: white;
+							}
+							
+							.btn-blue:hover {
+								background: #2563eb;
+							}
+							
+							.btn-green {
+								background: #10b981;
+								color: white;
+							}
+							
+							.btn-green:hover {
+								background: #059669;
+							}
+							
+							.btn-close {
+								background: #f3f4f6;
+								color: #6b7280;
+								padding: 8px 12px;
+							}
+							
+							.btn-close:hover {
+								background: #e5e7eb;
+								color: #374151;
+							}
+							
+							.content {
+								flex: 1;
+								padding: 16px;
+								background: #f8fafc;
+							}
+							
+							.iframe-container {
+								height: 100%;
+								background: white;
+								border-radius: 8px;
+								box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+								overflow: hidden;
+								position: relative;
+							}
+							
+							iframe {
+								width: 100%;
+								height: 100%;
+								border: none;
+							}
+							
+							.loading {
+								position: absolute;
+								top: 0;
+								left: 0;
+								width: 100%;
+								height: 100%;
+								display: flex;
+								flex-direction: column;
+								justify-content: center;
+								align-items: center;
+								background: white;
+								color: #6b7280;
+								z-index: 10;
+							}
+							
+							.spinner {
+								width: 40px;
+								height: 40px;
+								border: 4px solid #f3f4f6;
+								border-left-color: #3b82f6;
+								border-radius: 50%;
+								animation: spin 1s linear infinite;
+								margin-bottom: 16px;
+							}
+							
+							@keyframes spin {
+								to { transform: rotate(360deg); }
+							}
+							
+							.hidden {
+								display: none;
+							}
+						</style>
+					</head>
+					<body>
+						<div class="header">
+							<div class="title">
+								<span class="icon">📄</span>
+								Xem trước file: ${fileName || 'File'}
+							</div>
+							<div class="controls">
+								<a href="${response.data}" target="_blank" class="btn btn-blue">
+									↗ Mở tab mới
+								</a>
+								<a href="${response.data}" download="${fileName || 'file'}" class="btn btn-green">
+									⬇ Tải xuống
+								</a>
+								<button onclick="window.close()" class="btn btn-close">
+									× Đóng
+								</button>
+							</div>
+						</div>
+						<div class="content">
+							<div class="iframe-container">
+								<div class="loading" id="loading">
+									<div class="spinner"></div>
+									<div>Đang tải file...</div>
+									<div style="font-size: 12px; margin-top: 8px;">Vui lòng đợi trong giây lát</div>
+								</div>
+								<iframe 
+									src="${response.data}" 
+									title="File Preview"
+									onload="document.getElementById('loading').classList.add('hidden')"
+									onerror="document.getElementById('loading').innerHTML='<div>Không thể tải file</div>'"
+								></iframe>
+							</div>
+						</div>
+					</body>
+					</html>
+				`;
+
+				// Open popup window with specific dimensions and features
+				const popup = window.open(
+					'',
+					'_blank',
+					'width=1200,height=800,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no,status=no,directories=no',
+				);
+
+				if (popup) {
+					popup.document.write(popupContent);
+					popup.document.close();
+					popup.focus();
+
+					// Set window title
+					popup.document.title = `Xem trước file: ${fileName || 'File'}`;
+
+					toast.success('File đã được mở trong cửa sổ mới');
+				} else {
+					// Fallback if popup was blocked
+					toast.error('Popup bị chặn. Vui lòng cho phép popup cho trang web này và thử lại.');
+				}
+			} else {
+				toast.error('Không thể xem file');
+			}
+		} catch (error) {
+			console.error('File preview error:', error);
+			toast.error('Có lỗi xảy ra khi xem file');
+		}
+	};
+
 	// Handle Enter key press for EX info fields
 	const handleExInfoKeyDown = (e, analysisId, field, value) => {
 		if (e.key === 'Enter') {
@@ -2109,7 +2336,7 @@ const ProcessingSample = () => {
 																		<th className="font-normal p-1 text-start min-w-32">Đơn vị</th>
 																		<th className="font-normal p-1 text-start w-28 min-w-28">Hạn trả</th>
 																		<th className="font-normal p-1 text-start w-36 min-w-40">Người thực hiện</th>
-																		<th className="font-normal p-1 text-center w-12 min-w-12">
+																		<th className="font-normal p-1 text-center w-16 min-w-16">
 																			<input
 																				type="checkbox"
 																				className="w-4 h-4 sample-checkbox"
@@ -2308,15 +2535,26 @@ const ProcessingSample = () => {
 																				</div>
 																			</td>
 																			<td className="border p-1 text-center">
-																				<input
-																					type="checkbox"
-																					className="w-4 h-4 row-checkbox"
-																					data-receipt-id={receipt.id}
-																					data-analysis-id={item.id}
-																					data-sample-id={sample.id}
-																					checked={selectedCheckboxesV3.includes(item.id)}
-																					onChange={(e) => handleAnalysisCheckboxChange(e, receipt.id, item.id)}
-																				/>
+																				<div className="flex items-center justify-center gap-2">
+																					{item.file_id && item.file_id.trim() !== '' && (
+																						<button
+																							onClick={() => handleFilePreview(item.file_id, `Analysis_${item.id}`)}
+																							className="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-50 transition-colors"
+																							title="Xem file đính kèm"
+																						>
+																							<GrDocumentText size={16} />
+																						</button>
+																					)}
+																					<input
+																						type="checkbox"
+																						className="w-4 h-4 row-checkbox"
+																						data-receipt-id={receipt.id}
+																						data-analysis-id={item.id}
+																						data-sample-id={sample.id}
+																						checked={selectedCheckboxesV3.includes(item.id)}
+																						onChange={(e) => handleAnalysisCheckboxChange(e, receipt.id, item.id)}
+																					/>
+																				</div>
 																			</td>
 																		</tr>
 																	))}
@@ -2387,7 +2625,7 @@ const ProcessingSample = () => {
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[200]">
 					<div className="bg-white rounded-lg shadow-lg w-[95%] h-[95%] flex flex-col">
 						<div className="flex justify-between items-center p-1 border-b">
-							<h2 className="text-xl font-bold p-1">Phân tích chỉ tiêu</h2>
+							<h2 className="text-xl font-bold p-1">Danh sách chỉ tiêu đang thực hiện</h2>
 							<button
 								onClick={() => setShowMatchAnalysisPopup(false)}
 								className="text-gray-500 hover:text-gray-700 text-2xl p-2 px-4"

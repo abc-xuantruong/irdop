@@ -1,0 +1,4159 @@
+<!DOCTYPE html>
+<html lang="vi">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Xác nhận kết quả phân tích</title>
+		<!-- Font Awesome for icons -->
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+		<!-- TinyMCE từ file local -->
+		<script src="tinymce/tinymce.min.js"></script>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+				background-color: #f8fafc;
+				color: #333;
+				line-height: 1.6;
+			}
+
+			.container {
+				margin: 0 auto;
+				padding: 20px;
+			}
+
+			.page-header {
+				background: white;
+				border-radius: 8px;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+				padding: 20px;
+				margin-bottom: 20px;
+			}
+
+			.page-title {
+				font-size: 24px;
+				font-weight: 600;
+				color: #1f2937;
+				margin-bottom: 8px;
+			}
+
+			.page-subtitle {
+				color: #6b7280;
+				font-size: 14px;
+			}
+
+			.breadcrumb {
+				background: white;
+				border-radius: 8px;
+				box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+				padding: 12px 20px;
+				margin-bottom: 20px;
+				font-size: 14px;
+				color: #6b7280;
+			}
+
+			/* Fullscreen Modal Styles */
+			.fullscreen-modal {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: white;
+				z-index: 2000;
+				display: flex;
+				flex-direction: column;
+			}
+
+			.fullscreen-modal-header {
+				background: #f9fafb;
+				border-bottom: 1px solid #e5e7eb;
+				padding: 6px 24px;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				flex-shrink: 0;
+			}
+
+			.fullscreen-modal-header h3 {
+				font-size: 18px;
+				font-weight: 600;
+				color: #1f2937;
+			}
+
+			.close-btn {
+				background: #ef4444;
+				color: white;
+				border: none;
+				border-radius: 4px;
+				width: 32px;
+				height: 32px;
+				cursor: pointer;
+				font-size: 18px;
+				font-weight: bold;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				transition: background 0.2s;
+			}
+
+			.close-btn:hover {
+				background: #dc2626;
+			}
+
+			.fullscreen-modal-body {
+				flex: 1;
+				display: flex;
+				overflow: auto;
+				min-width: 0;
+			}
+
+			/* Tables Container */
+			.tables-container {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				border-right: 1px solid #e5e7eb;
+				min-width: 850px; /* Minimum for 800px tables + controls + gaps */
+				overflow: hidden;
+			}
+
+			.tables-scroll-container {
+				flex: 1;
+				overflow: hidden; /* Remove auto scroll to let tables-side-by-side handle it */
+				padding:  6px 16px;
+				min-width: 0; /* Allow shrinking */
+				display: flex;
+				flex-direction: column;
+			}
+
+			/* Selected rows info */
+			.selected-info {
+				background: #eff6ff;
+				border: 1px solid #bfdbfe;
+				border-radius: 6px;
+				padding: 12px 16px;
+				margin-bottom: 16px;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+			}
+
+			.selection-actions {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+			}
+
+			.action-btn {
+				padding: 6px 12px;
+				border: none;
+				border-radius: 4px;
+				cursor: pointer;
+				font-size: 12px;
+				font-weight: 500;
+				transition: all 0.2s;
+				display: flex;
+				align-items: center;
+				gap: 4px;
+			}
+
+			.clear-btn {
+				background: #f3f4f6;
+				color: #374151;
+			}
+
+			.clear-btn:hover {
+				background: #e5e7eb;
+			}
+
+			.transfer-btn {
+				background: #3b82f6;
+				color: white;
+			}
+
+			.transfer-btn:hover {
+				background: #2563eb;
+			}
+
+			.transfer-back-btn {
+				background: #f59e0b;
+				color: white;
+			}
+
+			.transfer-back-btn:hover {
+				background: #d97706;
+			}
+
+			.confirm-btn {
+				background: #10b981;
+				color: white;
+			}
+
+			.confirm-btn:hover {
+				background: #059669;
+			}
+
+			/* Tables side by side */
+			.tables-side-by-side {
+				display: flex;
+				gap: 12px;
+				flex: 1; /* Take up remaining height */
+				width: 100%;
+				min-width: 800px; /* Minimum width to ensure tables are usable */
+				overflow: hidden; /* Prevent overflow of container */
+			}
+
+			.left-table-section {
+				flex: 0.4;
+				display: flex;
+				flex-direction: column;
+				min-width: 0;
+				height: 100%; /* Full height of parent */
+				overflow: hidden; /* Prevent section overflow */
+			}
+
+			.controls-column {
+				flex: 0 0 50px;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				background: #f9fafb;
+				border-radius: 6px;
+				border: 1px solid #e5e7eb;
+				padding: 8px 4px;
+				min-width: 50px;
+				height: 100%; /* Full height of parent */
+				transition: all 0.3s ease;
+			}
+
+			.controls-content {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 8px;
+				width: 100%;
+			}
+
+			.selected-count {
+				font-weight: 600;
+				font-size: 14px;
+				color: #1f2937;
+				text-align: center;
+				margin-bottom: 4px;
+			}
+
+			.control-buttons {
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+				width: 100%;
+			}
+
+			.control-btn {
+				width: 36px;
+				height: 36px;
+				border: none;
+				border-radius: 4px;
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-size: 14px;
+				transition: all 0.2s;
+				margin: 0 auto;
+			}
+
+			.control-btn.clear-btn {
+				background: #f3f4f6;
+				color: #374151;
+			}
+
+			.control-btn.clear-btn:hover {
+				background: #e5e7eb;
+			}
+
+			.control-btn.transfer-btn {
+				background: #3b82f6;
+				color: white;
+			}
+
+			.control-btn.transfer-btn:hover {
+				background: #2563eb;
+			}
+
+			.control-btn.transfer-back-btn {
+				background: #f59e0b;
+				color: white;
+			}
+
+			.control-btn.transfer-back-btn:hover {
+				background: #d97706;
+			}
+
+			.control-btn.refresh-btn {
+				background: #10b981;
+				color: white;
+				margin-bottom: 12px;
+			}
+
+			.control-btn.refresh-btn:hover {
+				background: #059669;
+				transform: rotate(180deg);
+			}
+
+			.control-btn.select-all-btn {
+				background: transparent;
+				color: #6b7280;
+				border: 1px solid #d1d5db;
+				width: 36px;
+				height: 36px;
+				padding: 0;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+			}
+
+			.control-btn.select-all-btn:hover {
+				background: #f9fafb !important;
+				border-color: #9ca3af !important;
+				color: #374151 !important;
+				transform: translateY(-1px);
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+			}
+
+			.control-btn.select-all-btn:active {
+				transform: translateY(0);
+				background: #f3f4f6 !important;
+			}
+
+			.refresh-section {
+				display: flex;
+				justify-content: center;
+				margin-bottom: 8px;
+			}
+
+			.middle-table-section {
+				flex: 0.6;
+				display: flex;
+				flex-direction: column;
+				min-width: 0;
+				height: 100%; /* Full height of parent */
+				overflow: hidden; /* Prevent section overflow */
+			}
+
+			.left-table-section h4,
+			.middle-table-section h4 {
+				font-size: 16px;
+				font-weight: 600;
+				color: #1f2937;
+				margin-bottom: 12px;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				height: 40px;
+				display: flex;
+				align-items: center;
+				padding: 8px 0;
+				border-bottom: 1px solid #e5e7eb;
+				flex-shrink: 0;
+			}
+
+			/* Table containers */
+			.left-table-container,
+			.middle-table-container {
+				flex: 1; /* Take remaining height after headers and info */
+				overflow-y: auto;
+				overflow-x: hidden;
+				border-radius: 6px;
+				border: 1px solid #e5e7eb;
+				background: white;
+				min-height: 0; /* Allow shrinking */
+			}
+
+			/* Left table container */
+			.left-table-container {
+				width: 100%;
+			}
+
+			/* Middle table container */
+			.middle-table-container {
+				width: 100%;
+			}
+
+			.table {
+				width: 100%;
+				border-collapse: collapse;
+				background: white;
+				table-layout: fixed;
+			}
+
+			.table th,
+			.table td {
+				padding: 4px;
+				text-align: left;
+				border-bottom: 1px solid #e5e7eb;
+				font-size: 14px;
+				line-height: 1.4;
+				vertical-align: middle;
+			}
+
+			/* Specific column widths - Using percentage values */
+			.table th:nth-child(1),
+			.table td:nth-child(1) {
+				width: 10%;
+				min-width: 50px;
+			}
+
+			.table th:nth-child(2),
+			.table td:nth-child(2) {
+				width: 20%;
+				min-width: 80px;
+			}
+
+			/* Left table specific widths (5 columns) */
+			.left-table .table th:nth-child(3),
+			.left-table .table td:nth-child(3) {
+				width: 45%;
+				min-width: 120px;
+			}
+
+			.left-table .table th:nth-child(4),
+			.left-table .table td:nth-child(4) {
+				width: 15%;
+				min-width: 80px;
+			}
+
+			.left-table .table th:nth-child(5),
+			.left-table .table td:nth-child(5) {
+				width: 10%;
+				min-width: 60px;
+			}
+
+			/* Middle table specific widths (7 columns) */
+			.middle-table-container .table th:nth-child(3),
+			.middle-table-container .table td:nth-child(3) {
+				width: 25%;
+				min-width: 100px;
+			}
+
+			.middle-table-container .table th:nth-child(4),
+			.middle-table-container .table td:nth-child(4) {
+				width: 15%;
+				min-width: 80px;
+			}
+
+			.middle-table-container .table th:nth-child(5),
+			.middle-table-container .table td:nth-child(5) {
+				width: 15%;
+				min-width: 80px;
+			}
+
+			.middle-table-container .table th:nth-child(6),
+			.middle-table-container .table td:nth-child(6) {
+				width: 10%;
+				min-width: 60px;
+			}
+
+			.middle-table-container .table th:nth-child(7),
+			.middle-table-container .table td:nth-child(7) {
+				width: 15%;
+				min-width: 80px;
+			}
+
+			/* Remove duplicate min-width rules - already set above */
+
+			.table th {
+				background: #f9fafb;
+				font-weight: 600;
+				color: #374151;
+				position: sticky;
+				top: 0;
+				z-index: 10;
+			}
+
+			.table tbody tr:hover {
+				background: #f9fafb;
+			}
+
+			.table tbody tr:last-child td {
+				border-bottom: none;
+			}
+
+			/* Row selection styles */
+			.selectable-row {
+				cursor: pointer;
+				user-select: none;
+			}
+
+			.selectable-row:hover {
+				background-color: #f3f4f6;
+			}
+
+			.selectable-row.selected {
+				background-color: #dbeafe !important;
+				border-left: 3px solid #3b82f6;
+			}
+
+			.selectable-row.transferred-row {
+				background-color: #d1fae5 !important;
+				border-left: 3px solid #10b981;
+			}
+
+			/* Ensure selected state overrides transferred state */
+			.selectable-row.transferred-row.selected {
+				background-color: #dbeafe !important;
+				border-left: 3px solid #3b82f6;
+			}
+
+			.selecting {
+				cursor: crosshair;
+			}
+
+			.no-data {
+				text-align: center;
+				color: #6b7280;
+				font-style: italic;
+				padding: 24px;
+			}
+
+			/* Table info */
+			.table-info {
+				padding: 6px;
+				background: #f9fafb;
+				border-top: 1px solid #e5e7eb;
+				font-size: 14px;
+				color: #6b7280;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+
+			/* Preview Panel */
+			.preview-panel {
+				flex: 0 0 25%;
+				display: flex;
+				flex-direction: column;
+				min-width: 300px;
+				overflow: hidden;
+			}
+
+			.panel-header {
+				background: #f9fafb;
+				border-bottom: 1px solid #e5e7eb;
+				padding: 9px 16px;
+				font-weight: 600;
+				color: #1f2937;
+				flex-shrink: 0;
+			}
+
+			.panel-content {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				position: relative;
+				overflow: hidden;
+			}
+
+			.preview-frame {
+				flex: 1;
+				border: none;
+				background: white;
+			}
+
+			/* Preview controls */
+			.preview-controls {
+				position: absolute;
+				top: 8px;
+				right: 8px;
+				display: flex;
+				gap: 4px;
+				z-index: 20;
+			}
+
+			.preview-control-btn {
+				width: 32px;
+				height: 32px;
+				background: rgba(255, 255, 255, 0.9);
+				border: 1px solid #d1d5db;
+				border-radius: 4px;
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				color: #374151;
+				transition: all 0.2s;
+			}
+
+			.preview-control-btn:hover {
+				background: white;
+				border-color: #3b82f6;
+				color: #3b82f6;
+			}
+
+			.preview-control-btn:active {
+				transform: scale(0.95);
+			}
+
+			/* Loading and Error States */
+			.loading {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				flex-direction: column;
+				padding: 40px;
+				color: #6b7280;
+			}
+
+			.spinner {
+				width: 40px;
+				height: 40px;
+				border: 3px solid #e5e7eb;
+				border-top: 3px solid #3b82f6;
+				border-radius: 50%;
+				animation: spin 1s linear infinite;
+				margin-bottom: 16px;
+			}
+
+			@keyframes spin {
+				0% {
+					transform: rotate(0deg);
+				}
+				100% {
+					transform: rotate(360deg);
+				}
+			}
+
+			.loading-text {
+				font-size: 14px;
+				font-weight: 500;
+			}
+
+			.error-message {
+				background: #fef2f2;
+				border: 1px solid #fecaca;
+				border-radius: 6px;
+				padding: 12px;
+				margin: 16px;
+				color: #dc2626;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+
+			/* File list styles */
+			.file-management {
+				background: white;
+				border-radius: 8px;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+				padding: 24px;
+			}
+
+			.controls-row {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				flex-wrap: wrap;
+				gap: 16px;
+				margin-bottom: 16px;
+			}
+
+			.left-controls,
+			.right-controls {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				flex-wrap: wrap;
+			}
+
+			.btn {
+				padding: 8px 16px;
+				border: none;
+				border-radius: 6px;
+				cursor: pointer;
+				font-size: 14px;
+				font-weight: 500;
+				transition: all 0.2s;
+				text-decoration: none;
+				display: inline-flex;
+				align-items: center;
+				gap: 6px;
+			}
+
+			.btn-primary {
+				background: #3b82f6;
+				color: white;
+			}
+
+			.btn-primary:hover {
+				background: #2563eb;
+			}
+
+			.btn-secondary {
+				background: #e5e7eb;
+				color: #374151;
+			}
+
+			.btn-secondary:hover {
+				background: #d1d5db;
+			}
+
+			.btn-status {
+				background: #f3f4f6;
+				color: #6b7280;
+				border: 1px solid #d1d5db;
+			}
+
+			.btn-status:hover {
+				background: #e5e7eb;
+			}
+
+			.btn-status.active {
+				background: #3b82f6;
+				color: white;
+				border-color: #3b82f6;
+			}
+
+			.form-group {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+
+			.form-label {
+				font-size: 14px;
+				color: #6b7280;
+				white-space: nowrap;
+			}
+
+			.form-input,
+			.form-select {
+				padding: 8px 12px;
+				border: 1px solid #d1d5db;
+				border-radius: 6px;
+				font-size: 14px;
+				background: white;
+				transition: border-color 0.2s;
+			}
+
+			.form-input:focus,
+			.form-select:focus {
+				outline: none;
+				border-color: #3b82f6;
+				box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+			}
+
+			.search-input {
+				width: 250px;
+			}
+
+			.table-container {
+				overflow-x: auto;
+				border-radius: 6px;
+				border: 1px solid #e5e7eb;
+			}
+
+			.pagination {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				gap: 8px;
+				padding: 16px 0;
+			}
+
+			.page-btn {
+				padding: 8px 12px;
+				border: 1px solid #d1d5db;
+				border-radius: 4px;
+				background: white;
+				color: #374151;
+				cursor: pointer;
+				font-size: 14px;
+				transition: all 0.2s;
+			}
+
+			.page-btn:hover:not(:disabled) {
+				background: #f3f4f6;
+				border-color: #3b82f6;
+			}
+
+			.page-btn.active {
+				background: #3b82f6;
+				border-color: #3b82f6;
+				color: white;
+			}
+
+			.page-btn:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+			}
+
+			.file-info {
+				background: #f9fafb;
+				border-radius: 6px;
+				padding: 12px;
+				margin-top: 16px;
+				font-size: 14px;
+				color: #6b7280;
+			}
+
+			/* Tag styles */
+			.tag {
+				display: inline-block;
+				padding: 4px 8px;
+				border-radius: 12px;
+				font-size: 12px;
+				font-weight: 500;
+				text-transform: uppercase;
+			}
+
+			.tag-system {
+				background: #dcfce7;
+				color: #166534;
+			}
+
+			.tag-user {
+				background: #fef3c7;
+				color: #92400e;
+			}
+
+			.tag-error {
+				background: #fecaca;
+				color: #991b1b;
+			}
+
+			/* Modal action section */
+			.modal-actions {
+				display: flex;
+				justify-content: space-between;
+				align-items: flex-start;
+				gap: 24px;
+				padding: 16px 20px;
+				background: #f8fafc;
+				border-top: 1px solid #e5e7eb;
+				border-radius: 0 0 6px 6px;
+				flex-shrink: 0;
+				margin-top: auto;
+			}
+
+			.signed-by-section {
+				flex: 1;
+				max-width: 60%;
+			}
+
+			.signed-by-list {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 12px;
+				align-items: flex-start;
+			}
+
+			.signature-item {
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+				padding: 12px;
+				background: #f8fafc;
+				border: 1px solid #e2e8f0;
+				border-radius: 8px;
+				transition: all 0.2s;
+				min-width: 160px;
+				box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+			}
+
+			.signature-item:hover {
+				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+				transform: translateY(-1px);
+			}
+
+			.signature-name {
+				font-weight: 600;
+				color: #1f2937;
+				font-size: 14px;
+				line-height: 1.2;
+			}
+
+			.signature-uid {
+				color: #6b7280;
+				font-size: 12px;
+				line-height: 1.2;
+			}
+
+			.signature-time {
+				color: #9ca3af;
+				font-size: 11px;
+				line-height: 1.2;
+			}
+
+			.action-buttons-section {
+				display: flex;
+				gap: 12px;
+				min-width: 300px;
+				justify-content: flex-end;
+			}
+
+			.action-button {
+				padding: 12px 24px;
+				border: none;
+				border-radius: 6px;
+				font-size: 14px;
+				font-weight: 600;
+				cursor: pointer;
+				transition: all 0.2s;
+				display: none; /* Hidden by default - shown only for admin users */
+				align-items: center;
+				gap: 8px;
+				min-width: 160px;
+				justify-content: center;
+			}
+
+			.action-button:hover {
+				transform: translateY(-1px);
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+			}
+
+			.action-button:active {
+				transform: translateY(0);
+			}
+
+			.sign-btn {
+				background: #3b82f6;
+				color: white;
+			}
+
+			.sign-btn:hover {
+				background: #2563eb;
+			}
+
+			.approve-btn {
+				background: #10b981;
+				color: white;
+			}
+
+			.approve-btn:hover {
+				background: #059669;
+			}
+
+			/* Mobile responsive */
+			@media (max-width: 768px) {
+				.fullscreen-modal-body {
+					flex-direction: column;
+				}
+
+				.tables-container {
+					flex: 0 0 60%;
+				}
+
+				.preview-panel {
+					flex: 0 0 40%;
+				}
+
+				.tables-side-by-side {
+					flex-direction: column;
+					gap: 12px;
+					height: auto; /* Auto height for mobile */
+					min-height: 400px; /* Minimum height for mobile */
+				}
+
+				.left-table-section,
+				.middle-table-section {
+					flex: none;
+					height: 300px; /* Fixed height for mobile */
+				}
+
+				.controls-column {
+					order: -1;
+					flex-direction: row;
+					justify-content: center;
+					padding: 8px;
+					margin-bottom: 8px;
+				}
+
+				.controls-content {
+					flex-direction: row;
+					align-items: center;
+					gap: 12px;
+				}
+
+				.control-buttons {
+					flex-direction: row;
+				}
+
+				.left-table-container,
+				.middle-table-container {
+					max-height: 300px;
+				}
+
+				.controls-row {
+					flex-direction: column;
+					align-items: stretch;
+				}
+
+				.left-controls,
+				.right-controls {
+					justify-content: center;
+				}
+
+				.modal-actions {
+					flex-direction: column;
+					gap: 16px;
+					padding: 16px;
+				}
+
+				.signed-by-section {
+					max-width: 100%;
+					order: 2;
+				}
+
+				.action-buttons-section {
+					min-width: 100%;
+					order: 1;
+					flex-direction: column;
+				}
+
+				.action-button {
+					min-width: 100%;
+				}
+
+				.signed-by-list {
+					justify-content: center;
+				}
+
+				.signature-item {
+					min-width: 140px;
+				}
+			}
+
+			/* Additional responsive breakpoints */
+			@media (max-width: 1024px) {
+				.tables-container {
+					flex: 0 0 65%;
+				}
+
+				.preview-panel {
+					flex: 0 0 35%;
+				}
+			}
+
+			@media (max-width: 480px) {
+				.fullscreen-modal-header {
+					padding: 12px 16px;
+					flex-wrap: wrap;
+					gap: 8px;
+				}
+
+				.tables-scroll-container {
+					padding: 8px;
+				}
+
+				.left-table-container,
+				.middle-table-container {
+					max-height: 250px;
+				}
+
+				.modal-actions {
+					padding: 12px;
+					gap: 8px;
+				}
+
+				.action-button {
+					padding: 10px 16px;
+					font-size: 13px;
+					min-width: 100%;
+				}
+			}
+
+			/* Synchronize row heights between tables */
+			.tables-side-by-side .table tbody tr {
+				height: 45px;
+				box-sizing: border-box;
+			}
+
+			.tables-side-by-side .table tbody td {
+				height: 45px;
+				box-sizing: border-box;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.tables-side-by-side .table thead tr {
+				height: 45px;
+				box-sizing: border-box;
+			}
+
+			.tables-side-by-side .table thead th {
+				height: 45px;
+				box-sizing: border-box;
+			}
+
+			/* Ensure rows with same ID have same height */
+			.table tbody tr[data-id] {
+				height: 45px !important;
+			}
+
+			/* Inline editing styles */
+			.editable-cell {
+				cursor: pointer;
+				position: relative;
+			}
+
+			.editable-cell:hover {
+				background-color: #f3f4f6;
+			}
+
+			.editable-cell.editing {
+				padding: 0;
+				vertical-align: top;
+				height: 45px !important;
+				max-height: 45px !important;
+				overflow: hidden !important;
+			}
+
+			.editable-cell.modified {
+				background-color: #fef3c7;
+				border-left: 3px solid #f59e0b;
+			}
+
+			.modified-indicator {
+				font-size: 0.8em;
+			}
+
+			/* Support for subscript and superscript in cells */
+			.editable-cell sub {
+				vertical-align: sub;
+				font-size: smaller;
+			}
+
+			.editable-cell sup {
+				vertical-align: super;
+				font-size: smaller;
+			}
+
+			/* TinyMCE editor container styles */
+			.editable-cell.editing .tox-tinymce {
+				height: 45px !important;
+				max-height: 45px !important;
+				overflow: hidden !important;
+				border: 2px solid #3b82f6 !important;
+				border-radius: 4px !important;
+			}
+
+			.editable-cell.editing .tox-edit-area {
+				height: 40px !important;
+				max-height: 40px !important;
+				overflow: hidden !important;
+			}
+
+			.editable-cell.editing .tox-edit-area__iframe {
+				height: 40px !important;
+				max-height: 40px !important;
+				overflow: hidden !important;
+			}
+
+			.editable-cell.editing textarea {
+				height: 45px !important;
+				max-height: 45px !important;
+				overflow: hidden !important;
+				resize: none !important;
+				box-sizing: border-box !important;
+			}
+
+			/* Hide scrollbars in TinyMCE */
+			.tox-edit-area__iframe {
+				scrollbar-width: none !important;
+				-ms-overflow-style: none !important;
+			}
+
+			.tox-edit-area__iframe::-webkit-scrollbar {
+				display: none !important;
+			}
+
+			/* Save/Discard controls */
+			.modification-controls {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+				margin: 8px 0;
+			}
+
+			.save-btn {
+				background-color: #10b981;
+				color: white;
+			}
+
+			.save-btn:hover {
+				background-color: #059669;
+			}
+
+			.discard-btn {
+				background-color: #ef4444;
+				color: white;
+			}
+
+			.discard-btn:hover {
+				background-color: #dc2626;
+			}
+
+			/* Column selection header styles */
+			.selectable-header {
+				cursor: pointer;
+				user-select: none;
+				transition: all 0.2s ease;
+				position: relative;
+			}
+
+			.selectable-header:hover {
+				background-color: #f3f4f6;
+			}
+
+			.selectable-header.selected {
+				background-color: #ecfdf5;
+				border-color: #10b981;
+				color: #047857;
+			}
+
+			.selectable-header.unselected {
+				background-color: #fef2f2;
+				border-color: #ef4444;
+				color: #dc2626;
+			}
+
+			.column-indicator {
+				margin-left: 5px;
+				font-size: 0.8em;
+				opacity: 0.8;
+			}
+
+			.selectable-header.selected .column-indicator {
+				color: #10b981;
+			}
+
+			.selectable-header.unselected .column-indicator {
+				color: #ef4444;
+			}
+
+			/* Auto-dismiss notification styles */
+			.auto-notification {
+				position: fixed;
+				top: 20px;
+				right: 20px;
+				background: #10b981;
+				color: white;
+				padding: 12px 20px;
+				border-radius: 8px;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+				z-index: 10000;
+				font-weight: 500;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				animation: slideInRight 0.3s ease-out;
+				max-width: 400px;
+			}
+
+			.auto-notification.error {
+				background: #ef4444;
+			}
+
+			.auto-notification.warning {
+				background: #f59e0b;
+			}
+
+			.auto-notification.info {
+				background: #3b82f6;
+			}
+
+			@keyframes slideInRight {
+				from {
+					transform: translateX(100%);
+					opacity: 0;
+				}
+				to {
+					transform: translateX(0);
+					opacity: 1;
+				}
+			}
+
+			@keyframes slideOutRight {
+				from {
+					transform: translateX(0);
+					opacity: 1;
+				}
+				to {
+					transform: translateX(100%);
+					opacity: 0;
+				}
+			}
+
+			.auto-notification.slide-out {
+				animation: slideOutRight 0.3s ease-in forwards;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<!-- Page Header -->
+			<div class="page-header">
+				<h1 class="page-title">Xác nhận kết quả phân tích</h1>
+				<p class="page-subtitle">Duyệt và xác nhận kết quả thử nghiệm</p>
+			</div>
+
+			<!-- Breadcrumb -->
+			<div class="breadcrumb"><span>Trang chủ</span> › <span>Quản lý file</span> › <span>Xác nhận kết quả</span></div>
+
+			<!-- File Management -->
+			<div class="file-management">
+				<!-- Loading -->
+				<div id="loadingContainer"></div>
+
+				<!-- Error -->
+				<div id="errorContainer"></div>
+
+				<!-- Controls -->
+				<div class="controls-row">
+					<div class="left-controls">
+						<div class="form-group">
+							<label class="form-label">Tìm kiếm:</label>
+							<input
+								type="text"
+								id="searchInput"
+								class="form-input search-input"
+								placeholder="Nhập tên file..."
+								onkeypress="handleSearchKeyPress(event)"
+							/>
+							<button class="btn btn-primary" onclick="handleSearch()"><i class="fas fa-search"></i> Tìm</button>
+						</div>
+
+						<div class="form-group">
+							<label class="form-label">Trạng thái:</label>
+							<select id="statusFilter" class="form-select" onchange="handleStatusChange()">
+								<option value="PENDING_APPROVAL" selected>Chờ duyệt</option>
+								<option value="APPROVED">Đã duyệt</option>
+								<option value="REJECTED">Từ chối</option>
+							</select>
+						</div>
+					</div>
+
+					<div class="right-controls">
+						<div class="form-group">
+							<label class="form-label">Hiển thị:</label>
+							<select id="filesPerPage" class="form-select" onchange="handleFilesPerPageChange()">
+								<option value="10">10</option>
+								<option value="20" selected>20</option>
+								<option value="50">50</option>
+								<option value="100">100</option>
+							</select>
+							<span class="form-label">file/trang</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- Search Indicator -->
+				<div id="searchIndicator" class="search-indicator" style="display: none">
+					<span id="searchText"></span>
+					<span class="clear-search" onclick="clearSearch()">Xóa tìm kiếm</span>
+				</div>
+
+				<!-- File Table -->
+				<div class="table-container">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>Tên file</th>
+								<th>Kích thước</th>
+								<th>Người tạo</th>
+								<th>Ngày tạo</th>
+								<th>Trạng thái</th>
+								<th style="width: 180px">Thao tác</th>
+							</tr>
+						</thead>
+						<tbody id="fileTableBody">
+							<tr>
+								<td colspan="6" class="no-data">
+									<div class="loading">
+										<div class="spinner"></div>
+										<div>Đang tải danh sách file...</div>
+									</div>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+
+				<!-- Pagination -->
+				<div id="pagination" class="pagination" style="display: none"></div>
+
+				<!-- File Info -->
+				<div id="fileInfo" class="file-info" style="display: none"></div>
+			</div>
+		</div>
+
+		<!-- Fullscreen Lab Results Modal -->
+		<div id="fullscreenLabResultsModal" class="fullscreen-modal" style="display: none">
+			<div class="fullscreen-modal-header">
+				<h3 id="fullscreenLabResultsTitle">Xác nhận kết quả phân tích</h3>
+				<div style="display: flex; gap: 8px; align-items: center">
+					<button class="btn btn-secondary" onclick="goBackToFileList()" title="Quay lại danh sách file">
+						<i class="fas fa-arrow-left"></i> Quay lại
+					</button>
+					<button class="close-btn" onclick="closeFullscreenLabResultsModal()">&times;</button>
+				</div>
+			</div>
+			<div class="fullscreen-modal-body">
+				<!-- Tables Container (70% width) -->
+				<div class="tables-container">
+					<!-- Scrollable Tables Container -->
+					<div class="tables-scroll-container" id="tablesScrollContainer">
+						<div class="tables-side-by-side">
+							<!-- Left table: Lab results -->
+							<div class="left-table-section">
+								<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px">
+									<h4 style="margin: 0">Kết quả thử nghiệm từ file</h4>
+									<!-- Selection controls -->
+									<div class="selection-controls" style="display: none">
+										<button
+											onclick="selectAllRows()"
+											class="control-btn select-all-btn"
+											title="Chọn tất cả các hàng"
+											style="
+												background: transparent;
+												color: #6b7280;
+												padding: 8px;
+												border: 1px solid #d1d5db;
+												border-radius: 4px;
+												cursor: pointer;
+												font-size: 14px;
+												display: flex;
+												align-items: center;
+												justify-content: center;
+												transition: all 0.2s ease;
+												width: 36px;
+												height: 36px;
+											"
+										>
+											<i class="fas fa-check-square"></i>
+										</button>
+									</div>
+								</div>
+
+								<!-- Loading -->
+								<div id="fullscreenLabResultsLoading" class="loading" style="display: none">
+									<div class="spinner"></div>
+									<div class="loading-text">Đang tải danh sách chỉ tiêu...</div>
+								</div>
+
+								<!-- Error -->
+								<div id="fullscreenLabResultsError" class="error-message" style="display: none"></div>
+
+								<!-- Left Table Container -->
+								<div class="left-table-container" id="leftTableContainer">
+									<table class="table left-table">
+										<thead>
+											<tr>
+												<th>ID</th>
+												<th>Mã mẫu</th>
+												<th>Tên chỉ tiêu</th>
+												<th
+													class="selectable-header selected"
+													onclick="toggleColumnSelection('resultValue')"
+													title="Click để chọn/bỏ chọn cột này khi chuyển dữ liệu"
+												>
+													Kết quả <i class="fas fa-check-circle column-indicator"></i>
+												</th>
+												<th
+													class="selectable-header selected"
+													onclick="toggleColumnSelection('resultUnit')"
+													title="Click để chọn/bỏ chọn cột này khi chuyển dữ liệu"
+												>
+													Đơn vị <i class="fas fa-check-circle column-indicator"></i>
+												</th>
+											</tr>
+										</thead>
+										<tbody id="fullscreenLabResultsTableBody" class="selectable-tbody">
+											<tr>
+												<td colspan="5" class="no-data">Không có dữ liệu</td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
+
+								<!-- Info -->
+								<div id="fullscreenLabResultsInfo" class="table-info" style="display: none"></div>
+							</div>
+
+							<!-- Middle controls column -->
+							<div class="controls-column">
+								<div class="controls-content">
+									<!-- Refresh button - always visible -->
+									<div class="refresh-section">
+										<button onclick="refreshTables()" class="control-btn refresh-btn" title="Làm mới dữ liệu">
+											<i class="fas fa-sync-alt"></i>
+										</button>
+									</div>
+
+									<!-- Save/Discard section for modifications -->
+									<div id="modificationControls" class="modification-controls" style="display: none">
+										<button onclick="saveAllModifications()" class="control-btn save-btn" title="Lưu tất cả thay đổi">
+											<i class="fas fa-save"></i>
+										</button>
+										<button
+											onclick="discardAllModifications()"
+											class="control-btn discard-btn"
+											title="Hủy tất cả thay đổi"
+										>
+											<i class="fas fa-undo"></i>
+										</button>
+									</div>
+
+									<div id="selectedCountDisplay" class="selected-count" style="display: none">
+										<span id="selectedCount">0</span>
+									</div>
+									<div class="control-buttons" id="controlButtons" style="display: none">
+										<button onclick="selectAllRows()" class="control-btn select-all-btn" title="Chọn tất cả">
+											<i class="fas fa-check-square"></i>
+										</button>
+										<button onclick="clearSelection()" class="control-btn clear-btn" title="Bỏ chọn">
+											<i class="fas fa-times"></i>
+										</button>
+										<button
+											onclick="transferSelectedRows()"
+											class="control-btn transfer-btn"
+											title="Chuyển sang bảng phân tích"
+										>
+											<i class="fas fa-arrow-right"></i>
+										</button>
+										<button
+											onclick="transferFromAnalysisToLab()"
+											class="control-btn transfer-back-btn"
+											title="Chuyển ngược từ bảng phân tích"
+										>
+											<i class="fas fa-arrow-left"></i>
+										</button>
+									</div>
+								</div>
+							</div>
+
+							<!-- Right table: Analysis match -->
+							<div class="middle-table-section">
+								<h4>Kết quả phân tích từ hệ thống</h4>
+
+								<!-- Loading -->
+								<div id="analysisMatchLoading" class="loading" style="display: none">
+									<div class="spinner"></div>
+									<div class="loading-text">Đang tải kết quả phân tích...</div>
+								</div>
+
+								<!-- Error -->
+								<div id="analysisMatchError" class="error-message" style="display: none"></div>
+
+								<!-- Middle Table Container -->
+								<div class="middle-table-container" id="middleTableContainer">
+									<table class="table">
+										<thead>
+											<tr>
+												<th>ID</th>
+												<th>Mã mẫu</th>
+												<th>Tên chỉ tiêu</th>
+												<th>Phương pháp</th>
+												<th>Kết quả</th>
+												<th>Đơn vị</th>
+												<th>Tham chiếu</th>
+											</tr>
+										</thead>
+										<tbody id="analysisMatchTableBody">
+											<tr>
+												<td colspan="7" class="no-data">Không có dữ liệu</td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
+
+								<!-- Info -->
+								<div id="analysisMatchInfo" class="table-info" style="display: none"></div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Action section at bottom of tables container -->
+					<div class="modal-actions">
+						<!-- Left side: Signed by list -->
+						<div class="signed-by-section">
+							<div id="signedByList" class="signed-by-list">
+								<!-- Signatures will be displayed here -->
+							</div>
+						</div>
+
+						<!-- Right side: Action buttons -->
+						<div class="action-buttons-section">
+							<button class="action-button sign-btn" onclick="signConfirmation()">
+								<i class="fas fa-signature"></i> Ký xác nhận
+							</button>
+							<button class="action-button approve-btn" onclick="approveResults()">
+								<i class="fas fa-check-circle"></i> Duyệt kết quả
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- Preview Panel (30% width) -->
+				<div class="preview-panel">
+					<div class="panel-header">Preview File</div>
+					<div class="panel-content" style="padding: 0; position: relative">
+						<iframe id="filePreviewFrame" class="preview-frame" src=""></iframe>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			// Global variables
+			let allFiles = [];
+			let filteredFiles = [];
+			let currentPage = 1;
+			let filesPerPage = 20;
+			let isSearchMode = false;
+			let searchTerm = '';
+			let currentStatus = null;
+			let currentFileId = null;
+			let currentUser = null;
+			let currentFileRecord = null;
+
+			// Lab results variables
+			let labResultsCurrentPage = 1;
+			let labResultsItemsPerPage = 1000;
+			let labResultsSort = { column: 'id', direction: 'asc' };
+
+			// Row selection variables
+			let selectedRows = new Set();
+			let isSelecting = false;
+			let startRowIndex = -1;
+
+			// Column transfer selection variables
+			let selectedTransferColumns = {
+				resultValue: true, // Kết quả column - selected by default
+				resultUnit: true, // Đơn vị column - selected by default
+			};
+
+			// Utility function to get URL parameters
+			function getUrlParameter(name) {
+				const urlParams = new URLSearchParams(window.location.search);
+				return urlParams.get(name);
+			}
+
+			// Utility function to get cookie value
+			function getCookie(name) {
+				const value = `; ${document.cookie}`;
+				const parts = value.split(`; ${name}=`);
+				if (parts.length === 2) return parts.pop().split(';').shift();
+				return null;
+			}
+
+			// Check if auth cookies exist
+			function hasAuthCookies() {
+				const authToken = getCookie('auth');
+				return authToken && authToken.trim() !== '';
+			}
+
+			// API call function
+			async function apiPost(url, body) {
+				try {
+					const response = await fetch(url, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${getCookie('auth')}`,
+							'x-fh-app-uid': 'LIMS-IRDOP-PRD',
+							'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
+						},
+						body: JSON.stringify(body),
+					});
+
+					// Check content type to determine how to parse response
+					const contentType = response.headers.get('content-type');
+					let data;
+
+					if (contentType && contentType.includes('application/json')) {
+						// Response is JSON
+						data = await response.json();
+					} else {
+						// Response is text/string
+						data = await response.text();
+					}
+
+					return {
+						status: response.status,
+						data: data,
+					};
+				} catch (error) {
+					console.error('API Error:', error);
+					throw error;
+				}
+			}
+
+			// Show auto-dismiss notification
+			function showAutoNotification(message, type = 'success', duration = 2000) {
+				// Create notification element
+				const notification = document.createElement('div');
+				notification.className = `auto-notification ${type}`;
+
+				// Add icon based on type
+				let icon;
+				switch (type) {
+					case 'success':
+						icon = '<i class="fas fa-check-circle"></i>';
+						break;
+					case 'error':
+						icon = '<i class="fas fa-times-circle"></i>';
+						break;
+					case 'warning':
+						icon = '<i class="fas fa-exclamation-triangle"></i>';
+						break;
+					case 'info':
+						icon = '<i class="fas fa-info-circle"></i>';
+						break;
+					default:
+						icon = '<i class="fas fa-check-circle"></i>';
+				}
+
+				notification.innerHTML = `${icon} ${message}`;
+
+				// Add to body
+				document.body.appendChild(notification);
+
+				// Auto remove after duration
+				setTimeout(() => {
+					notification.classList.add('slide-out');
+					setTimeout(() => {
+						if (notification.parentNode) {
+							notification.parentNode.removeChild(notification);
+						}
+					}, 300); // Wait for slide-out animation
+				}, duration);
+
+				return notification;
+			}
+
+			// Show loading state
+			function showLoading() {
+				document.getElementById('loadingContainer').innerHTML = `
+					<div class="loading">
+						<div class="spinner"></div>
+						<div class="loading-text">Đang tải danh sách file...</div>
+					</div>
+				`;
+			}
+
+			// Hide loading state
+			function hideLoading() {
+				document.getElementById('loadingContainer').innerHTML = '';
+			}
+
+			// Show error message
+			function showError(message) {
+				document.getElementById('errorContainer').innerHTML = `
+					<div class="error-message">
+						<i class="fas fa-exclamation-triangle"></i> ${message}
+					</div>
+				`;
+			}
+
+			// Hide error message
+			function hideError() {
+				document.getElementById('errorContainer').innerHTML = '';
+			}
+
+			// Toggle column selection for transfer
+			function toggleColumnSelection(columnName) {
+				// Toggle the selection state
+				selectedTransferColumns[columnName] = !selectedTransferColumns[columnName];
+
+				// Update the visual indication
+				updateColumnSelectionUI();
+			}
+
+			// Update column selection UI indicators
+			function updateColumnSelectionUI() {
+				const headers = document.querySelectorAll('.selectable-header');
+
+				headers.forEach((header) => {
+					const isResultColumn = header.textContent.includes('Kết quả');
+					const isUnitColumn = header.textContent.includes('Đơn vị');
+
+					if (isResultColumn) {
+						const isSelected = selectedTransferColumns.resultValue;
+						updateHeaderStyle(header, isSelected);
+					} else if (isUnitColumn) {
+						const isSelected = selectedTransferColumns.resultUnit;
+						updateHeaderStyle(header, isSelected);
+					}
+				});
+			}
+
+			// Update individual header style based on selection state
+			function updateHeaderStyle(header, isSelected) {
+				const indicator = header.querySelector('.column-indicator');
+
+				if (isSelected) {
+					header.classList.add('selected');
+					header.classList.remove('unselected');
+					if (indicator) {
+						indicator.className = 'fas fa-check-circle column-indicator';
+						indicator.style.color = '#10b981';
+					}
+				} else {
+					header.classList.remove('selected');
+					header.classList.add('unselected');
+					if (indicator) {
+						indicator.className = 'fas fa-times-circle column-indicator';
+						indicator.style.color = '#ef4444';
+					}
+				}
+			}
+
+			// Format file size
+			function formatFileSize(bytes) {
+				if (!bytes) return '0 KB';
+				const kb = bytes / 1024;
+				if (kb < 1024) {
+					return `${kb.toFixed(2)} KB`;
+				}
+				const mb = kb / 1024;
+				return `${mb.toFixed(2)} MB`;
+			}
+
+			// Fetch current user info
+			async function fetchUser() {
+				try {
+					// Kiểm tra auth cookies trước khi gọi API
+					if (!hasAuthCookies()) {
+						console.log('No auth cookies found, skipping fetchUser');
+						return;
+					}
+
+					const response = await apiPost('https://pink.irdop.org/ab4dg2/auth/me', {});
+					// Kiểm tra response trước khi đọc thuộc tính
+					if (response && response.data) {
+						currentUser = {
+							identity_name: response.data.identity_name,
+							identity_uid: response.data.identity_uid,
+							role: response.data.role,
+						};
+						// Update UI after getting user info
+						updateUIForUserRole();
+					}
+				} catch (error) {
+					console.error('Error fetching user:', error);
+				}
+			}
+
+			// Update UI based on user role
+			function updateUIForUserRole() {
+				console.log('Updating UI for user role...');
+
+				// Hide action buttons by default
+				const actionButtons = document.querySelectorAll('.action-button');
+				console.log('Found action buttons:', actionButtons.length);
+
+				actionButtons.forEach((button) => {
+					button.style.display = 'none';
+				});
+
+				if (currentUser && currentUser.role) {
+					console.log('Current user:', currentUser);
+					console.log('User role details:', currentUser.role);
+
+					// Check if user has staff_admin or staff_superAdmin role
+					const hasAdminRole = currentUser.role.staff_admin === true || currentUser.role.staff_superAdmin === true;
+					console.log('Has admin role:', hasAdminRole);
+
+					if (hasAdminRole) {
+						// Show action buttons for admin users
+						actionButtons.forEach((button) => {
+							button.style.display = 'inline-flex';
+						});
+						console.log('User has admin privileges - showing action buttons');
+					} else {
+						console.log('User does not have admin privileges - hiding action buttons');
+					}
+				} else {
+					console.log('No user info or role available - hiding action buttons');
+				}
+			}
+
+			// Format date
+			function formatDate(dateString) {
+				if (!dateString) return '-';
+				const date = new Date(dateString);
+				return date.toLocaleDateString('vi-VN');
+			}
+
+			// Update signed by list
+			function updateSignedByList(signedByData) {
+				const signedByList = document.getElementById('signedByList');
+
+				if (!signedByData || signedByData.length === 0) {
+					signedByList.innerHTML = '';
+					return;
+				}
+
+				const signatures = signedByData
+					.map((signature) => {
+						// Handle new jsonb format: {signedByUID, signedByName, signedAt}
+						let uid, name, signedAt;
+
+						if (typeof signature === 'object' && signature.signedByUID && signature.signedByName) {
+							// New jsonb format
+							uid = signature.signedByUID;
+							name = signature.signedByName;
+							signedAt = signature.signedAt;
+						} else if (typeof signature === 'string') {
+							// Legacy format: "<identityUID>-<identityName>"
+							const parts = signature.split('-');
+							uid = parts[0] || '';
+							name = parts.slice(1).join('-') || signature;
+							signedAt = new Date().toISOString(); // Default to current time for legacy
+						} else {
+							// Fallback
+							uid = 'unknown';
+							name = String(signature);
+							signedAt = new Date().toISOString();
+						}
+
+						return `
+						<div class="signature-item">
+							<div class="signature-name">${name}</div>
+							<div class="signature-uid">ID: ${uid}</div>
+							<div class="signature-time">${formatDate(signedAt)}</div>
+						</div>
+					`;
+					})
+					.join('');
+
+				signedByList.innerHTML = signatures;
+			}
+
+			// Load files from API
+			async function loadFiles() {
+				try {
+					hideError();
+					showLoading();
+
+					const requestBody = {
+						tag: ['Biên bản kết quả thử nghiệm', 'Dữ liệu gốc'],
+						mode: 'all',
+						page: currentPage,
+						filesPerPage: filesPerPage,
+						columnSort: 'createdAt',
+						sortBy: 'desc',
+					};
+
+					// Add status filter if selected
+					if (currentStatus) {
+						requestBody.status = currentStatus;
+					}
+
+					const response = await apiPost('https://red.irdop.org/v1/file/get/by_tag', requestBody);
+
+					if (response.status === 200 && Array.isArray(response.data)) {
+						allFiles = response.data;
+						filteredFiles = allFiles;
+						renderTable();
+					} else {
+						throw new Error('Không thể tải danh sách file');
+					}
+				} catch (error) {
+					console.error('Load files error:', error);
+					showError('Không thể tải danh sách file. Vui lòng thử lại sau.');
+					allFiles = [];
+					filteredFiles = [];
+					renderTable();
+				} finally {
+					hideLoading();
+				}
+			}
+
+			// Handle search
+			function handleSearch() {
+				const input = document.getElementById('searchInput');
+				const term = input.value.trim();
+
+				if (term) {
+					searchTerm = term;
+					isSearchMode = true;
+					document.getElementById('searchIndicator').style.display = 'block';
+					document.getElementById('searchText').textContent = `📝 Đang hiển thị kết quả tìm kiếm cho: "${term}"`;
+					searchFiles(term);
+				} else {
+					clearSearch();
+				}
+			}
+
+			// Search files using API
+			async function searchFiles(term) {
+				try {
+					hideError();
+					showLoading();
+
+					const requestBody = {
+						tag: ['Biên bản kết quả thử nghiệm', 'Dữ liệu gốc'],
+						searchTerm: term,
+						mode: 'all',
+						page: currentPage,
+						filesPerPage: filesPerPage,
+						columnSort: 'createdAt',
+						sortBy: 'desc',
+					};
+
+					// Add status filter if selected
+					if (currentStatus) {
+						requestBody.status = currentStatus;
+					}
+
+					const response = await apiPost('https://red.irdop.org/v1/file/get/by_tag', requestBody);
+
+					if (response.status === 200 && Array.isArray(response.data)) {
+						allFiles = response.data;
+						filteredFiles = allFiles;
+						renderTable();
+					} else {
+						throw new Error('Không thể tìm kiếm file');
+					}
+				} catch (error) {
+					console.error('Search files error:', error);
+					showError('Không thể tìm kiếm file. Vui lòng thử lại sau.');
+					allFiles = [];
+					filteredFiles = [];
+					renderTable();
+				} finally {
+					hideLoading();
+				}
+			}
+
+			// Handle search key press
+			function handleSearchKeyPress(event) {
+				if (event.key === 'Enter') {
+					handleSearch();
+				}
+			}
+
+			// Clear search
+			function clearSearch() {
+				document.getElementById('searchInput').value = '';
+				searchTerm = '';
+				isSearchMode = false;
+				document.getElementById('searchIndicator').style.display = 'none';
+				loadFiles();
+			}
+
+			// Handle status change
+			function handleStatusChange() {
+				const select = document.getElementById('statusFilter');
+				currentStatus = select.value || null;
+				currentPage = 1;
+
+				if (isSearchMode && searchTerm) {
+					searchFiles(searchTerm);
+				} else {
+					loadFiles();
+				}
+			}
+
+			// Handle files per page change
+			function handleFilesPerPageChange() {
+				const select = document.getElementById('filesPerPage');
+				filesPerPage = parseInt(select.value);
+				currentPage = 1;
+
+				if (isSearchMode && searchTerm) {
+					searchFiles(searchTerm);
+				} else {
+					loadFiles();
+				}
+			}
+
+			// Change page
+			function changePage(page) {
+				currentPage = page;
+
+				if (isSearchMode && searchTerm) {
+					searchFiles(searchTerm);
+				} else {
+					loadFiles();
+				}
+
+				window.scrollTo({ top: 0, behavior: 'smooth' });
+			}
+
+			// Get status class for styling
+			function getStatusClass(status) {
+				switch (status) {
+					case 'APPROVED':
+						return 'tag-system';
+					case 'PENDING_APPROVAL':
+						return 'tag-user';
+					case 'REJECTED':
+						return 'tag-error';
+					default:
+						return 'tag-user';
+				}
+			}
+
+			// Get status text in Vietnamese
+			function getStatusText(status) {
+				switch (status) {
+					case 'APPROVED':
+						return 'Đã duyệt';
+					case 'PENDING_APPROVAL':
+						return 'Chờ duyệt';
+					case 'REJECTED':
+						return 'Từ chối';
+					default:
+						return status || 'Không xác định';
+				}
+			}
+
+			// Render table
+			function renderTable() {
+				const tbody = document.getElementById('fileTableBody');
+				const pagination = document.getElementById('pagination');
+				const fileInfo = document.getElementById('fileInfo');
+
+				const totalFiles = filteredFiles.length;
+
+				if (totalFiles === 0) {
+					tbody.innerHTML = `
+						<tr>
+							<td colspan="6" class="no-data">
+								${isSearchMode ? `Không tìm thấy file phù hợp với "${searchTerm}"` : 'Không có dữ liệu'}
+							</td>
+						</tr>
+					`;
+					pagination.style.display = 'none';
+					fileInfo.style.display = 'none';
+					return;
+				}
+
+				// Render table rows
+				tbody.innerHTML = filteredFiles
+					.map(
+						(file, index) => `
+						<tr>
+							<td>${file.originInfo?.fileName || '-'}</td>
+							<td>${formatFileSize(file.originInfo?.fileSize)}</td>
+							<td>${file.identityName || file.identityUID || '-'}</td>
+							<td>${formatDate(file.createdAt)}</td>
+							<td>
+								<span class="tag ${getStatusClass(file.processingStatus)}">
+									${getStatusText(file.processingStatus)}
+								</span>
+							</td>
+							<td>
+								${
+									file.processingStatus === 'PENDING_APPROVAL'
+										? `<button class="btn btn-primary" onclick="openConfirmModal(${JSON.stringify(file).replace(
+												/"/g,
+												'&quot;',
+										  )})">
+										<i class="fas fa-check"></i> Duyệt
+									</button>`
+										: `<button class="btn btn-secondary" onclick="viewFile(${JSON.stringify(file).replace(
+												/"/g,
+												'&quot;',
+										  )})">
+										<i class="fas fa-eye"></i> Xem
+									</button>`
+								}
+							</td>
+						</tr>
+					`,
+					)
+					.join('');
+
+				// Show file info
+				fileInfo.innerHTML = `Tổng số: ${totalFiles} file`;
+				fileInfo.style.display = 'block';
+				pagination.style.display = 'none';
+			}
+
+			// Open confirm modal for file approval
+			function openConfirmModal(fileRecord) {
+				// Clean up any existing TinyMCE editors before opening modal
+				destroyAllTinyMCEEditors();
+
+				currentFileId = fileRecord.id;
+				currentFileRecord = fileRecord;
+				labResultsCurrentPage = 1;
+
+				const modal = document.getElementById('fullscreenLabResultsModal');
+				const title = document.getElementById('fullscreenLabResultsTitle');
+
+				title.textContent = `Xác nhận kết quả - ${fileRecord.originInfo?.fileName || 'File'}`;
+				modal.style.display = 'flex';
+
+				// Update signed by list
+				updateSignedByList(fileRecord.signedBy || []);
+
+				// Update UI based on user role (check permissions for action buttons)
+				updateUIForUserRole();
+
+				// Load lab results
+				loadFullscreenLabResults();
+
+				// Load analysis match data
+				loadAnalysisMatch();
+
+				// Load file preview
+				loadFilePreview(fileRecord);
+
+				// Setup scroll synchronization and row selection
+				setupScrollSync();
+				setupRowSelection();
+
+				// Update column selection UI
+				updateColumnSelectionUI();
+			}
+
+			// Open confirm modal with fileId (for direct access via URL)
+			async function openConfirmModalWithFileId(fileId, fileName = 'File') {
+				try {
+					// Create a minimal file record for the modal
+					const fileRecord = {
+						id: fileId,
+						originInfo: {
+							fileName: fileName,
+						},
+					};
+
+					currentFileId = fileId;
+					labResultsCurrentPage = 1;
+
+					const modal = document.getElementById('fullscreenLabResultsModal');
+					const title = document.getElementById('fullscreenLabResultsTitle');
+
+					title.textContent = `Xác nhận kết quả - ${fileName}`;
+					modal.style.display = 'flex';
+
+					// Update UI based on user role (check permissions for action buttons)
+					updateUIForUserRole();
+
+					// Load lab results
+					loadFullscreenLabResults();
+
+					// Load analysis match data
+					loadAnalysisMatch();
+
+					// Load file preview - need to get file record first
+					await loadFilePreviewWithId(fileId);
+
+					// Setup scroll synchronization and row selection
+					setupScrollSync();
+					setupRowSelection();
+
+					// Update column selection UI
+					updateColumnSelectionUI();
+				} catch (error) {
+					console.error('Error opening confirm modal with fileId:', error);
+					showError('Không thể mở modal xác nhận kết quả');
+				}
+			}
+
+			// Load file preview with only fileId
+			async function loadFilePreviewWithId(fileId) {
+				try {
+					// Get file record first
+					const fileResponse = await apiPost('https://red.irdop.org/v1/file/get/file', {
+						id: fileId,
+					});
+
+					if (fileResponse.status === 200 && fileResponse.data) {
+						const fileRecord = fileResponse.data;
+						const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
+							expiry: 60 * 10,
+							mode: 'view',
+							fileRecord: fileRecord,
+						});
+
+						if (response.status === 200 && response.data) {
+							document.getElementById('filePreviewFrame').src = response.data;
+						} else {
+							console.error('Cannot get preview link for file');
+							document.getElementById('filePreviewFrame').src = 'about:blank';
+						}
+					} else {
+						throw new Error('Cannot get file record');
+					}
+				} catch (error) {
+					console.error('Preview failed:', error);
+					document.getElementById('filePreviewFrame').src = 'about:blank';
+				}
+			}
+
+			// View file (for already approved files)
+			async function viewFile(fileRecord) {
+				try {
+					const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
+						expiry: 60 * 10,
+						mode: 'view',
+						fileRecord: fileRecord,
+					});
+
+					if (response.status === 200 && response.data) {
+						window.open(response.data, '_blank');
+					} else {
+						showError('Không thể xem file');
+					}
+				} catch (error) {
+					console.error('View file failed:', error);
+					showError('Có lỗi xảy ra khi xem file');
+				}
+			}
+
+			// Close fullscreen modal
+			function closeFullscreenLabResultsModal() {
+				// Clean up any existing TinyMCE editors before closing
+				destroyAllTinyMCEEditors();
+
+				document.getElementById('fullscreenLabResultsModal').style.display = 'none';
+				document.getElementById('filePreviewFrame').src = '';
+
+				// Clear analysis match data
+				document.getElementById('analysisMatchTableBody').innerHTML =
+					'<tr><td colspan="7" class="no-data">Không có dữ liệu</td></tr>';
+				document.getElementById('analysisMatchInfo').style.display = 'none';
+				hideAnalysisMatchError();
+				hideAnalysisMatchLoading();
+
+				// Clear selection state
+				clearSelection();
+
+				currentFileId = null;
+
+				// If opened from LabReportFile, check if we should redirect back
+				const referrer = document.referrer;
+				if (referrer && referrer.includes('LabReportFile.html') && getUrlParameter('fileId')) {
+					// Remove URL parameters and go back to file list view
+					window.history.replaceState({}, document.title, window.location.pathname);
+				}
+			}
+
+			// Go back to file list (close modal and clear URL params)
+			function goBackToFileList() {
+				closeFullscreenLabResultsModal();
+
+				// Clear URL parameters
+				window.history.replaceState({}, document.title, window.location.pathname);
+			}
+
+			// Load fullscreen lab results from API
+			async function loadFullscreenLabResults() {
+				if (!currentFileId) return;
+
+				try {
+					showFullscreenLabResultsLoading();
+					hideFullscreenLabResultsError();
+
+					const requestBody = {
+						fileId: currentFileId,
+						page: labResultsCurrentPage,
+						itemsPerPage: labResultsItemsPerPage,
+						columnSort: labResultsSort.column,
+						sortBy: labResultsSort.direction,
+					};
+
+					const response = await apiPost('https://red.irdop.org/v1/lab/temporary_result/get/by_file_id', requestBody);
+
+					if (response.status === 200 && response.data) {
+						renderFullscreenLabResultsTable(response.data);
+					} else {
+						throw new Error('Không thể tải danh sách chỉ tiêu');
+					}
+				} catch (error) {
+					console.error('Load fullscreen lab results error:', error);
+					showFullscreenLabResultsError('Không thể tải danh sách chỉ tiêu. Vui lòng thử lại sau.');
+				} finally {
+					hideFullscreenLabResultsLoading();
+				}
+			}
+
+			// Load analysis match data
+			async function loadAnalysisMatch() {
+				if (!currentFileId) return;
+
+				try {
+					showAnalysisMatchLoading();
+					hideAnalysisMatchError();
+
+					// First get the lab results to extract IDs
+					const labResultsResponse = await apiPost('https://red.irdop.org/v1/lab/temporary_result/get/by_file_id', {
+						fileId: currentFileId,
+						page: 1,
+						itemsPerPage: 1000,
+						columnSort: 'id',
+						sortBy: 'asc',
+					});
+
+					if (labResultsResponse.status === 200 && labResultsResponse.data && labResultsResponse.data.result) {
+						const ids = labResultsResponse.data.result.map((record) => record.id);
+
+						if (ids.length > 0) {
+							const analysisResponse = await apiPost('https://red.irdop.org/v1/lab/analysis/match/by_id', {
+								ids: ids,
+							});
+
+							if (analysisResponse.status === 200 && analysisResponse.data) {
+								const resultData = Array.isArray(analysisResponse.data)
+									? analysisResponse.data
+									: analysisResponse.data.result || analysisResponse.data;
+								renderAnalysisMatchTable(resultData);
+							} else {
+								throw new Error('Không thể tải kết quả phân tích khớp');
+							}
+						} else {
+							renderAnalysisMatchTable([]);
+						}
+					} else {
+						throw new Error('Không thể lấy danh sách ID');
+					}
+				} catch (error) {
+					console.error('Load analysis match error:', error);
+					showAnalysisMatchError('Không thể tải kết quả phân tích khớp. Vui lòng thử lại sau.');
+				} finally {
+					hideAnalysisMatchLoading();
+				}
+			}
+
+			// Load file preview
+			async function loadFilePreview(fileRecord) {
+				try {
+					const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
+						expiry: 60 * 10,
+						mode: 'view',
+						fileRecord: fileRecord,
+					});
+
+					if (response.status === 200 && response.data) {
+						document.getElementById('filePreviewFrame').src = response.data;
+					} else {
+						console.error('Cannot get preview link for file');
+						document.getElementById('filePreviewFrame').src = 'about:blank';
+					}
+				} catch (error) {
+					console.error('Preview failed:', error);
+					document.getElementById('filePreviewFrame').src = 'about:blank';
+				}
+			}
+
+			// Render fullscreen lab results table
+			function renderFullscreenLabResultsTable(data) {
+				const tbody = document.getElementById('fullscreenLabResultsTableBody');
+				const info = document.getElementById('fullscreenLabResultsInfo');
+
+				const results = data.result || [];
+
+				if (results.length === 0) {
+					tbody.innerHTML = `
+						<tr>
+							<td colspan="5" class="no-data">Không có dữ liệu chỉ tiêu</td>
+						</tr>
+					`;
+					info.style.display = 'none';
+
+					// Hide selection controls when no data
+					const selectionControls = document.querySelector('.selection-controls');
+					if (selectionControls) {
+						selectionControls.style.display = 'none';
+					}
+
+					return;
+				}
+
+				// Render table rows with selectable class and data-id attribute
+				tbody.innerHTML = results
+					.map(
+						(result, index) => `
+						<tr class="selectable-row" data-index="${index}" data-id="${result.id}">
+							<td>${result.id || '-'}</td>
+							<td>${result.sampleUID || '-'}</td>
+							<td>${result.parameterName || '-'}</td>
+							<td class="editable-cell" data-field="resultValue" onclick="makeEditable(this, event)">${result.resultValue || '-'}</td>
+							<td class="editable-cell" data-field="resultUnit" onclick="makeEditable(this, event)">${result.resultUnit || '-'}</td>
+						</tr>
+					`,
+					)
+					.join('');
+
+				// Show info
+				info.innerHTML = `Tổng số: ${results.length} chỉ tiêu`;
+				info.style.display = 'block';
+
+				// Show/hide selection controls based on data availability
+				const selectionControls = document.querySelector('.selection-controls');
+				if (selectionControls) {
+					selectionControls.style.display = results.length > 0 ? 'block' : 'none';
+				}
+
+				// Clear previous selection and setup row selection after rendering
+				clearSelection();
+				setupRowSelection();
+
+				// Update column selection UI
+				updateColumnSelectionUI();
+
+				// Synchronize row heights after rendering
+				setTimeout(() => {
+					synchronizeRowHeights();
+				}, 100);
+			}
+
+			// Render analysis match table
+			function renderAnalysisMatchTable(data) {
+				const tbody = document.getElementById('analysisMatchTableBody');
+				const info = document.getElementById('analysisMatchInfo');
+
+				if (!data || data.length === 0) {
+					tbody.innerHTML = '<tr><td colspan="7" class="no-data">Không có dữ liệu</td></tr>';
+					info.style.display = 'none';
+					return;
+				}
+
+				tbody.innerHTML = data
+					.map(
+						(item) => `
+					<tr data-id="${item.id}">
+						<td>${item.id || '-'}</td>
+						<td>${item.sampleUID || '-'}</td>
+						<td>${item.parameterName || '-'}</td>
+						<td>${item.protocolCode || '-'}</td>
+						<td>${item.resultValue || '-'}</td>
+						<td>${item.resultUnit || '-'}</td>
+						<td>${item.reference || '-'}</td>
+					</tr>
+				`,
+					)
+					.join('');
+
+				// Show info
+				info.innerHTML = `<i class="fas fa-info-circle"></i> Tổng cộng: ${data.length} kết quả`;
+				info.style.display = 'block';
+
+				// Setup scroll synchronization after rendering
+				setupScrollSync();
+
+				// Synchronize row heights after rendering
+				setTimeout(() => {
+					synchronizeRowHeights();
+				}, 100);
+			}
+
+			// Setup scroll synchronization
+			function setupScrollSync() {
+				const leftContainer = document.getElementById('leftTableContainer');
+				const middleContainer = document.getElementById('middleTableContainer');
+
+				if (!leftContainer || !middleContainer) return;
+
+				// Remove any existing listeners
+				middleContainer.removeEventListener('scroll', syncScrollFromMiddle);
+
+				// Add new listeners
+				middleContainer.addEventListener('scroll', syncScrollFromMiddle);
+			}
+
+			function syncScrollFromMiddle() {
+				const leftContainer = document.getElementById('leftTableContainer');
+				const middleContainer = document.getElementById('middleTableContainer');
+
+				if (leftContainer && middleContainer) {
+					leftContainer.scrollTop = middleContainer.scrollTop;
+				}
+			}
+
+			// Setup row selection
+			function setupRowSelection() {
+				const tbody = document.getElementById('fullscreenLabResultsTableBody');
+				if (!tbody) return;
+
+				// Remove existing listeners
+				tbody.removeEventListener('mousedown', handleTableMouseDown);
+				tbody.removeEventListener('mouseover', handleTableMouseOver);
+				document.removeEventListener('mouseup', handleDocumentMouseUp);
+
+				// Add new listeners
+				tbody.addEventListener('mousedown', handleTableMouseDown);
+				tbody.addEventListener('mouseover', handleTableMouseOver);
+				document.addEventListener('mouseup', handleDocumentMouseUp);
+
+				// Add click listeners to rows
+				Array.from(tbody.children).forEach((row, index) => {
+					if (!row.querySelector('.no-data')) {
+						row.addEventListener('click', (e) => {
+							// Don't select row if clicking on editable cell
+							if (e.target.classList.contains('editable-cell') || e.target.closest('.editable-cell')) {
+								return;
+							}
+
+							if (!isSelecting) {
+								e.preventDefault();
+								toggleRowSelection(row);
+								updateSelectedRowsInfo();
+							}
+						});
+					}
+				});
+			}
+
+			function handleTableMouseDown(e) {
+				if (e.target.closest('tr') && !e.target.closest('.no-data')) {
+					isSelecting = true;
+					const row = e.target.closest('tr');
+					const tbody = row.parentNode;
+					startRowIndex = Array.from(tbody.children).indexOf(row);
+
+					// Clear previous selection unless Ctrl is held
+					if (!e.ctrlKey && !e.metaKey) {
+						clearSelection();
+					}
+
+					toggleRowSelection(row, true);
+					updateSelectedRowsInfo();
+
+					// Add selecting class
+					const tablesContainer = document.querySelector('.tables-container');
+					if (tablesContainer) {
+						tablesContainer.classList.add('selecting');
+					}
+
+					e.preventDefault();
+				}
+			}
+
+			function handleTableMouseOver(e) {
+				if (isSelecting && e.target.closest('tr') && !e.target.closest('.no-data')) {
+					const row = e.target.closest('tr');
+					const tbody = row.parentNode;
+					const currentRowIndex = Array.from(tbody.children).indexOf(row);
+
+					// Clear current selection range
+					const startIndex = Math.min(startRowIndex, currentRowIndex);
+					const endIndex = Math.max(startRowIndex, currentRowIndex);
+
+					// Clear selecting class from all rows
+					Array.from(tbody.children).forEach((r) => r.classList.remove('selecting'));
+
+					// Add selecting class to range
+					for (let i = startIndex; i <= endIndex; i++) {
+						const targetRow = tbody.children[i];
+						if (targetRow && !targetRow.querySelector('.no-data')) {
+							targetRow.classList.add('selecting');
+						}
+					}
+				}
+			}
+
+			function handleDocumentMouseUp() {
+				if (isSelecting) {
+					const tbody = document.getElementById('fullscreenLabResultsTableBody');
+					if (tbody) {
+						// Apply selection to all rows with selecting class
+						Array.from(tbody.children).forEach((row, i) => {
+							if (row.classList.contains('selecting')) {
+								toggleRowSelection(row, true);
+								row.classList.remove('selecting');
+							}
+						});
+					}
+
+					isSelecting = false;
+
+					// Remove selecting class
+					const tablesContainer = document.querySelector('.tables-container');
+					if (tablesContainer) {
+						tablesContainer.classList.remove('selecting');
+					}
+
+					updateSelectedRowsInfo();
+				}
+			}
+
+			function toggleRowSelection(row, forceSelect = null) {
+				const rowIndex = Array.from(row.parentNode.children).indexOf(row);
+
+				if (forceSelect === true || (forceSelect === null && !selectedRows.has(rowIndex))) {
+					selectedRows.add(rowIndex);
+					row.classList.add('selected');
+				} else {
+					selectedRows.delete(rowIndex);
+					row.classList.remove('selected');
+				}
+			}
+
+			function clearSelection() {
+				selectedRows.clear();
+				const tbody = document.getElementById('fullscreenLabResultsTableBody');
+				if (tbody) {
+					Array.from(tbody.children).forEach((row) => {
+						row.classList.remove('selected', 'selecting');
+					});
+				}
+				updateSelectedRowsInfo();
+			}
+
+			function selectAllRows() {
+				const tbody = document.getElementById('fullscreenLabResultsTableBody');
+				if (!tbody) return;
+
+				// Clear existing selection first
+				selectedRows.clear();
+
+				let selectedCount = 0;
+
+				Array.from(tbody.children).forEach((row, index) => {
+					// Only select rows that have data (not no-data rows)
+					if (!row.querySelector('.no-data')) {
+						selectedRows.add(index);
+						row.classList.add('selected');
+						row.classList.remove('selecting');
+						selectedCount++;
+					}
+				});
+
+				updateSelectedRowsInfo();
+
+				// Show feedback to user
+				if (selectedCount > 0) {
+					// Temporary visual feedback - change icon and color
+					const button = event.target.closest('button');
+					if (button) {
+						const originalHTML = button.innerHTML;
+						const originalColor = button.style.color;
+						const originalBackground = button.style.background;
+						const originalBorder = button.style.borderColor;
+
+						// Change to checkmark with green color
+						button.innerHTML = '<i class="fas fa-check"></i>';
+						button.style.color = '#10b981';
+						button.style.background = '#f0fdf4';
+						button.style.borderColor = '#10b981';
+
+						setTimeout(() => {
+							button.innerHTML = originalHTML;
+							button.style.color = originalColor;
+							button.style.background = originalBackground;
+							button.style.borderColor = originalBorder;
+						}, 1500);
+					}
+				}
+			}
+
+			function updateSelectedRowsInfo() {
+				const selectedCountDisplay = document.getElementById('selectedCountDisplay');
+				const controlButtons = document.getElementById('controlButtons');
+				const selectedCount = document.getElementById('selectedCount');
+
+				if (selectedRows.size > 0) {
+					selectedCount.textContent = selectedRows.size;
+					selectedCountDisplay.style.display = 'block';
+					controlButtons.style.display = 'flex';
+
+					// Add glow effect to controls column
+					const controlsColumn = document.querySelector('.controls-column');
+					if (controlsColumn) {
+						controlsColumn.style.background = '#eff6ff';
+						controlsColumn.style.borderColor = '#3b82f6';
+						controlsColumn.style.boxShadow = '0 0 0 2px rgba(59, 130, 246, 0.1)';
+					}
+				} else {
+					selectedCountDisplay.style.display = 'none';
+					controlButtons.style.display = 'none';
+
+					// Remove glow effect from controls column
+					const controlsColumn = document.querySelector('.controls-column');
+					if (controlsColumn) {
+						controlsColumn.style.background = '#f9fafb';
+						controlsColumn.style.borderColor = '#e5e7eb';
+						controlsColumn.style.boxShadow = 'none';
+					}
+				}
+			}
+
+			// Update visibility of modification controls
+			function updateModificationControlsVisibility() {
+				const modifiedCells = document.querySelectorAll('#fullscreenLabResultsTableBody .modified');
+				const modificationControls = document.getElementById('modificationControls');
+
+				if (modifiedCells.length > 0) {
+					modificationControls.style.display = 'flex';
+				} else {
+					modificationControls.style.display = 'none';
+				}
+			}
+
+			// Transfer selected rows to analysis match table
+			async function transferSelectedRows() {
+				if (selectedRows.size === 0) {
+					showAutoNotification('Vui lòng chọn ít nhất một hàng để chuyển', 'warning');
+					return;
+				}
+
+				// Check if at least one column is selected for transfer
+				if (!selectedTransferColumns.resultValue && !selectedTransferColumns.resultUnit) {
+					showAutoNotification(
+						'Vui lòng chọn ít nhất một cột để chuyển (click vào tiêu đề Kết quả hoặc Đơn vị)',
+						'warning',
+					);
+					return;
+				}
+
+				try {
+					// Get selected row data
+					const tbody = document.getElementById('fullscreenLabResultsTableBody');
+					const analysisTableBody = document.getElementById('analysisMatchTableBody');
+					const analysisRows = analysisTableBody.querySelectorAll('tr:not(.no-data)');
+
+					let transferCount = 0;
+
+					selectedRows.forEach((rowIndex) => {
+						const row = tbody.children[rowIndex];
+						if (row && !row.querySelector('.no-data')) {
+							const cells = row.querySelectorAll('td');
+							const id = cells[0].textContent.trim();
+							const resultValueHtml = cells[3].innerHTML; // Get HTML content instead of text
+							const resultUnitHtml = cells[4].innerHTML; // Get HTML content instead of text
+
+							// Find corresponding row in analysis match table by ID
+							analysisRows.forEach((analysisRow) => {
+								const analysisCells = analysisRow.querySelectorAll('td');
+								const analysisId = analysisCells[0].textContent.trim();
+
+								if (analysisId === id) {
+									// Only update selected columns
+									if (selectedTransferColumns.resultValue) {
+										analysisCells[4].innerHTML = resultValueHtml; // Result Value column
+									}
+
+									if (selectedTransferColumns.resultUnit) {
+										analysisCells[5].innerHTML = resultUnitHtml; // Unit column
+									}
+
+									// Mark as transferred
+									analysisRow.classList.add('transferred-row');
+									transferCount++;
+								}
+							});
+
+							// Mark original row as transferred
+							row.classList.add('transferred-row');
+							row.style.opacity = '0.6';
+						}
+					});
+
+					if (transferCount > 0) {
+						// Create transfer info message
+						const selectedColumns = [];
+						if (selectedTransferColumns.resultValue) selectedColumns.push('Kết quả');
+						if (selectedTransferColumns.resultUnit) selectedColumns.push('Đơn vị');
+						const columnsText = selectedColumns.join(' và ');
+
+						// Update analysis match info
+						const analysisInfo = document.getElementById('analysisMatchInfo');
+						const totalRows = analysisTableBody.querySelectorAll('tr:not(.no-data)').length;
+						analysisInfo.innerHTML = `<i class="fas fa-info-circle"></i> Tổng cộng: ${totalRows} kết quả (${transferCount} đã chuyển cột ${columnsText})`;
+						analysisInfo.style.display = 'block';
+
+						showAutoNotification(
+							`Đã chuyển ${transferCount} hàng sang bảng phân tích khớp (cột: ${columnsText})`,
+							'success',
+						);
+
+						// Synchronize heights after transfer
+						setTimeout(() => {
+							synchronizeRowHeights();
+						}, 100);
+					} else {
+						showAutoNotification('Không tìm thấy hàng tương ứng để chuyển', 'warning');
+					}
+
+					// Clear selection after transfer
+					clearSelection();
+				} catch (error) {
+					console.error('Transfer error:', error);
+					showAutoNotification('Có lỗi xảy ra khi chuyển dữ liệu', 'error');
+				}
+			}
+
+			// Confirm selected rows (update status to APPROVED)
+			async function confirmSelectedRows() {
+				if (selectedRows.size === 0) {
+					alert('Vui lòng chọn ít nhất một hàng để xác nhận');
+					return;
+				}
+
+				if (!confirm(`Bạn có chắc chắn muốn xác nhận duyệt ${selectedRows.size} hàng đã chọn?`)) {
+					return;
+				}
+
+				try {
+					// Get selected IDs
+					const tbody = document.getElementById('fullscreenLabResultsTableBody');
+					const selectedIds = [];
+
+					selectedRows.forEach((rowIndex) => {
+						const row = tbody.children[rowIndex];
+						if (row && !row.querySelector('.no-data')) {
+							const idCell = row.querySelector('td:first-child');
+							if (idCell) {
+								const id = idCell.textContent.trim();
+								if (id && id !== '-') {
+									selectedIds.push(parseInt(id));
+								}
+							}
+						}
+					});
+
+					if (selectedIds.length === 0) {
+						alert('Không có ID hợp lệ để xác nhận');
+						return;
+					}
+
+					// Call API to update status to APPROVED
+					const response = await apiPost('https://red.irdop.org/v1/lab/temporary_result/update_status', {
+						ids: selectedIds,
+						status: 'APPROVED',
+					});
+
+					if (response.status === 200) {
+						alert(`Đã duyệt thành công ${selectedIds.length} chỉ tiêu`);
+
+						// Update file status to APPROVED
+						if (currentFileId) {
+							await updateFileStatus(currentFileId, 'APPROVED');
+						}
+
+						// Reload the lab results to reflect the status change
+						loadFullscreenLabResults();
+
+						// Clear selection
+						clearSelection();
+
+						// Check if opened from LabReportFile via URL parameter
+						const referrer = document.referrer;
+						const fromUrl = getUrlParameter('fileId');
+
+						if (fromUrl && referrer && referrer.includes('LabReportFile.html')) {
+							// Show success message and offer to go back
+							const goBack = confirm('Duyệt thành công! Bạn có muốn quay lại trang Biên bản kiểm nghiệm?');
+							if (goBack) {
+								window.location.href = 'LabReportFile.html';
+								return;
+							}
+						}
+
+						// Close modal and reload file list
+						closeFullscreenLabResultsModal();
+						loadFiles();
+					} else {
+						throw new Error('API returned error status');
+					}
+				} catch (error) {
+					console.error('Confirm error:', error);
+					alert('Có lỗi xảy ra khi xác nhận. Vui lòng thử lại sau.');
+				}
+			}
+
+			// Update file status
+			async function updateFileStatus(fileId, status) {
+				try {
+					const response = await apiPost('https://red.irdop.org/v1/file/update/file', {
+						id: fileId,
+						updateData: {
+							processingStatus: status,
+						},
+					});
+
+					if (response.status !== 200) {
+						console.error('Failed to update file status');
+					}
+				} catch (error) {
+					console.error('Update file status error:', error);
+				}
+			}
+
+			// Show/hide loading and error functions
+			function showFullscreenLabResultsLoading() {
+				document.getElementById('fullscreenLabResultsLoading').style.display = 'block';
+			}
+
+			function hideFullscreenLabResultsLoading() {
+				document.getElementById('fullscreenLabResultsLoading').style.display = 'none';
+			}
+
+			function showFullscreenLabResultsError(message) {
+				const errorElement = document.getElementById('fullscreenLabResultsError');
+				errorElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${message}`;
+				errorElement.style.display = 'block';
+			}
+
+			function hideFullscreenLabResultsError() {
+				document.getElementById('fullscreenLabResultsError').style.display = 'none';
+			}
+
+			function showAnalysisMatchLoading() {
+				document.getElementById('analysisMatchLoading').style.display = 'block';
+			}
+
+			function hideAnalysisMatchLoading() {
+				document.getElementById('analysisMatchLoading').style.display = 'none';
+			}
+
+			function showAnalysisMatchError(message) {
+				const errorElement = document.getElementById('analysisMatchError');
+				errorElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${message}`;
+				errorElement.style.display = 'block';
+			}
+
+			function hideAnalysisMatchError() {
+				document.getElementById('analysisMatchError').style.display = 'none';
+			}
+
+			// Synchronize row heights between tables based on ID
+			function synchronizeRowHeights() {
+				const leftTableBody = document.getElementById('fullscreenLabResultsTableBody');
+				const rightTableBody = document.getElementById('analysisMatchTableBody');
+
+				if (!leftTableBody || !rightTableBody) return;
+
+				const leftRows = leftTableBody.querySelectorAll('tr[data-id]');
+				const rightRows = rightTableBody.querySelectorAll('tr[data-id]');
+
+				// Create maps for quick lookup
+				const leftRowsMap = new Map();
+				const rightRowsMap = new Map();
+
+				leftRows.forEach((row) => {
+					const id = row.getAttribute('data-id');
+					if (id) {
+						leftRowsMap.set(id, row);
+					}
+				});
+
+				rightRows.forEach((row) => {
+					const id = row.getAttribute('data-id');
+					if (id) {
+						rightRowsMap.set(id, row);
+					}
+				});
+
+				// Synchronize heights - take the maximum height between corresponding rows
+				leftRows.forEach((leftRow) => {
+					const id = leftRow.getAttribute('data-id');
+					const rightRow = rightRowsMap.get(id);
+
+					if (rightRow) {
+						// Reset heights first to get natural heights
+						leftRow.style.height = 'auto';
+						rightRow.style.height = 'auto';
+						const leftCells = leftRow.querySelectorAll('td');
+						const rightCells = rightRow.querySelectorAll('td');
+						leftCells.forEach((cell) => (cell.style.height = 'auto'));
+						rightCells.forEach((cell) => (cell.style.height = 'auto'));
+
+						// Force layout recalculation
+						leftRow.offsetHeight;
+						rightRow.offsetHeight;
+
+						// Get natural computed heights
+						const leftRowHeight = parseFloat(window.getComputedStyle(leftRow).height);
+						const rightRowHeight = parseFloat(window.getComputedStyle(rightRow).height);
+
+						// Take the maximum height
+						const maxHeight = Math.max(leftRowHeight, rightRowHeight) + 'px';
+
+						// Apply the maximum height to both rows
+						leftRow.style.height = maxHeight;
+						rightRow.style.height = maxHeight;
+
+						// Also ensure all cells have the same height
+						leftCells.forEach((cell) => {
+							cell.style.height = maxHeight;
+						});
+						rightCells.forEach((cell) => {
+							cell.style.height = maxHeight;
+						});
+					}
+				});
+			}
+
+			// Transfer data from analysis match table back to lab results table
+			async function transferFromAnalysisToLab() {
+				try {
+					const leftTableBody = document.getElementById('fullscreenLabResultsTableBody');
+					const rightTableBody = document.getElementById('analysisMatchTableBody');
+
+					if (!leftTableBody || !rightTableBody) return;
+
+					const leftRows = leftTableBody.querySelectorAll('tr[data-id]');
+					const rightRows = rightTableBody.querySelectorAll('tr[data-id]');
+
+					// Create a map of left table rows by ID
+					const leftRowsMap = new Map();
+					leftRows.forEach((row) => {
+						const id = row.getAttribute('data-id');
+						if (id) {
+							leftRowsMap.set(id, row);
+						}
+					});
+
+					let transferCount = 0;
+
+					// Transfer data from right to left table
+					rightRows.forEach((rightRow) => {
+						const id = rightRow.getAttribute('data-id');
+						const leftRow = leftRowsMap.get(id);
+
+						if (leftRow) {
+							const rightCells = rightRow.querySelectorAll('td');
+							const leftCells = leftRow.querySelectorAll('td');
+
+							// Get data from right table (analysis match)
+							const parameterName = rightCells[2] ? rightCells[2].innerHTML.trim() : '';
+							const resultValue = rightCells[4] ? rightCells[4].innerHTML.trim() : '';
+							const resultUnit = rightCells[5] ? rightCells[5].innerHTML.trim() : '';
+
+							// Check if values are not empty/null
+							if (parameterName && parameterName !== '-' && parameterName !== '') {
+								if (leftCells[2]) leftCells[2].innerHTML = parameterName;
+							}
+
+							if (resultValue && resultValue !== '-' && resultValue !== '') {
+								if (leftCells[3]) leftCells[3].innerHTML = resultValue;
+							}
+
+							if (resultUnit && resultUnit !== '-' && resultUnit !== '') {
+								if (leftCells[4]) leftCells[4].innerHTML = resultUnit;
+							}
+
+							// Mark as transferred back
+							if (
+								(parameterName && parameterName !== '-') ||
+								(resultValue && resultValue !== '-') ||
+								(resultUnit && resultUnit !== '-')
+							) {
+								leftRow.classList.add('transferred-back-row');
+								transferCount++;
+							}
+						}
+					});
+
+					if (transferCount > 0) {
+						showAutoNotification(`Đã chuyển ${transferCount} hàng từ bảng phân tích về bảng thử nghiệm`, 'success');
+
+						// Synchronize heights after transfer
+						setTimeout(() => {
+							synchronizeRowHeights();
+						}, 100);
+					} else {
+						showAutoNotification('Không có dữ liệu hợp lệ để chuyển', 'warning');
+					}
+				} catch (error) {
+					console.error('Transfer from analysis error:', error);
+					showAutoNotification('Có lỗi xảy ra khi chuyển dữ liệu', 'error');
+				}
+			}
+
+			// Sign confirmation function
+			async function signConfirmation() {
+				if (!currentFileId) {
+					alert('Không có file để ký xác nhận');
+					return;
+				}
+
+				if (!confirm('Bạn có chắc chắn muốn ký xác nhận?')) {
+					return;
+				}
+
+				try {
+					// API call for sign confirmation
+					const response = await apiPost('https://red.irdop.org/v1/file/sign/confirmation', {
+						fileId: currentFileId,
+						signature: 'SIGN_CONFIRMATION',
+						timestamp: new Date().toISOString(),
+					});
+
+					if (response.status === 200) {
+						alert('Ký xác nhận thành công!');
+
+						// Update current file record with new signature
+						if (currentFileRecord) {
+							if (!currentFileRecord.signedBy) {
+								currentFileRecord.signedBy = [];
+							}
+
+							// Add new signature in jsonb format using actual user info
+							const newSignature = {
+								signedByUID: currentUser?.identity_uid || 'unknown_uid',
+								signedByName: currentUser?.identity_name || 'Unknown User',
+								signedAt: new Date().toISOString(),
+							};
+
+							currentFileRecord.signedBy.push(newSignature);
+							updateSignedByList(currentFileRecord.signedBy);
+						}
+
+						// Reload data to reflect changes
+						loadFiles();
+					} else {
+						throw new Error('API returned error status');
+					}
+				} catch (error) {
+					console.error('Sign confirmation error:', error);
+					alert('Có lỗi xảy ra khi ký xác nhận. Vui lòng thử lại sau.');
+				}
+			}
+
+			// Approve results function
+			async function approveResults() {
+				if (!currentFileId) {
+					alert('Không có file để duyệt');
+					return;
+				}
+
+				if (!confirm('Bạn có chắc chắn muốn duyệt kết quả?')) {
+					return;
+				}
+
+				try {
+					// Collect all rows from left table
+					const tbody = document.getElementById('fullscreenLabResultsTableBody');
+					const leftTableData = [];
+
+					if (tbody) {
+						Array.from(tbody.children).forEach((row) => {
+							// Skip no-data rows
+							if (!row.querySelector('.no-data')) {
+								const cells = row.querySelectorAll('td');
+								if (cells.length >= 5) {
+									const rowData = {
+										id: cells[0].textContent.trim() || null,
+										sampleUID: cells[1].textContent.trim() || '',
+										parameterName: cells[2].textContent.trim() || '',
+										resultValue: cells[3].textContent.trim() || '',
+										resultUnit: cells[4].textContent.trim() || '',
+									};
+
+									// Convert id to number if it's a valid number
+									if (rowData.id && rowData.id !== '-') {
+										rowData.id = parseInt(rowData.id);
+									}
+
+									leftTableData.push(rowData);
+								}
+							}
+						});
+					}
+
+					if (leftTableData.length === 0) {
+						alert('Không có dữ liệu để gửi');
+						return;
+					}
+
+					// Submit all lab results to analysis system
+					const submitResponse = await apiPost('https://red.irdop.org/v1/lab/analysis/submit_result', {
+						fileId: currentFileId,
+						results: leftTableData,
+						timestamp: new Date().toISOString(),
+					});
+
+					if (submitResponse.status !== 200) {
+						throw new Error('Không thể gửi kết quả phân tích');
+					}
+
+					// API call for approve results
+					const response = await apiPost('https://red.irdop.org/v1/file/approve/results', {
+						fileId: currentFileId,
+						status: 'APPROVED',
+						timestamp: new Date().toISOString(),
+					});
+
+					if (response.status === 200) {
+						alert(`Duyệt kết quả thành công! Đã gửi ${leftTableData.length} kết quả phân tích.`);
+
+						// Close modal and reload file list
+						closeFullscreenLabResultsModal();
+						loadFiles();
+					} else {
+						throw new Error('API returned error status');
+					}
+				} catch (error) {
+					console.error('Approve results error:', error);
+					alert('Có lỗi xảy ra khi duyệt kết quả. Vui lòng thử lại sau.');
+				}
+			}
+
+			// Variables for inline editing
+			let currentEditingCell = null;
+			let currentEditor = null;
+			let originalValue = '';
+
+			// Make cell editable when clicked
+			function makeEditable(cell, event) {
+				// Prevent row selection when clicking on editable cell
+				event.stopPropagation();
+
+				// If already editing this cell, do nothing
+				if (currentEditingCell === cell) {
+					return;
+				}
+
+				// If editing another cell, force save and destroy editor first with synchronous cleanup
+				if (currentEditingCell && currentEditor) {
+					// Synchronously save and destroy the current editor
+					const prevEditor = currentEditor;
+					const prevCell = currentEditingCell;
+
+					try {
+						// Get content before destroying
+						const prevValue = prevEditor.getContent();
+						const prevDisplayValue = prevValue.trim() || '-';
+
+						// Destroy editor immediately
+						destroyCurrentEditor();
+
+						// Update previous cell content
+						prevCell.innerHTML = prevDisplayValue;
+						prevCell.classList.remove('editing');
+
+						// Reset state
+						resetEditingState();
+						removeDocumentClickListener();
+					} catch (error) {
+						console.warn('Error during editor transition:', error);
+						// Force cleanup
+						destroyCurrentEditor();
+						resetEditingState();
+						removeDocumentClickListener();
+					}
+				}
+
+				// Small delay to ensure clean state before creating new editor
+				setTimeout(() => {
+					createNewEditor(cell);
+				}, 50);
+			}
+
+			// Create new editor function
+			function createNewEditor(cell) {
+				currentEditingCell = cell;
+				originalValue = cell.innerHTML.trim();
+
+				// Create unique ID for this editor
+				const editorId = 'tinymce-editor-' + Date.now();
+
+				// Create textarea element for TinyMCE
+				const textarea = document.createElement('textarea');
+				textarea.id = editorId;
+				textarea.value = originalValue === '-' ? '' : originalValue;
+				textarea.style.cssText = `
+					width: 100%;
+					height: 45px;
+					border: 2px solid #3b82f6;
+					border-radius: 4px;
+					resize: none;
+					box-sizing: border-box;
+				`;
+
+				// Replace cell content with textarea
+				cell.innerHTML = '';
+				cell.appendChild(textarea);
+
+				// Initialize TinyMCE với toolbar fixed phía trên
+				tinymce.init({
+					selector: '#' + editorId,
+					inline: false,
+					menubar: false,
+					statusbar: false,
+					toolbar: false, // Ẩn hoàn toàn toolbar
+					plugins: ['superscript', 'subscript', 'textpattern'],
+					height: 40,
+					max_height: 40,
+					min_height: 40,
+					width: '100%',
+					resize: false,
+					autoresize_on_init: false,
+					autoresize_max_height: 40,
+					autoresize_min_height: 40,
+					content_style:
+						'body { font-family: inherit; font-size: 14px; margin: 0; padding: 4px; line-height: 1.2; overflow: hidden; box-sizing: border-box; height: 32px; max-height: 32px; } p { margin: 0; padding: 0; line-height: 1.2; } * { scrollbar-width: none; -ms-overflow-style: none; } *::-webkit-scrollbar { display: none; }',
+					setup: function (editor) {
+						// Store reference to current editor
+						currentEditor = editor;
+
+						// Tự động thay thế dấu * thành ×
+						editor.on('input', function () {
+							try {
+								const content = editor.getContent({ format: 'text' });
+								if (content.includes('*')) {
+									editor.setContent(content.replace(/\*/g, '×'));
+								}
+							} catch (error) {
+								console.warn('TinyMCE input error:', error);
+							}
+						});
+
+						// Phím ^ để bật superscript, _ để bật subscript
+						editor.on('keydown', function (e) {
+							try {
+								if (e.key === '^') {
+									e.preventDefault();
+									editor.execCommand('mceToggleFormat', false, 'superscript');
+								}
+								if (e.key === '_') {
+									e.preventDefault();
+									editor.execCommand('mceToggleFormat', false, 'subscript');
+								}
+								if (e.key === 'Enter' && !e.shiftKey) {
+									e.preventDefault();
+									// Trigger blur event instead of direct save
+									editor.fire('blur');
+								} else if (e.key === 'Escape') {
+									e.preventDefault();
+									cancelEditTinyMCE(cell, editor);
+								}
+							} catch (error) {
+								console.warn('TinyMCE keydown error:', error);
+							}
+						});
+
+						editor.on('init', function () {
+							try {
+								// Ensure editor is properly initialized before focusing
+								setTimeout(() => {
+									if (!editor.destroyed) {
+										editor.focus();
+										const body = editor.getBody();
+										if (body) {
+											editor.selection.select(body, true);
+										}
+									}
+								}, 100);
+							} catch (error) {
+								console.warn('TinyMCE init error:', error);
+							}
+						});
+
+						// Save on blur/click outside with API call - reduced timeout for faster response
+						editor.on('blur', function () {
+							// Use longer timeout to avoid conflicts during editor transitions
+							setTimeout(() => {
+								if (currentEditingCell === cell && currentEditor === editor && !editor.destroyed) {
+									saveEditTinyMCEWithAPI(cell, editor);
+								}
+							}, 150);
+						});
+					},
+				});
+
+				// Add editing class to cell
+				cell.classList.add('editing');
+
+				// Add document click listener to handle clicks outside
+				setTimeout(() => {
+					addDocumentClickListener();
+				}, 300);
+			}
+
+			// Global variable for document click listener
+			let documentClickListener = null;
+
+			// Destroy current editor safely
+			function destroyCurrentEditor() {
+				if (currentEditor && !currentEditor.destroyed) {
+					try {
+						// Get the textarea element before destroying
+						const editorElement = currentEditor.getElement();
+
+						// Clean up any fixed toolbars
+						const fixedToolbar = document.querySelector('.tinymce-toolbar-fixed');
+						if (fixedToolbar) {
+							fixedToolbar.remove();
+						}
+
+						// Remove the editor
+						currentEditor.remove();
+
+						// Remove the textarea element if it still exists
+						if (editorElement && editorElement.parentNode) {
+							editorElement.remove();
+						}
+
+						// Also clean up any remaining textarea with tinymce id pattern
+						if (currentEditingCell) {
+							const remainingTextarea = currentEditingCell.querySelector('textarea[id^="tinymce-editor-"]');
+							if (remainingTextarea) {
+								remainingTextarea.remove();
+							}
+						}
+					} catch (error) {
+						console.warn('Error destroying TinyMCE editor:', error);
+						// Fallback: try to clean up any textarea elements in the current cell
+						if (currentEditingCell) {
+							const textareas = currentEditingCell.querySelectorAll('textarea');
+							textareas.forEach((textarea) => {
+								try {
+									textarea.remove();
+								} catch (removeError) {
+									console.warn('Error removing textarea:', removeError);
+								}
+							});
+						}
+					}
+				}
+				currentEditor = null;
+			}
+
+			// Destroy all TinyMCE editors
+			function destroyAllTinyMCEEditors() {
+				try {
+					// Get all TinyMCE editors
+					const editors = tinymce.get();
+					if (editors && editors.length > 0) {
+						editors.forEach((editor) => {
+							try {
+								if (editor && !editor.destroyed) {
+									editor.remove();
+								}
+							} catch (error) {
+								console.warn('Error destroying individual TinyMCE editor:', error);
+							}
+						});
+					}
+
+					// Clean up any remaining TinyMCE UI elements
+					const toolbars = document.querySelectorAll(
+						'.tox-tinymce, .tinymce-toolbar-fixed, .tox-toolbar, .tox-menubar',
+					);
+					toolbars.forEach((toolbar) => {
+						try {
+							toolbar.remove();
+						} catch (error) {
+							console.warn('Error removing TinyMCE UI element:', error);
+						}
+					});
+
+					// Clean up any remaining textarea elements in the document
+					const remainingTextareas = document.querySelectorAll('textarea[id^="tinymce-editor-"]');
+					remainingTextareas.forEach((textarea) => {
+						try {
+							textarea.remove();
+						} catch (error) {
+							console.warn('Error removing remaining textarea:', error);
+						}
+					});
+
+					// Reset editing state
+					resetEditingState();
+					removeDocumentClickListener();
+				} catch (error) {
+					console.warn('Error in destroyAllTinyMCEEditors:', error);
+				}
+			}
+
+			// Force save current editor if any
+			function forceSaveCurrentEditor() {
+				if (currentEditingCell && currentEditor && !currentEditor.destroyed) {
+					try {
+						// Get content before destroying for synchronous save
+						const newValue = currentEditor.getContent();
+						const displayValue = newValue.trim() || '-';
+
+						// Get row data for API call
+						const row = currentEditingCell.closest('tr');
+						const rowData = extractRowData(row);
+						const field = currentEditingCell.getAttribute('data-field');
+
+						// Update the field value in rowData
+						if (field && rowData) {
+							rowData[field] = displayValue === '-' ? '' : displayValue;
+						}
+
+						// Clean up TinyMCE instance safely
+						destroyCurrentEditor();
+
+						// Update cell content
+						currentEditingCell.innerHTML = displayValue;
+						currentEditingCell.classList.remove('editing');
+
+						// Mark cell as modified if value changed
+						if (newValue !== originalValue && !(originalValue === '-' && newValue === '')) {
+							currentEditingCell.classList.add('modified');
+							currentEditingCell.title = `Đã sửa từ: ${originalValue}`;
+
+							// Add a visual indicator for modified cells
+							if (!currentEditingCell.querySelector('.modified-indicator')) {
+								const indicator = document.createElement('span');
+								indicator.className = 'modified-indicator';
+								indicator.innerHTML = ' <i class="fas fa-edit" style="color: #f59e0b; font-size: 0.8em;"></i>';
+								currentEditingCell.appendChild(indicator);
+							}
+
+							// Call API to update temporary result asynchronously
+							if (rowData) {
+								apiPost('https://red.irdop.org/v1/lab/temporary_result/update_value', {
+									temporaryResult: rowData,
+								})
+									.then((response) => {
+										if (response.status === 200) {
+											console.log('Temporary result updated successfully');
+											// Remove modified indicator on successful save
+											currentEditingCell.classList.remove('modified');
+											currentEditingCell.removeAttribute('title');
+											const indicator = currentEditingCell.querySelector('.modified-indicator');
+											if (indicator) {
+												indicator.remove();
+											}
+										} else {
+											console.error('Failed to update temporary result:', response);
+										}
+									})
+									.catch((apiError) => {
+										console.error('API call error:', apiError);
+									});
+							}
+						}
+
+						// Reset editing state
+						resetEditingState();
+
+						// Remove document click listener
+						removeDocumentClickListener();
+
+						// Update modification controls
+						updateModificationControlsVisibility();
+					} catch (error) {
+						console.warn('Error force saving TinyMCE editor:', error);
+						// Fallback: just destroy the editor without saving
+						destroyCurrentEditor();
+						resetEditingState();
+					}
+				} else if (currentEditingCell) {
+					// Fallback for regular input
+					saveEdit(currentEditingCell);
+				}
+			}
+
+			// Reset editing state
+			function resetEditingState() {
+				if (currentEditingCell) {
+					currentEditingCell.classList.remove('editing');
+
+					// Clean up any remaining textarea elements in the cell
+					const textareas = currentEditingCell.querySelectorAll('textarea');
+					textareas.forEach((textarea) => {
+						try {
+							textarea.remove();
+						} catch (error) {
+							console.warn('Error removing textarea in reset:', error);
+						}
+					});
+
+					currentEditingCell = null;
+				}
+				currentEditor = null;
+				originalValue = '';
+			}
+
+			// Add document click listener to handle clicks outside editor
+			function addDocumentClickListener() {
+				// Remove existing listener if any
+				removeDocumentClickListener();
+
+				documentClickListener = function (event) {
+					// Only handle if there's an active editor
+					if (currentEditingCell && currentEditor && !currentEditor.destroyed) {
+						const editingArea = currentEditingCell;
+						const tinyMCEContainer = document.querySelector('.tox-tinymce');
+						const tinyMCEToolbar = document.querySelector('.tox-toolbar');
+						const tinyMCEMenubar = document.querySelector('.tox-menubar');
+
+						// Check if click is on another editable cell
+						const clickedCell = event.target.closest('td[onclick*="makeEditable"]');
+
+						// If clicking on another editable cell, let makeEditable handle the transition
+						if (clickedCell && clickedCell !== currentEditingCell) {
+							return; // Don't handle here, let makeEditable function handle it
+						}
+
+						// Check if click is outside the editing cell and all TinyMCE containers
+						if (
+							!editingArea.contains(event.target) &&
+							(!tinyMCEContainer || !tinyMCEContainer.contains(event.target)) &&
+							(!tinyMCEToolbar || !tinyMCEToolbar.contains(event.target)) &&
+							(!tinyMCEMenubar || !tinyMCEMenubar.contains(event.target))
+						) {
+							// Force save and destroy the current editor
+							forceSaveCurrentEditor();
+						}
+					}
+				};
+
+				// Add listener with capture to catch events early
+				document.addEventListener('click', documentClickListener, true);
+			}
+
+			// Remove document click listener
+			function removeDocumentClickListener() {
+				if (documentClickListener) {
+					document.removeEventListener('click', documentClickListener, true);
+					documentClickListener = null;
+				}
+			}
+
+			// Handle keydown events during editing (legacy function - kept for compatibility)
+			function handleEditKeydown(event, cell) {
+				if (event.key === 'Enter') {
+					event.preventDefault();
+					saveEdit(cell);
+				} else if (event.key === 'Escape') {
+					event.preventDefault();
+					cancelEdit(cell);
+				}
+			}
+
+			// Save edit for TinyMCE with API call
+			async function saveEditTinyMCEWithAPI(cell, editor) {
+				if (!cell || !cell.classList.contains('editing') || !editor || editor.destroyed) {
+					return;
+				}
+
+				try {
+					const newValue = editor.getContent();
+					const displayValue = newValue.trim() || '-';
+
+					// Get row data for API call
+					const row = cell.closest('tr');
+					const rowData = extractRowData(row);
+					const field = cell.getAttribute('data-field');
+
+					// Update the field value in rowData
+					if (field && rowData) {
+						rowData[field] = displayValue === '-' ? '' : displayValue;
+					}
+
+					// Clean up TinyMCE instance safely
+					destroyCurrentEditor();
+
+					// Clear cell content completely and set new content
+					cell.innerHTML = displayValue;
+					cell.classList.remove('editing');
+
+					// Mark cell as modified if value changed
+					if (newValue !== originalValue && !(originalValue === '-' && newValue === '')) {
+						cell.classList.add('modified');
+						cell.title = `Đã sửa từ: ${originalValue}`;
+
+						// Add a visual indicator for modified cells
+						if (!cell.querySelector('.modified-indicator')) {
+							const indicator = document.createElement('span');
+							indicator.className = 'modified-indicator';
+							indicator.innerHTML = ' <i class="fas fa-edit" style="color: #f59e0b; font-size: 0.8em;"></i>';
+							cell.appendChild(indicator);
+						}
+
+						// Call API to update temporary result
+						if (rowData) {
+							try {
+								const response = await apiPost('https://red.irdop.org/v1/lab/temporary_result/update_value', {
+									temporaryResult: rowData,
+								});
+
+								if (response.status === 200) {
+									console.log('Temporary result updated successfully');
+									// Remove modified indicator on successful save
+									cell.classList.remove('modified');
+									cell.removeAttribute('title');
+									const indicator = cell.querySelector('.modified-indicator');
+									if (indicator) {
+										indicator.remove();
+									}
+								} else {
+									console.error('Failed to update temporary result:', response);
+									// Keep modified indicator if API call failed
+								}
+							} catch (apiError) {
+								console.error('API call error:', apiError);
+								// Keep modified indicator if API call failed
+							}
+						}
+					}
+
+					// Reset editing state
+					resetEditingState();
+
+					// Remove document click listener
+					removeDocumentClickListener();
+
+					// Show/hide modification controls based on whether there are any modifications
+					updateModificationControlsVisibility();
+
+					// Synchronize row heights after edit
+					setTimeout(() => {
+						synchronizeRowHeights();
+					}, 50);
+				} catch (error) {
+					console.error('Error in saveEditTinyMCEWithAPI:', error);
+					// Fallback to basic save without API
+					saveEditTinyMCE(cell, editor);
+				}
+			}
+
+			// Helper function to extract row data
+			function extractRowData(row) {
+				if (!row) return null;
+
+				try {
+					const cells = row.querySelectorAll('td');
+					if (cells.length < 5) return null;
+
+					return {
+						id: parseInt(cells[0].textContent.trim()) || null,
+						sampleUID: cells[1].textContent.trim() || '',
+						parameterName: cells[2].textContent.trim() || '',
+						resultValue: cells[3].textContent.trim() || '',
+						resultUnit: cells[4].textContent.trim() || '',
+					};
+				} catch (error) {
+					console.error('Error extracting row data:', error);
+					return null;
+				}
+			}
+
+			// Save edit for TinyMCE (fallback without API)
+			function saveEditTinyMCE(cell, editor) {
+				if (!cell || !cell.classList.contains('editing') || !editor || editor.destroyed) {
+					return;
+				}
+
+				try {
+					const newValue = editor.getContent();
+					const displayValue = newValue.trim() || '-';
+
+					// Clean up TinyMCE instance safely
+					destroyCurrentEditor();
+
+					// Clear cell content completely and set new content
+					cell.innerHTML = displayValue;
+					cell.classList.remove('editing');
+
+					// Mark cell as modified if value changed
+					if (newValue !== originalValue && !(originalValue === '-' && newValue === '')) {
+						cell.classList.add('modified');
+						cell.title = `Đã sửa từ: ${originalValue}`;
+
+						// Add a visual indicator for modified cells
+						if (!cell.querySelector('.modified-indicator')) {
+							const indicator = document.createElement('span');
+							indicator.className = 'modified-indicator';
+							indicator.innerHTML = ' <i class="fas fa-edit" style="color: #f59e0b; font-size: 0.8em;"></i>';
+							cell.appendChild(indicator);
+						}
+					}
+
+					// Reset editing state
+					resetEditingState();
+
+					// Remove document click listener
+					removeDocumentClickListener();
+
+					// Show/hide modification controls based on whether there are any modifications
+					updateModificationControlsVisibility();
+
+					// Synchronize row heights after edit
+					setTimeout(() => {
+						synchronizeRowHeights();
+					}, 50);
+				} catch (error) {
+					console.error('Error in saveEditTinyMCE:', error);
+				}
+			}
+
+			// Cancel edit for TinyMCE
+			function cancelEditTinyMCE(cell, editor) {
+				if (!cell || !cell.classList.contains('editing')) {
+					return;
+				}
+
+				try {
+					// Clean up TinyMCE instance safely
+					destroyCurrentEditor();
+
+					// Clear cell content completely and restore original value
+					cell.innerHTML = originalValue;
+					cell.classList.remove('editing');
+
+					// Reset editing state
+					resetEditingState();
+
+					// Remove document click listener
+					removeDocumentClickListener();
+				} catch (error) {
+					console.error('Error in cancelEditTinyMCE:', error);
+				}
+			}
+
+			// Save the edit (legacy function for input fields)
+			function saveEdit(cell) {
+				if (!cell || !cell.classList.contains('editing')) {
+					return;
+				}
+
+				const input = cell.querySelector('input');
+				if (!input) {
+					return;
+				}
+
+				const newValue = input.value.trim();
+				const displayValue = newValue || '-';
+
+				// Update cell content
+				cell.innerHTML = displayValue;
+				cell.classList.remove('editing');
+
+				// Mark cell as modified if value changed
+				if (newValue !== originalValue && !(originalValue === '-' && newValue === '')) {
+					cell.classList.add('modified');
+					cell.title = `Đã sửa từ: ${originalValue}`;
+
+					// Add a visual indicator for modified cells
+					if (!cell.querySelector('.modified-indicator')) {
+						const indicator = document.createElement('span');
+						indicator.className = 'modified-indicator';
+						indicator.innerHTML = ' <i class="fas fa-edit" style="color: #f59e0b; font-size: 0.8em;"></i>';
+						cell.appendChild(indicator);
+					}
+				}
+
+				currentEditingCell = null;
+				originalValue = '';
+
+				// Remove document click listener
+				removeDocumentClickListener();
+
+				// Show/hide modification controls based on whether there are any modifications
+				updateModificationControlsVisibility();
+
+				// Synchronize row heights after edit
+				setTimeout(() => {
+					synchronizeRowHeights();
+				}, 50);
+			}
+
+			// Cancel the edit (legacy function for input fields)
+			function cancelEdit(cell) {
+				if (!cell || !cell.classList.contains('editing')) {
+					return;
+				}
+
+				// Check if it's a TinyMCE editor
+				if (currentEditor && !currentEditor.destroyed) {
+					cancelEditTinyMCE(cell, currentEditor);
+					return;
+				}
+
+				// Restore original value for regular input
+				cell.innerHTML = originalValue;
+				cell.classList.remove('editing');
+
+				// Reset editing state
+				resetEditingState();
+
+				// Remove document click listener
+				removeDocumentClickListener();
+			}
+
+			// Save all modifications to the server
+			async function saveAllModifications() {
+				const modifiedCells = document.querySelectorAll('#fullscreenLabResultsTableBody .modified');
+
+				if (modifiedCells.length === 0) {
+					alert('Không có thay đổi nào để lưu');
+					return;
+				}
+
+				if (!confirm(`Bạn có chắc chắn muốn lưu ${modifiedCells.length} thay đổi?`)) {
+					return;
+				}
+
+				try {
+					const updates = [];
+
+					modifiedCells.forEach((cell) => {
+						const row = cell.closest('tr');
+						const id = row.getAttribute('data-id');
+						const field = cell.getAttribute('data-field');
+						let value = cell.innerHTML.trim();
+
+						// Remove modified indicator from value
+						const indicator = cell.querySelector('.modified-indicator');
+						if (indicator) {
+							const indicatorClone = indicator.cloneNode(true);
+							indicator.remove();
+							value = cell.innerHTML.trim();
+							cell.appendChild(indicatorClone);
+						}
+
+						if (value === '-') value = '';
+
+						updates.push({
+							id: parseInt(id),
+							field: field,
+							value: value,
+						});
+					});
+
+					// API call to update values
+					const response = await apiPost('https://red.irdop.org/v1/lab/temporary_result/update_values', {
+						updates: updates,
+					});
+
+					if (response.status === 200) {
+						alert('Lưu thay đổi thành công!');
+
+						// Remove modified indicators
+						modifiedCells.forEach((cell) => {
+							cell.classList.remove('modified');
+							cell.removeAttribute('title');
+							const indicator = cell.querySelector('.modified-indicator');
+							if (indicator) {
+								indicator.remove();
+							}
+						});
+
+						// Hide modification controls
+						updateModificationControlsVisibility();
+
+						// Reload data to ensure consistency
+						loadFullscreenLabResults();
+					} else {
+						throw new Error('API returned error status');
+					}
+				} catch (error) {
+					console.error('Save modifications error:', error);
+					alert('Có lỗi xảy ra khi lưu thay đổi. Vui lòng thử lại sau.');
+				}
+			}
+
+			// Discard all modifications
+			function discardAllModifications() {
+				const modifiedCells = document.querySelectorAll('#fullscreenLabResultsTableBody .modified');
+
+				if (modifiedCells.length === 0) {
+					alert('Không có thay đổi nào để hủy');
+					return;
+				}
+
+				if (!confirm(`Bạn có chắc chắn muốn hủy ${modifiedCells.length} thay đổi?`)) {
+					return;
+				}
+
+				// Reload data from server to discard all changes
+				loadFullscreenLabResults();
+			}
+
+			// Refresh tables function - reload data from API and reset to default state
+			async function refreshTables() {
+				if (!currentFileId) {
+					alert('Không có file để làm mới');
+					return;
+				}
+
+				try {
+					// Show loading indicator on refresh button
+					const refreshBtn = document.querySelector('.refresh-btn i');
+					if (refreshBtn) {
+						refreshBtn.classList.add('fa-spin');
+					}
+
+					// Clear selection first
+					clearSelection();
+
+					// Remove all transferred row classes and reset opacity
+					const leftTableBody = document.getElementById('fullscreenLabResultsTableBody');
+					const rightTableBody = document.getElementById('analysisMatchTableBody');
+
+					if (leftTableBody) {
+						const leftRows = leftTableBody.querySelectorAll('tr');
+						leftRows.forEach((row) => {
+							row.classList.remove('transferred-row', 'transferred-back-row');
+							row.style.opacity = '';
+						});
+					}
+
+					if (rightTableBody) {
+						const rightRows = rightTableBody.querySelectorAll('tr');
+						rightRows.forEach((row) => {
+							row.classList.remove('transferred-row', 'transferred-back-row');
+							row.style.opacity = '';
+						});
+					}
+
+					// Reload lab results (left table)
+					await loadFullscreenLabResults();
+
+					// Reload analysis match data (right table)
+					await loadAnalysisMatch();
+
+					// Reset analysis match info
+					const analysisInfo = document.getElementById('analysisMatchInfo');
+					if (analysisInfo && rightTableBody) {
+						const totalRows = rightTableBody.querySelectorAll('tr:not(.no-data)').length;
+						analysisInfo.innerHTML = `<i class="fas fa-info-circle"></i> Tổng cộng: ${totalRows} kết quả`;
+						analysisInfo.style.display = 'block';
+					}
+
+					console.log('Tables refreshed successfully');
+				} catch (error) {
+					console.error('Error refreshing tables:', error);
+					alert('Có lỗi xảy ra khi làm mới dữ liệu');
+				} finally {
+					// Remove loading indicator
+					const refreshBtn = document.querySelector('.refresh-btn i');
+					if (refreshBtn) {
+						refreshBtn.classList.remove('fa-spin');
+					}
+				}
+			}
+
+			// Initialize the page
+			document.addEventListener('DOMContentLoaded', async function () {
+				// Check authentication
+				if (!hasAuthCookies()) {
+					showError('Bạn cần đăng nhập để sử dụng tính năng này');
+					return;
+				}
+
+				// Fetch current user info
+				await fetchUser();
+
+				// Set default status to PENDING_APPROVAL
+				currentStatus = 'PENDING_APPROVAL';
+
+				// Check if fileId is provided in URL parameters
+				const fileId = getUrlParameter('fileId');
+				const fileName = getUrlParameter('fileName');
+
+				if (fileId) {
+					// Open modal directly with the fileId
+					openConfirmModalWithFileId(fileId, fileName || 'File');
+				}
+
+				// Load initial data
+				loadFiles();
+			});
+		</script>
+	</body>
+</html>

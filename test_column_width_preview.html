@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="vi">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Test Column Width Preview</title>
+		<style>
+			.preview-table {
+				width: 100%;
+				border-collapse: collapse;
+				table-layout: fixed;
+				margin: 20px 0;
+			}
+			.preview-table th {
+				background: #f9fafb;
+				border: 1px solid #e5e7eb;
+				padding: 12px 8px;
+				text-align: left;
+				font-weight: 600;
+				color: #374151;
+				position: relative;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.preview-table th .resize-handle {
+				position: absolute;
+				right: 0;
+				top: 0;
+				bottom: 0;
+				width: 4px;
+				background: transparent;
+				cursor: col-resize;
+				user-select: none;
+			}
+			.preview-table th .resize-handle:hover,
+			.preview-table th .resize-handle.resizing {
+				background: #3b82f6;
+			}
+			.width-indicator {
+				font-size: 11px;
+				color: #6b7280;
+				font-weight: normal;
+				display: block;
+				margin-top: 2px;
+			}
+			.form-section {
+				margin: 20px 0;
+				padding: 20px;
+				border: 1px solid #e5e7eb;
+				border-radius: 8px;
+			}
+			.note {
+				background: #f0f9ff;
+				border: 1px solid #0ea5e9;
+				padding: 15px;
+				border-radius: 8px;
+				margin: 20px 0;
+			}
+			.button {
+				background: #3b82f6;
+				color: white;
+				padding: 10px 20px;
+				border: none;
+				border-radius: 6px;
+				cursor: pointer;
+				margin: 5px;
+			}
+			.button:hover {
+				background: #2563eb;
+			}
+		</style>
+	</head>
+	<body>
+		<div style="max-width: 1200px; margin: 0 auto; padding: 20px">
+			<h1>Test Column Width Preview Feature</h1>
+
+			<div class="note">
+				<h3>🔧 Tính năng mới đã được cải thiện:</h3>
+				<ul>
+					<li><strong>Resize mượt mà:</strong> Khi giảm kích thước cột, giảm từ từ thay vì nhảy xuống 10%</li>
+					<li><strong>Tự động cân bằng:</strong> Khi một cột thay đổi, các cột khác tự động điều chỉnh</li>
+					<li><strong>Tổng luôn 100%:</strong> Đảm bảo tổng tất cả cột luôn bằng 100%</li>
+					<li><strong>Phân bố đều:</strong> Khi thêm/xóa cột, các cột còn lại được phân bố đều</li>
+					<li><strong>Giới hạn hợp lý:</strong> Mỗi cột tối thiểu 10%, tối đa 80%</li>
+				</ul>
+			</div>
+
+			<div class="form-section">
+				<h3>Demo Preview Table với Resize cải tiến</h3>
+				<p style="color: #6b7280; font-style: italic">
+					Kéo cạnh phải của các cột để điều chỉnh độ rộng. Các cột khác sẽ tự động điều chỉnh!
+				</p>
+
+				<table class="preview-table" id="demoTable">
+					<thead>
+						<tr>
+							<th style="width: 30%">
+								<div>Mã mẫu</div>
+								<div class="width-indicator">30%</div>
+								<div class="resize-handle" data-column="0"></div>
+							</th>
+							<th style="width: 20%">
+								<div>Mã chỉ tiêu</div>
+								<div class="width-indicator">20%</div>
+								<div class="resize-handle" data-column="1"></div>
+							</th>
+							<th style="width: 25%">
+								<div>Kết quả CFU/g (/ml)</div>
+								<div class="width-indicator">25%</div>
+								<div class="resize-handle" data-column="2"></div>
+							</th>
+							<th style="width: 25%">
+								<div>Ghi chú</div>
+								<div class="width-indicator">25%</div>
+								<div class="resize-handle" data-column="3"></div>
+							</th>
+						</tr>
+					</thead>
+				</table>
+			</div>
+
+			<div class="form-section">
+				<h3>Cấu trúc Object Columns mới:</h3>
+				<pre style="background: #f1f5f9; padding: 15px; border-radius: 6px; overflow-x: auto"><code>[
+    {
+        "columnName": "Mã mẫu",
+        "valueColumn": "sample_uid",
+        "width": "30%",
+        "resizable": true
+    },
+    {
+        "columnName": "Mã chỉ tiêu", 
+        "valueColumn": "id",
+        "width": "20%",
+        "resizable": true
+    },
+    {
+        "columnName": "Kết quả CFU/g (/ml)",
+        "valueColumn": "",
+        "width": "25%",
+        "resizable": true
+    },
+    {
+        "columnName": "Ghi chú",
+        "valueColumn": "",
+        "width": "25%", 
+        "resizable": true
+    }
+]</code></pre>
+			</div>
+
+			<button class="button" onclick="showCurrentWidths()">Hiển thị Width hiện tại</button>
+			<button class="button" onclick="resetWidths()">Reset về mặc định</button>
+		</div>
+
+		<script>
+			// Demo resize functionality
+			let isResizing = false;
+			let resizeColumn = null;
+			let resizeStartX = 0;
+			let resizeStartWidth = 0;
+			let columnWidths = ['30%', '20%', '25%', '25%'];
+
+			// Initialize resize handlers
+			function initializeResize() {
+				const handles = document.querySelectorAll('.resize-handle');
+				handles.forEach((handle) => {
+					handle.addEventListener('mousedown', startResize);
+				});
+			}
+
+			function startResize(e) {
+				e.preventDefault();
+				isResizing = true;
+
+				const handle = e.target;
+				resizeColumn = parseInt(handle.dataset.column);
+				resizeStartX = e.clientX;
+
+				// Get current width as percentage, not pixels
+				resizeStartWidth = parseInt(columnWidths[resizeColumn]) || 25;
+
+				handle.classList.add('resizing');
+				document.body.style.cursor = 'col-resize';
+				document.body.style.userSelect = 'none';
+
+				document.addEventListener('mousemove', handleResize);
+				document.addEventListener('mouseup', endResize);
+			}
+
+			function handleResize(e) {
+				if (!isResizing) return;
+
+				const deltaX = e.clientX - resizeStartX;
+
+				// Calculate new width more sensitively using percentage-based approach
+				const sensitivity = 0.3; // Lower = more sensitive
+				const percentChange = Math.round(deltaX * sensitivity);
+				let newWidthPercent = Math.max(5, Math.min(90, resizeStartWidth + percentChange));
+
+				// Get current widths of all columns
+				const totalColumns = columnWidths.length;
+				const currentWidths = [...columnWidths.map((w) => parseInt(w))];
+
+				// Calculate remaining percentage for other columns
+				const remainingPercent = 100 - newWidthPercent;
+				const otherColumnsCount = totalColumns - 1;
+
+				if (otherColumnsCount > 0) {
+					// Get total width of other columns
+					let totalOtherWidth = 0;
+					for (let i = 0; i < totalColumns; i++) {
+						if (i !== resizeColumn) {
+							totalOtherWidth += currentWidths[i];
+						}
+					}
+
+					// Proportionally adjust other columns
+					const newWidths = [...currentWidths];
+					newWidths[resizeColumn] = newWidthPercent;
+
+					if (totalOtherWidth > 0) {
+						for (let i = 0; i < totalColumns; i++) {
+							if (i !== resizeColumn) {
+								const proportion = currentWidths[i] / totalOtherWidth;
+								newWidths[i] = Math.max(5, Math.round(remainingPercent * proportion));
+							}
+						}
+
+						// Fine-tune to ensure total is exactly 100%
+						let actualTotal = newWidths.reduce((sum, width) => sum + width, 0);
+						const difference = 100 - actualTotal;
+
+						if (Math.abs(difference) > 0) {
+							// Distribute the difference more evenly
+							const increment = difference > 0 ? 1 : -1;
+							let remaining = Math.abs(difference);
+							let index = 0;
+
+							while (remaining > 0 && index < totalColumns * 2) {
+								const i = index % totalColumns;
+								if (i !== resizeColumn) {
+									if (difference > 0 || newWidths[i] > 5) {
+										newWidths[i] += increment;
+										remaining--;
+									}
+								}
+								index++;
+							}
+						}
+					}
+
+					// Update all columns
+					columnWidths = newWidths.map((w) => `${w}%`);
+					const table = document.getElementById('demoTable');
+					const ths = table.querySelectorAll('th');
+					ths.forEach((th, index) => {
+						th.style.width = columnWidths[index];
+						const indicator = th.querySelector('.width-indicator');
+						if (indicator) {
+							indicator.textContent = columnWidths[index];
+						}
+					});
+				}
+			}
+
+			function endResize(e) {
+				if (!isResizing) return;
+
+				isResizing = false;
+				resizeColumn = null;
+
+				document.querySelector('.resize-handle.resizing')?.classList.remove('resizing');
+				document.body.style.cursor = '';
+				document.body.style.userSelect = '';
+
+				document.removeEventListener('mousemove', handleResize);
+				document.removeEventListener('mouseup', endResize);
+			}
+
+			function showCurrentWidths() {
+				alert('Độ rộng hiện tại:\n' + columnWidths.map((w, i) => `Cột ${i + 1}: ${w}`).join('\n'));
+			}
+
+			function resetWidths() {
+				columnWidths = ['25%', '25%', '25%', '25%'];
+				const table = document.getElementById('demoTable');
+				const ths = table.querySelectorAll('th');
+				ths.forEach((th, index) => {
+					th.style.width = columnWidths[index];
+					const indicator = th.querySelector('.width-indicator');
+					if (indicator) {
+						indicator.textContent = columnWidths[index];
+					}
+				});
+			}
+
+			// Initialize when page loads
+			document.addEventListener('DOMContentLoaded', initializeResize);
+		</script>
+	</body>
+</html>
