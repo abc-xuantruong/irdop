@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="vi">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Test Simple Inline Editor</title>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<style>
+			body {
+				font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+				margin: 20px;
+				background: #f8fafc;
+			}
+
+			.test-table {
+				background: white;
+				border-radius: 8px;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+				overflow: hidden;
+			}
+
+			.test-table table {
+				width: 100%;
+				border-collapse: collapse;
+			}
+
+			.test-table th,
+			.test-table td {
+				padding: 12px 16px;
+				border-bottom: 1px solid #e5e7eb;
+				text-align: left;
+			}
+
+			.test-table th {
+				background: #f8f9fa;
+				font-weight: 600;
+			}
+
+			/* Inline editor styling - simplified */
+			.editable-cell {
+				cursor: pointer;
+				position: relative;
+			}
+
+			.editable-cell:hover {
+				background-color: #f0f9ff !important;
+				outline: 1px solid #3b82f6;
+			}
+
+			.editable-cell.editing {
+				background-color: #dbeafe !important;
+				padding: 0 !important;
+			}
+
+			.inline-editor-input {
+				width: 100%;
+				height: 100%;
+				border: none;
+				outline: none;
+				padding: 12px 16px;
+				font-size: 14px;
+				font-family: inherit;
+				background: transparent;
+				resize: none;
+			}
+
+			.inline-editor-input:focus {
+				background: white;
+				box-shadow: 0 0 0 2px #3b82f6;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container mx-auto max-w-4xl">
+			<h1 class="text-2xl font-bold mb-6">Test Simple Inline Editor</h1>
+
+			<div class="mb-4 p-4 bg-blue-50 rounded-lg">
+				<h3 class="font-semibold text-blue-800 mb-2">Hướng dẫn sử dụng:</h3>
+				<ul class="text-blue-700 space-y-1">
+					<li>• Click vào các ô "Kết quả" hoặc "Đơn vị" để chỉnh sửa</li>
+					<li>• Nhấn <strong>^</strong> để bật/tắt chế độ superscript (chỉ số trên)</li>
+					<li>• Nhấn <strong>_</strong> để bật/tắt chế độ subscript (chỉ số dưới)</li>
+					<li>• Khi ở chế độ SUP/SUB, các ký tự nhập vào sẽ được định dạng tương ứng</li>
+					<li>• Nhấn <strong>Enter</strong> để lưu, <strong>Escape</strong> để hủy</li>
+					<li>• Chỉ có 1 editor hiển thị tại 1 thời điểm</li>
+				</ul>
+			</div>
+
+			<div class="test-table">
+				<table>
+					<thead>
+						<tr>
+							<th>Mã mẫu</th>
+							<th>Tên chỉ tiêu</th>
+							<th>Kết quả</th>
+							<th>Đơn vị</th>
+							<th>Hạn trả</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>S001</td>
+							<td>pH</td>
+							<td class="result-cell" data-row-id="1" data-column="result_value">7.2</td>
+							<td class="unit-cell" data-row-id="1" data-column="result_unit">pH units</td>
+							<td>2024-01-15</td>
+						</tr>
+						<tr>
+							<td>S002</td>
+							<td>Đồng (Cu)</td>
+							<td class="result-cell" data-row-id="2" data-column="result_value">15.3</td>
+							<td class="unit-cell" data-row-id="2" data-column="result_unit">mg/L</td>
+							<td>2024-01-16</td>
+						</tr>
+						<tr>
+							<td>S003</td>
+							<td>Nước (H<sub>2</sub>O)</td>
+							<td class="result-cell" data-row-id="3" data-column="result_value">&lt; 10</td>
+							<td class="unit-cell" data-row-id="3" data-column="result_unit">mg/L</td>
+							<td>2024-01-17</td>
+						</tr>
+						<tr>
+							<td>S004</td>
+							<td>CO<sub>2</sub></td>
+							<td class="result-cell" data-row-id="4" data-column="result_value">25.8</td>
+							<td class="unit-cell" data-row-id="4" data-column="result_unit">mg/m<sup>3</sup></td>
+							<td>2024-01-18</td>
+						</tr>
+						<tr>
+							<td>S005</td>
+							<td>Test Formula</td>
+							<td class="result-cell" data-row-id="5" data-column="result_value">E = mc<sup>2</sup></td>
+							<td class="unit-cell" data-row-id="5" data-column="result_unit">J</td>
+							<td>2024-01-19</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<div class="mt-4 p-4 bg-green-50 rounded-lg">
+				<h3 class="font-semibold text-green-800 mb-2">Ví dụ sử dụng:</h3>
+				<ul class="text-green-700 space-y-1">
+					<li>
+						• Nhập: <code>H</code> → <code>^</code> (bật SUP) → <code>2</code> → <code>^</code> (tắt SUP) →
+						<code>O</code> → Kết quả: H<sup>2</sup>O
+					</li>
+					<li>
+						• Nhập: <code>CO</code> → <code>_</code> (bật SUB) → <code>2</code> → <code>_</code> (tắt SUB) → Kết quả:
+						CO<sub>2</sub>
+					</li>
+					<li>
+						• Nhập: <code>X</code> → <code>^</code> → <code>2</code> → <code>^</code> → <code> + Y</code> →
+						<code>^</code> → <code>3</code> → Kết quả: X<sup>2</sup> + Y<sup>3</sup>
+					</li>
+					<li>• Có hiển thị chỉ báo "SUP Mode" hoặc "SUB Mode" khi ở chế độ định dạng</li>
+				</ul>
+			</div>
+		</div>
+
+		<script>
+			// Inline Editor functionality - simplified
+			let currentEditingCell = null;
+			let originalValue = '';
+			let inlineInput = null;
+			let isSupMode = false;
+			let isSubMode = false;
+
+			// Initialize inline editor
+			function initInlineEditor() {
+				// No initialization needed for simplified version
+			}
+
+			// Show inline editor for a cell
+			function showInlineEditor(cell, value) {
+				// Close any existing editor first
+				if (currentEditingCell) {
+					saveInlineEdit();
+				}
+
+				currentEditingCell = cell;
+				originalValue = value;
+				isSupMode = false;
+				isSubMode = false;
+
+				// Create input element
+				inlineInput = document.createElement('div');
+				inlineInput.className = 'inline-editor-input';
+				inlineInput.contentEditable = true;
+				inlineInput.innerHTML = value || '';
+
+				// Replace cell content with input
+				cell.innerHTML = '';
+				cell.appendChild(inlineInput);
+				cell.classList.add('editing');
+
+				// Focus and select all
+				inlineInput.focus();
+				if (inlineInput.textContent) {
+					const range = document.createRange();
+					range.selectNodeContents(inlineInput);
+					const selection = window.getSelection();
+					selection.removeAllRanges();
+					selection.addRange(range);
+				}
+
+				// Add event listeners
+				inlineInput.addEventListener('keydown', handleKeyDown);
+				inlineInput.addEventListener('input', handleInput);
+				inlineInput.addEventListener('blur', handleBlur);
+			}
+
+			// Handle keydown events
+			function handleKeyDown(e) {
+				if (e.key === 'Enter' && !e.shiftKey) {
+					e.preventDefault();
+					saveInlineEdit();
+				} else if (e.key === 'Escape') {
+					e.preventDefault();
+					cancelInlineEdit();
+				}
+			}
+
+			// Handle input events for ^ and _ shortcuts
+			function handleInput(e) {
+				const inputType = e.inputType;
+				const data = e.data;
+
+				// Check for ^ (superscript toggle)
+				if (data === '^') {
+					e.preventDefault();
+					toggleFormatMode('sup');
+					return;
+				}
+
+				// Check for _ (subscript toggle)
+				if (data === '_') {
+					e.preventDefault();
+					toggleFormatMode('sub');
+					return;
+				}
+
+				// Handle normal text input based on current mode
+				if (data && data.length === 1 && (isSupMode || isSubMode)) {
+					e.preventDefault();
+					insertFormattedText(data);
+				}
+			}
+
+			// Toggle format mode (sup/sub)
+			function toggleFormatMode(mode) {
+				if (mode === 'sup') {
+					isSupMode = !isSupMode;
+					isSubMode = false; // Turn off sub mode
+				} else if (mode === 'sub') {
+					isSubMode = !isSubMode;
+					isSupMode = false; // Turn off sup mode
+				}
+
+				// Remove the trigger character
+				removeLastCharacter();
+
+				// Update visual indicator
+				updateModeIndicator();
+			}
+
+			// Remove the last character (^ or _)
+			function removeLastCharacter() {
+				const selection = window.getSelection();
+				if (selection.rangeCount > 0) {
+					const range = selection.getRangeAt(0);
+					if (range.startOffset > 0) {
+						range.setStart(range.startContainer, range.startOffset - 1);
+						range.deleteContents();
+					}
+				}
+			}
+
+			// Insert formatted text based on current mode
+			function insertFormattedText(text) {
+				const selection = window.getSelection();
+				if (selection.rangeCount === 0) return;
+
+				const range = selection.getRangeAt(0);
+
+				if (isSupMode) {
+					const supElement = document.createElement('sup');
+					supElement.textContent = text;
+					range.insertNode(supElement);
+
+					// Move cursor after the inserted element
+					range.setStartAfter(supElement);
+					range.collapse(true);
+					selection.removeAllRanges();
+					selection.addRange(range);
+				} else if (isSubMode) {
+					const subElement = document.createElement('sub');
+					subElement.textContent = text;
+					range.insertNode(subElement);
+
+					// Move cursor after the inserted element
+					range.setStartAfter(subElement);
+					range.collapse(true);
+					selection.removeAllRanges();
+					selection.addRange(range);
+				} else {
+					// Normal text
+					const textNode = document.createTextNode(text);
+					range.insertNode(textNode);
+
+					// Move cursor after the inserted text
+					range.setStartAfter(textNode);
+					range.collapse(true);
+					selection.removeAllRanges();
+					selection.addRange(range);
+				}
+			}
+
+			// Update visual mode indicator
+			function updateModeIndicator() {
+				// Remove existing indicators
+				const existingIndicators = inlineInput.parentElement.querySelectorAll('.mode-indicator');
+				existingIndicators.forEach((indicator) => indicator.remove());
+
+				// Add new indicator if in special mode
+				if (isSupMode || isSubMode) {
+					const indicator = document.createElement('div');
+					indicator.className = 'mode-indicator';
+					indicator.style.cssText = `
+                    position: absolute;
+                    top: -25px;
+                    right: 0;
+                    background: #3b82f6;
+                    color: white;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 11px;
+                    pointer-events: none;
+                    z-index: 10001;
+                `;
+					indicator.textContent = isSupMode ? 'SUP Mode' : 'SUB Mode';
+					currentEditingCell.appendChild(indicator);
+				}
+			}
+
+			// Handle blur event
+			function handleBlur(e) {
+				// Delay to allow other interactions
+				setTimeout(() => {
+					if (currentEditingCell && !currentEditingCell.contains(document.activeElement)) {
+						saveInlineEdit();
+					}
+				}, 100);
+			}
+
+			// Save inline edit
+			function saveInlineEdit() {
+				if (!currentEditingCell || !inlineInput) return;
+
+				const newValue = inlineInput.innerHTML.trim();
+
+				// Update cell content
+				currentEditingCell.innerHTML = newValue || '';
+				currentEditingCell.classList.remove('editing');
+
+				// Log the changes
+				console.log('Saving cell value:', {
+					rowId: currentEditingCell.dataset.rowId,
+					column: currentEditingCell.dataset.column,
+					value: newValue,
+				});
+
+				// Clear editing state
+				currentEditingCell = null;
+				inlineInput = null;
+				originalValue = '';
+			}
+
+			// Cancel inline edit
+			function cancelInlineEdit() {
+				if (!currentEditingCell) return;
+
+				// Restore original value
+				currentEditingCell.innerHTML = originalValue;
+				currentEditingCell.classList.remove('editing');
+
+				// Clear editing state
+				currentEditingCell = null;
+				inlineInput = null;
+				originalValue = '';
+			}
+
+			// Make cells editable when rendering table
+			function makeCellEditable(cell) {
+				cell.classList.add('editable-cell');
+
+				cell.addEventListener('click', (e) => {
+					e.stopPropagation();
+					const currentValue = cell.innerHTML;
+					showInlineEditor(cell, currentValue);
+				});
+			}
+
+			// Initialize the application
+			function init() {
+				// Initialize inline editor
+				initInlineEditor();
+
+				// Make result and unit cells editable
+				document.querySelectorAll('.result-cell, .unit-cell').forEach((cell) => {
+					makeCellEditable(cell);
+				});
+
+				// Global click listener to close inline editor when clicking outside
+				document.addEventListener('click', (e) => {
+					if (currentEditingCell && !currentEditingCell.contains(e.target)) {
+						saveInlineEdit();
+					}
+				});
+			}
+
+			// Start the application
+			document.addEventListener('DOMContentLoaded', init);
+		</script>
+	</body>
+</html>

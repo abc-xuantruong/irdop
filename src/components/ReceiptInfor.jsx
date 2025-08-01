@@ -3811,7 +3811,7 @@ const ReceiptInfor = ({ receipt }) => {
 			/>
 			{/* FileForm */}
 			<FileForm
-				foreignKeyUIDs={[currentReceipt?.receipt_uid]}
+				foreignKeyUIDs={[currentReceipt?.record_code]}
 				// localPath="activities/LAB"
 				objectPath="activities/LAB"
 				isVisible={isFileFormVisible}

@@ -1,0 +1,4072 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Phân tích chỉ tiêu - IRDOP</title>
+		<link
+			rel="icon"
+			type="image/png"
+			href="https://irdop.org/wp-content/uploads/2024/07/416333459_918989026598929_7536651727234700897_n-removebg-preview.png"
+		/>
+		<script src="tinymce/tinymce.min.js"></script>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<style>
+			body {
+				font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+				min-height: 100vh;
+				margin: 0;
+				padding: 0;
+			}
+			.container {
+				background: rgba(255, 255, 255, 0.95);
+				backdrop-filter: blur(10px);
+				border-radius: 15px;
+				box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+				width: 100%;
+				max-width: none;
+			}
+			.loading-spinner {
+				border: 4px solid #f3f3f3;
+				border-top: 4px solid #2563eb;
+				border-radius: 50%;
+				width: 40px;
+				height: 40px;
+				animation: spin 2s linear infinite;
+				margin: 0 auto;
+			}
+
+			/* Fixed loading overlay */
+			.loading-overlay {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100vw;
+				height: 100vh;
+				background: rgba(255, 255, 255, 0.8);
+				backdrop-filter: blur(4px);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				z-index: 9999;
+				flex-direction: column;
+			}
+
+			.loading-overlay .loading-spinner {
+				width: 60px;
+				height: 60px;
+				border-width: 6px;
+			}
+
+			.loading-text {
+				margin-top: 16px;
+				color: #374151;
+				font-size: 16px;
+				font-weight: 500;
+			}
+			@keyframes spin {
+				0% {
+					transform: rotate(0deg);
+				}
+				100% {
+					transform: rotate(360deg);
+				}
+			}
+			.fade-in {
+				animation: fadeIn 0.5s ease-in;
+			}
+			@keyframes fadeIn {
+				from {
+					opacity: 0;
+				}
+				to {
+					opacity: 1;
+				}
+			}
+
+			.editor-log-btn {
+				position: fixed;
+				top: 90px;
+				right: 20px;
+				z-index: 1000;
+				width: 60px;
+				height: 60px;
+				border-radius: 50%;
+				background-color: #10b981;
+				color: white;
+				border: none;
+				font-weight: bold;
+				font-size: 14px;
+				cursor: pointer;
+				box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+				transition: all 0.3s ease;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				flex-direction: column;
+			}
+			.editor-log-btn:hover:not([style*='cursor: not-allowed']) {
+				background-color: #059669;
+				transform: scale(1.05);
+			}
+			.editor-log-btn.active {
+				opacity: 1 !important;
+				cursor: pointer !important;
+			}
+			.clear-filters-btn {
+				position: fixed;
+				top: 160px;
+				right: 20px;
+				z-index: 1000;
+				width: 60px;
+				height: 60px;
+				border-radius: 50%;
+				background-color: #ef4444;
+				color: white;
+				border: none;
+				font-weight: bold;
+				font-size: 14px;
+				cursor: pointer;
+				box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+				transition: all 0.3s ease;
+				display: none; /* Hidden by default */
+				align-items: center;
+				justify-content: center;
+				flex-direction: column;
+			}
+			.clear-filters-btn:hover {
+				background-color: #dc2626;
+				transform: scale(1.05);
+			}
+			.dropdown-menu {
+				position: fixed;
+				top: 90px;
+				right: 20px;
+				z-index: 1001;
+				background: white;
+				border: 1px solid #e5e7eb;
+				border-radius: 8px;
+				box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+				min-width: 200px;
+			}
+			.dropdown-item {
+				padding: 12px 16px;
+				cursor: pointer;
+				border-bottom: 1px solid #f3f4f6;
+				transition: background-color 0.2s;
+			}
+			.dropdown-item:hover {
+				background-color: #f9fafb;
+			}
+			.dropdown-item:last-child {
+				border-bottom: none;
+			}
+
+			/* Sidebar Styles */
+			.sidebar {
+				position: fixed;
+				left: 0;
+				top: 0;
+				width: 350px;
+				height: 100vh;
+				background: white;
+				border-right: 1px solid #e2e8f0;
+				transition: transform 0.3s ease;
+				z-index: 999;
+				display: flex;
+				flex-direction: column;
+			}
+
+			.main-content {
+				margin-left: 350px;
+				width: calc(100vw - 350px);
+				min-height: 100vh;
+				transition: all 0.3s ease;
+				background: #f8fafc;
+			}
+
+			.parameter-item {
+				padding: 10px 12px;
+				margin-bottom: 8px;
+				border: 1px solid #e5e7eb;
+				border-radius: 8px;
+				cursor: pointer;
+				transition: all 0.2s ease;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				background: white;
+				box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+			}
+			.parameter-item:hover {
+				background-color: #dbeafe;
+				border: 2px solid #3b82f6;
+				transform: translateY(-1px);
+				box-shadow: 0 4px 10px rgba(59, 130, 246, 0.25);
+			}
+			.parameter-item.selected {
+				background-color: #3b82f6;
+				border: 2px solid #1e40af;
+				color: white;
+				box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+				transform: translateY(-1px);
+			}
+			.parameter-item.selected .parameter-text {
+				color: white;
+			}
+			.parameter-item.selected .parameter-name {
+				color: white;
+			}
+			.parameter-item.selected .parameter-protocol {
+				color: #d1d5db;
+			}
+			.parameter-content {
+				flex: 1;
+				min-width: 0;
+			}
+			.parameter-text {
+				margin: 0;
+				font-size: 13px;
+				line-height: 1.4;
+				color: #1f2937;
+				font-weight: 500;
+			}
+			.parameter-name {
+				color: #1f2937;
+			}
+			.parameter-protocol {
+				color: #9ca3af;
+				font-weight: 400;
+			}
+			.parameter-total-badge {
+				background: #dbeafe;
+				color: #1f2937;
+				padding: 4px 8px;
+				border-radius: 12px;
+				font-size: 11px;
+				font-weight: 600;
+				flex-shrink: 0;
+				min-width: 24px;
+				text-align: center;
+			}
+			.parameter-item.selected .parameter-total-badge {
+				background: white;
+				color: #3b82f6;
+			}
+			.parameter-search {
+				width: 100%;
+				padding: 8px 40px 8px 12px;
+				border: 1px solid #d1d5db;
+				border-radius: 6px;
+				margin-bottom: 6px;
+				font-size: 14px;
+				position: relative;
+			}
+			.parameter-search:focus {
+				outline: none;
+				border-color: #2563eb;
+				box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+			}
+
+			/* Search result count button */
+			.search-result-btn {
+				position: absolute;
+				right: 8px;
+				top: 50%;
+				transform: translateY(-58%);
+				background: #6b7280;
+				color: white;
+				border: none;
+				border-radius: 12px;
+				padding: 6px;
+				font-size: 11px;
+				font-weight: 600;
+				cursor: pointer;
+				min-width: 20px;
+				text-align: center;
+				transition: all 0.2s ease;
+			}
+			.search-result-btn:hover {
+				background: #4b5563;
+				transform: translateY(-50%) scale(1.05);
+			}
+
+			/* Sidebar toggle button */
+			.sidebar-toggle {
+				position: fixed;
+				left: 350px;
+				top: 50%;
+				transform: translateY(-50%);
+				z-index: 1000;
+				background: #3b82f6;
+				color: white;
+				border: none;
+				width: 24px;
+				height: 48px;
+				border-radius: 0 8px 8px 0;
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				transition: all 0.3s ease;
+				box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+			}
+			.sidebar-toggle:hover {
+				background: #2563eb;
+				width: 28px;
+			}
+			.sidebar-toggle svg {
+				transition: transform 0.3s ease;
+			}
+
+			/* Sidebar collapsed state */
+			.sidebar.collapsed {
+				transform: translateX(-100%);
+			}
+			.sidebar.collapsed + .sidebar-toggle {
+				left: 0;
+			}
+			.sidebar.collapsed + .sidebar-toggle svg {
+				transform: rotate(180deg);
+			}
+			.sidebar.collapsed ~ .main-content {
+				margin-left: 0;
+				width: 100vw;
+			}
+
+			.sidebar-header {
+				padding: 8px;
+				border-bottom: 1px solid #e2e8f0;
+				background: white;
+				position: relative;
+			}
+
+			.sidebar-content {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
+
+			.parameter-search-sticky {
+				padding: 12px;
+				background: white;
+				border-bottom: 1px solid #e2e8f0;
+				position: sticky;
+				top: 0;
+				z-index: 10;
+			}
+
+			.parameters-list-container {
+				flex: 1;
+				overflow-y: auto;
+				padding: 12px;
+				position: relative;
+			}
+
+			/* Clear all parameters button - small fixed button */
+			.clear-parameters-btn {
+				position: absolute;
+				top: 3px;
+				right: 3px;
+				z-index: 10;
+				background: #fef3c7;
+				color: #92400e;
+				border: none;
+				border-radius: 4px;
+				padding: 4px 8px;
+				font-size: 11px;
+				font-weight: 500;
+				cursor: pointer;
+				transition: all 0.2s ease;
+				box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+			}
+			.clear-parameters-btn:hover {
+				background: #fde68a;
+				transform: translateY(-1px);
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+			}
+
+			/* Removed sticky top bar styles */
+
+			/* Removed filters horizontal row styles */
+
+			/* Removed filter item and input styles */
+
+			.column-display-btn {
+				position: fixed;
+				top: 160px;
+				right: 20px;
+				z-index: 1000;
+				padding: 8px 12px;
+				border: 1px solid #d1d5db;
+				border-radius: 6px;
+				background: white;
+				font-size: 14px;
+				height: 40px;
+				display: none; /* Temporarily hidden */
+				align-items: center;
+				gap: 8px;
+				cursor: pointer;
+				transition: all 0.2s;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+			}
+
+			.column-display-btn:hover {
+				background: #f9fafb;
+				border-color: #9ca3af;
+			}
+
+			.column-display-btn:focus {
+				outline: none;
+				border-color: #2563eb;
+				box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+			}
+
+			.dropdown-open {
+				transform: rotate(180deg);
+			}
+
+			.filter-dropdown {
+				position: fixed; /* Use fixed for portal effect */
+				background: white;
+				border: 1px solid #d1d5db;
+				border-radius: 6px;
+				box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+				z-index: 9999; /* High z-index for portal */
+				max-height: 300px;
+				min-width: 250px;
+				overflow-y: auto;
+				transform: scale(0.95);
+				opacity: 0;
+				pointer-events: none;
+				transition: all 0.2s ease;
+			}
+
+			.filter-dropdown.show {
+				transform: scale(1);
+				opacity: 1;
+				pointer-events: all;
+			}
+
+			.filter-dropdown-content {
+				padding: 12px;
+			}
+
+			/* Table container without overflow */
+			#tableContainer {
+				position: relative;
+				height: calc(100vh - 90px);
+				border: 1px solid #e5e7eb;
+				border-radius: 8px;
+				background: white;
+				display: flex;
+				flex-direction: column;
+				overflow-x: auto; /* Allow horizontal scroll when table is wider than container */
+			}
+
+			/* Table styling */
+			#tableContainer table {
+				width: 100%;
+				border-collapse: collapse;
+				display: flex;
+				flex-direction: column;
+				height: 100%;
+			}
+
+			/* Sticky header */
+			#tableContainer thead {
+				position: sticky;
+				top: 0;
+				z-index: 200;
+				background: white;
+				flex-shrink: 0;
+			}
+
+			/* Scrollable tbody */
+			#tableContainer tbody {
+				flex: 1;
+				overflow-y: auto;
+				display: block;
+			}
+
+			/* Scrollbar styling for tbody */
+			#tableContainer tbody::-webkit-scrollbar {
+				width: 8px;
+			}
+			#tableContainer tbody::-webkit-scrollbar-track {
+				background: #f1f1f1;
+				border-radius: 4px;
+			}
+			#tableContainer tbody::-webkit-scrollbar-thumb {
+				background: #c1c1c1;
+				border-radius: 4px;
+			}
+			#tableContainer tbody::-webkit-scrollbar-thumb:hover {
+				background: #a8a8a8;
+			}
+
+			#tableContainer thead,
+			#tableContainer tbody tr {
+				display: table;
+				width: 100%;
+				table-layout: fixed;
+			}
+
+			/* Table rows styling */
+			#tableContainer tbody tr td {
+				padding: 12px 16px;
+				border-bottom: 1px solid #e5e7eb;
+				vertical-align: top;
+			}
+
+			#tableContainer thead th {
+				background: #dbeafe !important;
+				border-bottom: 2px solid #3b82f6;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+				padding: 12px 16px;
+				text-align: left;
+				font-weight: 600;
+				white-space: nowrap;
+			}
+
+			/* Column width constraints */
+			#tableContainer thead th:first-child,
+			#tableContainer tbody tr td:first-child {
+				max-width: 150px;
+				width: 150px;
+			}
+
+			#tableContainer thead th:last-child,
+			#tableContainer tbody tr td:last-child {
+				max-width: 70px;
+				width: 70px;
+			}
+
+			/* Sort icons */
+			.sort-icon {
+				display: inline-block;
+				margin-left: 8px;
+				font-size: 12px;
+				color: #6b7280;
+				cursor: pointer;
+			}
+
+			.sort-icon.active {
+				color: #3b82f6;
+			}
+
+			/* Filter icons */
+			.filter-icon {
+				display: inline-block;
+				margin-left: 4px;
+				font-size: 12px;
+				color: #9ca3af;
+				cursor: pointer;
+				transition: all 0.2s;
+				padding: 2px;
+				border-radius: 3px;
+				border: 1px solid transparent;
+				background: transparent;
+			}
+
+			.filter-icon:hover {
+				color: #6b7280;
+			}
+
+			.filter-icon.active {
+				color: #1e40af;
+				border-color: #1e40af;
+			}
+
+			/* Header dropdown filters */
+			.header-filter-dropdown {
+				position: fixed;
+				background: white;
+				border: 1px solid #d1d5db;
+				border-radius: 6px;
+				box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+				z-index: 9999;
+				min-width: 200px;
+				max-height: 300px;
+				overflow-y: auto;
+				transform: scale(0.95);
+				opacity: 0;
+				pointer-events: none;
+				transition: all 0.2s ease;
+			}
+
+			.header-filter-dropdown.show {
+				transform: scale(1);
+				opacity: 1;
+				pointer-events: all;
+			}
+
+			.header-filter-content {
+				padding: 12px;
+			}
+
+			.header-filter-input {
+				width: 100%;
+				padding: 8px 12px;
+				border: 1px solid #d1d5db;
+				border-radius: 4px;
+				font-size: 14px;
+			}
+
+			.header-filter-input:focus {
+				outline: none;
+				border-color: #2563eb;
+				box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+			}
+
+			/* Date range picker styles */
+			.date-range-container {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+			}
+
+			.date-input {
+				width: 100%;
+				padding: 6px 8px;
+				border: 1px solid #d1d5db;
+				border-radius: 4px;
+				font-size: 13px;
+			}
+
+			/* Document icon */
+			.document-icon {
+				color: #3b82f6;
+				font-size: 16px;
+				cursor: pointer;
+				padding: 4px;
+				border-radius: 4px;
+				transition: all 0.2s ease;
+			}
+
+			.document-icon:hover {
+				color: #1d4ed8;
+				border: 2px solid #3b82f6;
+				background-color: #eff6ff;
+			}
+
+			/* Ensure table structure is correct */
+			#tableContainer table {
+				width: 100%;
+				min-width: 1050px;
+				border-collapse: collapse;
+				border-spacing: 0;
+			}
+
+			/* Body cells styling */
+			#tableContainer tbody td {
+				padding: 12px 16px;
+				border-bottom: 1px solid #f1f5f9;
+				vertical-align: top;
+			}
+
+			/* Zebra striping for better readability */
+			#tableContainer tbody tr:nth-child(even) {
+				background-color: #f8fafc;
+			}
+
+			#tableContainer tbody tr:hover {
+				background-color: #e0f2fe;
+			}
+
+			/* Selected row styling */
+			.selected-row {
+				background-color: #dbeafe !important;
+				border-left: 4px solid #3b82f6;
+			}
+
+			/* Removed overflow-x-auto styling */
+
+			.hidden {
+				display: none;
+			}
+
+			/* Button Styles */
+			.selected-count-btn {
+				position: fixed;
+				top: 20px;
+				right: 5px;
+				z-index: 1000;
+				width: 45px;
+				height: 45px;
+				border-radius: 50%;
+				background-color: #fef3c7;
+				color: #92400e;
+				border: none;
+				font-weight: bold;
+				font-size: 12px;
+				cursor: pointer;
+				box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+				transition: all 0.3s ease;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				flex-direction: column;
+			}
+			.selected-count-btn:hover {
+				background-color: #fde68a;
+				transform: scale(1.05);
+			}
+
+			.editor-log-btn {
+				position: fixed;
+				top: 90px;
+				right: 5px;
+				z-index: 1000;
+				width: 45px;
+				height: 45px;
+				border-radius: 50%;
+				background-color: #10b981;
+				color: white;
+				border: none;
+				font-weight: bold;
+				font-size: 10px;
+				cursor: pointer;
+				box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+				transition: all 0.3s ease;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				flex-direction: column;
+			}
+			.editor-log-btn:hover:not([style*='cursor: not-allowed']) {
+				background-color: #059669;
+				transform: scale(1.05);
+			}
+			.editor-log-btn.active {
+				opacity: 1 !important;
+				cursor: pointer !important;
+			}
+
+			.clear-filters-btn {
+				position: fixed;
+				top: 145px;
+				right: 5px;
+				z-index: 1000;
+				width: 45px;
+				height: 45px;
+				border-radius: 50%;
+				background-color: #ef4444;
+				color: white;
+				border: none;
+				font-weight: bold;
+				font-size: 10px;
+				cursor: pointer;
+				box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+				transition: all 0.3s ease;
+				display: none; /* Hidden by default */
+				align-items: center;
+				justify-content: center;
+				flex-direction: column;
+			}
+			.clear-filters-btn:hover {
+				background-color: #dc2626;
+				transform: scale(1.05);
+			}
+
+			/* Table minimum width and horizontal scroll */
+			.main-content {
+				overflow-x: auto;
+				background-color: #e6e6e6;
+			}
+
+			#tableContainer table {
+				min-width: 1050px;
+				width: 100%;
+				table-layout: fixed;
+			}
+
+			.table-container-wrapper {
+				position: relative;
+				user-select: none;
+			}
+
+			/* Drag highlight styling */
+			.drag-highlight {
+				background-color: #e0f2fe !important;
+			}
+
+			/* Inline editor styling - TinyMCE */
+			.editable-cell {
+				cursor: pointer;
+				position: relative;
+			}
+
+			.editable-cell:hover {
+				background-color: #f0f9ff !important;
+				outline: 1px solid #3b82f6;
+			}
+
+			.editable-cell.editing {
+				background-color: #dbeafe !important;
+				padding: 0 !important;
+				position: relative !important;
+				overflow: hidden !important;
+			}
+
+			/* TinyMCE editor container styles - dynamic height */
+			.editable-cell.editing .tox-tinymce {
+				width: 100% !important;
+				height: 100% !important;
+				min-height: 100% !important;
+				max-height: 100% !important;
+				border: 2px solid #3b82f6 !important;
+				border-radius: 0 !important;
+				position: absolute !important;
+				top: 0 !important;
+				left: 0 !important;
+				right: 0 !important;
+				bottom: 0 !important;
+				box-sizing: border-box !important;
+			}
+
+			.editable-cell.editing .tox-edit-area {
+				width: 100% !important;
+				height: calc(100% - 4px) !important;
+				min-height: calc(100% - 4px) !important;
+				max-height: calc(100% - 4px) !important;
+				overflow: hidden !important;
+			}
+
+			.editable-cell.editing .tox-edit-area__iframe {
+				width: 100% !important;
+				height: 100% !important;
+				min-height: 100% !important;
+				max-height: 100% !important;
+				overflow: hidden !important;
+			}
+
+			.editable-cell.editing textarea {
+				width: 100% !important;
+				height: 100% !important;
+				min-height: 100% !important;
+				max-height: 100% !important;
+				border: 2px solid #3b82f6 !important;
+				border-radius: 0 !important;
+				resize: none !important;
+				box-sizing: border-box !important;
+				position: absolute !important;
+				top: 0 !important;
+				left: 0 !important;
+				right: 0 !important;
+				bottom: 0 !important;
+				font-size: 14px;
+				font-family: inherit;
+				padding: 4px;
+			}
+
+			/* Hide scrollbars in TinyMCE */
+			.tox-edit-area__iframe {
+				scrollbar-width: none !important;
+				-ms-overflow-style: none !important;
+			}
+
+			.tox-edit-area__iframe::-webkit-scrollbar {
+				display: none !important;
+			}
+
+			/* Subscript and superscript styling */
+			.editable-cell sub {
+				vertical-align: sub;
+				font-size: smaller;
+			}
+
+			.editable-cell sup {
+				vertical-align: super;
+				font-size: smaller;
+			}
+
+			/* Source select dropdown styling */
+			.editable-cell.editing select {
+				width: 100%;
+				height: 100%;
+				min-height: 100%;
+				border: 2px solid #3b82f6;
+				border-radius: 0;
+				font-size: 14px;
+				font-family: inherit;
+				padding: 0 8px;
+				background: white;
+				outline: none;
+				box-sizing: border-box;
+				margin: 0;
+			}
+
+			/* Protocol textarea styling */
+			.editable-cell.editing textarea {
+				width: 100%;
+				height: 100%;
+				min-height: 100%;
+				border: 2px solid #3b82f6;
+				border-radius: 0;
+				font-size: 14px;
+				font-family: inherit;
+				padding: 8px;
+				background: white;
+				outline: none;
+				box-sizing: border-box;
+				margin: 0;
+				resize: none;
+				overflow-y: auto;
+			}
+
+			/* Protocol input styling (kept for backwards compatibility) */
+			.editable-cell.editing input {
+				width: 100%;
+				height: 100%;
+				min-height: 100%;
+				border: 2px solid #3b82f6;
+				border-radius: 0;
+				font-size: 14px;
+				font-family: inherit;
+				padding: 0 8px;
+				background: white;
+				outline: none;
+				box-sizing: border-box;
+				margin: 0;
+			}
+
+			/* Editing cell should have no padding to allow full height */
+			.editable-cell.editing {
+				padding: 0 !important;
+				position: relative !important;
+				overflow: hidden;
+			}
+
+			/* Success notification - Top Right */
+			.success-notification {
+				position: fixed;
+				top: 20px;
+				right: 20px;
+				background: #10b981;
+				color: white;
+				padding: 12px 24px;
+				border-radius: 8px;
+				font-weight: 600;
+				z-index: 10000;
+				box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+				animation: slideInRight 0.3s ease-out;
+				max-width: 300px;
+				word-wrap: break-word;
+			}
+
+			@keyframes slideInRight {
+				0% {
+					opacity: 0;
+					transform: translateX(100%);
+				}
+				100% {
+					opacity: 1;
+					transform: translateX(0);
+				}
+			}
+		</style>
+	</head>
+	<body class="p-0">
+		<!-- Sidebar -->
+		<div class="sidebar">
+			<div class="sidebar-content">
+				<!-- Sticky Parameter Search -->
+				<div class="parameter-search-sticky">
+					<div style="position: relative">
+						<input type="text" id="parameterSearchInput" class="parameter-search" placeholder="Tìm kiếm chỉ tiêu..." />
+						<button
+							id="searchResultBtn"
+							class="search-result-btn"
+							onclick="resetParameterSearch()"
+							style="display: none"
+						>
+							0
+						</button>
+					</div>
+				</div>
+
+				<!-- Parameters List Container -->
+				<div class="parameters-list-container">
+					<button
+						id="clearParametersBtn"
+						onclick="clearAllParameters()"
+						class="clear-parameters-btn"
+						style="display: none"
+					>
+						× Hủy tất cả
+					</button>
+					<div id="parametersList">
+						<!-- Parameters will be loaded here -->
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Sidebar Toggle Button -->
+		<button class="sidebar-toggle" onclick="toggleSidebar()">
+			<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<path
+					d="M15 18L9 12L15 6"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				/>
+			</svg>
+		</button>
+
+		<!-- Main Content -->
+		<div class="main-content">
+			<div class="w-full p-2">
+				<!-- Selected Items Button -->
+				<button id="selectedCountBtn" class="selected-count-btn hidden" onclick="clearAllSelections()">
+					<span id="selectedCountText">0</span>
+					<span style="font-size: 10px">đã chọn</span>
+				</button>
+
+				<!-- Editor Nhật ký Button -->
+				<button id="editorLogBtn" class="editor-log-btn active" onclick="openEditor()">
+					<span>📝</span>
+					<span style="font-size: 10px">BIÊN BẢN</span>
+				</button>
+
+				<!-- Clear All Filters Button -->
+				<button id="clearAllFiltersBtn" class="clear-filters-btn" onclick="clearAllFilters()">
+					<span>🗑️</span>
+					<span style="font-size: 10px">XÓA BỘ LỌC</span>
+				</button>
+
+				<!-- Column Selection Button -->
+				<button class="column-display-btn" onclick="toggleColumnFilter()">
+					<span>Cột hiển thị</span>
+					<svg class="w-4 h-4 transform transition-transform" id="columnFilterIcon" fill="none" viewBox="0 0 24 24">
+						<path
+							stroke="currentColor"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M19 9l-7 7-7-7"
+						></path>
+					</svg>
+				</button>
+
+				<div class="space-y-2">
+					<!-- Error Message -->
+					<div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+						<strong>Lỗi:</strong> <span id="errorText"></span>
+					</div>
+
+					<!-- Loading Overlay -->
+					<div id="loadingIndicator" class="loading-overlay hidden">
+						<div class="loading-spinner"></div>
+						<div class="loading-text">Đang tải dữ liệu...</div>
+					</div>
+
+					<!-- Empty State -->
+					<div id="emptyState" class="hidden text-center py-12 bg-gray-50 rounded-lg">
+						<div class="text-gray-400 text-6xl mb-4">📊</div>
+						<h3 class="text-lg font-semibold text-gray-600 mb-2">Không có dữ liệu</h3>
+						<p class="text-gray-500">Không tìm thấy chỉ tiêu nào với tiêu chí tìm kiếm hiện tại</p>
+					</div>
+
+					<!-- Data Table -->
+					<div id="tableContainer" class="w-full shadow-lg rounded-lg table-container-wrapper">
+						<table class="w-full bg-white border border-gray-200">
+							<thead id="tableHeader">
+								<!-- Table headers will be dynamically generated -->
+							</thead>
+							<tbody id="tableBody">
+								<!-- Data will be populated here -->
+							</tbody>
+						</table>
+					</div>
+
+					<!-- Pagination Controls -->
+					<div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
+						<div class="flex items-center space-x-2">
+							<label class="text-sm text-gray-700 font-medium">Số dòng hiển thị:</label>
+							<select
+								id="itemsPerPageSelect"
+								class="border border-gray-300 rounded-md p-2 bg-white focus:ring-2 focus:ring-blue-500"
+							>
+								<option value="20">20</option>
+								<option value="50">50</option>
+								<option value="100" selected>100</option>
+								<option value="200">200</option>
+								<option value="500">500</option>
+							</select>
+							<span class="text-sm text-gray-600 ml-4"> Tổng số: <span id="totalItems">0</span> mục </span>
+						</div>
+						<div class="flex items-center space-x-2">
+							<button
+								id="prevButton"
+								class="px-4 py-2 bg-blue-500 text-white rounded-md disabled:opacity-50 disabled:bg-gray-300 hover:bg-blue-600 transition-colors"
+							>
+								Trước
+							</button>
+							<span class="px-4 py-2 text-sm text-gray-700 font-medium">
+								Trang
+								<span
+									id="currentPageDisplay"
+									class="cursor-pointer hover:bg-blue-100 px-1 rounded"
+									title="Click để nhập số trang"
+								>
+									<span id="currentPage">1</span>
+								</span>
+								<input
+									type="number"
+									id="pageInput"
+									class="hidden w-16 text-center border border-gray-300 rounded px-1 py-0 text-sm"
+									min="1"
+									value="1"
+								/>
+								/ <span id="totalPages">1</span>
+							</span>
+							<button
+								id="nextButton"
+								class="px-4 py-2 bg-blue-500 text-white rounded-md disabled:opacity-50 disabled:bg-gray-300 hover:bg-blue-600 transition-colors"
+							>
+								Sau
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- End Main Content -->
+
+		<!-- Column Filter Dropdown (Portal) -->
+		<div id="columnFilter" class="filter-dropdown">
+			<div class="filter-dropdown-content">
+				<div class="mb-3 flex gap-2">
+					<button
+						id="confirmColumnsBtn"
+						class="flex-1 px-3 py-1.5 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition-colors"
+					>
+						Xác nhận
+					</button>
+					<button
+						id="resetColumnsBtn"
+						class="flex-1 px-3 py-1.5 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors"
+					>
+						Đặt lại
+					</button>
+				</div>
+				<div class="grid grid-cols-1 gap-2" id="columnCheckboxes">
+					<!-- Column checkboxes will be populated here -->
+				</div>
+			</div>
+		</div>
+
+		<script>
+			// Global state variables
+			let data = [];
+			let pagination = {
+				currentPage: 1,
+				itemsPerPage: 100,
+				totalItems: 0,
+				totalPages: 1,
+			};
+			// URL Query Management Functions
+			function updateURLWithFilters() {
+				const url = new URL(window.location);
+
+				// Add search filters to URL
+				Object.keys(searchInputs).forEach((key) => {
+					if (searchInputs[key] && searchInputs[key].trim()) {
+						url.searchParams.set(key, searchInputs[key]);
+					} else {
+						url.searchParams.delete(key);
+					}
+				});
+
+				// Add column filters
+				if (Object.keys(filters.headerFilters).length > 0) {
+					url.searchParams.set('columnFilters', JSON.stringify(filters.headerFilters));
+				} else {
+					url.searchParams.delete('columnFilters');
+				}
+
+				// Add sidebar filters (parameters, protocols)
+				if (filters.parameters.length > 0) {
+					url.searchParams.set('parameters', filters.parameters.join(','));
+				} else {
+					url.searchParams.delete('parameters');
+				}
+
+				if (filters.protocols.length > 0) {
+					url.searchParams.set('protocols', filters.protocols.join(','));
+				} else {
+					url.searchParams.delete('protocols');
+				}
+
+				// Add sort and pagination
+				if (filters.columnSort !== 'sample_uid') {
+					url.searchParams.set('sortColumn', filters.columnSort);
+				} else {
+					url.searchParams.delete('sortColumn');
+				}
+
+				if (filters.sortBy !== 'ASC') {
+					url.searchParams.set('sortBy', filters.sortBy);
+				} else {
+					url.searchParams.delete('sortBy');
+				}
+
+				if (pagination.currentPage > 1) {
+					url.searchParams.set('page', pagination.currentPage.toString());
+				} else {
+					url.searchParams.delete('page');
+				}
+
+				if (pagination.itemsPerPage !== 100) {
+					url.searchParams.set('itemsPerPage', pagination.itemsPerPage.toString());
+				} else {
+					url.searchParams.delete('itemsPerPage');
+				}
+
+				// Update URL without page reload
+				window.history.replaceState({}, '', url);
+
+				// Update clear all filters button visibility
+				updateClearAllFiltersButtonVisibility();
+			}
+
+			function loadFiltersFromURL() {
+				const urlParams = new URLSearchParams(window.location.search);
+
+				// Load search filters
+				Object.keys(searchInputs).forEach((key) => {
+					const value = urlParams.get(key);
+					if (value) {
+						searchInputs[key] = value;
+						const input = document.getElementById(key + 'SearchInput');
+						if (input) {
+							input.value = value;
+						}
+					}
+				});
+
+				// Load column filters
+				const columnFiltersParam = urlParams.get('columnFilters');
+				if (columnFiltersParam) {
+					try {
+						filters.headerFilters = JSON.parse(columnFiltersParam);
+					} catch (error) {
+						console.warn('Failed to parse column filters from URL:', error);
+					}
+				}
+
+				// Load sidebar filters
+				const parametersParam = urlParams.get('parameters');
+				if (parametersParam) {
+					filters.parameters = parametersParam.split(',').filter((p) => p.trim());
+				}
+
+				const protocolsParam = urlParams.get('protocols');
+				if (protocolsParam) {
+					filters.protocols = protocolsParam.split(',').filter((p) => p.trim());
+				}
+
+				// Load sort and pagination
+				const sortColumn = urlParams.get('sortColumn');
+				if (sortColumn) {
+					filters.columnSort = sortColumn;
+				}
+
+				const sortBy = urlParams.get('sortBy');
+				if (sortBy) {
+					filters.sortBy = sortBy;
+				}
+
+				const page = urlParams.get('page');
+				if (page) {
+					pagination.currentPage = parseInt(page) || 1;
+				}
+
+				const itemsPerPage = urlParams.get('itemsPerPage');
+				if (itemsPerPage) {
+					pagination.itemsPerPage = parseInt(itemsPerPage) || 100;
+					// Update the select element if it exists
+					const itemsPerPageSelect = document.getElementById('itemsPerPageSelect');
+					if (itemsPerPageSelect) {
+						itemsPerPageSelect.value = pagination.itemsPerPage.toString();
+					}
+				}
+
+				console.log('Filters loaded from URL:', {
+					searchInputs,
+					headerFilters: filters.headerFilters,
+					parameters: filters.parameters,
+					protocols: filters.protocols,
+					sort: { column: filters.columnSort, by: filters.sortBy },
+					page: pagination.currentPage,
+					itemsPerPage: pagination.itemsPerPage,
+				});
+
+				// Rebuild selectedParameters from header filters for sidebar display
+				rebuildSelectedParametersFromHeaderFilters();
+			}
+
+			// Rebuild selectedParameters array from header filters
+			function rebuildSelectedParametersFromHeaderFilters() {
+				selectedParameters = [];
+
+				const parameterFilters = filters.headerFilters['parameter_name'] || [];
+				const protocolFilters = filters.headerFilters['protocol_code'] || [];
+
+				// If both arrays have same length, pair them up
+				if (parameterFilters.length === protocolFilters.length) {
+					for (let i = 0; i < parameterFilters.length; i++) {
+						selectedParameters.push({
+							parameter_name: parameterFilters[i],
+							protocol_code: protocolFilters[i] || '',
+						});
+					}
+				} else {
+					// If lengths don't match, create entries for parameters with empty protocols
+					parameterFilters.forEach((parameterName) => {
+						selectedParameters.push({
+							parameter_name: parameterName,
+							protocol_code: '',
+						});
+					});
+				}
+			}
+
+			let filters = {
+				columns: [
+					'id',
+					'sample_uid',
+					'parameter_name',
+					'matrix',
+					'protocol_source',
+					'protocol_code',
+					'result_value',
+					'result_unit',
+					'deadline',
+					'doc_id',
+				],
+				matrix: '',
+				sampleUIDs: [],
+				parameters: [],
+				protocols: [],
+				isSubmitResult: null,
+				columnSort: 'sample_uid',
+				sortBy: 'ASC',
+				headerFilters: {}, // For individual column filters
+			};
+			let searchInputs = {
+				matrix: '',
+				sampleUID: '',
+				parameter: '',
+				protocol: '',
+				resultStatus: '',
+			};
+			let selectedRows = new Set();
+			let selectedRowsData = new Map();
+			let tableContainer = null;
+
+			// Simple drag selection variables
+			let isDragging = false;
+			let dragStartY = 0;
+			let dragStartRowIndex = -1;
+			let dragEndRowIndex = -1;
+
+			// Available columns with their display names
+			const availableColumns = {
+				sample_uid: 'Mã mẫu',
+				parameter_name: 'Tên chỉ tiêu',
+				matrix: 'Nền mẫu',
+				protocol_source: 'Nguồn',
+				protocol_code: 'Phương pháp',
+				result_value: 'Kết quả',
+				result_unit: 'Đơn vị',
+				deadline: 'Hạn trả',
+				doc_id: '', // No title for doc_id column
+				document: 'Tài liệu',
+				id: 'ID',
+				lodq: 'LOD/LOQ',
+				reviewed_by: 'Người duyệt',
+			};
+
+			// Columns that have filter capability
+			const filterableColumns = ['sample_uid', 'parameter_name', 'matrix', 'protocol_code', 'deadline', 'doc_id'];
+
+			// Columns that have different filter types
+			const columnFilterTypes = {
+				sample_uid: 'search',
+				parameter_name: 'search',
+				matrix: 'search',
+				protocol_code: 'search',
+				deadline: 'daterange',
+				doc_id: 'select',
+			};
+
+			const API_ENDPOINT = 'https://black.irdop.org/v1/analysis/processing/list';
+			const PARAMETER_API_ENDPOINT = 'https://black.irdop.org/v1/lab/get/analysis/by_parameter';
+
+			// Sidebar state variables
+			let parametersData = [];
+			let selectedParameters = [];
+
+			// TinyMCE inline editor functionality
+			let currentEditingCell = null;
+			let originalValue = '';
+			let currentEditor = null;
+
+			// Initialize inline editor
+			function initInlineEditor() {
+				// No initialization needed for TinyMCE version
+			}
+
+			// Create new TinyMCE editor
+			function createNewEditor(cell) {
+				currentEditingCell = cell;
+				originalValue = cell.innerHTML.trim();
+
+				// Get cell's actual height using getComputedStyle (same as textarea)
+				const cellStyle = window.getComputedStyle(cell);
+				const cellHeight = cell.offsetHeight;
+				const cellPaddingTop = parseInt(cellStyle.paddingTop) || 0;
+				const cellPaddingBottom = parseInt(cellStyle.paddingBottom) || 0;
+				const availableHeight = cellHeight - cellPaddingTop - cellPaddingBottom;
+
+				// Create unique ID for this editor
+				const editorId = 'tinymce-editor-' + Date.now();
+
+				// Create textarea element for TinyMCE
+				const textarea = document.createElement('textarea');
+				textarea.id = editorId;
+				textarea.value = originalValue === '-' ? '' : originalValue;
+				textarea.style.cssText = `
+					width: 100%;
+					height: ${cellHeight}px;
+					min-height: ${cellHeight}px;
+					max-height: ${cellHeight}px;
+					border: 2px solid #3b82f6;
+					border-radius: 0;
+					resize: none;
+					box-sizing: border-box;
+					position: absolute;
+					top: 0;
+					left: 0;
+					right: 0;
+					bottom: 0;
+				`;
+
+				// Set cell to relative position for absolute textarea
+				cell.style.position = 'relative';
+
+				// Replace cell content with textarea
+				cell.innerHTML = '';
+				cell.appendChild(textarea);
+
+				// Store current textarea value for fallback
+				let textareaFallbackValue = textarea.value;
+
+				// Add immediate blur protection for textarea before TinyMCE loads
+				let tinymceLoaded = false;
+
+				const protectiveBlurHandler = (e) => {
+					if (!tinymceLoaded) {
+						// TinyMCE hasn't loaded yet, save textarea value directly
+						e.preventDefault();
+						textareaFallbackValue = textarea.value;
+						saveTextareaFallback(cell, textareaFallbackValue);
+					}
+				};
+
+				textarea.addEventListener('blur', protectiveBlurHandler);
+
+				// Initialize TinyMCE với toolbar ẩn và CSS-controlled height
+				tinymce.init({
+					selector: '#' + editorId,
+					inline: false,
+					menubar: false,
+					statusbar: false,
+					toolbar: false, // Ẩn hoàn toàn toolbar
+					plugins: ['superscript', 'subscript', 'textpattern'],
+					width: '100%',
+					resize: false,
+					autoresize_on_init: false,
+					content_style: `body { 
+						font-family: inherit; 
+						font-size: 14px; 
+						margin: 0; 
+						padding: 4px; 
+						line-height: 1.2; 
+						overflow: hidden; 
+						box-sizing: border-box; 
+						height: 100%; 
+						min-height: 100%; 
+					} p { margin: 0; padding: 0; line-height: 1.2; } * { scrollbar-width: none; -ms-overflow-style: none; } *::-webkit-scrollbar { display: none; }`,
+					setup: function (editor) {
+						// Store reference to current editor
+						currentEditor = editor;
+
+						// Phím ^ để bật superscript, _ để bật subscript
+						editor.on('keydown', function (e) {
+							try {
+								if (e.key === '^') {
+									e.preventDefault();
+									editor.execCommand('mceToggleFormat', false, 'superscript');
+								}
+								if (e.key === '_') {
+									e.preventDefault();
+									editor.execCommand('mceToggleFormat', false, 'subscript');
+								}
+								if (e.key === 'Enter' && !e.shiftKey) {
+									e.preventDefault();
+									// Save immediately on Enter
+									saveEditTinyMCE(cell, editor);
+								} else if (e.key === 'Escape') {
+									e.preventDefault();
+									cancelEditTinyMCE(cell, editor);
+								}
+							} catch (error) {
+								console.warn('TinyMCE keydown error:', error);
+							}
+						});
+
+						editor.on('init', function () {
+							try {
+								// Mark TinyMCE as loaded and remove protective handler
+								tinymceLoaded = true;
+								textarea.removeEventListener('blur', protectiveBlurHandler);
+
+								// Ensure editor is properly initialized before focusing
+								setTimeout(() => {
+									if (!editor.destroyed) {
+										editor.focus();
+										const body = editor.getBody();
+										if (body) {
+											editor.selection.select(body, true);
+										}
+									}
+								}, 100);
+							} catch (error) {
+								console.warn('TinyMCE init error:', error);
+							}
+						});
+
+						// Save on blur - immediate response
+						editor.on('blur', function () {
+							setTimeout(() => {
+								if (currentEditingCell === cell && currentEditor === editor && !editor.destroyed) {
+									saveEditTinyMCE(cell, editor);
+								}
+							}, 10); // Reduced timeout for immediate response
+						});
+					},
+				});
+
+				// Add editing class to cell
+				cell.classList.add('editing');
+
+				// Add document click listener to handle clicks outside
+				setTimeout(() => {
+					addDocumentClickListener();
+				}, 300);
+			}
+
+			// Show inline editor for a cell
+			function showInlineEditor(cell, value) {
+				// Close any existing editor first
+				if (currentEditingCell) {
+					destroyCurrentEditor();
+				}
+
+				createNewEditor(cell);
+			}
+
+			// Global variable for document click listener
+			let documentClickListener = null;
+
+			// Add document click listener
+			function addDocumentClickListener() {
+				if (documentClickListener) {
+					document.removeEventListener('click', documentClickListener);
+				}
+
+				documentClickListener = function (event) {
+					if (currentEditingCell && currentEditor && !currentEditor.destroyed) {
+						// Check if click is outside the editing cell and TinyMCE UI
+						const isClickInCell = currentEditingCell.contains(event.target);
+						const isClickInTinyMCE = event.target.closest('.tox-tinymce, .tox-toolbar, .tox-menubar');
+
+						if (!isClickInCell && !isClickInTinyMCE) {
+							saveEditTinyMCE(currentEditingCell, currentEditor);
+						}
+					}
+				};
+
+				document.addEventListener('click', documentClickListener);
+			}
+
+			// Remove document click listener
+			function removeDocumentClickListener() {
+				if (documentClickListener) {
+					document.removeEventListener('click', documentClickListener);
+					documentClickListener = null;
+				}
+			}
+
+			// Destroy current editor safely
+			function destroyCurrentEditor() {
+				if (currentEditor && !currentEditor.destroyed) {
+					try {
+						// Get the textarea element before destroying
+						const editorElement = currentEditor.getElement();
+
+						// Remove the editor
+						currentEditor.remove();
+
+						// Remove the textarea element if it still exists
+						if (editorElement && editorElement.parentNode) {
+							editorElement.remove();
+						}
+
+						// Clean up any remaining textarea with tinymce id pattern
+						if (currentEditingCell) {
+							const remainingTextarea = currentEditingCell.querySelector('textarea[id^="tinymce-editor-"]');
+							if (remainingTextarea) {
+								remainingTextarea.remove();
+							}
+						}
+					} catch (error) {
+						console.warn('Error destroying TinyMCE editor:', error);
+						// Fallback: try to clean up any textarea elements in the current cell
+						if (currentEditingCell) {
+							const textareas = currentEditingCell.querySelectorAll('textarea');
+							textareas.forEach((textarea) => {
+								try {
+									textarea.remove();
+								} catch (removeError) {
+									console.warn('Error removing textarea:', removeError);
+								}
+							});
+						}
+					}
+				}
+				currentEditor = null;
+			}
+
+			// Destroy all TinyMCE editors
+			function destroyAllTinyMCEEditors() {
+				try {
+					// Get all TinyMCE editors
+					const editors = tinymce.get();
+					if (editors && editors.length > 0) {
+						editors.forEach((editor) => {
+							try {
+								if (editor && !editor.destroyed) {
+									editor.remove();
+								}
+							} catch (error) {
+								console.warn('Error destroying individual TinyMCE editor:', error);
+							}
+						});
+					}
+
+					// Clean up any remaining TinyMCE UI elements
+					const toolbars = document.querySelectorAll('.tox-tinymce, .tox-toolbar, .tox-menubar');
+					toolbars.forEach((toolbar) => {
+						try {
+							toolbar.remove();
+						} catch (error) {
+							console.warn('Error removing TinyMCE UI element:', error);
+						}
+					});
+
+					// Clean up any remaining textarea elements in the document
+					const remainingTextareas = document.querySelectorAll('textarea[id^="tinymce-editor-"]');
+					remainingTextareas.forEach((textarea) => {
+						try {
+							textarea.remove();
+						} catch (error) {
+							console.warn('Error removing remaining textarea:', error);
+						}
+					});
+
+					// Reset editing state
+					resetEditingState();
+					removeDocumentClickListener();
+				} catch (error) {
+					console.warn('Error in destroyAllTinyMCEEditors:', error);
+				}
+			}
+
+			// Reset editing state
+			function resetEditingState() {
+				currentEditingCell = null;
+				currentEditor = null;
+				originalValue = '';
+			}
+
+			// Save textarea fallback when TinyMCE hasn't loaded yet
+			async function saveTextareaFallback(cell, value) {
+				if (!cell || !cell.classList.contains('editing')) {
+					return;
+				}
+
+				try {
+					const displayValue = value.trim() || '';
+
+					// Clean up textarea
+					const textarea = cell.querySelector('textarea');
+					if (textarea) {
+						textarea.remove();
+					}
+
+					// Update cell content
+					cell.innerHTML = displayValue;
+					cell.classList.remove('editing');
+					cell.style.position = ''; // Reset position
+
+					// Call API to update
+					await updateAnalysisField(cell.dataset.rowId, cell.dataset.column, displayValue);
+
+					// Reset editing state
+					resetEditingState();
+
+					// Remove document click listener
+					removeDocumentClickListener();
+				} catch (error) {
+					console.warn('Error saving textarea fallback:', error);
+					// Restore original value on error
+					cell.innerHTML = originalValue;
+					cell.classList.remove('editing');
+					cell.style.position = ''; // Reset position
+					resetEditingState();
+				}
+			}
+
+			// Save edit for TinyMCE
+			async function saveEditTinyMCE(cell, editor) {
+				if (!cell || !cell.classList.contains('editing') || !editor || editor.destroyed) {
+					return;
+				}
+
+				try {
+					const newValue = editor.getContent();
+					const displayValue = newValue.trim() || '';
+
+					// Clean up TinyMCE instance safely
+					destroyCurrentEditor();
+
+					// Remove all textareas in table body
+					clearAllTextareasInTable();
+
+					// Update cell content
+					cell.innerHTML = displayValue;
+					cell.classList.remove('editing');
+					cell.style.position = ''; // Reset position
+
+					// Call API to update
+					await updateAnalysisField(cell.dataset.rowId, cell.dataset.column, displayValue);
+
+					// Reset editing state
+					resetEditingState();
+
+					// Remove document click listener
+					removeDocumentClickListener();
+				} catch (error) {
+					console.warn('Error saving TinyMCE edit:', error);
+					// Cleanup on error too
+					cell.classList.remove('editing');
+					cell.style.position = ''; // Reset position
+					clearAllTextareasInTable();
+					resetEditingState();
+				}
+			}
+
+			// Clear all textareas in table body
+			function clearAllTextareasInTable() {
+				try {
+					// Find table body
+					const tableBody = document.getElementById('tableBody') || document.querySelector('#tableContainer tbody');
+
+					if (tableBody) {
+						// Remove all textareas in table body
+						const textareas = tableBody.querySelectorAll('textarea');
+						textareas.forEach((textarea) => {
+							try {
+								textarea.remove();
+							} catch (error) {
+								console.warn('Error removing textarea:', error);
+							}
+						});
+
+						// Remove all TinyMCE elements in table body
+						const tinyMCEElements = tableBody.querySelectorAll(
+							'.tox-tinymce, .tox-editor-container, .tox-edit-area, [id^="mceu_"], [class*="mce-"], [class*="tox-"]',
+						);
+						tinyMCEElements.forEach((element) => {
+							try {
+								element.remove();
+							} catch (error) {
+								console.warn('Error removing TinyMCE element:', error);
+							}
+						});
+
+						// Reset all editing cells in table body
+						const editingCells = tableBody.querySelectorAll('.editing');
+						editingCells.forEach((cell) => {
+							try {
+								cell.classList.remove('editing');
+								cell.style.position = '';
+							} catch (error) {
+								console.warn('Error resetting editing cell:', error);
+							}
+						});
+					}
+
+					// Also clear any textareas in the entire document as fallback
+					const allTextareas = document.querySelectorAll('textarea[id^="tinymce-editor-"]');
+					allTextareas.forEach((textarea) => {
+						try {
+							textarea.remove();
+						} catch (error) {
+							console.warn('Error removing global textarea:', error);
+						}
+					});
+
+					// Destroy all TinyMCE instances
+					if (typeof tinymce !== 'undefined' && tinymce.editors) {
+						tinymce.editors.forEach((editor) => {
+							try {
+								if (editor && !editor.destroyed) {
+									editor.remove();
+								}
+							} catch (error) {
+								console.warn('Error destroying TinyMCE editor instance:', error);
+							}
+						});
+					}
+				} catch (error) {
+					console.warn('Error in clearAllTextareasInTable:', error);
+				}
+			}
+
+			// Data change tracking
+			let originalDataState = {};
+			let autoRefreshInterval = null;
+			let isRefreshing = false;
+
+			// Update analysis field via API - Only if value actually changed
+			async function updateAnalysisField(rowId, column, value) {
+				try {
+					// Get current value from local data
+					const dataIndex = data.findIndex((item) => String(item.id) === String(rowId));
+					const currentValue = dataIndex >= 0 ? data[dataIndex][column] : null;
+
+					// Check if value actually changed
+					if (String(currentValue) === String(value)) {
+						console.log('No change detected, skipping API call');
+						return;
+					}
+
+					// Store original value for rollback if needed
+					const originalValue = currentValue;
+
+					// Prepare the body for API call
+					const body = {
+						analysis: {
+							id: parseInt(rowId),
+							[column]: value,
+						},
+					};
+
+					console.log('Updating analysis field (value changed):', body);
+
+					// Call API
+					const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', body);
+
+					if (response && response.status >= 200 && response.status < 300) {
+						// Show success notification
+						showSuccessNotification('Cập nhật thành công');
+
+						// Update local data array
+						if (dataIndex >= 0) {
+							data[dataIndex][column] = value;
+							// Update original state tracking
+							originalDataState[rowId] = originalDataState[rowId] || {};
+							originalDataState[rowId][column] = value;
+						}
+					} else {
+						console.error('API update failed:', response);
+						throw new Error(`API update failed with status: ${response.status}`);
+					}
+				} catch (error) {
+					console.error('Error updating analysis field:', error);
+					// Show error notification
+					showErrorNotification('Cập nhật thất bại: ' + error.message);
+
+					// Rollback local data on error
+					if (dataIndex >= 0 && originalValue !== undefined) {
+						data[dataIndex][column] = originalValue;
+					}
+				}
+			}
+
+			// Show success notification
+			function showSuccessNotification(message) {
+				const notification = document.createElement('div');
+				notification.className = 'success-notification';
+				notification.textContent = message;
+
+				document.body.appendChild(notification);
+
+				// Auto remove after 0.5s
+				setTimeout(() => {
+					if (notification.parentNode) {
+						notification.parentNode.removeChild(notification);
+					}
+				}, 500);
+			}
+
+			// Show error notification
+			function showErrorNotification(message) {
+				const notification = document.createElement('div');
+				notification.className = 'success-notification';
+				notification.style.background = '#ef4444';
+				notification.textContent = message;
+
+				document.body.appendChild(notification);
+
+				// Auto remove after 2s
+				setTimeout(() => {
+					if (notification.parentNode) {
+						notification.parentNode.removeChild(notification);
+					}
+				}, 2000);
+			}
+
+			// Get cookie helper function
+			function getCookie(name) {
+				const value = `; ${document.cookie}`;
+				const parts = value.split(`; ${name}=`);
+				if (parts.length === 2) return parts.pop().split(';').shift();
+				return '';
+			}
+
+			// API call function
+			async function apiPost(url, body) {
+				try {
+					const response = await fetch(url, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${getCookie('auth')}`,
+							'x-fh-app-uid': 'LIMS-IRDOP-PRD',
+							'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
+						},
+						body: JSON.stringify(body),
+					});
+
+					// Check content type to determine how to parse response
+					const contentType = response.headers.get('content-type');
+					let data;
+
+					if (contentType && contentType.includes('application/json')) {
+						// Response is JSON
+						data = await response.json();
+					} else {
+						// Response is text/string
+						data = await response.text();
+					}
+
+					return {
+						status: response.status,
+						data: data,
+					};
+				} catch (error) {
+					console.error('API Error:', error);
+					throw error;
+				}
+			}
+
+			// Cancel edit for TinyMCE
+			function cancelEditTinyMCE(cell, editor) {
+				if (!cell || !editor) return;
+
+				try {
+					// Clean up TinyMCE instance
+					destroyCurrentEditor();
+
+					// Remove all textareas in table body
+					clearAllTextareasInTable();
+
+					// Restore original value
+					cell.innerHTML = originalValue;
+					cell.classList.remove('editing');
+					cell.style.position = ''; // Reset position
+
+					// Reset editing state
+					resetEditingState();
+
+					// Remove document click listener
+					removeDocumentClickListener();
+				} catch (error) {
+					console.warn('Error canceling TinyMCE edit:', error);
+					// Cleanup on error too
+					cell.classList.remove('editing');
+					cell.style.position = ''; // Reset position
+					clearAllTextareasInTable();
+					resetEditingState();
+				}
+			}
+
+			// Make cells editable when rendering table
+			function makeCellEditable(cell, rowData, columnKey) {
+				if (columnKey === 'result_value' || columnKey === 'result_unit') {
+					cell.classList.add('editable-cell');
+					cell.dataset.column = columnKey;
+					cell.dataset.rowId = rowData.id;
+
+					cell.addEventListener('click', (e) => {
+						e.stopPropagation();
+						const currentValue = cell.innerHTML;
+						showInlineEditor(cell, currentValue);
+					});
+				} else if (columnKey === 'protocol_source') {
+					cell.classList.add('editable-cell');
+					cell.dataset.column = columnKey;
+					cell.dataset.rowId = rowData.id;
+
+					cell.addEventListener('click', (e) => {
+						e.stopPropagation();
+						const currentValue = cell.textContent.trim();
+						showSourceSelect(cell, currentValue);
+					});
+				} else if (columnKey === 'protocol_code') {
+					cell.classList.add('editable-cell');
+					cell.dataset.column = columnKey;
+					cell.dataset.rowId = rowData.id;
+
+					cell.addEventListener('click', (e) => {
+						e.stopPropagation();
+						const currentValue = cell.textContent.trim();
+						showProtocolInput(cell, currentValue);
+					});
+				}
+			}
+
+			// Show source select dropdown
+			function showSourceSelect(cell, currentValue) {
+				// Close any existing editor first
+				if (currentEditingCell) {
+					if (currentEditor && !currentEditor.destroyed) {
+						destroyCurrentEditor();
+					} else {
+						closeCurrentEditor();
+					}
+				}
+
+				currentEditingCell = cell;
+				originalValue = currentValue;
+
+				// Create select element
+				const select = document.createElement('select');
+				select.style.cssText = `
+					width: 100%;
+					height: 100%;
+					min-height: 100%;
+					border: 2px solid #3b82f6;
+					border-radius: 0;
+					font-size: 14px;
+					font-family: inherit;
+					padding: 0 8px;
+					background: white;
+					outline: none;
+					box-sizing: border-box;
+					margin: 0;
+				`;
+
+				// Add options
+				const options = ['IRDOP', 'IRDOP VS', 'EX'];
+				options.forEach((option) => {
+					const optionElement = document.createElement('option');
+					optionElement.value = option;
+					optionElement.textContent = option;
+					if (option === currentValue) {
+						optionElement.selected = true;
+					}
+					select.appendChild(optionElement);
+				});
+
+				// Replace cell content with select
+				cell.innerHTML = '';
+				cell.appendChild(select);
+				cell.classList.add('editing');
+
+				// Focus the select
+				setTimeout(() => {
+					select.focus();
+				}, 10);
+
+				// Add event listeners
+				select.addEventListener('change', (e) => {
+					e.stopPropagation();
+					saveSourceSelect(cell, select);
+				});
+
+				select.addEventListener('blur', (e) => {
+					// Save immediately when blur
+					setTimeout(() => {
+						if (currentEditingCell === cell && document.activeElement !== select) {
+							saveSourceSelect(cell, select);
+						}
+					}, 10); // Reduced timeout for immediate response
+				});
+
+				select.addEventListener('keydown', (e) => {
+					e.stopPropagation();
+					if (e.key === 'Escape') {
+						e.preventDefault();
+						cancelEdit(cell);
+					} else if (e.key === 'Enter') {
+						e.preventDefault();
+						saveSourceSelect(cell, select);
+					}
+				});
+
+				// Prevent cell click events from interfering
+				select.addEventListener('click', (e) => {
+					e.stopPropagation();
+				});
+			}
+
+			// Show protocol textarea
+			function showProtocolInput(cell, currentValue) {
+				// Close any existing editor first
+				if (currentEditingCell) {
+					if (currentEditor && !currentEditor.destroyed) {
+						destroyCurrentEditor();
+					} else {
+						closeCurrentEditor();
+					}
+				}
+
+				currentEditingCell = cell;
+				originalValue = currentValue;
+
+				// Get cell's actual height using getComputedStyle
+				const cellStyle = window.getComputedStyle(cell);
+				const cellHeight = cell.offsetHeight;
+				const cellPaddingTop = parseInt(cellStyle.paddingTop) || 0;
+				const cellPaddingBottom = parseInt(cellStyle.paddingBottom) || 0;
+				const availableHeight = cellHeight - cellPaddingTop - cellPaddingBottom;
+
+				// Create textarea element
+				const textarea = document.createElement('textarea');
+				textarea.value = currentValue;
+				textarea.style.cssText = `
+					width: 100%;
+					height: ${cellHeight}px;
+					min-height: ${cellHeight}px;
+					max-height: ${cellHeight}px;
+					border: 2px solid #3b82f6;
+					border-radius: 0;
+					font-size: 14px;
+					font-family: inherit;
+					padding: 8px;
+					background: white;
+					outline: none;
+					box-sizing: border-box;
+					margin: 0;
+					resize: none;
+					overflow-y: auto;
+					position: absolute;
+					top: 0;
+					left: 0;
+					right: 0;
+					bottom: 0;
+				`;
+
+				// Set cell to relative position for absolute textarea
+				cell.style.position = 'relative';
+
+				// Replace cell content with textarea
+				cell.innerHTML = '';
+				cell.appendChild(textarea);
+				cell.classList.add('editing');
+
+				// Focus and select all
+				setTimeout(() => {
+					textarea.focus();
+					textarea.select();
+				}, 10);
+
+				// Add event listeners
+				textarea.addEventListener('keydown', (e) => {
+					e.stopPropagation();
+					if (e.key === 'Enter' && !e.shiftKey) {
+						// Enter to save (Shift+Enter for new line)
+						e.preventDefault();
+						textarea.blur(); // This will trigger the blur event and save
+					} else if (e.key === 'Enter' && e.ctrlKey) {
+						// Ctrl+Enter to save (alternative)
+						e.preventDefault();
+						saveProtocolInput(cell, textarea);
+					} else if (e.key === 'Escape') {
+						e.preventDefault();
+						cancelEdit(cell);
+					}
+				});
+
+				textarea.addEventListener('blur', (e) => {
+					// Save immediately when blur
+					setTimeout(() => {
+						if (currentEditingCell === cell && document.activeElement !== textarea) {
+							saveProtocolInput(cell, textarea);
+						}
+					}, 10); // Reduced timeout for immediate response
+				});
+
+				// Prevent cell click events from interfering
+				textarea.addEventListener('click', (e) => {
+					e.stopPropagation();
+				});
+			}
+
+			// Save source select
+			async function saveSourceSelect(cell, select) {
+				if (!cell || !cell.classList.contains('editing') || !select) {
+					return;
+				}
+
+				try {
+					const newValue = select.value;
+
+					// Clean up first
+					cell.classList.remove('editing');
+
+					// Update cell content
+					cell.innerHTML = newValue;
+
+					// Call API to update
+					await updateAnalysisField(cell.dataset.rowId, cell.dataset.column, newValue);
+
+					// Reset editing state
+					resetEditingState();
+				} catch (error) {
+					console.warn('Error saving source select:', error);
+					// Restore original value on error
+					cell.innerHTML = originalValue;
+					cell.classList.remove('editing');
+					resetEditingState();
+				}
+			}
+
+			// Save protocol textarea
+			async function saveProtocolInput(cell, textarea) {
+				if (!cell || !cell.classList.contains('editing') || !textarea) {
+					return;
+				}
+
+				try {
+					const newValue = textarea.value.trim();
+
+					// Clean up first
+					cell.classList.remove('editing');
+					cell.style.position = ''; // Reset position
+
+					// Update cell content (preserve line breaks as <br>)
+					const displayValue = newValue.replace(/\n/g, '<br>');
+					cell.innerHTML = displayValue || newValue;
+
+					// Call API to update (send original value with line breaks)
+					await updateAnalysisField(cell.dataset.rowId, cell.dataset.column, newValue);
+
+					// Reset editing state
+					resetEditingState();
+				} catch (error) {
+					console.warn('Error saving protocol textarea:', error);
+					// Restore original value on error
+					cell.innerHTML = originalValue;
+					cell.classList.remove('editing');
+					cell.style.position = ''; // Reset position
+					resetEditingState();
+				}
+			}
+
+			// Close current editor (for non-TinyMCE editors)
+			function closeCurrentEditor() {
+				if (currentEditingCell) {
+					// Remove any input/select/textarea elements
+					const inputs = currentEditingCell.querySelectorAll('input, select, textarea');
+					inputs.forEach((element) => {
+						try {
+							element.remove();
+						} catch (error) {
+							console.warn('Error removing input/select/textarea element:', error);
+						}
+					});
+
+					// Restore original value if needed
+					if (originalValue !== null && originalValue !== undefined) {
+						currentEditingCell.innerHTML = originalValue;
+					}
+
+					currentEditingCell.classList.remove('editing');
+					currentEditingCell.style.position = ''; // Reset position
+					resetEditingState();
+				}
+			}
+
+			// Cancel edit
+			function cancelEdit(cell) {
+				if (!cell) return;
+
+				try {
+					// Remove any input/select/textarea elements
+					const inputs = cell.querySelectorAll('input, select, textarea');
+					inputs.forEach((element) => {
+						try {
+							element.remove();
+						} catch (error) {
+							console.warn('Error removing input/select/textarea element:', error);
+						}
+					});
+
+					// Restore original value
+					cell.innerHTML = originalValue;
+					cell.classList.remove('editing');
+					cell.style.position = ''; // Reset position
+
+					// Reset editing state
+					resetEditingState();
+				} catch (error) {
+					console.warn('Error canceling edit:', error);
+				}
+			}
+
+			// Open editor function
+			function openEditor() {
+				// Allow opening editor even without selection
+				// Collect selected data (can be empty)
+				const selectedData = Array.from(selectedRows)
+					.map((rowId) => {
+						return selectedRowsData.get(rowId);
+					})
+					.filter(Boolean);
+
+				// Check if any selected items have doc_id
+				const itemsWithDocId = selectedData.filter((item) => item.doc_id);
+
+				if (itemsWithDocId.length > 0) {
+					// Create warning message with sample_uid and parameter_name
+					const itemDescriptions = itemsWithDocId.map((item) => {
+						const sampleUid = item.sample_uid || 'N/A';
+						const parameterName = item.parameter_name || 'N/A';
+						return `${sampleUid} - ${parameterName}`;
+					});
+
+					const message = `${itemDescriptions.join(', ')} đã được tạo biên bản, vẫn tiếp tục tạo biên bản?`;
+
+					// Show confirmation dialog
+					if (!confirm(message)) {
+						return; // User canceled, don't proceed
+					}
+				}
+
+				// Create form data for editor
+				const editorData = {
+					selectedItems: selectedData,
+					count: selectedData.length,
+				};
+
+				// Store in localStorage for editor to access
+				localStorage.setItem('editorData', JSON.stringify(editorData));
+
+				// Get analysis IDs for URL query
+				const analysisIds = selectedData.map((item) => item.id).filter((id) => id);
+
+				// Build editor URL with query parameters
+				let editorUrl = 'EditorTemplate.html';
+				if (analysisIds.length > 0) {
+					const queryParams = new URLSearchParams();
+					queryParams.set('analysisIds', analysisIds.join(','));
+					editorUrl += '?' + queryParams.toString();
+				}
+
+				// Open editor in new tab/window
+				window.open(editorUrl, '_blank');
+			}
+
+			// Simple drag selection functions
+			function handleDragStart(e, rowIndex) {
+				dragStartY = e.clientY;
+				dragStartRowIndex = rowIndex;
+				dragEndRowIndex = rowIndex;
+				isDragging = false;
+			}
+
+			function handleDragMove(e, rowIndex) {
+				if (!isDragging && Math.abs(e.clientY - dragStartY) > 5) {
+					isDragging = true;
+					document.body.style.userSelect = 'none';
+					e.preventDefault();
+				}
+
+				if (!isDragging) return;
+
+				e.preventDefault();
+				dragEndRowIndex = rowIndex;
+				updateDragSelection();
+			}
+
+			function handleDragEnd() {
+				if (isDragging) {
+					finalizeDragSelection();
+					isDragging = false;
+					document.body.style.userSelect = '';
+				}
+				dragStartRowIndex = -1;
+				dragEndRowIndex = -1;
+			}
+
+			function updateDragSelection() {
+				if (dragStartRowIndex < 0 || dragEndRowIndex < 0) return;
+
+				const startIndex = Math.min(dragStartRowIndex, dragEndRowIndex);
+				const endIndex = Math.max(dragStartRowIndex, dragEndRowIndex);
+
+				document.querySelectorAll('.drag-highlight').forEach((row) => {
+					row.classList.remove('drag-highlight');
+				});
+
+				const rows = document.querySelectorAll('#tableBody tr');
+				for (let i = startIndex; i <= endIndex && i < rows.length; i++) {
+					rows[i].classList.add('drag-highlight');
+				}
+			}
+
+			function finalizeDragSelection() {
+				if (dragStartRowIndex < 0 || dragEndRowIndex < 0) return;
+
+				const startIndex = Math.min(dragStartRowIndex, dragEndRowIndex);
+				const endIndex = Math.max(dragStartRowIndex, dragEndRowIndex);
+
+				document.querySelectorAll('.drag-highlight').forEach((row) => {
+					row.classList.remove('drag-highlight');
+				});
+
+				const rows = document.querySelectorAll('#tableBody tr');
+				for (let i = startIndex; i <= endIndex && i < rows.length; i++) {
+					const row = rows[i];
+					const rowId = String(data[i]?.id || i);
+					if (rowId) {
+						selectedRows.add(rowId);
+						const itemData = data[i];
+						if (itemData) {
+							selectedRowsData.set(rowId, itemData);
+						}
+						row.classList.add('selected-row');
+					}
+				}
+
+				updateSelectedCount();
+			}
+
+			// Portal management
+			let portalContainer = null;
+
+			// Create portal container for dropdowns
+			function createPortal() {
+				if (!portalContainer) {
+					portalContainer = document.createElement('div');
+					portalContainer.id = 'portal-container';
+					portalContainer.style.position = 'fixed';
+					portalContainer.style.top = '0';
+					portalContainer.style.left = '0';
+					portalContainer.style.width = '100%';
+					portalContainer.style.height = '100%';
+					portalContainer.style.pointerEvents = 'none';
+					portalContainer.style.zIndex = '9998';
+					document.body.appendChild(portalContainer);
+				}
+				return portalContainer;
+			}
+
+			// Position dropdown relative to button
+			function positionDropdown(dropdown, button) {
+				const rect = button.getBoundingClientRect();
+				const dropdownRect = dropdown.getBoundingClientRect();
+
+				let top = rect.bottom + 5;
+				let left = rect.left;
+
+				// Adjust if dropdown goes off screen
+				if (left + dropdownRect.width > window.innerWidth) {
+					left = window.innerWidth - dropdownRect.width - 10;
+				}
+
+				if (top + dropdownRect.height > window.innerHeight) {
+					top = rect.top - dropdownRect.height - 5;
+				}
+
+				dropdown.style.top = top + 'px';
+				dropdown.style.left = left + 'px';
+			}
+
+			// Keep only the column filter toggle since it's still used
+			function toggleColumnFilter() {
+				const dropdown = document.getElementById('columnFilter');
+				const button = document.querySelector('.column-display-btn');
+				const icon = document.getElementById('columnFilterIcon');
+
+				if (!dropdown || !button) return;
+
+				if (dropdown.classList.contains('show')) {
+					dropdown.classList.remove('show');
+					icon.classList.remove('dropdown-open');
+				} else {
+					// Close other dropdowns
+					closeAllDropdowns();
+
+					// Move dropdown to portal
+					const portal = createPortal();
+					if (dropdown.parentNode !== portal) {
+						portal.appendChild(dropdown);
+					}
+
+					// Position and show dropdown
+					dropdown.classList.add('show');
+					icon.classList.add('dropdown-open');
+
+					// Position after showing to get correct dimensions
+					setTimeout(() => {
+						positionDropdown(dropdown, button);
+					}, 10);
+				}
+			}
+
+			function closeAllDropdowns() {
+				const allDropdowns = document.querySelectorAll('.filter-dropdown');
+				const allIcons = document.querySelectorAll('.column-display-btn svg');
+				allDropdowns.forEach((d) => d.classList.remove('show'));
+				allIcons.forEach((i) => i.classList.remove('dropdown-open'));
+			}
+
+			// Search parameters from API
+			async function searchParameters(searchTerm = '') {
+				try {
+					const response = await fetch(PARAMETER_API_ENDPOINT, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+						},
+						body: JSON.stringify({ searchTerm: searchTerm }),
+					});
+
+					if (!response.ok) {
+						throw new Error(`HTTP error! status: ${response.status}`);
+					}
+
+					const data = await response.json();
+
+					if (data.result) {
+						parametersData = data.result;
+						renderParametersList();
+					}
+				} catch (error) {
+					console.error('Error fetching parameters:', error);
+					showError('Lỗi khi tải danh sách chỉ tiêu: ' + error.message);
+				}
+			}
+
+			// Render parameters list in sidebar
+			function renderParametersList() {
+				const parametersList = document.getElementById('parametersList');
+				const searchResultBtn = document.getElementById('searchResultBtn');
+
+				if (parametersData.length === 0) {
+					parametersList.innerHTML = '<div class="text-center py-4 text-gray-500">Không có dữ liệu</div>';
+					if (searchResultBtn) {
+						searchResultBtn.style.display = 'none';
+					}
+					return;
+				}
+
+				// Show search results count button
+				if (searchResultBtn) {
+					searchResultBtn.style.display = 'block';
+					searchResultBtn.textContent = parametersData.length;
+				}
+
+				parametersList.innerHTML = parametersData
+					.map((param) => {
+						const protocolCode = param.protocol_code || '';
+
+						// Check if selected based on header filters instead of selectedParameters
+						const parameterFilters = filters.headerFilters['parameter_name'] || [];
+						const protocolFilters = filters.headerFilters['protocol_code'] || [];
+						const isSelected =
+							parameterFilters.includes(param.parameter_name) &&
+							(!protocolCode || protocolFilters.includes(protocolCode));
+
+						// Combine parameter name and protocol code in one string
+						const displayText = protocolCode
+							? `<span class="parameter-name">${param.parameter_name}</span> <span class="parameter-protocol">${protocolCode}</span>`
+							: `<span class="parameter-name">${param.parameter_name}</span>`;
+
+						return `
+					<div class="parameter-item ${isSelected ? 'selected' : ''}" 
+						 onclick="toggleParameterSelection('${param.parameter_name}', '${protocolCode}')">
+						<div class="parameter-content">
+							<p class="parameter-text">${displayText}</p>
+						</div>
+						<div class="parameter-total-badge">
+							${param.total}
+						</div>
+					</div>
+				`;
+					})
+					.join('');
+			}
+
+			// Toggle parameter selection (multiple selection)
+			function toggleParameterSelection(parameterName, protocolCode) {
+				// Normalize protocolCode - handle null/undefined
+				const normalizedProtocolCode = protocolCode || '';
+
+				// Add to header filters for parameter_name and protocol_code columns
+				if (!filters.headerFilters['parameter_name']) {
+					filters.headerFilters['parameter_name'] = [];
+				}
+				if (!filters.headerFilters['protocol_code']) {
+					filters.headerFilters['protocol_code'] = [];
+				}
+
+				// Check if parameter is already in filter
+				const parameterIndex = filters.headerFilters['parameter_name'].indexOf(parameterName);
+				const protocolIndex = filters.headerFilters['protocol_code'].indexOf(normalizedProtocolCode);
+
+				if (parameterIndex >= 0) {
+					// Remove if already selected
+					filters.headerFilters['parameter_name'].splice(parameterIndex, 1);
+					if (protocolIndex >= 0) {
+						filters.headerFilters['protocol_code'].splice(protocolIndex, 1);
+					}
+				} else {
+					// Add if not selected
+					filters.headerFilters['parameter_name'].push(parameterName);
+					if (normalizedProtocolCode) {
+						filters.headerFilters['protocol_code'].push(normalizedProtocolCode);
+					}
+				}
+
+				// Clean up empty arrays
+				if (filters.headerFilters['parameter_name'].length === 0) {
+					delete filters.headerFilters['parameter_name'];
+				}
+				if (filters.headerFilters['protocol_code'].length === 0) {
+					delete filters.headerFilters['protocol_code'];
+				}
+
+				// Update filter icons
+				updateFilterIconState('parameter_name');
+				updateFilterIconState('protocol_code');
+
+				// Rebuild selectedParameters for consistency
+				rebuildSelectedParametersFromHeaderFilters();
+
+				renderParametersList();
+				updateParameterSelectionUI();
+				updateClearAllFiltersButtonVisibility(); // Update clear button visibility
+				updateURLWithFilters(); // Update URL with new filters
+				fetchData(); // Reload data with updated filters
+			}
+
+			// Clear all parameter selections
+			function clearAllParameters() {
+				selectedParameters = [];
+				filters.parameters = [];
+				filters.protocols = [];
+
+				// Clear header filters for parameter_name and protocol_code
+				delete filters.headerFilters['parameter_name'];
+				delete filters.headerFilters['protocol_code'];
+
+				// Update filter icons
+				updateFilterIconState('parameter_name');
+				updateFilterIconState('protocol_code');
+
+				// Rebuild selectedParameters for consistency
+				rebuildSelectedParametersFromHeaderFilters();
+
+				renderParametersList();
+				updateParameterSelectionUI();
+				updateClearAllFiltersButtonVisibility(); // Update clear button visibility
+				updateURLWithFilters(); // Update URL with cleared filters
+				fetchData();
+			}
+
+			// Clear all filters and query parameters
+			function clearAllFilters() {
+				// Confirm with user
+				if (!confirm('Bạn có chắc chắn muốn xóa tất cả bộ lọc và trở về trạng thái mặc định?')) {
+					return;
+				}
+
+				// Reset filters to default values
+				filters.headerFilters = {};
+				filters.parameters = [];
+				filters.protocols = [];
+				filters.columnSort = 'sample_uid';
+				filters.sortBy = 'ASC';
+				filters.documentStatus = null;
+
+				// Reset search inputs
+				searchInputs.matrix = '';
+				searchInputs.sampleUID = '';
+				searchInputs.parameter = '';
+				searchInputs.protocol = '';
+				searchInputs.resultStatus = '';
+
+				// Reset pagination
+				pagination.currentPage = 1;
+				pagination.itemsPerPage = 100;
+
+				// Reset selected parameters
+				selectedParameters = [];
+
+				// Clear all input fields
+				const inputIds = ['matrixSearchInput', 'sampleUIDSearchInput', 'parameterSearchInput', 'protocolSearchInput'];
+				inputIds.forEach((inputId) => {
+					const input = document.getElementById(inputId);
+					if (input) {
+						input.value = '';
+					}
+				});
+
+				// Clear parameter search input
+				const parameterSearchInput = document.getElementById('parameterSearchInput');
+				if (parameterSearchInput) {
+					parameterSearchInput.value = '';
+				}
+
+				// Reset items per page select
+				const itemsPerPageSelect = document.getElementById('itemsPerPageSelect');
+				if (itemsPerPageSelect) {
+					itemsPerPageSelect.value = '100';
+				}
+
+				// Clear all selections
+				clearAllSelections();
+
+				// Update UI components
+				renderParametersList();
+				updateParameterSelectionUI();
+				renderTableHeaders();
+
+				// Update URL (this will clear all query parameters)
+				const url = new URL(window.location);
+				url.search = '';
+				window.history.replaceState({}, '', url);
+
+				// Fetch fresh data
+				fetchData();
+
+				// Show success message
+				showSuccessNotification('Đã xóa tất cả bộ lọc');
+
+				// Update button visibility
+				updateClearAllFiltersButtonVisibility();
+			}
+
+			// Update parameter selection UI (show/hide clear button)
+			function updateParameterSelectionUI() {
+				const clearButton = document.getElementById('clearParametersBtn');
+				if (clearButton) {
+					// Check header filters instead of selectedParameters
+					const parameterFilters = filters.headerFilters['parameter_name'] || [];
+					const protocolFilters = filters.headerFilters['protocol_code'] || [];
+					const totalSelected = Math.max(parameterFilters.length, protocolFilters.length);
+
+					if (totalSelected > 0) {
+						clearButton.style.display = 'block';
+						clearButton.textContent = `Hủy chọn tất cả (${totalSelected})`;
+					} else {
+						clearButton.style.display = 'none';
+					}
+				}
+			}
+
+			// Update clear all filters button visibility
+			function updateClearAllFiltersButtonVisibility() {
+				const clearAllFiltersBtn = document.getElementById('clearAllFiltersBtn');
+				if (!clearAllFiltersBtn) return;
+
+				// Check if there are any active filters or query parameters
+				const hasFilters =
+					Object.keys(filters.headerFilters).length > 0 ||
+					filters.parameters.length > 0 ||
+					filters.protocols.length > 0 ||
+					filters.columnSort !== 'sample_uid' ||
+					filters.sortBy !== 'ASC' ||
+					pagination.currentPage > 1 ||
+					pagination.itemsPerPage !== 100 ||
+					searchInputs.matrix ||
+					searchInputs.sampleUID ||
+					searchInputs.parameter ||
+					searchInputs.protocol ||
+					searchInputs.resultStatus ||
+					selectedParameters.length > 0;
+
+				if (hasFilters) {
+					clearAllFiltersBtn.style.display = 'flex';
+				} else {
+					clearAllFiltersBtn.style.display = 'none';
+				}
+			}
+
+			// Initialize sidebar event listeners
+			function initializeSidebar() {
+				// Parameter search input (sidebar only)
+				const parameterSearchInput = document.getElementById('parameterSearchInput');
+				let searchTimeout;
+
+				function handleParameterSearch(value) {
+					clearTimeout(searchTimeout);
+					searchTimeout = setTimeout(() => {
+						// Update search inputs with URL query
+						searchInputs.parameter = value;
+						searchParameters(value);
+						// Update URL with filter change
+						updateURLWithFilters();
+					}, 300);
+				} // Sidebar parameter search input
+				if (parameterSearchInput) {
+					parameterSearchInput.addEventListener('input', (e) => {
+						handleParameterSearch(e.target.value);
+					});
+
+					parameterSearchInput.addEventListener('keypress', (e) => {
+						if (e.key === 'Enter') {
+							clearTimeout(searchTimeout);
+							searchParameters(e.target.value);
+						}
+					});
+				}
+
+				// Update filter inputs to use sidebar inputs
+				updateFilterInputListeners();
+
+				// Load initial parameters
+				searchParameters();
+
+				// Initialize parameter selection UI
+				updateParameterSelectionUI();
+			}
+
+			// Reset parameter search
+			function resetParameterSearch() {
+				const parameterSearchInput = document.getElementById('parameterSearchInput');
+				if (parameterSearchInput) {
+					parameterSearchInput.value = '';
+					searchParameters('');
+				}
+			}
+
+			// Update filter input listeners to use sidebar inputs
+			function updateFilterInputListeners() {
+				// All filter inputs have been removed from the sticky top bar
+				// Only sidebar parameter search and dropdown selects remain active
+
+				// Result status filter (if it exists elsewhere)
+				const resultStatusFilterSelect = document.getElementById('resultStatusFilterSelect');
+				if (resultStatusFilterSelect) {
+					resultStatusFilterSelect.addEventListener('change', (e) => {
+						searchInputs.resultStatus = e.target.value;
+						fetchData();
+					});
+				}
+
+				// Document status filter (if it exists elsewhere)
+				const documentStatusFilterSelect = document.getElementById('documentStatusFilterSelect');
+				if (documentStatusFilterSelect) {
+					documentStatusFilterSelect.addEventListener('change', (e) => {
+						const value = e.target.value;
+						// Apply document filter logic
+						if (value === 'no_doc') {
+							// Filter for null doc_id or containing 'edit'
+							filters.documentStatus = 'no_doc';
+						} else if (value === 'has_doc') {
+							// Filter for doc_id containing 'doc'
+							filters.documentStatus = 'has_doc';
+						} else {
+							filters.documentStatus = null;
+						}
+						fetchData();
+					});
+				}
+			}
+
+			// Debounce function for input handling
+			function debounce(func, wait) {
+				let timeout;
+				return function executedFunction(...args) {
+					const later = () => {
+						clearTimeout(timeout);
+						func(...args);
+					};
+					clearTimeout(timeout);
+					timeout = setTimeout(later, wait);
+				};
+			}
+
+			// Initialize column checkboxes
+			function initializeColumnCheckboxes() {
+				const container = document.getElementById('columnCheckboxes');
+				container.innerHTML = '';
+
+				Object.keys(availableColumns).forEach((column) => {
+					// Skip 'id' column from display in column selection
+					if (column === 'id') return;
+
+					const checkboxWrapper = document.createElement('div');
+					checkboxWrapper.className = 'flex items-center';
+
+					const checkbox = document.createElement('input');
+					checkbox.type = 'checkbox';
+					checkbox.id = `column-${column}`;
+					checkbox.value = column;
+					checkbox.checked = filters.columns.includes(column);
+					checkbox.className = 'mr-2';
+
+					const label = document.createElement('label');
+					label.htmlFor = `column-${column}`;
+					label.textContent = availableColumns[column];
+					label.className = 'text-sm cursor-pointer';
+
+					checkboxWrapper.appendChild(checkbox);
+					checkboxWrapper.appendChild(label);
+					container.appendChild(checkboxWrapper);
+				});
+			}
+
+			// Get selected columns from checkboxes
+			function getSelectedColumns() {
+				const selectedColumns = [];
+				Object.keys(availableColumns).forEach((column) => {
+					const checkbox = document.getElementById(`column-${column}`);
+					if (checkbox && checkbox.checked) {
+						selectedColumns.push(column);
+					}
+				});
+				return selectedColumns;
+			}
+
+			// Update columns and refresh data
+			function updateColumns() {
+				const selectedColumns = getSelectedColumns();
+				if (selectedColumns.length === 0) {
+					showError('Vui lòng chọn ít nhất một cột để hiển thị');
+					return;
+				}
+
+				// Ensure 'id' is always included for API calls but not displayed
+				if (!selectedColumns.includes('id')) {
+					selectedColumns.unshift('id'); // Add to beginning
+				}
+
+				filters.columns = selectedColumns;
+				// Reset to first page when changing columns
+				pagination.currentPage = 1;
+
+				// Clear selected rows when changing columns
+				selectedRows.clear();
+				updateSelectedCount();
+
+				// Update table headers
+				renderTableHeaders();
+
+				// Fetch new data
+				fetchData();
+			}
+
+			// Handle row selection
+			function toggleRowSelection(rowId, rowElement, itemData = null) {
+				// Ensure rowId is a string for consistent comparison
+				rowId = String(rowId);
+
+				// Check if rowElement exists before accessing its properties
+				if (!rowElement) {
+					console.error('toggleRowSelection: rowElement is undefined for rowId:', rowId);
+					return;
+				}
+
+				if (selectedRows.has(rowId)) {
+					selectedRows.delete(rowId);
+					selectedRowsData.delete(rowId);
+					rowElement.classList.remove('selected-row');
+
+					// Reset to normal zebra striping background
+					const rowIndex = Array.from(rowElement.parentNode.children).indexOf(rowElement);
+					if (rowIndex % 2 === 0) {
+						rowElement.style.backgroundColor = ''; // White for even rows
+					} else {
+						rowElement.style.backgroundColor = '#f8fafc'; // Light gray for odd rows
+					}
+
+					console.log('Removed row:', rowId);
+				} else {
+					selectedRows.add(rowId);
+					// Store the actual data for this row
+					if (itemData) {
+						selectedRowsData.set(rowId, itemData);
+					}
+					rowElement.classList.add('selected-row');
+					console.log('Added row:', rowId);
+				}
+				console.log('Current selected rows:', Array.from(selectedRows));
+				updateSelectedCount();
+			}
+
+			// Update selected count display
+			function updateSelectedCount() {
+				const count = selectedRows.size;
+				const selectedCountText = document.getElementById('selectedCountText');
+				const selectedCountBtn = document.getElementById('selectedCountBtn');
+
+				if (selectedCountText) {
+					selectedCountText.textContent = count;
+				}
+
+				if (selectedCountBtn) {
+					if (count > 0) {
+						selectedCountBtn.classList.remove('hidden');
+					} else {
+						selectedCountBtn.classList.add('hidden');
+					}
+				}
+			}
+
+			// Clear all selections
+			function clearAllSelections() {
+				selectedRows.clear();
+				selectedRowsData.clear();
+
+				// Reset all row backgrounds to normal zebra striping
+				document.querySelectorAll('#tableBody tr').forEach((row, index) => {
+					row.classList.remove('selected-row');
+					// Reset to original zebra striping
+					if (index % 2 === 0) {
+						row.style.backgroundColor = ''; // White for even rows
+					} else {
+						row.style.backgroundColor = '#f8fafc'; // Light gray for odd rows
+					}
+				});
+
+				updateSelectedCount();
+			}
+
+			// Toggle sidebar function
+			function toggleSidebar() {
+				const sidebar = document.querySelector('.sidebar');
+				if (sidebar) {
+					sidebar.classList.toggle('collapsed');
+				}
+			}
+
+			// Render table headers
+			function renderTableHeaders() {
+				const tableHeader = document.getElementById('tableHeader');
+				if (!tableHeader) return;
+
+				const headerRow = document.createElement('tr');
+
+				filters.columns.forEach((column) => {
+					// Skip 'id' column - don't display it but keep it for data processing
+					if (column === 'id') return;
+
+					const th = document.createElement('th');
+					th.style.cursor = 'pointer';
+					th.style.position = 'relative';
+
+					// Create header text
+					const headerText = availableColumns[column] || '';
+
+					// Create sort icon
+					let sortIcon = '';
+					if (filters.columnSort === column) {
+						sortIcon = filters.sortBy === 'ASC' ? '↑' : '↓';
+					} else {
+						sortIcon = '↕';
+					}
+
+					// Create filter icon for filterable columns
+					let filterIcon = '';
+					if (filterableColumns.includes(column)) {
+						const hasFilter = filters.headerFilters[column];
+						filterIcon = `<span class="filter-icon ${
+							hasFilter ? 'active' : ''
+						}" onclick="toggleHeaderFilter('${column}', event)">🔽</span>`;
+					}
+
+					// Set innerHTML with icons
+					if (headerText) {
+						th.innerHTML = `
+							${headerText}
+							<span class="sort-icon ${
+								filters.columnSort === column ? 'active' : ''
+							}" onclick="sortByColumn('${column}')">${sortIcon}</span>
+							${filterIcon}
+						`;
+					} else {
+						// For doc_id column (no title)
+						th.innerHTML = filterIcon;
+					}
+
+					headerRow.appendChild(th);
+				});
+
+				tableHeader.innerHTML = '';
+				tableHeader.appendChild(headerRow);
+			}
+
+			// Toggle header filter dropdown
+			function toggleHeaderFilter(column, event) {
+				event.stopPropagation();
+
+				// Close other dropdowns first
+				closeAllHeaderFilters();
+
+				// Create or show filter dropdown
+				const filterId = `headerFilter_${column}`;
+				let filterDropdown = document.getElementById(filterId);
+
+				if (!filterDropdown) {
+					filterDropdown = createHeaderFilterDropdown(column);
+					document.body.appendChild(filterDropdown);
+				}
+
+				// Position and show
+				positionHeaderFilter(filterDropdown, event.target);
+				filterDropdown.classList.add('show');
+			}
+
+			// Create header filter dropdown
+			function createHeaderFilterDropdown(column) {
+				const dropdown = document.createElement('div');
+				dropdown.id = `headerFilter_${column}`;
+				dropdown.className = 'header-filter-dropdown';
+
+				const filterType = columnFilterTypes[column];
+				let content = '';
+
+				if (filterType === 'search') {
+					// Special handling for parameter_name and protocol_code to show array values
+					let currentValue = '';
+					if (column === 'parameter_name' || column === 'protocol_code') {
+						const filterArray = filters.headerFilters[column] || [];
+						currentValue = filterArray.join(', ');
+					} else {
+						currentValue = filters.headerFilters[column] || '';
+					}
+
+					content = `
+						<div class="header-filter-content">
+							<input type="text" 
+								   class="header-filter-input" 
+								   placeholder="Tìm kiếm ${availableColumns[column]}..."
+								   value="${currentValue}"
+								   onInput="updateHeaderFilter('${column}', this.value)"
+								   onKeypress="if(event.key==='Enter') closeAllHeaderFilters()">
+							<div style="margin-top: 8px;">
+								<button onclick="clearHeaderFilter('${column}')" 
+										style="padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 4px; font-size: 12px;">
+									Xóa bộ lọc
+								</button>
+							</div>
+						</div>
+					`;
+				} else if (filterType === 'daterange') {
+					const currentFilter = filters.headerFilters[column] || {};
+					content = `
+						<div class="header-filter-content">
+							<div class="date-range-container">
+								<label style="font-size: 12px; color: #6b7280;">Từ ngày:</label>
+								<input type="date" 
+									   class="date-input" 
+									   value="${currentFilter.from || ''}"
+									   onchange="updateDateFilter('${column}', 'from', this.value)">
+								<label style="font-size: 12px; color: #6b7280;">Đến ngày:</label>
+								<input type="date" 
+									   class="date-input" 
+									   value="${currentFilter.to || ''}"
+									   onchange="updateDateFilter('${column}', 'to', this.value)">
+								<button onclick="clearHeaderFilter('${column}')" 
+										style="padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 4px; font-size: 12px; margin-top: 8px;">
+									Xóa bộ lọc
+								</button>
+							</div>
+						</div>
+					`;
+				} else if (filterType === 'select') {
+					content = `
+						<div class="header-filter-content">
+							<select class="header-filter-input" onchange="updateHeaderFilter('${column}', this.value)">
+								<option value="">Tất cả</option>
+								<option value="has_file" ${filters.headerFilters[column] === 'has_file' ? 'selected' : ''}>Có tài liệu</option>
+								<option value="no_file" ${filters.headerFilters[column] === 'no_file' ? 'selected' : ''}>Không có tài liệu</option>
+							</select>
+							<div style="margin-top: 8px;">
+								<button onclick="clearHeaderFilter('${column}')" 
+										style="padding: 4px 8px; background: #ef4444; color: white; border: none; border-radius: 4px; font-size: 12px;">
+									Xóa bộ lọc
+								</button>
+							</div>
+						</div>
+					`;
+				}
+
+				dropdown.innerHTML = content;
+				return dropdown;
+			}
+
+			// Position header filter dropdown
+			function positionHeaderFilter(dropdown, button) {
+				const rect = button.getBoundingClientRect();
+
+				let top = rect.bottom + 5;
+				let left = rect.left;
+
+				// Adjust if dropdown goes off screen
+				if (left + 200 > window.innerWidth) {
+					left = window.innerWidth - 210;
+				}
+
+				if (top + 200 > window.innerHeight) {
+					top = rect.top - 200 - 5;
+				}
+
+				dropdown.style.top = top + 'px';
+				dropdown.style.left = left + 'px';
+			}
+
+			// Update header filter
+			function updateHeaderFilter(column, value) {
+				if (value && value.trim()) {
+					filters.headerFilters[column] = value.trim();
+				} else {
+					delete filters.headerFilters[column];
+				}
+
+				// Update filter icon appearance
+				updateFilterIconState(column);
+
+				// Update URL with filter changes
+				updateURLWithFilters();
+
+				// Debounce the API call
+				clearTimeout(window.filterTimeout);
+				window.filterTimeout = setTimeout(() => {
+					fetchData();
+				}, 300);
+			}
+
+			// Update date filter
+			function updateDateFilter(column, type, value) {
+				if (!filters.headerFilters[column]) {
+					filters.headerFilters[column] = {};
+				}
+
+				if (value) {
+					filters.headerFilters[column][type] = value;
+				} else {
+					delete filters.headerFilters[column][type];
+				}
+
+				// Remove empty filter object
+				if (Object.keys(filters.headerFilters[column]).length === 0) {
+					delete filters.headerFilters[column];
+				}
+
+				updateFilterIconState(column);
+				updateURLWithFilters(); // Update URL with date filter changes
+				fetchData();
+			}
+
+			// Clear header filter
+			function clearHeaderFilter(column) {
+				delete filters.headerFilters[column];
+				updateFilterIconState(column);
+				updateURLWithFilters(); // Update URL with cleared filter
+				closeAllHeaderFilters();
+				fetchData();
+			}
+
+			// Update filter icon state
+			function updateFilterIconState(column) {
+				const filterIcon = document.querySelector(`[onclick*="toggleHeaderFilter('${column}'"]`);
+				if (filterIcon) {
+					if (filters.headerFilters[column]) {
+						filterIcon.classList.add('active');
+					} else {
+						filterIcon.classList.remove('active');
+					}
+				}
+			}
+
+			// Close all header filters
+			function closeAllHeaderFilters() {
+				const dropdowns = document.querySelectorAll('.header-filter-dropdown');
+				dropdowns.forEach((dropdown) => {
+					dropdown.classList.remove('show');
+				});
+			} // Sort by column
+			function sortByColumn(column) {
+				if (filters.columnSort === column) {
+					filters.sortBy = filters.sortBy === 'ASC' ? 'DESC' : 'ASC';
+				} else {
+					filters.columnSort = column;
+					filters.sortBy = 'ASC';
+				}
+
+				// Re-render headers to update sort icons
+				renderTableHeaders();
+				fetchData();
+			}
+
+			// Show error message
+			function showError(message) {
+				const errorMessage = document.getElementById('errorMessage');
+				const errorText = document.getElementById('errorText');
+
+				if (errorMessage && errorText) {
+					errorText.textContent = message;
+					errorMessage.classList.remove('hidden');
+
+					setTimeout(() => {
+						errorMessage.classList.add('hidden');
+					}, 5000);
+				}
+			}
+
+			// Show loading indicator
+			function showLoading() {
+				const loadingIndicator = document.getElementById('loadingIndicator');
+				const tableContainer = document.getElementById('tableContainer');
+				const emptyState = document.getElementById('emptyState');
+
+				if (loadingIndicator) loadingIndicator.classList.remove('hidden');
+				if (tableContainer) tableContainer.classList.add('hidden');
+				if (emptyState) emptyState.classList.add('hidden');
+			}
+
+			// Hide loading indicator
+			function hideLoading() {
+				const loadingIndicator = document.getElementById('loadingIndicator');
+				if (loadingIndicator) loadingIndicator.classList.add('hidden');
+			}
+
+			// Show empty state but keep table headers visible
+			function showEmptyState() {
+				const tableContainer = document.getElementById('tableContainer');
+				const tableBody = document.getElementById('tableBody');
+				const emptyState = document.getElementById('emptyState');
+
+				// Show table container to keep headers visible
+				if (tableContainer) tableContainer.classList.remove('hidden');
+
+				// Clear table body but keep headers
+				if (tableBody) {
+					tableBody.innerHTML =
+						'<tr><td colspan="100%" class="text-center py-8 text-gray-500">Không có dữ liệu</td></tr>';
+				}
+
+				// Hide the separate empty state element
+				if (emptyState) emptyState.classList.add('hidden');
+			}
+
+			// Show table with data
+			function showTable() {
+				const tableContainer = document.getElementById('tableContainer');
+				const emptyState = document.getElementById('emptyState');
+
+				if (tableContainer) tableContainer.classList.remove('hidden');
+				if (emptyState) emptyState.classList.add('hidden');
+			}
+
+			// Render table data
+			function renderTableData() {
+				const tableBody = document.getElementById('tableBody');
+				if (!tableBody) return;
+
+				if (data.length === 0) {
+					showEmptyState();
+					return;
+				}
+
+				showTable();
+
+				const rows = data.map((item, index) => {
+					const row = document.createElement('tr');
+					const rowId = String(item.id || index);
+
+					// Add click event for row selection
+					row.addEventListener('click', (e) => {
+						console.log('Row clicked:', rowId, e.target);
+
+						// Don't select if clicking on interactive elements
+						const target = e.target;
+						if (
+							target.tagName === 'BUTTON' ||
+							target.tagName === 'A' ||
+							target.closest('button') ||
+							target.closest('a')
+						) {
+							console.log('Clicked on interactive element, skipping selection');
+							return;
+						}
+
+						toggleRowSelection(rowId, row, item);
+					});
+
+					// Add drag events for row selection
+					row.addEventListener('mousedown', (e) => {
+						handleDragStart(e, index);
+					});
+
+					row.addEventListener('mouseenter', (e) => {
+						handleDragMove(e, index);
+					});
+
+					// Global mouseup event will be handled by document listener
+
+					// Prevent text selection on double click
+					row.addEventListener('selectstart', (e) => {
+						e.preventDefault();
+					});
+
+					filters.columns.forEach((column) => {
+						// Skip 'id' column - don't display it but keep it for data processing
+						if (column === 'id') return;
+
+						const td = document.createElement('td');
+						let value = item[column];
+
+						// Handle special cases
+						if (column === 'protocol_code' && (!value || value === 'null')) {
+							value = '';
+						}
+
+						if (column === 'doc_id') {
+							// File ID column - show document icon if doc_id exists
+							if (value) {
+								td.innerHTML = `<span class="document-icon" onclick="openDocument('${value}')">📄</span>`;
+							} else {
+								td.textContent = '';
+							}
+						} else if (column === 'deadline') {
+							// Format deadline as DD/MM/YYYY
+							if (value) {
+								const date = new Date(value);
+								if (!isNaN(date.getTime())) {
+									td.textContent = date.toLocaleDateString('vi-VN');
+								} else {
+									td.textContent = '';
+								}
+							} else {
+								td.textContent = '';
+							}
+						} else if (column === 'document') {
+							if (item.doc_id) {
+								td.innerHTML = `<button onclick="openDocument('${item.doc_id}')" class="text-blue-600 hover:text-blue-800 underline">Xem</button>`;
+							} else {
+								td.textContent = '-';
+							}
+						} else if (column === 'result_value' || column === 'result_unit') {
+							// Display HTML content for result_value and result_unit
+							if (value && typeof value === 'string') {
+								td.innerHTML = value;
+							} else {
+								td.textContent = value || '';
+							}
+							// Make cell editable
+							makeCellEditable(td, item, column);
+						} else if (column === 'protocol_source') {
+							// Display text content for protocol_source
+							td.textContent = value || '';
+							// Make cell editable with select dropdown
+							makeCellEditable(td, item, column);
+						} else if (column === 'protocol_code') {
+							// Handle HTML content in protocol code column - strip HTML
+							if (value && typeof value === 'string' && value.includes('<')) {
+								// Strip HTML tags and get text content
+								const tempDiv = document.createElement('div');
+								tempDiv.innerHTML = value;
+								td.textContent = tempDiv.textContent || tempDiv.innerText || '';
+							} else {
+								td.textContent = value || '';
+							}
+							// Make cell editable with input
+							makeCellEditable(td, item, column);
+						} else {
+							td.textContent = value || '';
+						}
+
+						row.appendChild(td);
+					});
+
+					// Check if this row should be selected and apply appropriate styling
+					if (selectedRows.has(rowId)) {
+						row.classList.add('selected-row');
+					} else {
+						// Apply normal zebra striping
+						if (index % 2 === 0) {
+							// Even rows - white background (default)
+						} else {
+							// Odd rows - light gray background
+							row.style.backgroundColor = '#f8fafc';
+						}
+					}
+
+					return row;
+				});
+
+				tableBody.innerHTML = '';
+				rows.forEach((row) => tableBody.appendChild(row));
+			}
+
+			// Fetch data from API with state preservation
+			async function fetchData(isAutoRefresh = false) {
+				// If this is an auto-refresh, store current state
+				let preservedState = null;
+				if (isAutoRefresh) {
+					preservedState = preserveCurrentState();
+					if (!preservedState.shouldRefresh) {
+						console.log('Skipping auto-refresh - user is editing');
+						return;
+					}
+				}
+
+				if (!isAutoRefresh) {
+					showLoading();
+				} else {
+					isRefreshing = true;
+				}
+
+				try {
+					// Prepare columns for API - always include 'id' but don't display it
+					const apiColumns = [...filters.columns];
+					if (!apiColumns.includes('id')) {
+						apiColumns.push('id');
+					}
+
+					// Prepare request body
+					const requestBody = {
+						itemsPerPage: pagination.itemsPerPage,
+						page: pagination.currentPage,
+						columns: apiColumns,
+						columnSort: filters.columnSort,
+						sortBy: filters.sortBy,
+					};
+
+					// Add filters based on search inputs
+					if (searchInputs.matrix) {
+						requestBody.matrix = searchInputs.matrix;
+					}
+
+					if (searchInputs.sampleUID) {
+						const sampleUIDs = searchInputs.sampleUID
+							.split(',')
+							.map((s) => s.trim())
+							.filter((s) => s);
+						if (sampleUIDs.length > 0) {
+							requestBody.sampleUIDs = sampleUIDs;
+						}
+					}
+
+					if (filters.parameters.length > 0) {
+						requestBody.parameters = filters.parameters;
+					}
+
+					if (filters.protocols.length > 0) {
+						requestBody.protocols = filters.protocols;
+					}
+
+					if (searchInputs.parameter) {
+						const parameters = searchInputs.parameter
+							.split(',')
+							.map((s) => s.trim())
+							.filter((s) => s);
+						if (parameters.length > 0) {
+							requestBody.parameters = parameters;
+						}
+					}
+
+					if (searchInputs.protocol) {
+						const protocols = searchInputs.protocol
+							.split(',')
+							.map((s) => s.trim())
+							.filter((s) => s);
+						if (protocols.length > 0) {
+							requestBody.protocols = protocols;
+						}
+					}
+
+					if (searchInputs.resultStatus) {
+						requestBody.isSubmitResult = searchInputs.resultStatus === 'true';
+					}
+
+					// Add header filters
+					Object.keys(filters.headerFilters).forEach((column) => {
+						const filterValue = filters.headerFilters[column];
+
+						if (column === 'sample_uid' && filterValue) {
+							if (!requestBody.sampleUIDs) requestBody.sampleUIDs = [];
+							// Handle both string and array values
+							const values = Array.isArray(filterValue)
+								? filterValue
+								: filterValue
+										.split(',')
+										.map((s) => s.trim())
+										.filter((s) => s);
+							requestBody.sampleUIDs = requestBody.sampleUIDs.concat(values);
+						} else if (column === 'parameter_name' && filterValue) {
+							if (!requestBody.parameters) requestBody.parameters = [];
+							// Handle both string and array values
+							const values = Array.isArray(filterValue)
+								? filterValue
+								: filterValue
+										.split(',')
+										.map((s) => s.trim())
+										.filter((s) => s);
+							requestBody.parameters = requestBody.parameters.concat(values);
+						} else if (column === 'matrix' && filterValue) {
+							requestBody.matrix = filterValue;
+						} else if (column === 'protocol_code' && filterValue) {
+							if (!requestBody.protocols) requestBody.protocols = [];
+							// Handle both string and array values
+							const values = Array.isArray(filterValue)
+								? filterValue
+								: filterValue
+										.split(',')
+										.map((s) => s.trim())
+										.filter((s) => s);
+							requestBody.protocols = requestBody.protocols.concat(values);
+						} else if (column === 'deadline' && filterValue) {
+							if (filterValue.from) requestBody.deadlineFrom = filterValue.from;
+							if (filterValue.to) requestBody.deadlineTo = filterValue.to;
+						} else if (column === 'doc_id' && filterValue) {
+							if (filterValue === 'has_file') {
+								requestBody.hasDocument = true;
+							} else if (filterValue === 'no_file') {
+								requestBody.hasDocument = false;
+							}
+						}
+					});
+
+					if (filters.documentStatus) {
+						requestBody.documentStatus = filters.documentStatus;
+					}
+
+					const response = await apiPost(API_ENDPOINT, requestBody);
+
+					if (!response.status > 300) {
+						throw new Error(`HTTP error! status: ${response.status}`);
+					}
+
+					const result = await response.data;
+
+					if (result.result) {
+						data = result.result;
+
+						// Update pagination from API response
+						if (result.pagination) {
+							pagination.currentPage = result.pagination.currentPage;
+							pagination.itemsPerPage = result.pagination.itemsPerPage;
+							pagination.totalItems = result.pagination.totalItems;
+							pagination.totalPages = result.pagination.totalPages;
+						} else {
+							// Fallback for backward compatibility
+							pagination.totalItems = result.total || 0;
+							pagination.totalPages = Math.ceil(pagination.totalItems / pagination.itemsPerPage);
+						}
+
+						renderTableData();
+						updatePaginationControls();
+
+						// Update URL with current filters if not auto-refresh
+						if (!isAutoRefresh) {
+							updateURLWithFilters();
+						}
+
+						// Restore state if this was an auto-refresh
+						if (isAutoRefresh && preservedState) {
+							restorePreservedState(preservedState);
+						}
+
+						// Store original data state for change tracking
+						data.forEach((item) => {
+							originalDataState[item.id] = { ...item };
+						});
+					} else {
+						throw new Error('No data received from server');
+					}
+				} catch (error) {
+					console.error('Error fetching data:', error);
+					showError('Lỗi khi tải dữ liệu: ' + error.message);
+					showEmptyState();
+				} finally {
+					if (!isAutoRefresh) {
+						hideLoading();
+					} else {
+						isRefreshing = false;
+					}
+				}
+			}
+
+			// Preserve current user state for auto-refresh
+			function preserveCurrentState() {
+				// Check if user is currently editing any cell
+				const editingCells = document.querySelectorAll('tbody .editing');
+				if (editingCells.length > 0) {
+					return { shouldRefresh: false };
+				}
+
+				// Check if any dropdown is open
+				const openDropdowns = document.querySelectorAll('.dropdown.show');
+				if (openDropdowns.length > 0) {
+					return { shouldRefresh: false };
+				}
+
+				// Check if TinyMCE is active
+				if (currentEditor) {
+					return { shouldRefresh: false };
+				}
+
+				// Store current scroll position
+				const tableContainer = document.querySelector('.table-container');
+				const scrollTop = tableContainer ? tableContainer.scrollTop : 0;
+				const scrollLeft = tableContainer ? tableContainer.scrollLeft : 0;
+
+				return {
+					shouldRefresh: true,
+					scrollTop,
+					scrollLeft,
+					currentPage: pagination.currentPage,
+				};
+			}
+
+			// Restore preserved state after auto-refresh
+			function restorePreservedState(state) {
+				// Restore scroll position
+				setTimeout(() => {
+					const tableContainer = document.querySelector('.table-container');
+					if (tableContainer) {
+						tableContainer.scrollTop = state.scrollTop || 0;
+						tableContainer.scrollLeft = state.scrollLeft || 0;
+					}
+				}, 100);
+			}
+
+			// Auto-refresh management
+			function startAutoRefresh() {
+				if (autoRefreshInterval) {
+					clearInterval(autoRefreshInterval);
+				}
+
+				// Auto-refresh every 60 seconds (1 minute)
+				autoRefreshInterval = setInterval(() => {
+					if (!isRefreshing) {
+						console.log('Auto-refreshing data...');
+						fetchData(true);
+					}
+				}, 60000);
+
+				console.log('Auto-refresh started (every 60 seconds)');
+			}
+
+			function stopAutoRefresh() {
+				if (autoRefreshInterval) {
+					clearInterval(autoRefreshInterval);
+					autoRefreshInterval = null;
+					console.log('Auto-refresh stopped');
+				}
+			} // Update pagination controls
+			function updatePaginationControls() {
+				const currentPageEl = document.getElementById('currentPage');
+				const totalPagesEl = document.getElementById('totalPages');
+				const totalItemsEl = document.getElementById('totalItems');
+				const prevButton = document.getElementById('prevButton');
+				const nextButton = document.getElementById('nextButton');
+				const pageInput = document.getElementById('pageInput');
+
+				if (currentPageEl) currentPageEl.textContent = pagination.currentPage;
+				if (totalPagesEl) totalPagesEl.textContent = pagination.totalPages;
+				if (totalItemsEl) totalItemsEl.textContent = pagination.totalItems;
+
+				// Update page input attributes
+				if (pageInput) {
+					pageInput.max = pagination.totalPages;
+					pageInput.value = pagination.currentPage;
+				}
+
+				if (prevButton) {
+					prevButton.disabled = pagination.currentPage <= 1;
+				}
+
+				if (nextButton) {
+					nextButton.disabled = pagination.currentPage >= pagination.totalPages;
+				}
+			}
+
+			// Document navigation function
+			async function openDocument(docId) {
+				// Check if doc_id starts with 'edit_'
+				if (docId && docId.includes('edit')) {
+					// Open EditorTemplate.html with docId parameter
+					const editorUrl = `../EditorTemplate.html?docId=${docId}`;
+					window.open(editorUrl, '_blank');
+				} else if (docId && docId.includes('Doc')) {
+					// Call API to preview document
+					try {
+						const response = await apiPost('https://red.irdop.org/v1/document/preview_doc', {
+							id: docId,
+						});
+
+						if (response && response.status >= 200 && response.status < 300) {
+							// Handle successful response - could be URL or data
+							if (response.data && typeof response.data === 'string') {
+								if (response.data.startsWith('http')) {
+									// If response is a URL, open it
+									window.open(response.data, '_blank');
+								} else {
+									// If response is HTML content, open in a new popup window
+									const popup = window.open('', '_blank', 'width=800,height=800,scrollbars=yes,resizable=yes');
+									if (popup) {
+										popup.document.open();
+										popup.document.write(response.data);
+										popup.document.close();
+									} else {
+										showErrorNotification('Không thể mở cửa sổ popup. Vui lòng kiểm tra cài đặt trình duyệt.');
+									}
+								}
+							} else {
+								// Handle other response formats
+								console.log('Document preview response:', response.data);
+							}
+						} else {
+							showErrorNotification('Không thể xem tài liệu: ' + (response.data || 'Lỗi không xác định'));
+						}
+					} catch (error) {
+						console.error('Error previewing document:', error);
+						showErrorNotification('Lỗi khi xem tài liệu: ' + error.message);
+					}
+				} else {
+					// Implementation for opening other document types
+					console.log('Opening document:', docId);
+				}
+			}
+
+			// Initialize the application
+			function init() {
+				// Load filters from URL first
+				loadFiltersFromURL();
+
+				// Initialize inline editor
+				initInlineEditor();
+
+				// Initialize column checkboxes
+				initializeColumnCheckboxes();
+
+				// Initialize sidebar
+				initializeSidebar();
+
+				// Set up event listeners
+				const confirmColumnsBtn = document.getElementById('confirmColumnsBtn');
+				if (confirmColumnsBtn) {
+					confirmColumnsBtn.addEventListener('click', () => {
+						updateColumns();
+						closeAllDropdowns();
+					});
+				}
+
+				const resetColumnsBtn = document.getElementById('resetColumnsBtn');
+				if (resetColumnsBtn) {
+					resetColumnsBtn.addEventListener('click', () => {
+						// Reset to default columns (including 'id' for API but not displayed)
+						filters.columns = [
+							'id',
+							'sample_uid',
+							'parameter_name',
+							'matrix',
+							'protocol_source',
+							'protocol_code',
+							'result_value',
+							'result_unit',
+							'deadline',
+							'doc_id',
+						];
+						initializeColumnCheckboxes();
+						updateColumns();
+						closeAllDropdowns();
+					});
+				}
+
+				const itemsPerPageSelect = document.getElementById('itemsPerPageSelect');
+				if (itemsPerPageSelect) {
+					itemsPerPageSelect.addEventListener('change', (e) => {
+						pagination.itemsPerPage = parseInt(e.target.value);
+						pagination.currentPage = 1;
+						updateURLWithFilters(); // Update URL with new itemsPerPage
+						fetchData();
+					});
+				}
+
+				const prevButton = document.getElementById('prevButton');
+				if (prevButton) {
+					prevButton.addEventListener('click', () => {
+						if (pagination.currentPage > 1) {
+							pagination.currentPage--;
+							updateURLWithFilters(); // Update URL with new page
+							fetchData();
+						}
+					});
+				}
+
+				const nextButton = document.getElementById('nextButton');
+				if (nextButton) {
+					nextButton.addEventListener('click', () => {
+						if (pagination.currentPage < pagination.totalPages) {
+							pagination.currentPage++;
+							updateURLWithFilters(); // Update URL with new page
+							fetchData();
+						}
+					});
+				}
+
+				// Page input functionality
+				const currentPageDisplay = document.getElementById('currentPageDisplay');
+				const pageInput = document.getElementById('pageInput');
+				const currentPageSpan = document.getElementById('currentPage');
+
+				if (currentPageDisplay && pageInput && currentPageSpan) {
+					// Click on current page to edit
+					currentPageDisplay.addEventListener('click', () => {
+						// Hide display span and show input
+						currentPageSpan.style.display = 'none';
+						pageInput.style.display = 'inline-block';
+						pageInput.classList.remove('hidden');
+						pageInput.value = pagination.currentPage;
+						pageInput.focus();
+						pageInput.select();
+					});
+
+					// Handle page input events
+					pageInput.addEventListener('blur', () => {
+						handlePageInputChange();
+					});
+
+					pageInput.addEventListener('keydown', (e) => {
+						if (e.key === 'Enter') {
+							e.preventDefault();
+							handlePageInputChange();
+						} else if (e.key === 'Escape') {
+							e.preventDefault();
+							cancelPageInput();
+						}
+					});
+
+					// Function to handle page input change
+					function handlePageInputChange() {
+						const newPage = parseInt(pageInput.value);
+						if (newPage && newPage >= 1 && newPage <= pagination.totalPages && newPage !== pagination.currentPage) {
+							pagination.currentPage = newPage;
+							updateURLWithFilters();
+							fetchData();
+						}
+						resetPageInput();
+					}
+
+					// Function to cancel page input
+					function cancelPageInput() {
+						pageInput.value = pagination.currentPage;
+						resetPageInput();
+					}
+
+					// Function to reset page input display
+					function resetPageInput() {
+						pageInput.style.display = 'none';
+						pageInput.classList.add('hidden');
+						currentPageSpan.style.display = 'inline';
+					}
+				}
+
+				// Click outside to close dropdowns
+				document.addEventListener('click', (e) => {
+					const isColumnButton = e.target.closest('.column-display-btn');
+					const isColumnDropdown = e.target.closest('.filter-dropdown');
+					const isHeaderFilter = e.target.closest('.header-filter-dropdown');
+					const isFilterIcon = e.target.closest('.filter-icon');
+
+					if (!isColumnButton && !isColumnDropdown) {
+						closeAllDropdowns();
+					}
+
+					if (!isHeaderFilter && !isFilterIcon) {
+						closeAllHeaderFilters();
+					}
+				});
+
+				// Global event listeners for drag selection
+				document.addEventListener('mouseup', handleDragEnd);
+				document.addEventListener('mouseleave', handleDragEnd);
+
+				// Global click listener to close inline editor when clicking outside
+				document.addEventListener('click', (e) => {
+					if (currentEditingCell && !currentEditingCell.contains(e.target)) {
+						saveInlineEdit();
+					}
+				});
+
+				// Prevent text selection during drag
+				document.addEventListener('selectstart', (e) => {
+					if (isDragging) {
+						e.preventDefault();
+					}
+				});
+
+				// Render initial table headers
+				renderTableHeaders();
+
+				// Load initial data
+				fetchData();
+
+				// Start auto-refresh after initial load
+				startAutoRefresh();
+
+				// Initialize clear all filters button visibility
+				updateClearAllFiltersButtonVisibility();
+			} // Make functions globally accessible for inline event handlers
+			window.toggleColumnFilter = toggleColumnFilter;
+			window.toggleParameterSelection = toggleParameterSelection;
+			window.clearAllParameters = clearAllParameters;
+			window.clearAllFilters = clearAllFilters;
+			window.updateClearAllFiltersButtonVisibility = updateClearAllFiltersButtonVisibility;
+			window.rebuildSelectedParametersFromHeaderFilters = rebuildSelectedParametersFromHeaderFilters;
+			window.resetParameterSearch = resetParameterSearch;
+			window.openDocument = openDocument;
+			window.clearAllSelections = clearAllSelections;
+			window.toggleSidebar = toggleSidebar;
+			window.openEditor = openEditor;
+			window.sortByColumn = sortByColumn;
+			window.toggleHeaderFilter = toggleHeaderFilter;
+			window.updateHeaderFilter = updateHeaderFilter;
+			window.updateDateFilter = updateDateFilter;
+			window.clearHeaderFilter = clearHeaderFilter;
+
+			// Start the application
+			document.addEventListener('DOMContentLoaded', init);
+		</script>
+	</body>
+</html>

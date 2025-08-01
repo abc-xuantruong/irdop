@@ -23,6 +23,26 @@ const AccountInfor = () => {
 		fetchAccountData();
 	}, [setCurrentTitlePage]);
 
+	// Initialize newRowData when columns change
+	useEffect(() => {
+		if (columns.length > 0) {
+			const emptyRow = {};
+			columns.forEach((col, index) => {
+				if (col === 'relation_id') {
+					emptyRow[col] = 4;
+				} else if (col === 'identity_uid') {
+					// Skip identity_uid as it's auto-generated
+				} else if (index > 4 && col !== 'technician_alias') {
+					emptyRow[col] = false;
+				} else {
+					emptyRow[col] = '';
+				}
+			});
+			setNewRowData(emptyRow);
+			console.log('Initialized newRowData:', emptyRow);
+		}
+	}, [columns]);
+
 	const fetchAccountData = async () => {
 		try {
 			setLoading(true);
@@ -401,6 +421,16 @@ const AccountInfor = () => {
 		const basicFields = {};
 		const roles = {};
 
+		// Debug logging
+		console.log('columns:', columns);
+		console.log('newRowData:', newRowData);
+		console.log('columns.length:', columns.length);
+		console.log(
+			'columns with index > 4:',
+			columns.filter((col, index) => index > 4),
+		);
+		console.log('technician_alias in columns:', columns.includes('technician_alias'));
+
 		columns.forEach((col, index) => {
 			if (index <= 4 && col !== 'technician_alias') {
 				// For basic fields
@@ -411,9 +441,23 @@ const AccountInfor = () => {
 				}
 			} else {
 				// For role fields (including technician_alias)
-				roles[col] = newRowData[col] || (col !== 'technician_alias' ? false : '');
+				const value = newRowData[col];
+				if (col === 'technician_alias') {
+					roles[col] = value || '';
+				} else {
+					roles[col] = value !== undefined ? value : false;
+				}
 			}
 		});
+
+		console.log('basicFields:', basicFields);
+		console.log('roles before sending:', roles);
+		console.log('roles object keys:', Object.keys(roles));
+		console.log('roles object length:', Object.keys(roles).length);
+
+		// Check if there are any role columns at all
+		const hasRoleColumns = columns.some((col, index) => index > 4 || col === 'technician_alias');
+		console.log('Has role columns:', hasRoleColumns);
 
 		const newRow = { ...basicFields, roles };
 
@@ -423,12 +467,27 @@ const AccountInfor = () => {
 		try {
 			// Send new row data to API
 			const url = 'https://pink.irdop.org/ab4dg2/insert/iden';
+
+			// Process roles object similar to update logic
+			const processedRoles = {};
+			Object.keys(roles).forEach((key) => {
+				if (key === 'technician_alias') {
+					processedRoles[key] = roles[key] || '';
+				} else {
+					// Ensure boolean values for role fields
+					const value = roles[key];
+					processedRoles[key] = Boolean(value);
+				}
+			});
+
 			const payload = {
 				identity: {
 					...basicFields,
-					roles,
+					roles: processedRoles, // Keep nested structure like update
 				},
 			};
+
+			console.log('Final payload being sent to API:', JSON.stringify(payload, null, 2));
 
 			const response = await apiPost(url, payload);
 			toast.success('Thêm tài khoản thành công!');
@@ -443,10 +502,12 @@ const AccountInfor = () => {
 
 			// Reset new row data
 			const emptyRow = {};
-			columns.forEach((col) => {
+			columns.forEach((col, index) => {
 				if (col === 'relation_id') {
 					emptyRow[col] = 4;
-				} else if (col !== 'relation_id' && columns.indexOf(col) > 4 && col !== 'technician_alias') {
+				} else if (col === 'identity_uid') {
+					// Skip identity_uid as it's auto-generated
+				} else if (index > 4 && col !== 'technician_alias') {
 					emptyRow[col] = false;
 				} else {
 					emptyRow[col] = '';

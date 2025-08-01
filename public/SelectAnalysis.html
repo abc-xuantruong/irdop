@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Chọn chỉ tiêu - IRDOP</title>
+		<link
+			rel="icon"
+			type="image/png"
+			href="https://irdop.org/wp-content/uploads/2024/07/416333459_918989026598929_7536651727234700897_n-removebg-preview.png"
+		/>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<style>
+			body {
+				font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+				margin: 0;
+				padding: 0;
+				background: #f8fafc;
+				min-height: 100vh;
+			}
+
+			.container {
+				background: white;
+				width: 100%;
+				height: 100vh;
+				display: flex;
+				flex-direction: column;
+				max-width: 1440 px !important;
+			}
+
+			/* Header */
+			.header {
+				padding: 16px 20px;
+				border-bottom: 1px solid #e5e7eb;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				background: #f9fafb;
+			}
+
+			.header h2 {
+				margin: 0;
+				color: #1f2937;
+				font-size: 18px;
+				font-weight: 600;
+			}
+
+			.header-actions {
+				display: flex;
+				gap: 8px;
+			}
+
+			/* Filters Section */
+			.filters-section {
+				padding: 16px 20px;
+				border-bottom: 1px solid #e5e7eb;
+				background: white;
+			}
+
+			.filters-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+				gap: 12px;
+				margin-bottom: 12px;
+			}
+
+			.filter-group {
+				display: flex;
+				flex-direction: column;
+			}
+
+			.filter-label {
+				font-size: 12px;
+				font-weight: 500;
+				color: #374151;
+				margin-bottom: 4px;
+			}
+
+			.filter-input,
+			.filter-select {
+				padding: 8px 12px;
+				border: 1px solid #d1d5db;
+				border-radius: 4px;
+				font-size: 14px;
+				background: white;
+			}
+
+			.filter-input:focus,
+			.filter-select:focus {
+				outline: none;
+				border-color: #3b82f6;
+				box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+			}
+
+			/* Table Section */
+			.table-section {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+				background: white;
+				margin: 0 20px;
+				border: 1px solid #e5e7eb;
+				border-radius: 8px;
+			}
+
+			.table-container {
+				flex: 1;
+				overflow: hidden;
+				display: flex;
+				flex-direction: column;
+			}
+
+			#dataTable {
+				width: 100%;
+				border-collapse: collapse;
+				table-layout: fixed;
+				height: 100%;
+				display: flex;
+				flex-direction: column;
+			}
+
+			/* Fixed header */
+			#dataTable thead {
+				position: sticky;
+				top: 0;
+				z-index: 100;
+				background: white;
+				flex-shrink: 0;
+				display: block;
+			}
+
+			#dataTable thead tr {
+				display: table;
+				width: 100%;
+				table-layout: fixed;
+			}
+
+			/* Scrollable tbody */
+			#dataTable tbody {
+				flex: 1;
+				overflow-y: auto;
+				display: block;
+				background: white;
+			}
+
+			#dataTable tbody tr {
+				display: table;
+				width: 100%;
+				table-layout: fixed;
+			}
+
+			#dataTable th,
+			#dataTable td {
+				padding: 12px 16px;
+				text-align: left;
+				vertical-align: middle;
+				border-bottom: 1px solid #f1f5f9;
+				word-wrap: break-word;
+				overflow: hidden;
+			}
+
+			#dataTable th {
+				background: #dbeafe !important;
+				border-bottom: 2px solid #3b82f6;
+				font-weight: 600;
+				color: #1e40af;
+				text-transform: uppercase;
+				font-size: 12px;
+				letter-spacing: 0.05em;
+				cursor: pointer;
+				user-select: none;
+				position: relative;
+			}
+
+			#dataTable th:hover {
+				background: #bfdbfe !important;
+			}
+
+			#dataTable th.sortable::after {
+				content: '⇅';
+				position: absolute;
+				right: 8px;
+				opacity: 0.5;
+				font-size: 10px;
+			}
+
+			#dataTable th.sort-asc::after {
+				content: '↑';
+				opacity: 1;
+				color: #1e40af;
+			}
+
+			#dataTable th.sort-desc::after {
+				content: '↓';
+				opacity: 1;
+				color: #1e40af;
+			}
+
+			/* Column widths */
+			#dataTable th:nth-child(1),
+			#dataTable td:nth-child(1) {
+				width: 120px;
+			}
+			#dataTable th:nth-child(2),
+			#dataTable td:nth-child(2) {
+				width: 200px;
+			}
+			#dataTable th:nth-child(3),
+			#dataTable td:nth-child(3) {
+				width: 120px;
+			}
+			#dataTable th:nth-child(4),
+			#dataTable td:nth-child(4) {
+				width: 120px;
+			}
+			#dataTable th:nth-child(5),
+			#dataTable td:nth-child(5) {
+				width: 120px;
+			}
+			#dataTable th:nth-child(6),
+			#dataTable td:nth-child(6) {
+				width: 100px;
+			}
+			#dataTable th:nth-child(7),
+			#dataTable td:nth-child(7) {
+				width: 80px;
+			}
+
+			/* Row styling */
+			#dataTable tbody tr {
+				transition: background-color 0.15s ease;
+				cursor: pointer;
+			}
+
+			#dataTable tbody tr:nth-child(even) {
+				background-color: #f8fafc;
+			}
+
+			#dataTable tbody tr:hover {
+				background-color: #e0f2fe !important;
+			}
+
+			/* Selected row styling */
+			.selected-row {
+				background-color: #dbeafe !important;
+				border-left: 4px solid #3b82f6;
+			}
+
+			.selected-row:hover {
+				background-color: #bfdbfe !important;
+			}
+
+			/* Drag and drop styles */
+			.dragging {
+				opacity: 0.5;
+				transform: rotate(2deg);
+			}
+
+			.drag-over {
+				border-top: 3px solid #3b82f6;
+				background-color: #eff6ff;
+			}
+
+			/* Drag selection highlight */
+			.drag-highlight {
+				background-color: #dbeafe !important;
+			}
+
+			/* Selected count button */
+			.selected-count-btn {
+				position: fixed;
+				top: 20px;
+				right: 20px;
+				z-index: 1000;
+				width: 50px;
+				height: 50px;
+				border-radius: 50%;
+				background-color: #fef3c7;
+				color: #92400e;
+				border: none;
+				font-weight: bold;
+				font-size: 12px;
+				cursor: pointer;
+				box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+				transition: all 0.3s ease;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				flex-direction: column;
+			}
+
+			.selected-count-btn:hover {
+				background-color: #fde68a;
+				transform: scale(1.05);
+			}
+
+			.selected-count-btn.hidden {
+				display: none;
+			}
+
+			.row-number {
+				background: #f3f4f6;
+				color: #6b7280;
+				font-size: 12px;
+				font-weight: 500;
+				border-radius: 12px;
+				padding: 2px 6px;
+				min-width: 20px;
+				text-align: center;
+				display: inline-block;
+			}
+
+			/* Pagination */
+			.pagination-section {
+				padding: 16px 20px;
+				border-top: 1px solid #e5e7eb;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				background: #f9fafb;
+				flex-wrap: wrap;
+				gap: 12px;
+			}
+
+			.pagination-info {
+				font-size: 14px;
+				color: #6b7280;
+			}
+
+			.pagination-controls {
+				display: flex;
+				gap: 8px;
+				align-items: center;
+				flex-wrap: wrap;
+			}
+
+			.flex {
+				display: flex;
+			}
+
+			.items-center {
+				align-items: center;
+			}
+
+			.space-x-2 > * + * {
+				margin-left: 8px;
+			}
+
+			.space-x-4 > * + * {
+				margin-left: 16px;
+			}
+
+			.text-sm {
+				font-size: 14px;
+			}
+
+			.text-gray-700 {
+				color: #374151;
+			}
+
+			.font-medium {
+				font-weight: 500;
+			}
+
+			.border {
+				border-width: 1px;
+			}
+
+			.border-gray-300 {
+				border-color: #d1d5db;
+			}
+
+			.rounded-md {
+				border-radius: 6px;
+			}
+
+			.p-2 {
+				padding: 8px;
+			}
+
+			.bg-white {
+				background-color: white;
+			}
+
+			.focus\:ring-2:focus {
+				box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+			}
+
+			.focus\:ring-blue-500:focus {
+				box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+			}
+
+			.pagination-btn {
+				padding: 8px 12px;
+				border: 1px solid #d1d5db;
+				border-radius: 4px;
+				background: white;
+				cursor: pointer;
+				font-size: 14px;
+			}
+
+			.pagination-btn:hover:not(:disabled) {
+				background: #f3f4f6;
+			}
+
+			.pagination-btn:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+			}
+
+			.pagination-btn.active {
+				background: #3b82f6;
+				color: white;
+				border-color: #3b82f6;
+			}
+
+			.page-input {
+				width: 60px;
+				padding: 8px;
+				border: 1px solid #d1d5db;
+				border-radius: 4px;
+				text-align: center;
+				font-size: 14px;
+			}
+
+			/* Action buttons */
+			.btn {
+				padding: 8px 16px;
+				border-radius: 4px;
+				font-size: 14px;
+				font-weight: 500;
+				cursor: pointer;
+				border: none;
+				transition: all 0.2s;
+			}
+
+			.btn-primary {
+				background: #3b82f6;
+				color: white;
+			}
+
+			.btn-primary:hover {
+				background: #2563eb;
+			}
+
+			.btn-secondary {
+				background: #6b7280;
+				color: white;
+			}
+
+			.btn-secondary:hover {
+				background: #4b5563;
+			}
+
+			.btn-success {
+				background: #10b981;
+				color: white;
+			}
+
+			.btn-success:hover {
+				background: #059669;
+			}
+
+			/* Loading */
+			.loading-overlay {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100vw;
+				height: 100vh;
+				background: rgba(255, 255, 255, 0.8);
+				backdrop-filter: blur(4px);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				z-index: 9999;
+				flex-direction: column;
+			}
+
+			.loading-spinner {
+				border: 4px solid #f3f3f3;
+				border-top: 4px solid #3b82f6;
+				border-radius: 50%;
+				width: 40px;
+				height: 40px;
+				animation: spin 2s linear infinite;
+				margin: 0 auto;
+			}
+
+			.loading-text {
+				margin-top: 16px;
+				color: #374151;
+				font-size: 16px;
+				font-weight: 500;
+			}
+
+			@keyframes spin {
+				0% {
+					transform: rotate(0deg);
+				}
+				100% {
+					transform: rotate(360deg);
+				}
+			}
+
+			.hidden {
+				display: none;
+			}
+
+			/* Document icon */
+			.document-icon {
+				color: #3b82f6;
+				font-size: 16px;
+				cursor: pointer;
+				padding: 4px;
+				border-radius: 4px;
+				transition: all 0.2s ease;
+			}
+
+			.document-icon:hover {
+				color: #1d4ed8;
+				border: 2px solid #3b82f6;
+				background-color: #eff6ff;
+			}
+		</style>
+	</head>
+	<body>
+		<!-- Selected Count Button -->
+		<button id="selectedCountBtn" class="selected-count-btn hidden" onclick="clearAllSelections()">
+			<span id="selectedCountText">0</span>
+			<span style="font-size: 10px">đã chọn</span>
+		</button>
+
+		<div class="container" style="max-width: 100% !important">
+			<!-- Header -->
+			<div class="header">
+				<h2>Chọn chỉ tiêu phân tích</h2>
+			</div>
+
+			<!-- Filters Section -->
+			<div class="filters-section">
+				<div class="filters-grid">
+					<div class="filter-group">
+						<label class="filter-label">Mẫu (Sample)</label>
+						<input type="text" class="filter-input" id="sampleFilter" placeholder="Tìm theo mã mẫu" />
+					</div>
+					<div class="filter-group">
+						<label class="filter-label">Tên chỉ tiêu (Parameter)</label>
+						<input type="text" class="filter-input" id="parameterFilter" placeholder="Tìm theo tên chỉ tiêu" />
+					</div>
+					<div class="filter-group">
+						<label class="filter-label">Phương pháp (Protocol)</label>
+						<input type="text" class="filter-input" id="protocolFilter" placeholder="Tìm theo phương pháp" />
+					</div>
+					<div class="filter-group">
+						<label class="filter-label">Kết quả</label>
+						<select class="filter-select" id="resultFilter">
+							<option value="">Tất cả</option>
+							<option value="1">Có kết quả</option>
+							<option value="0">Chưa có kết quả</option>
+						</select>
+					</div>
+					<div class="filter-group">
+						<label class="filter-label">Biên bản</label>
+						<select class="filter-select" id="documentFilter">
+							<option value="">Tất cả</option>
+							<option value="1">Có biên bản</option>
+							<option value="0">Chưa có biên bản</option>
+						</select>
+					</div>
+				</div>
+			</div>
+
+			<!-- Loading Overlay -->
+			<div id="loadingIndicator" class="loading-overlay hidden">
+				<div class="loading-spinner"></div>
+				<div class="loading-text">Đang tải dữ liệu...</div>
+			</div>
+
+			<!-- Table Section -->
+			<div class="table-section">
+				<div class="table-container">
+					<table id="dataTable">
+						<thead>
+							<tr>
+								<th class="sortable" data-column="sample_uid" onclick="sortTable('sample_uid')">Mã mẫu</th>
+								<th class="sortable" data-column="parameter_name" onclick="sortTable('parameter_name')">
+									Tên chỉ tiêu
+								</th>
+								<th class="sortable" data-column="matrix" onclick="sortTable('matrix')">Nền mẫu</th>
+								<th class="sortable" data-column="protocol_code" onclick="sortTable('protocol_code')">
+									Mã phương pháp
+								</th>
+								<th class="sortable" data-column="deadline" onclick="sortTable('deadline')">Deadline</th>
+								<th class="sortable" data-column="result_value" onclick="sortTable('result_value')">Kết quả</th>
+								<th>Biên bản</th>
+							</tr>
+						</thead>
+						<tbody id="tableBody"></tbody>
+					</table>
+				</div>
+			</div>
+
+			<!-- Pagination Section -->
+			<div class="pagination-section">
+				<div class="flex items-center space-x-4">
+					<div class="flex items-center space-x-2">
+						<label class="text-sm text-gray-700 font-medium">Số dòng hiển thị:</label>
+						<select
+							id="itemsPerPageSelect"
+							class="border border-gray-300 rounded-md p-2 bg-white focus:ring-2 focus:ring-blue-500"
+						>
+							<option value="20">20</option>
+							<option value="50">50</option>
+							<option value="100" selected>100</option>
+							<option value="200">200</option>
+							<option value="500">500</option>
+						</select>
+					</div>
+					<div class="pagination-info">
+						<span id="paginationInfo">Đang tải...</span>
+					</div>
+				</div>
+				<div class="pagination-controls" id="paginationControls"></div>
+				<div class="header-actions" style="margin-left: auto">
+					<button class="btn btn-secondary" onclick="cancelSelection()">Hủy bỏ</button>
+					<button class="btn btn-success" onclick="confirmSelection()">Xác nhận</button>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			// Global state variables
+			let data = [];
+			let selectedRows = new Set();
+			let selectedRowsData = new Map();
+			let preSelectedIds = [];
+			let pagination = {
+				currentPage: 1,
+				itemsPerPage: 100,
+				totalItems: 0,
+				totalPages: 1,
+			};
+
+			let filters = {
+				sample: '',
+				parameter: '',
+				protocol: '',
+				result: '',
+				document: '',
+			};
+
+			// Drag selection variables
+			let isDragging = false;
+			let dragStartY = 0;
+			let dragStartRowIndex = -1;
+			let dragEndRowIndex = -1;
+
+			// Sorting variables
+			let currentSort = {
+				column: 'sample_uid',
+				direction: 'ASC',
+			};
+
+			const API_ENDPOINT = 'https://black.irdop.org/v1/analysis/processing/list';
+
+			// Initialize
+			document.addEventListener('DOMContentLoaded', function () {
+				initializeFilters();
+				initializeItemsPerPageSelector();
+				initializeKeyboardShortcuts();
+				setupDragSelection();
+				fetchData();
+
+				// Listen for messages from parent window
+				window.addEventListener('message', function (event) {
+					if (event.data && event.data.type === 'INIT_SELECTION') {
+						preSelectedIds = event.data.analysisIds || [];
+						console.log('Pre-selected IDs:', preSelectedIds);
+						// Re-render table to show selections
+						renderTable();
+					}
+				});
+			});
+
+			// Initialize keyboard shortcuts
+			function initializeKeyboardShortcuts() {
+				document.addEventListener('keydown', (e) => {
+					// Ctrl+A to select all
+					if (e.ctrlKey && e.key === 'a') {
+						e.preventDefault();
+						selectAllRows();
+					}
+
+					// Escape to cancel selection
+					if (e.key === 'Escape') {
+						clearAllSelections();
+					}
+
+					// Enter to confirm selection
+					if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+						confirmSelection();
+					}
+				});
+			}
+
+			// Setup drag selection
+			function setupDragSelection() {
+				document.addEventListener('mouseup', handleDragEnd);
+				document.addEventListener('mouseleave', handleDragEnd);
+			}
+
+			// Sort table function
+			function sortTable(column) {
+				// Toggle sort direction if clicking on the same column
+				if (currentSort.column === column) {
+					currentSort.direction = currentSort.direction === 'ASC' ? 'DESC' : 'ASC';
+				} else {
+					currentSort.column = column;
+					currentSort.direction = 'ASC';
+				}
+
+				// Update UI indicators
+				updateSortIndicators();
+
+				// Fetch data with new sorting
+				fetchData();
+			}
+
+			// Update sort indicators in table headers
+			function updateSortIndicators() {
+				// Remove all sort classes
+				document.querySelectorAll('#dataTable th').forEach((th) => {
+					th.classList.remove('sort-asc', 'sort-desc');
+				});
+
+				// Add appropriate class to current sorted column
+				const currentHeader = document.querySelector(`#dataTable th[data-column="${currentSort.column}"]`);
+				if (currentHeader) {
+					currentHeader.classList.add(currentSort.direction === 'ASC' ? 'sort-asc' : 'sort-desc');
+				}
+			}
+
+			// Select all rows function
+			function selectAllRows() {
+				data.forEach((item, index) => {
+					const rowId = String(item.id);
+					selectedRows.add(rowId);
+					selectedRowsData.set(rowId, item);
+				});
+
+				// Update visual state
+				document.querySelectorAll('#tableBody tr').forEach((row) => {
+					row.classList.add('selected-row');
+				});
+
+				updateSelectedCount();
+			}
+
+			// Initialize itemsPerPage selector
+			function initializeItemsPerPageSelector() {
+				const itemsPerPageSelect = document.getElementById('itemsPerPageSelect');
+				if (itemsPerPageSelect) {
+					itemsPerPageSelect.value = pagination.itemsPerPage.toString();
+					itemsPerPageSelect.addEventListener('change', (e) => {
+						pagination.itemsPerPage = parseInt(e.target.value);
+						pagination.currentPage = 1; // Reset to first page
+						fetchData();
+					});
+				}
+			}
+
+			// Initialize filter event listeners
+			function initializeFilters() {
+				document.getElementById('sampleFilter').addEventListener(
+					'input',
+					debounce(() => {
+						filters.sample = document.getElementById('sampleFilter').value;
+						resetPagination();
+						fetchData();
+					}, 300),
+				);
+
+				document.getElementById('parameterFilter').addEventListener(
+					'input',
+					debounce(() => {
+						filters.parameter = document.getElementById('parameterFilter').value;
+						resetPagination();
+						fetchData();
+					}, 300),
+				);
+
+				document.getElementById('protocolFilter').addEventListener(
+					'input',
+					debounce(() => {
+						filters.protocol = document.getElementById('protocolFilter').value;
+						resetPagination();
+						fetchData();
+					}, 300),
+				);
+
+				document.getElementById('resultFilter').addEventListener('change', () => {
+					filters.result = document.getElementById('resultFilter').value;
+					resetPagination();
+					fetchData();
+				});
+
+				document.getElementById('documentFilter').addEventListener('change', () => {
+					filters.document = document.getElementById('documentFilter').value;
+					resetPagination();
+					fetchData();
+				});
+			}
+
+			// Debounce function
+			function debounce(func, wait) {
+				let timeout;
+				return function executedFunction(...args) {
+					const later = () => {
+						clearTimeout(timeout);
+						func(...args);
+					};
+					clearTimeout(timeout);
+					timeout = setTimeout(later, wait);
+				};
+			}
+
+			// Reset pagination
+			function resetPagination() {
+				pagination.currentPage = 1;
+			}
+
+			// API call function
+			async function apiPost(url, body) {
+				try {
+					const response = await fetch(url, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${getCookie('auth')}`,
+							'x-fh-app-uid': 'LIMS-IRDOP-PRD',
+							'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
+						},
+						body: JSON.stringify(body),
+					});
+
+					if (!response.ok) {
+						const errorText = await response.text();
+						console.error('Response error text:', errorText);
+						throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+					}
+
+					const jsonResponse = await response.json();
+					jsonResponse.status = response.status; // Include status in response
+					return jsonResponse;
+				} catch (error) {
+					console.error('API Error details:', {
+						message: error.message,
+						stack: error.stack,
+						url: url,
+						body: body,
+					});
+					throw error;
+				}
+			}
+
+			// Get cookie helper function
+			function getCookie(name) {
+				const value = `; ${document.cookie}`;
+				const parts = value.split(`; ${name}=`);
+				const result = parts.length === 2 ? parts.pop().split(';').shift() : '';
+				console.log(`Getting cookie '${name}':`, result ? '***found***' : 'not found');
+				return result;
+			}
+
+			// Fetch data from API
+			async function fetchData() {
+				showLoading(true);
+
+				try {
+					const apiColumns = [
+						'id',
+						'sample_uid',
+						'parameter_name',
+						'matrix',
+						'protocol_code',
+						'deadline',
+						'result_value',
+						'doc_id',
+					];
+
+					const requestBody = {
+						itemsPerPage: pagination.itemsPerPage,
+						page: pagination.currentPage,
+						columns: apiColumns,
+						columnSort: currentSort.column,
+						sortBy: currentSort.direction,
+					};
+
+					// Add filters directly to request body (not in a filters wrapper)
+					if (filters.sample) {
+						const sampleUIDs = filters.sample
+							.split(',')
+							.map((s) => s.trim())
+							.filter((s) => s);
+						if (sampleUIDs.length > 0) {
+							requestBody.sampleUIDs = sampleUIDs;
+						}
+					}
+
+					if (filters.parameter) {
+						const parameters = filters.parameter
+							.split(',')
+							.map((s) => s.trim())
+							.filter((s) => s);
+						if (parameters.length > 0) {
+							requestBody.parameters = parameters;
+						}
+					}
+
+					if (filters.protocol) {
+						const protocols = filters.protocol
+							.split(',')
+							.map((s) => s.trim())
+							.filter((s) => s);
+						if (protocols.length > 0) {
+							requestBody.protocols = protocols;
+						}
+					}
+
+					if (filters.result !== '') {
+						// For result filter: '1' = has result_value, '0' = no result_value
+						if (filters.result === '1') {
+							requestBody.isSubmitResult = true;
+						} else {
+							requestBody.isSubmitResult = false;
+						}
+					}
+
+					if (filters.document !== '') {
+						requestBody.hasDocument = filters.document === '1';
+					}
+
+					const response = await apiPost(API_ENDPOINT, requestBody);
+
+					if (!response.status || response.status > 300) {
+						throw new Error(`HTTP error! status: ${response.status}`);
+					}
+
+					// Response structure is directly { result: [...], pagination: {...} }
+					const result = response;
+
+					if (result) {
+						// Ensure data is an array
+						if (result.result && Array.isArray(result.result)) {
+							data = result.result;
+						} else {
+							console.warn('API result.result is not an array:', result.result);
+							data = [];
+						}
+
+						// Update pagination from API response
+						if (result.pagination) {
+							pagination.totalItems = result.pagination.totalItems || 0;
+							pagination.currentPage = result.pagination.currentPage || pagination.currentPage;
+							pagination.itemsPerPage = result.pagination.itemsPerPage || pagination.itemsPerPage;
+							pagination.totalPages =
+								result.pagination.totalPages || Math.ceil(pagination.totalItems / pagination.itemsPerPage);
+						} else {
+							pagination.totalItems = result.total || 0;
+							pagination.totalPages = Math.ceil(pagination.totalItems / pagination.itemsPerPage);
+						}
+
+						renderTable();
+						updatePaginationControls();
+					} else {
+						console.error('No result data in response:', result);
+						data = []; // Ensure data is always an array
+						showError('Không có dữ liệu trả về từ server');
+					}
+				} catch (error) {
+					console.error('Fetch Error:', error);
+					const errorMessage = error?.message || error?.toString() || 'Lỗi không xác định';
+					showError('Lỗi kết nối: ' + errorMessage);
+
+					// Ensure data is always an array even on error
+					data = [];
+					renderTable();
+					updatePaginationControls();
+				} finally {
+					showLoading(false);
+				}
+			}
+
+			// Render table
+			function renderTable() {
+				const tbody = document.getElementById('tableBody');
+				tbody.innerHTML = '';
+
+				// Ensure data is an array
+				if (!Array.isArray(data) || data.length === 0) {
+					tbody.innerHTML =
+						'<tr><td colspan="7" style="text-align: center; padding: 40px; color: #6b7280;">Không có dữ liệu</td></tr>';
+					return;
+				}
+
+				data.forEach((item, index) => {
+					const row = document.createElement('tr');
+					const isSelected = selectedRows.has(item.id.toString()) || preSelectedIds.includes(item.id.toString());
+
+					// Add row data attributes
+					row.dataset.itemId = item.id;
+					row.dataset.index = index;
+
+					if (isSelected) {
+						row.classList.add('selected-row');
+						selectedRows.add(item.id.toString());
+						selectedRowsData.set(item.id.toString(), item);
+					}
+
+					// Add click event for row selection
+					row.addEventListener('click', (e) => {
+						// Don't select if clicking on interactive elements
+						const target = e.target;
+						if (
+							target.tagName === 'BUTTON' ||
+							target.tagName === 'A' ||
+							target.closest('button') ||
+							target.closest('a') ||
+							target.classList.contains('document-icon')
+						) {
+							return;
+						}
+
+						toggleRowSelection(item.id.toString(), row, item);
+					});
+
+					// Add drag events for row selection
+					row.addEventListener('mousedown', (e) => {
+						handleDragStart(e, index);
+					});
+
+					row.addEventListener('mouseenter', (e) => {
+						handleDragMove(e, index);
+					});
+
+					// Format deadline
+					const deadline = item.deadline ? new Date(item.deadline).toLocaleDateString('vi-VN') : '';
+
+					// Format result status - check if result_value exists and is not empty
+					const resultStatus = item.result_value && item.result_value.trim() !== '' ? 'Có kết quả' : 'Chưa có';
+
+					// Format document status with icon
+					let documentStatus = '';
+					if (item.doc_id && item.doc_id !== 'edit' && item.doc_id !== null) {
+						documentStatus = `<span class="document-icon" title="Có biên bản">📄</span>`;
+					} else {
+						documentStatus = 'Chưa có';
+					}
+
+					row.innerHTML = `
+						<td>${item.sample_uid || ''}</td>
+						<td>${item.parameter_name || ''}</td>
+						<td>${item.matrix || ''}</td>
+						<td>${item.protocol_code || ''}</td>
+						<td>${deadline}</td>
+						<td>${resultStatus}</td>
+						<td>${documentStatus}</td>
+					`;
+
+					tbody.appendChild(row);
+				});
+
+				updateSelectedCount();
+				updateSortIndicators();
+			}
+
+			// Simple drag selection functions
+			function handleDragStart(e, rowIndex) {
+				dragStartY = e.clientY;
+				dragStartRowIndex = rowIndex;
+				dragEndRowIndex = rowIndex;
+				isDragging = false;
+			}
+
+			function handleDragMove(e, rowIndex) {
+				if (!isDragging && Math.abs(e.clientY - dragStartY) > 5) {
+					isDragging = true;
+					document.body.style.userSelect = 'none';
+					e.preventDefault();
+				}
+
+				if (!isDragging) return;
+
+				e.preventDefault();
+				dragEndRowIndex = rowIndex;
+				updateDragSelection();
+			}
+
+			function handleDragEnd() {
+				if (isDragging) {
+					finalizeDragSelection();
+					isDragging = false;
+					document.body.style.userSelect = '';
+				}
+				dragStartRowIndex = -1;
+				dragEndRowIndex = -1;
+			}
+
+			function updateDragSelection() {
+				if (dragStartRowIndex < 0 || dragEndRowIndex < 0) return;
+
+				const startIndex = Math.min(dragStartRowIndex, dragEndRowIndex);
+				const endIndex = Math.max(dragStartRowIndex, dragEndRowIndex);
+
+				document.querySelectorAll('.drag-highlight').forEach((row) => {
+					row.classList.remove('drag-highlight');
+				});
+
+				const rows = document.querySelectorAll('#tableBody tr');
+				for (let i = startIndex; i <= endIndex && i < rows.length; i++) {
+					rows[i].classList.add('drag-highlight');
+				}
+			}
+
+			function finalizeDragSelection() {
+				if (dragStartRowIndex < 0 || dragEndRowIndex < 0) return;
+
+				const startIndex = Math.min(dragStartRowIndex, dragEndRowIndex);
+				const endIndex = Math.max(dragStartRowIndex, dragEndRowIndex);
+
+				document.querySelectorAll('.drag-highlight').forEach((row) => {
+					row.classList.remove('drag-highlight');
+				});
+
+				const rows = document.querySelectorAll('#tableBody tr');
+				for (let i = startIndex; i <= endIndex && i < rows.length; i++) {
+					const row = rows[i];
+					const rowId = String(data[i]?.id);
+					if (rowId && data[i]) {
+						selectedRows.add(rowId);
+						selectedRowsData.set(rowId, data[i]);
+						row.classList.add('selected-row');
+					}
+				}
+
+				updateSelectedCount();
+			}
+
+			// Toggle row selection with enhanced multi-selection
+			let lastSelectedIndex = -1;
+
+			// Handle row selection
+			function toggleRowSelection(rowId, rowElement, itemData = null) {
+				// Ensure rowId is a string for consistent comparison
+				rowId = String(rowId);
+
+				// Check if rowElement exists before accessing its properties
+				if (!rowElement) {
+					console.error('toggleRowSelection: rowElement is undefined for rowId:', rowId);
+					return;
+				}
+
+				if (selectedRows.has(rowId)) {
+					selectedRows.delete(rowId);
+					selectedRowsData.delete(rowId);
+					rowElement.classList.remove('selected-row');
+
+					// Reset to normal zebra striping background
+					const rowIndex = Array.from(rowElement.parentNode.children).indexOf(rowElement);
+					if (rowIndex % 2 === 0) {
+						rowElement.style.backgroundColor = ''; // White for even rows
+					} else {
+						rowElement.style.backgroundColor = '#f8fafc'; // Light gray for odd rows
+					}
+				} else {
+					selectedRows.add(rowId);
+					// Store the actual data for this row
+					if (itemData) {
+						selectedRowsData.set(rowId, itemData);
+					}
+					rowElement.classList.add('selected-row');
+				}
+
+				updateSelectedCount();
+			}
+
+			// Update selected count display
+			function updateSelectedCount() {
+				const count = selectedRows.size;
+				const selectedCountText = document.getElementById('selectedCountText');
+				const selectedCountBtn = document.getElementById('selectedCountBtn');
+
+				if (selectedCountText) {
+					selectedCountText.textContent = count;
+				}
+
+				if (selectedCountBtn) {
+					if (count > 0) {
+						selectedCountBtn.classList.remove('hidden');
+					} else {
+						selectedCountBtn.classList.add('hidden');
+					}
+				}
+			}
+
+			// Clear all selections
+			function clearAllSelections() {
+				selectedRows.clear();
+				selectedRowsData.clear();
+
+				// Reset all row backgrounds to normal zebra striping
+				document.querySelectorAll('#tableBody tr').forEach((row, index) => {
+					row.classList.remove('selected-row');
+					// Reset to original zebra striping
+					if (index % 2 === 0) {
+						row.style.backgroundColor = ''; // White for even rows
+					} else {
+						row.style.backgroundColor = '#f8fafc'; // Light gray for odd rows
+					}
+				});
+
+				updateSelectedCount();
+			}
+
+			// Drag selection functions
+			function handleDragStart(e, rowIndex) {
+				dragStartY = e.clientY;
+				dragStartRowIndex = rowIndex;
+				dragEndRowIndex = rowIndex;
+				isDragging = false;
+			}
+
+			function handleDragMove(e, rowIndex) {
+				if (!isDragging && Math.abs(e.clientY - dragStartY) > 5) {
+					isDragging = true;
+					document.body.style.userSelect = 'none';
+					e.preventDefault();
+				}
+
+				if (!isDragging) return;
+
+				e.preventDefault();
+				dragEndRowIndex = rowIndex;
+				updateDragSelection();
+			}
+
+			function handleDragEnd() {
+				if (isDragging) {
+					finalizeDragSelection();
+					isDragging = false;
+					document.body.style.userSelect = '';
+				}
+				dragStartRowIndex = -1;
+				dragEndRowIndex = -1;
+			}
+
+			function updateDragSelection() {
+				if (dragStartRowIndex < 0 || dragEndRowIndex < 0) return;
+
+				const startIndex = Math.min(dragStartRowIndex, dragEndRowIndex);
+				const endIndex = Math.max(dragStartRowIndex, dragEndRowIndex);
+
+				document.querySelectorAll('.drag-highlight').forEach((row) => {
+					row.classList.remove('drag-highlight');
+				});
+
+				const rows = document.querySelectorAll('#tableBody tr');
+				for (let i = startIndex; i <= endIndex && i < rows.length; i++) {
+					rows[i].classList.add('drag-highlight');
+				}
+			}
+
+			function finalizeDragSelection() {
+				if (dragStartRowIndex < 0 || dragEndRowIndex < 0) return;
+
+				const startIndex = Math.min(dragStartRowIndex, dragEndRowIndex);
+				const endIndex = Math.max(dragStartRowIndex, dragEndRowIndex);
+
+				document.querySelectorAll('.drag-highlight').forEach((row) => {
+					row.classList.remove('drag-highlight');
+				});
+
+				const rows = document.querySelectorAll('#tableBody tr');
+				for (let i = startIndex; i <= endIndex && i < rows.length; i++) {
+					const row = rows[i];
+					const rowId = String(data[i]?.id || i);
+					if (rowId && data[i]) {
+						selectedRows.add(rowId);
+						selectedRowsData.set(rowId, data[i]);
+						row.classList.add('selected-row');
+					}
+				}
+
+				updateSelectedCount();
+			}
+
+			// Update pagination controls
+			function updatePaginationControls() {
+				const info = document.getElementById('paginationInfo');
+				const controls = document.getElementById('paginationControls');
+
+				const start = (pagination.currentPage - 1) * pagination.itemsPerPage + 1;
+				const end = Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems);
+
+				info.textContent = `Hiển thị ${start}-${end} trong tổng số ${pagination.totalItems} mục`;
+
+				controls.innerHTML = '';
+
+				// Previous button
+				const prevBtn = document.createElement('button');
+				prevBtn.className = 'pagination-btn';
+				prevBtn.textContent = '‹ Trước';
+				prevBtn.disabled = pagination.currentPage === 1;
+				prevBtn.onclick = () => changePage(pagination.currentPage - 1);
+				controls.appendChild(prevBtn);
+
+				// Page numbers
+				const startPage = Math.max(1, pagination.currentPage - 2);
+				const endPage = Math.min(pagination.totalPages, pagination.currentPage + 2);
+
+				for (let i = startPage; i <= endPage; i++) {
+					const pageBtn = document.createElement('button');
+					pageBtn.className = `pagination-btn ${i === pagination.currentPage ? 'active' : ''}`;
+					pageBtn.textContent = i;
+					pageBtn.onclick = () => changePage(i);
+					controls.appendChild(pageBtn);
+				}
+
+				// Next button
+				const nextBtn = document.createElement('button');
+				nextBtn.className = 'pagination-btn';
+				nextBtn.textContent = 'Tiếp ›';
+				nextBtn.disabled = pagination.currentPage === pagination.totalPages;
+				nextBtn.onclick = () => changePage(pagination.currentPage + 1);
+				controls.appendChild(nextBtn);
+
+				// Direct page input
+				const pageInputContainer = document.createElement('div');
+				pageInputContainer.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-left: 16px;';
+				pageInputContainer.innerHTML = `
+					<span>Trang:</span>
+					<input type="number" class="page-input" min="1" max="${pagination.totalPages}" 
+						value="${pagination.currentPage}" onchange="goToPage(this.value)">
+				`;
+				controls.appendChild(pageInputContainer);
+			}
+
+			// Change page
+			function changePage(page) {
+				if (page >= 1 && page <= pagination.totalPages) {
+					pagination.currentPage = page;
+					fetchData();
+				}
+			}
+
+			// Go to specific page
+			function goToPage(page) {
+				const pageNum = parseInt(page);
+				if (pageNum >= 1 && pageNum <= pagination.totalPages) {
+					changePage(pageNum);
+				}
+			}
+
+			// Show/hide loading
+			function showLoading(show) {
+				const loading = document.getElementById('loadingIndicator');
+
+				if (show) {
+					loading.classList.remove('hidden');
+				} else {
+					loading.classList.add('hidden');
+				}
+			}
+
+			// Show error message
+			function showError(message) {
+				alert('Lỗi: ' + message);
+			}
+
+			// Cancel selection
+			function cancelSelection() {
+				// Send cancel message to parent
+				window.parent.postMessage(
+					{
+						type: 'SELECTION_CANCELLED',
+					},
+					'*',
+				);
+			}
+
+			// Confirm selection
+			function confirmSelection() {
+				const selectedIds = Array.from(selectedRows);
+				const selectedData = Array.from(selectedRows)
+					.map((rowId) => {
+						return selectedRowsData.get(rowId);
+					})
+					.filter((item) => item);
+
+				// Check if any selected items have documents
+				const itemsWithDocuments = selectedData.filter(
+					(item) => item.doc_id && item.doc_id !== 'edit' && item.doc_id !== null,
+				);
+
+				if (itemsWithDocuments.length > 0) {
+					const documentList = itemsWithDocuments
+						.map((item) => `- ${item.sample_uid} - ${item.parameter_name} (Biên bản: ${item.doc_id})`)
+						.join('\n');
+
+					const confirmMessage = `⚠️ CẢNH BÁO: Có ${itemsWithDocuments.length} mục đã có biên bản:\n\n${documentList}\n\nViệc áp dụng các mục này vào EditorTemplate có thể ghi đè lên dữ liệu hiện tại.\n\nBạn có chắc chắn muốn tiếp tục?`;
+
+					if (!confirm(confirmMessage)) {
+						console.log('User cancelled selection due to existing documents');
+						return;
+					}
+				}
+
+				console.log('Confirmed selection:', selectedIds);
+				console.log('Selected data:', selectedData);
+
+				// Send selection to parent
+				window.parent.postMessage(
+					{
+						type: 'SELECTION_CONFIRMED',
+						analysisIds: selectedIds,
+						selectedData: selectedData,
+					},
+					'*',
+				);
+			}
+
+			// Cancel selection
+			function cancelSelection() {
+				window.parent.postMessage(
+					{
+						type: 'SELECTION_CANCELLED',
+					},
+					'*',
+				);
+			}
+
+			// Global functions for window access
+			window.clearAllSelections = clearAllSelections;
+			window.confirmSelection = confirmSelection;
+			window.cancelSelection = cancelSelection;
+			window.changePage = changePage;
+			window.goToPage = goToPage;
+			window.sortTable = sortTable;
+		</script>
+	</body>
+</html>

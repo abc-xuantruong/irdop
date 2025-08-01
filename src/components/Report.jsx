@@ -338,34 +338,34 @@ export default function MultiPageEditor() {
 			<img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg" 
 				 loading="lazy" 
 				 class="OQtYGs6LmEKlbdTnVjZ4oA" 
-				 style="width:5cm;">
+				 style="width:4cm;">
 		</div>
 		<div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
 			<p class="" 
-			style="font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
+			style="font-weight:700; font-size:14.4px; color:#0058A3; margin-bottom: 0; line-height: 17.6px; letter-spacing: 0.04em; word-spacing: 0.04em;">
 				Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
 			</p>
 			<p class="" 
-			style="font-weight:400; font-size:14px; margin: 0; line-height: 15px;">
+			style="font-weight:400; font-size:11.2px; margin: 0; line-height: 12px; letter-spacing: 0.04em; word-spacing: 0.04em;">
 				/ Institute for Research and Development of Organic Products
 			</p>
 			<span class="" 
-				style="font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
-						width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
+				style="font-weight:400; font-size:11.2px; border-bottom:1px solid rgba(128,128,128,0.5); 
+						width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px; letter-spacing: 0.04em; word-spacing: 0.04em;">
 				Phòng Phân tích - Kiểm nghiệm / Analysis and Testing Dept.
 			</span>
 		</div>
 
 	</div>
 	<div class=" " 
-		 style="padding-top:6mm; position:relative; ">
+		 style="padding-top:5mm; position:relative; ">
 		<div style="position:relative; text-align:left;">
 			<p contenteditable="true" class=" content-header-title" 
-			   style="font-weight:840; font-size:24pt; color:#0058A3; height: 28px;">
+			   style="font-weight:840; font-size:24pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
 				PHIẾU KẾT QUẢ THỬ NGHIỆM
 			</p>
 			<p class=" content-header-title_eng" 
-			   style="font-weight:820; font-size:21pt; color:#0058A3; height: 28px;">
+			   style="font-weight:820; font-size:21pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
 				/ Certificate of Analysis
 			</p>
 			<div class=" display-flex" 
@@ -387,7 +387,7 @@ export default function MultiPageEditor() {
 			<img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png" 
 				 loading="lazy" 
 				 class="" 
-				 style="width:5.2cm;">
+				 style="width:4.16cm;">
 		</div>
 	</div>
 </div>
@@ -1199,34 +1199,34 @@ export default function MultiPageEditor() {
 			<img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg" 
 				 loading="lazy" 
 				 class="OQtYGs6LmEKlbdTnVjZ4oA" 
-				 style="width:5cm;">
+				 style="width:4cm;">
 		</div>
 		<div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
 			<p class="nunito-700" 
-			style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;">
+			style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 700; font-size:14.4px; color:#0058A3; margin-bottom: 0; line-height: 17.6px; letter-spacing: 0.04em; word-spacing: 0.04em;">
 				Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
 			</p>
 			<p class="nunito-400" 
-			style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400; font-size:14px; margin: 0; line-height: 15px;">
+			style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400; font-size:11.2px; margin: 0; line-height: 12px; letter-spacing: 0.04em; word-spacing: 0.04em;">
 				/ Institute for Research and Development of Organic Products
 			</p>
 			<span class="nunito-400" 
-				style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); 
-						width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;">
+				style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400; font-size:11.2px; border-bottom:1px solid rgba(128,128,128,0.5); 
+						width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px; letter-spacing: 0.04em; word-spacing: 0.04em;">
 				Phòng Phân tích - Kiểm nghiệm / Analysis and Testing Dept.
 			</span>
 		</div>
 
 	</div>
 	<div class=" " 
-		 style="padding-top:1mm; position:relative; ">
+		 style="padding-top:5mm; position:relative; ">
 		<div style="position:relative; text-align:left;">
 			<p contenteditable="true" class="nunito-840 content-header-title" 
-			   style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 840; font-size:24pt; color:#0058A3; height: 28px;">
+			   style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 840; font-size:24pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
 				PHIẾU KẾT QUẢ THỬ NGHIỆM
 			</p>
 			<p class="nunito-820 content-header-title_eng" 
-			   style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 820; font-size:21pt; color:#0058A3; height: 28px;">
+			   style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 820; font-size:21pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
 				/ Certificate of Analysis
 			</p>
 			<div class="nunito-400 display-flex" 
@@ -1248,7 +1248,7 @@ export default function MultiPageEditor() {
 			<img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png" 
 				 loading="lazy" 
 				 class="" 
-				 style="width:5.2cm;">
+				 style="width:4.16cm;">
 		</div>
 	</div>
 </div>
@@ -2598,9 +2598,7 @@ export default function MultiPageEditor() {
 							overflow: visible !important;
 							z-index: 10;
 						}
-						.vlas_icon img {
-							transform: translateX(-5mm);
-						}
+
 						
 						/* Additional styles for table rows to preserve height */
 						table {
@@ -2888,11 +2886,11 @@ export default function MultiPageEditor() {
 					});
 
 					// Add event listener to close window after printing
-					window.addEventListener('afterprint', function() {
-						setTimeout(function() {
-							window.close();
-						}, 500);
-					});
+					// window.addEventListener('afterprint', function() {
+					// 	setTimeout(function() {
+					// 		window.close();
+					// 	}, 500);
+					// });
 				</script>
 				</body>
 				</html>

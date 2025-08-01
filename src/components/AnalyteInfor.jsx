@@ -6,6 +6,8 @@ import { GlobalContext } from '../contexts/GlobalContext';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import { RiEdit2Line } from 'react-icons/ri';
 import { GiConfirmed, GiCancel, GiTrashCan } from 'react-icons/gi';
+import { FaSort, FaSortUp, FaSortDown, FaFilter } from 'react-icons/fa';
+import { MdFilterAlt, MdFilterAltOff } from 'react-icons/md';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -27,14 +29,16 @@ const AnalyteInfor = () => {
 		protocol_code: '',
 		parameter_uid: '',
 		protocol_source: 'IRDOP',
-		display_style: '',
+		display_style: [
+			{ label: 'default', value: '' },
+			{ label: 'eng', value: '' }
+		],
 		price: 0,
 	});
 	const [protocolSearch, setProtocolSearch] = useState('');
 
 	const [isProtocolDropdownVisible, setIsProtocolDropdownVisible] = useState(false);
 	const [originalAnalytes, setOriginalAnalytes] = useState([]);
-	const [currentPage, setCurrentPage] = useState(1);
 	const [protocolPage, setProtocolPage] = useState(1);
 	const [listProtocol, setListProtocol] = useState([]);
 	const [protocols, setProtocols] = useState([]);
@@ -70,13 +74,26 @@ const AnalyteInfor = () => {
 	const [showSourceDropdown, setShowSourceDropdown] = useState(false);
 	const [filteredAnalytes, setFilteredAnalytes] = useState([]);
 
+	// Add new API search states
+	const [searchTerm, setSearchTerm] = useState('');
+	const [pagination, setPagination] = useState({
+		currentPage: 1,
+		itemsPerPage: 100,
+		totalItems: 0,
+		totalPages: 0
+	});
+	const [loading, setLoading] = useState(false);
+	const [columnSort, setColumnSort] = useState('parameter_name');
+	const [sortBy, setSortBy] = useState('ASC');
+	const [columnFilters, setColumnFilters] = useState({});
+
+	// Add column filter input states
+	const [columnFilterInputs, setColumnFilterInputs] = useState({});
+	const [showColumnFilters, setShowColumnFilters] = useState({});
+
 	// Add technician states
 	const [techniciansList, setTechniciansList] = useState([]);
 	const [technicianDropdowns, setTechnicianDropdowns] = useState({});
-
-	// TinyMCE refs for managing editors
-	const editorRefs = useRef({});
-	const newAnalyteEditorRef = useRef(null);
 
 	const protocolsPerPage = 5;
 	const analytesPerPage = 100;
@@ -105,6 +122,17 @@ const AnalyteInfor = () => {
 			if (!event.target.closest('.technician-dropdown') && !event.target.closest('.technician-portal')) {
 				setTechnicianDropdowns({});
 			}
+			// Close search dropdowns when clicking outside
+			if (!event.target.closest('.search-dropdown')) {
+				setShowParameterNameDropdown(false);
+				setShowMatrixDropdown(false);
+				setShowProtocolCodeDropdown(false);
+				setShowUnitDropdown(false);
+			}
+			// Close column filter dropdowns when clicking outside
+			if (!event.target.closest('th') && !event.target.closest('.column-filter-dropdown')) {
+				setShowColumnFilters({});
+			}
 		};
 
 		document.addEventListener('mousedown', handleClickOutside);
@@ -116,7 +144,7 @@ const AnalyteInfor = () => {
 	useEffect(() => {
 		if (technicians.length > 0 && !isFetch) {
 			isFetch = true;
-			fetchAnalytes();
+			fetchAnalytes(1, 100, '', {}, 'parameter_name', 'ASC');
 			fetchMatricesList();
 			fetchProtocolSourcesList();
 			fetchUnitsList();
@@ -165,7 +193,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			plugins: '', // Không sử dụng plugins
 			toolbar: false, // Ẩn hoàn toàn toolbar
 			menubar: false,
-			height: '100%',
+			height: '24px', // Reduced height to match our h-6 class
 			width: '100%',
 			statusbar: false,
 			resize: false,
@@ -177,7 +205,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 					border: none !important;
 					line-height: 1.2 !important;
 					font-family: Arial, sans-serif; 
-					font-size: 14px;
+					font-size: 12px;
 					overflow: hidden !important;
 					border-radius: 0 !important;
 				}
@@ -355,29 +383,50 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 	// Initialize TinyMCE when editing starts
 	useEffect(() => {
 		if (editingRow !== null) {
-			const selector = `tinymce-${editingRow}`;
 			const analyte = analytes.find((a) => a.id === editingRow);
+			const displayStyleArray = initializeDisplayStyle(analyte?.display_style);
 
-			const initEditor = () => {
-				// Kiểm tra xem element có tồn tại không
-				const element = document.getElementById(selector);
-				if (element && window.tinymce) {
-					initTinyMCE(selector, analyte?.display_style || '', (content) => {
-						handleInputChange(editingRow, 'display_style', content);
+			const initEditors = () => {
+				const defaultElement = document.getElementById(`tinymce-${editingRow}-default`);
+				const engElement = document.getElementById(`tinymce-${editingRow}-eng`);
+				
+				if (defaultElement && window.tinymce) {
+					const defaultValue = getDisplayStyleValue(displayStyleArray, 'default');
+					initTinyMCE(`tinymce-${editingRow}-default`, defaultValue, (content) => {
+						const currentAnalyte = analytes.find((a) => a.id === editingRow);
+						const currentDisplayStyle = initializeDisplayStyle(currentAnalyte?.display_style);
+						const updatedDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'default', content);
+						handleInputChange(editingRow, 'display_style', updatedDisplayStyle);
 					});
-				} else {
-					// Retry sau một thời gian ngắn nếu element chưa có
-					setTimeout(initEditor, 100);
+				}
+				
+				if (engElement && window.tinymce) {
+					const engValue = getDisplayStyleValue(displayStyleArray, 'eng');
+					initTinyMCE(`tinymce-${editingRow}-eng`, engValue, (content) => {
+						const currentAnalyte = analytes.find((a) => a.id === editingRow);
+						const currentDisplayStyle = initializeDisplayStyle(currentAnalyte?.display_style);
+						const updatedDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'eng', content);
+						handleInputChange(editingRow, 'display_style', updatedDisplayStyle);
+					});
+				}
+				
+				if ((!defaultElement || !engElement) && window.tinymce) {
+					setTimeout(initEditors, 100);
 				}
 			};
 
 			// Delay để đảm bảo DOM đã render
-			setTimeout(initEditor, 200);
+			setTimeout(initEditors, 200);
 
 			// Cleanup khi editingRow thay đổi
 			return () => {
-				if (window.tinymce && window.tinymce.get(selector)) {
-					window.tinymce.get(selector).remove();
+				if (window.tinymce) {
+					if (window.tinymce.get(`tinymce-${editingRow}-default`)) {
+						window.tinymce.get(`tinymce-${editingRow}-default`).remove();
+					}
+					if (window.tinymce.get(`tinymce-${editingRow}-eng`)) {
+						window.tinymce.get(`tinymce-${editingRow}-eng`).remove();
+					}
 				}
 			};
 		}
@@ -386,22 +435,41 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 	// Initialize TinyMCE for new analyte
 	useEffect(() => {
 		if (isAddingNew) {
-			const initEditor = () => {
-				const element = document.getElementById('tinymce-new');
-				if (element && window.tinymce) {
-					initTinyMCE('tinymce-new', newAnalyte.display_style || '', (content) => {
-						handleNewAnalyteChange('display_style', content);
+			const initEditors = () => {
+				const defaultElement = document.getElementById('tinymce-new-default');
+				const engElement = document.getElementById('tinymce-new-eng');
+				
+				if (defaultElement && window.tinymce) {
+					const defaultValue = getDisplayStyleValue(newAnalyte.display_style, 'default');
+					initTinyMCE('tinymce-new-default', defaultValue, (content) => {
+						const updatedDisplayStyle = setDisplayStyleValue(newAnalyte.display_style, 'default', content);
+						handleNewAnalyteChange('display_style', updatedDisplayStyle);
 					});
-				} else {
-					setTimeout(initEditor, 100);
+				}
+				
+				if (engElement && window.tinymce) {
+					const engValue = getDisplayStyleValue(newAnalyte.display_style, 'eng');
+					initTinyMCE('tinymce-new-eng', engValue, (content) => {
+						const updatedDisplayStyle = setDisplayStyleValue(newAnalyte.display_style, 'eng', content);
+						handleNewAnalyteChange('display_style', updatedDisplayStyle);
+					});
+				}
+				
+				if ((!defaultElement || !engElement) && window.tinymce) {
+					setTimeout(initEditors, 100);
 				}
 			};
 
-			setTimeout(initEditor, 200);
+			setTimeout(initEditors, 200);
 
 			return () => {
-				if (window.tinymce && window.tinymce.get('tinymce-new')) {
-					window.tinymce.get('tinymce-new').remove();
+				if (window.tinymce) {
+					if (window.tinymce.get('tinymce-new-default')) {
+						window.tinymce.get('tinymce-new-default').remove();
+					}
+					if (window.tinymce.get('tinymce-new-eng')) {
+						window.tinymce.get('tinymce-new-eng').remove();
+					}
 				}
 			};
 		}
@@ -409,33 +477,121 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 
 	// Cleanup editors when component unmounts or editing ends
 	useEffect(() => {
-		return () => {
-			// Cleanup all editors on unmount
-			Object.keys(editorRefs.current).forEach((selector) => {
-				cleanupTinyMCE(selector);
-			});
-			if (newAnalyteEditorRef.current) {
-				cleanupTinyMCE('tinymce-new');
-			}
-		};
 	}, []);
 
-	const fetchAnalytes = async () => {
-		try {
-			const response = await apiGet('https://black.irdop.org/ha8i0uw2/db/get/parameter');
-			const data = response.data.map((analyte) => ({
-				...analyte,
-				tat_expected: analyte?.tat_expected?.days
-					? `${analyte.tat_expected.days} ${analyte.tat_expected.days > 1 ? 'days' : 'day'}`
-					: '',
-			}));
-			setAnalytes(data);
-			setOriginalAnalytes(data);
+	// Helper functions for display_style array management
+	const getDisplayStyleValue = (displayStyleArray, label) => {
+		if (!Array.isArray(displayStyleArray)) return '';
+		const item = displayStyleArray.find(item => item.label === label);
+		return item ? item.value : '';
+	};
 
-			// Extract unique lists
-			extractUniqueLists(data);
+	const setDisplayStyleValue = (displayStyleArray, label, value) => {
+		if (!Array.isArray(displayStyleArray)) {
+			return [{ label, value }];
+		}
+		
+		const updated = [...displayStyleArray];
+		const existingIndex = updated.findIndex(item => item.label === label);
+		
+		if (existingIndex >= 0) {
+			updated[existingIndex] = { label, value };
+		} else {
+			updated.push({ label, value });
+		}
+		
+		return updated;
+	};
+
+	const initializeDisplayStyle = (existingDisplayStyle) => {
+		const defaultLabels = ['default', 'eng'];
+		const result = [];
+		
+		if (Array.isArray(existingDisplayStyle)) {
+			// If it's already an array, use it but ensure all required labels exist
+			defaultLabels.forEach(label => {
+				const existing = existingDisplayStyle.find(item => item.label === label);
+				result.push(existing || { label, value: '' });
+			});
+		} else if (typeof existingDisplayStyle === 'string') {
+			// If it's a string, put it in the default label
+			result.push({ label: 'default', value: existingDisplayStyle });
+			result.push({ label: 'eng', value: '' });
+		} else {
+			// If it's null/undefined, create empty array
+			defaultLabels.forEach(label => {
+				result.push({ label, value: '' });
+			});
+		}
+		
+		return result;
+	};
+
+	const fetchAnalytes = async (page = 1, itemsPerPage = 100, searchValue = '', filters = {}, sort = 'parameter_name', sortDirection = 'ASC') => {
+		try {
+			setLoading(true);
+			
+			// Prepare request body according to the specified format
+			const requestBody = {
+				itemsPerPage: itemsPerPage,
+				page: page,
+				columns: [
+					"id", "parameter_name", "field", "matrix", "protocol_source", 
+					"protocol_code", "default_unit", "display_style", "price", 
+					"accreditation", "technician_uid", "parameter_uid"
+				],
+				columnSort: sort,
+				sortBy: sortDirection,
+				searchTerm: searchValue,
+				...filters // Spread any column-specific filters
+			};
+
+			const response = await apiPost('https://black.irdop.org/v1/parameter/get', requestBody);
+			
+			if (response.data && response.data.result) {
+				const data = response.data.result.map((analyte) => ({
+					...analyte,
+					tat_expected: analyte?.tat_expected?.days
+						? `${analyte.tat_expected.days} ${analyte.tat_expected.days > 1 ? 'days' : 'day'}`
+						: '',
+				}));
+				
+				setAnalytes(data);
+				setOriginalAnalytes(data);
+				
+				// Update pagination info
+				if (response.data.pagination) {
+					setPagination(response.data.pagination);
+				}
+			} else {
+				// Fallback to old API if new format doesn't work
+				const fallbackResponse = await apiGet('https://black.irdop.org/ha8i0uw2/db/get/parameter');
+				const data = fallbackResponse.data.map((analyte) => ({
+					...analyte,
+					tat_expected: analyte?.tat_expected?.days
+						? `${analyte.tat_expected.days} ${analyte.tat_expected.days > 1 ? 'days' : 'day'}`
+						: '',
+				}));
+				setAnalytes(data);
+				setOriginalAnalytes(data);
+				
+				// Set default pagination for fallback
+				setPagination({
+					currentPage: 1,
+					itemsPerPage: data.length,
+					totalItems: data.length,
+					totalPages: 1
+				});
+			}
+
+			// Extract unique lists for dropdowns
+			extractUniqueLists(analytes);
+			
 		} catch (error) {
 			console.error('Error fetching analytes:', error);
+			toast.error('Failed to fetch analytes');
+		} finally {
+			setLoading(false);
 		}
 	};
 
@@ -508,6 +664,96 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		return [...new Set(currentList.map((analyte) => analyte.protocol_source).filter(Boolean))];
 	};
 
+	const getUniqueProtocolCodesFromCurrent = () => {
+		const currentList = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
+		return [...new Set(currentList.map((analyte) => analyte.protocol_code).filter(Boolean))];
+	};
+
+	const getUniqueUnitsFromCurrent = () => {
+		const currentList = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
+		return [...new Set(currentList.map((analyte) => analyte.default_unit).filter(Boolean))];
+	};
+
+	// Add search and filter handlers
+	const handleSearch = async (searchValue = searchTerm, page = pagination.currentPage) => {
+		await fetchAnalytes(
+			page,
+			pagination.itemsPerPage,
+			searchValue,
+			columnFilters,
+			columnSort,
+			sortBy
+		);
+	};
+
+	const handleColumnFilter = async (column, value) => {
+		const newFilters = { ...columnFilters };
+		if (value) {
+			newFilters[column] = value;
+		} else {
+			delete newFilters[column];
+		}
+		setColumnFilters(newFilters);
+		await fetchAnalytes(
+			1, // Reset to first page when filtering
+			pagination.itemsPerPage,
+			searchTerm,
+			newFilters,
+			columnSort,
+			sortBy
+		);
+	};
+
+	const handleSort = async (column) => {
+		const newSortDirection = columnSort === column && sortBy === 'ASC' ? 'DESC' : 'ASC';
+		setColumnSort(column);
+		setSortBy(newSortDirection);
+		await fetchAnalytes(
+			pagination.currentPage,
+			pagination.itemsPerPage,
+			searchTerm,
+			columnFilters,
+			column,
+			newSortDirection
+		);
+	};
+
+	const handleApiPageChange = async (page) => {
+		await fetchAnalytes(
+			page,
+			pagination.itemsPerPage,
+			searchTerm,
+			columnFilters,
+			columnSort,
+			sortBy
+		);
+	};
+
+	// Add handler for items per page change
+	const handleItemsPerPageChange = async (itemsPerPage) => {
+		const newPagination = { ...pagination, itemsPerPage: parseInt(itemsPerPage) };
+		setPagination(newPagination);
+		await fetchAnalytes(
+			1, // Reset to first page
+			parseInt(itemsPerPage),
+			searchTerm,
+			columnFilters,
+			columnSort,
+			sortBy
+		);
+	};
+
+	// Remove automatic debounced search - now handled manually with Enter/blur
+	// useEffect(() => {
+	// 	const delayedSearch = setTimeout(() => {
+	// 		if (searchTerm !== undefined && isFetch) { // Only search after initial fetch
+	// 			handleSearch(searchTerm, 1);
+	// 		}
+	// 	}, 500);
+
+	// 	return () => clearTimeout(delayedSearch);
+	// }, [searchTerm]);
+
 	// Add filter handlers
 	const handleFieldFilter = (field) => {
 		setFieldFilter(fieldFilter === field ? '' : field);
@@ -526,47 +772,126 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 
 	// Add toggle handlers for header clicks
 	const toggleFieldDropdown = () => {
-		if (fieldFilter) {
-			setFieldFilter('');
-			return;
-		}
 		setShowFieldDropdown(!showFieldDropdown);
+		setShowMatrixFilterDropdown(false);
+		setShowSourceDropdown(false);
+		setShowProtocolCodeDropdown(false);
+		setShowUnitDropdown(false);
 	};
 
 	const toggleMatrixDropdown = () => {
-		if (matrixFilter) {
-			setMatrixFilter('');
-			return;
-		}
 		setShowMatrixFilterDropdown(!showMatrixFilterDropdown);
+		setShowFieldDropdown(false);
+		setShowSourceDropdown(false);
+		setShowProtocolCodeDropdown(false);
+		setShowUnitDropdown(false);
+	};
+
+	const toggleProtocolDropdown = () => {
+		setShowProtocolCodeDropdown(!showProtocolCodeDropdown);
+		setShowFieldDropdown(false);
+		setShowMatrixFilterDropdown(false);
+		setShowSourceDropdown(false);
+		setShowUnitDropdown(false);
+	};
+
+	const toggleUnitDropdown = () => {
+		setShowUnitDropdown(!showUnitDropdown);
+		setShowFieldDropdown(false);
+		setShowMatrixFilterDropdown(false);
+		setShowSourceDropdown(false);
+		setShowProtocolCodeDropdown(false);
 	};
 
 	const toggleSourceDropdown = () => {
-		if (sourceFilter) {
-			setSourceFilter('');
-			return;
-		}
 		setShowSourceDropdown(!showSourceDropdown);
+		setShowFieldDropdown(false);
+		setShowMatrixFilterDropdown(false);
+		setShowProtocolCodeDropdown(false);
+		setShowUnitDropdown(false);
 	};
 
-	// Modified filter functions with minimum character requirement
+	// Add functions for new column header functionality
+	const handleColumnFilterInput = (column, value) => {
+		setColumnFilterInputs(prev => ({
+			...prev,
+			[column]: value
+		}));
+	};
+
+	const handleColumnFilterSubmit = async (column, value) => {
+		const newFilters = { ...columnFilters };
+		if (value && value.trim()) {
+			newFilters[column] = value.trim();
+		} else {
+			delete newFilters[column];
+		}
+		setColumnFilters(newFilters);
+		setShowColumnFilters(prev => ({
+			...prev,
+			[column]: false
+		}));
+		
+		await fetchAnalytes(
+			1, // Reset to first page when filtering
+			pagination.itemsPerPage,
+			searchTerm,
+			newFilters,
+			columnSort,
+			sortBy
+		);
+	};
+
+	const toggleColumnFilter = (column) => {
+		setShowColumnFilters(prev => ({
+			...prev,
+			[column]: !prev[column]
+		}));
+	};
+
+	const getSortIcon = (column) => {
+		if (columnSort !== column) {
+			return <FaSort className="text-gray-400" />;
+		}
+		return sortBy === 'ASC' ? 
+			<FaSortUp className="text-blue-600" /> : 
+			<FaSortDown className="text-blue-600" />;
+	};
+
+	const getFilterIcon = (column) => {
+		const hasFilter = columnFilters[column];
+		const isActive = showColumnFilters[column];
+		
+		if (hasFilter) {
+			return <MdFilterAlt className="text-blue-600" />;
+		}
+		if (isActive) {
+			return <FaFilter className="text-blue-600" />;
+		}
+		return <FaFilter className="text-gray-400" />;
+	};
+
+	// Modified filter functions to show all results when input is empty or short
 	const filterParameterNames = (input) => {
-		if (!input || input.length < 2) return [];
+		if (!input || input.trim() === '') return uniqueParameterNames;
+		if (input.length < 2) return uniqueParameterNames;
 		return uniqueParameterNames.filter((name) => name && name.toLowerCase().includes((input || '').toLowerCase()));
 	};
 
 	const filterMatrices = (input) => {
-		if (!input || input.length < 2) return [];
+		if (!input || input.trim() === '') return uniqueMatrices;
+		if (input.length < 2) return uniqueMatrices;
 		return uniqueMatrices.filter((matrix) => matrix && matrix.toLowerCase().includes((input || '').toLowerCase()));
 	};
 
 	const filterProtocolCodes = (input) => {
-		if (!input || input.length < 2) return [];
+		if (!input || input.trim() === '') return uniqueProtocolCodes;
+		if (input.length < 2) return uniqueProtocolCodes;
 		return uniqueProtocolCodes.filter((code) => code && code.toLowerCase().includes((input || '').toLowerCase()));
 	};
 
 	const filterUnits = (input) => {
-		if (!input || input.trim() === '') return [];
+		if (!input || input.trim() === '') return uniqueUnits;
 		return uniqueUnits.filter((unit) => unit && unit.toLowerCase().includes((input || '').toLowerCase()));
 	};
 
@@ -655,6 +980,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		} else {
 			handleNewAnalyteChange('parameter_name', value);
 		}
+		// Reset page when input changes and always show dropdown
+		setParameterNamePage(1);
 		setShowParameterNameDropdown(true);
 	};
 
@@ -667,6 +994,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		} else {
 			handleNewAnalyteChange('matrix', value);
 		}
+		// Reset page when input changes and always show dropdown
+		setMatrixPage(1);
 		setShowMatrixDropdown(true);
 	};
 
@@ -679,6 +1008,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		} else {
 			handleNewAnalyteChange('protocol_code', value);
 		}
+		// Reset page when input changes and always show dropdown
+		setProtocolCodePage(1);
 		setShowProtocolCodeDropdown(true);
 	};
 
@@ -692,7 +1023,32 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			handleNewAnalyteChange('default_unit', value);
 		}
 		const filteredUnits = filterUnits(value);
-		setShowUnitDropdown(filteredUnits.length > 0);
+		setShowUnitDropdown(true); // Always show dropdown when typing
+	};
+
+	// Add focus handlers for dropdowns
+	const handleParameterNameFocus = (id) => {
+		setEditingParameterName(id);
+		setShowParameterNameDropdown(true);
+		setParameterNamePage(1);
+	};
+
+	const handleMatrixFocus = (id) => {
+		setEditingMatrix(id);
+		setShowMatrixDropdown(true);
+		setMatrixPage(1);
+	};
+
+	const handleProtocolCodeFocus = (id) => {
+		setEditingProtocolCode(id);
+		setShowProtocolCodeDropdown(true);
+		setProtocolCodePage(1);
+	};
+
+	const handleUnitFocus = (id) => {
+		setEditingUnit(id);
+		setShowUnitDropdown(true);
+		setUnitPage(1);
 	};
 
 	// Add technician helper functions
@@ -780,16 +1136,28 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 	};
 
 	const handleSaveClick = async (id) => {
-		// Get content from TinyMCE editor before saving
-		const editorId = `tinymce-${id}`;
-		if (window.tinymce && window.tinymce.get(editorId)) {
-			const editorContent = window.tinymce.get(editorId).getContent();
-			handleInputChange(id, 'display_style', editorContent);
+		// Get content from TinyMCE editors before saving
+		const defaultEditorId = `tinymce-${id}-default`;
+		const engEditorId = `tinymce-${id}-eng`;
+		
+		const updatedAnalyte = analytes.find((analyte) => analyte.id === id);
+		let currentDisplayStyle = initializeDisplayStyle(updatedAnalyte.display_style);
+
+		if (window.tinymce && window.tinymce.get(defaultEditorId)) {
+			const defaultContent = window.tinymce.get(defaultEditorId).getContent();
+			currentDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'default', defaultContent);
 		}
 
-		const updatedAnalyte = analytes.find((analyte) => analyte.id === id);
+		if (window.tinymce && window.tinymce.get(engEditorId)) {
+			const engContent = window.tinymce.get(engEditorId).getContent();
+			currentDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'eng', engContent);
+		}
+
+		// Update the display_style with the final array
+		handleInputChange(id, 'display_style', currentDisplayStyle);
+
 		const { tat_expected, ...analyteWithoutTat } = updatedAnalyte;
-		const finalAnalyte = analyteWithoutTat;
+		const finalAnalyte = { ...analyteWithoutTat, display_style: currentDisplayStyle };
 
 		try {
 			finalAnalyte.modified_by_uid = currentUser.identity_uid;
@@ -798,28 +1166,40 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 				parameter: finalAnalyte,
 			});
 
-			// Cleanup TinyMCE editor
-			cleanupTinyMCE(editorId);
+			// Cleanup TinyMCE editors
+			cleanupTinyMCE(defaultEditorId);
+			cleanupTinyMCE(engEditorId);
 
 			setEditingRow(null);
 			if (response.status === 200) {
 				toast.success('Analyte updated successfully');
-				setOriginalAnalytes(analytes);
-				extractUniqueLists(analytes);
-				setCurrentPage(1);
+				// Fetch fresh data from server to ensure consistency
+				await fetchAnalytes(
+					pagination.currentPage,
+					pagination.itemsPerPage,
+					searchTerm,
+					columnFilters,
+					columnSort,
+					sortBy
+				);
 			} else {
 				toast.error('Analyte update failed');
+				// Revert to original data on failure
+				setAnalytes(originalAnalytes);
 			}
 		} catch (error) {
 			console.error('Error updating analyte:', error);
 			toast.error('Analyte update failed');
+			// Revert to original data on error
+			setAnalytes(originalAnalytes);
 		}
 	};
 
 	const handleCancelClick = () => {
-		// Cleanup TinyMCE editor
+		// Cleanup TinyMCE editors
 		if (editingRow !== null) {
-			cleanupTinyMCE(`tinymce-${editingRow}`);
+			cleanupTinyMCE(`tinymce-${editingRow}-default`);
+			cleanupTinyMCE(`tinymce-${editingRow}-eng`);
 		}
 		setAnalytes(originalAnalytes);
 		setEditingRow(null);
@@ -847,11 +1227,15 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 				});
 				if (response.status === 200) {
 					toast.success('Analyte deleted successfully');
-					const updatedAnalytes = analytes.filter((analyte) => analyte.id !== id);
-					setAnalytes(updatedAnalytes);
-					setOriginalAnalytes(updatedAnalytes);
-					extractUniqueLists(updatedAnalytes);
-					setCurrentPage(1);
+					// Fetch fresh data from server to ensure consistency
+					await fetchAnalytes(
+						pagination.currentPage,
+						pagination.itemsPerPage,
+						searchTerm,
+						columnFilters,
+						columnSort,
+						sortBy
+					);
 				} else {
 					toast.error('Analyte deletion failed');
 				}
@@ -880,14 +1264,21 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 	};
 
 	const handleSaveNewAnalyte = async () => {
-		// Get content from TinyMCE editor before saving
-		if (window.tinymce && window.tinymce.get('tinymce-new')) {
-			const editorContent = window.tinymce.get('tinymce-new').getContent();
-			setNewAnalyte((prev) => ({ ...prev, display_style: editorContent }));
+		// Get content from TinyMCE editors before saving
+		let currentDisplayStyle = [...newAnalyte.display_style];
+
+		if (window.tinymce && window.tinymce.get('tinymce-new-default')) {
+			const defaultContent = window.tinymce.get('tinymce-new-default').getContent();
+			currentDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'default', defaultContent);
+		}
+
+		if (window.tinymce && window.tinymce.get('tinymce-new-eng')) {
+			const engContent = window.tinymce.get('tinymce-new-eng').getContent();
+			currentDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'eng', engContent);
 		}
 
 		const { tat_expected, ...analyteWithoutTat } = newAnalyte;
-		const finalAnalyte = analyteWithoutTat;
+		const finalAnalyte = { ...analyteWithoutTat, display_style: currentDisplayStyle };
 
 		finalAnalyte.created_by_uid = currentUser.identity_uid;
 		finalAnalyte.modified_by_uid = currentUser.identity_uid;
@@ -898,13 +1289,10 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			});
 			if (response.status === 200) {
 				toast.success('New analyte added successfully');
-				const newAnalyteWithId = { ...finalAnalyte, id: response.data?.insertedIds?.[0] || Date.now() };
-				const updatedAnalytes = [...analytes, newAnalyteWithId];
-				setAnalytes(updatedAnalytes);
-				setOriginalAnalytes(updatedAnalytes);
 
-				// Cleanup TinyMCE editor
-				cleanupTinyMCE('tinymce-new');
+				// Cleanup TinyMCE editors
+				cleanupTinyMCE('tinymce-new-default');
+				cleanupTinyMCE('tinymce-new-eng');
 
 				setIsAddingNew(false);
 				setNewAnalyte({
@@ -919,11 +1307,22 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 					protocol_code: '',
 					parameter_uid: '',
 					protocol_source: 'IRDOP',
-					display_style: '',
+					display_style: [
+						{ label: 'default', value: '' },
+						{ label: 'eng', value: '' }
+					],
 					price: '',
 				});
-				extractUniqueLists(updatedAnalytes);
-				setCurrentPage(1);
+				
+				// Fetch fresh data from server to ensure consistency
+				await fetchAnalytes(
+					1, // Reset to first page for new items
+					pagination.itemsPerPage,
+					searchTerm,
+					columnFilters,
+					columnSort,
+					sortBy
+				);
 			} else {
 				toast.error('Failed to add new analyte');
 			}
@@ -934,8 +1333,9 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 	};
 
 	const handleCancelNewAnalyte = () => {
-		// Cleanup TinyMCE editor
-		cleanupTinyMCE('tinymce-new');
+		// Cleanup TinyMCE editors
+		cleanupTinyMCE('tinymce-new-default');
+		cleanupTinyMCE('tinymce-new-eng');
 
 		setIsAddingNew(false);
 		setNewAnalyte({
@@ -950,7 +1350,10 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			protocol_code: '',
 			parameter_uid: '',
 			protocol_source: 'IRDOP',
-			display_style: '',
+			display_style: [
+				{ label: 'default', value: '' },
+				{ label: 'eng', value: '' }
+			],
 			price: '',
 		});
 	};
@@ -1034,9 +1437,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		setNewAnalyte({ ...newAnalyte, protocol_source: value });
 	};
 
-	const handlePageChange = (pageNumber) => {
-		setCurrentPage(pageNumber);
-	};
+
 
 	const handleProtocolPageChange = (pageNumber) => {
 		setProtocolPage(pageNumber);
@@ -1096,13 +1497,14 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		setExpandedRow(expandedRow === id ? null : id);
 	};
 
-	const totalPages = Math.ceil((filteredAnalytes.length > 0 ? filteredAnalytes : analytes).length / analytesPerPage);
+	// Update pagination logic to use API pagination
+	const totalPages = pagination.totalPages;
+	const currentPage = pagination.currentPage;
 	const totalProtocolPages = Math.ceil(protocols.length / protocolsPerPage);
-	const currentAnalytes = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
-	const paginatedAnalytes = currentAnalytes.slice((currentPage - 1) * analytesPerPage, currentPage * analytesPerPage);
+	const paginatedAnalytes = analytes; // Data is already paginated from API
 	const paginatedProtocols = protocols.slice((protocolPage - 1) * protocolsPerPage, protocolPage * protocolsPerPage);
 
-	const renderPageNumbers = (totalPages, currentPage, handlePageChange) => {
+	const renderPageNumbers = (totalPages, currentPage, handlePageChangeFunc) => {
 		const pageNumbers = [];
 		const maxPagesToShow = 5;
 		let startPage = Math.max(1, currentPage - 2);
@@ -1119,7 +1521,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 				<button
 					key={i}
 					className={`px-2 py-1 border rounded ${i === currentPage ? 'bg-blue-500 text-white' : ''}`}
-					onClick={() => handlePageChange(i)}
+					onClick={() => handlePageChangeFunc(i)}
 				>
 					{i}
 				</button>,
@@ -1130,7 +1532,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			<div className="flex space-x-1">
 				{currentPage > 3 && (
 					<>
-						<button className="px-2 py-1 border rounded" onClick={() => handlePageChange(1)}>
+						<button className="px-2 py-1 border rounded" onClick={() => handlePageChangeFunc(1)}>
 							First
 						</button>
 						<span>...</span>
@@ -1140,7 +1542,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 				{currentPage + 2 < totalPages && (
 					<>
 						<span>...</span>
-						<button className="px-2 py-1 border rounded" onClick={() => handlePageChange(totalPages)}>
+						<button className="px-2 py-1 border rounded" onClick={() => handlePageChangeFunc(totalPages)}>
 							Last
 						</button>
 					</>
@@ -1149,129 +1551,166 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		);
 	};
 
+	// Reusable column header component
+	const renderColumnHeader = (column, title, className = "py-2 text-start pl-2", headerType = "default", selectOptions = []) => {
+		const handleHeaderClick = () => {
+			if (headerType === "select-filter") {
+				// For field and source columns - show select filter
+				toggleColumnFilter(column);
+			} else if (headerType === "input-filter") {
+				// For matrix column - show input filter
+				toggleColumnFilter(column);
+			} else if (headerType === "sort-only") {
+				// For sortable columns - handle sort
+				handleSort(column);
+			} else if (headerType === "no-action") {
+				// For price and unit columns - no action
+				return;
+			}
+		};
+
+		// Check if filter button should be shown
+		let showFilterButton = !["no-action", "no-filter"].includes(headerType);
+		
+		// For select-filter and input-filter types, only show filter button if there's an active filter
+		if (headerType === "select-filter" || headerType === "input-filter") {
+			const hasActiveFilter = columnFilters[column] && columnFilters[column] !== '';
+			showFilterButton = showFilterButton && hasActiveFilter;
+		}
+		
+		const showSortIcon = headerType === "sort-only" && (columnSort === column);
+
+		return (
+			<th className={`${className} relative`}>
+				<div className="flex items-center justify-between p-1">
+					<span 
+						className={`font-medium ${headerType !== "no-action" ? "cursor-pointer hover:text-blue-600" : ""}`}
+						onClick={handleHeaderClick}
+					>
+						{title}
+						{showSortIcon && (
+							<span className="ml-1">
+								{getSortIcon(column)}
+							</span>
+						)}
+					</span>
+					<div className="flex items-center gap-1">
+						{/* Filter Button */}
+						{showFilterButton && (
+							<button
+								onClick={() => toggleColumnFilter(column)}
+								className="p-1 hover:bg-gray-200 rounded transition-colors"
+								title="Lọc"
+							>
+								{getFilterIcon(column)}
+							</button>
+						)}
+					</div>
+				</div>
+				
+				{/* Filter Input */}
+				{showColumnFilters[column] && (
+					<div className="absolute top-full left-0 w-full bg-white border rounded shadow-lg z-10 p-2 column-filter-dropdown">
+						{headerType === "select-filter" ? (
+							<select
+								value={columnFilterInputs[column] || ''}
+								onChange={(e) => {
+									handleColumnFilterInput(column, e.target.value);
+									handleColumnFilterSubmit(column, e.target.value);
+								}}
+								className="w-full px-2 py-1 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+								autoFocus
+							>
+								<option value="">Tất cả</option>
+								{selectOptions.map((option, index) => (
+									<option key={index} value={option}>{option}</option>
+								))}
+							</select>
+						) : (
+							<input
+								type="text"
+								placeholder={`Lọc ${title.toLowerCase()}...`}
+								value={columnFilterInputs[column] || ''}
+								onChange={(e) => handleColumnFilterInput(column, e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter') {
+										handleColumnFilterSubmit(column, e.target.value);
+									}
+									if (e.key === 'Escape') {
+										setShowColumnFilters(prev => ({
+											...prev,
+											[column]: false
+										}));
+									}
+								}}
+								onBlur={(e) => handleColumnFilterSubmit(column, e.target.value)}
+								className="w-full px-2 py-1 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+								autoFocus
+							/>
+						)}
+					</div>
+				)}
+			</th>
+		);
+	};
+
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
 			<div className="w-full h-full rounded-lg bg-white p-2">
-				<div className="flex justify-between items-center">
+				<div className="flex justify-between items-center mb-4">
 					<div className="relative"></div>
 					<h2 className="text-4xl text-primary font-semibold py-2">Danh sách chỉ tiêu</h2>
-					<div className="relative z-10">
+					<div className="flex flex-col items-end gap-2">
 						<button
-							className="bg-blue-500 text-white px-4 py-0 w-44 rounded-lg font-medium focus:outline-none focus:border-none"
+							className="bg-blue-500 text-white px-4 py-2 rounded-lg font-medium focus:outline-none focus:border-none"
 							onClick={handleAddNewClick}
 						>
 							Thêm mới
 						</button>
+						{/* Search Box moved below Thêm mới */}
+						<div className="relative">
+							<input
+								type="text"
+								placeholder="Tìm kiếm..."
+								value={searchTerm}
+								onChange={(e) => setSearchTerm(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter') {
+										handleSearch(e.target.value, 1);
+									}
+								}}
+								onBlur={(e) => {
+									handleSearch(e.target.value, 1);
+								}}
+								className="w-64 px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+							/>
+							{loading && (
+								<div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-600">
+									<span className="text-xs">Đang tìm...</span>
+								</div>
+							)}
+						</div>
 					</div>
 				</div>
-				<div className=" w-full mb-2">
-					<FilterBar source={originalAnalytes} setCurrentList={setAnalytes} typeSearch="parameter" />
-				</div>
+
 
 				<div className="rounded-lg border p-0.5 pb-0 relative z-0 overflow-x-auto" onMouseDown={handleTableMouseDown}>
 					<table className="min-w-screen-xl bg-white text-sm">
 						<thead className="border-b-2">
 							<tr>
-								<th className="py-2 text-start pl-2 min-w-24 w-24">UID</th>
-								<th className="py-2 text-start pl-2 min-w-48 w-1/5 ">Tên chỉ tiêu</th>
-								<th className="py-2 text-start pl-2 min-w-32 w-32 relative filter-dropdown">
-									<div
-										className="cursor-pointer flex items-center justify-between p-1 rounded text-blue-600 underline"
-										onClick={toggleFieldDropdown}
-									>
-										<span>Lĩnh vực</span>
-										{fieldFilter && <span className="text-xs bg-blue-500 text-white px-1 rounded">✓</span>}
-									</div>
-									{showFieldDropdown && (
-										<div className="absolute top-full left-0 w-full bg-white border rounded shadow-lg z-10">
-											<div
-												className="p-2 cursor-pointer hover:bg-gray-200 text-start border-b"
-												onClick={() => handleFieldFilter('')}
-											>
-												<span className="text-gray-500">Tất cả</span>
-											</div>
-											{getUniqueFields().map((field, index) => (
-												<div
-													key={index}
-													className={`p-2 cursor-pointer hover:bg-gray-200 text-start border-b ${
-														fieldFilter === field ? 'bg-blue-100' : ''
-													}`}
-													onClick={() => handleFieldFilter(field)}
-												>
-													{field}
-												</div>
-											))}
-										</div>
-									)}
-								</th>
-								<th className="py-2 text-start pl-2 min-w-44 w-1/5 relative filter-dropdown">
-									<div
-										className="cursor-pointer flex items-center justify-between p-1 rounded text-blue-600 underline"
-										onClick={toggleMatrixDropdown}
-									>
-										<span>Nền mẫu</span>
-										{matrixFilter && <span className="text-xs bg-blue-500 text-white px-1 rounded">✓</span>}
-									</div>
-									{showMatrixFilterDropdown && (
-										<div className="absolute top-full left-0 w-full bg-white border rounded shadow-lg z-10 max-h-60 overflow-y-auto">
-											<div
-												className="p-2 cursor-pointer hover:bg-gray-200 text-start border-b"
-												onClick={() => handleMatrixFilter('')}
-											>
-												<span className="text-gray-500">Tất cả</span>
-											</div>
-											{getUniqueMatricesFromCurrent().map((matrix, index) => (
-												<div
-													key={index}
-													className={`p-2 cursor-pointer hover:bg-gray-200 text-start border-b ${
-														matrixFilter === matrix ? 'bg-blue-100' : ''
-													}`}
-													onClick={() => handleMatrixFilter(matrix)}
-												>
-													{matrix}
-												</div>
-											))}
-										</div>
-									)}
-								</th>
-								<th className="py-2 text-start pl-2 min-w-24 w-24 relative filter-dropdown">
-									<div
-										className="cursor-pointer flex items-center justify-between p-1 rounded text-blue-600 underline"
-										onClick={toggleSourceDropdown}
-									>
-										<span>Nguồn</span>
-										{sourceFilter && <span className="text-xs bg-blue-500 text-white px-1 rounded">✓</span>}
-									</div>
-									{showSourceDropdown && (
-										<div className="absolute top-full left-0 w-full bg-white border rounded shadow-lg z-10">
-											<div
-												className="p-2 cursor-pointer hover:bg-gray-200 text-start border-b"
-												onClick={() => handleSourceFilter('')}
-											>
-												<span className="text-gray-500">Tất cả</span>
-											</div>
-											{getUniqueSourcesFromCurrent().map((source, index) => (
-												<div
-													key={index}
-													className={`p-2 cursor-pointer hover:bg-gray-200 text-start border-b ${
-														sourceFilter === source ? 'bg-blue-100' : ''
-													}`}
-													onClick={() => handleSourceFilter(source)}
-												>
-													{source}
-												</div>
-											))}
-										</div>
-									)}
-								</th>
-								<th className="py-2 text-start pl-2 min-w-44 w-44">Code</th>
-								<th className="py-2 text-start pl-2 min-w-20 w-20">Đơn vị</th>
-								<th className="py-2 text-start pl-2 min-w-48 w-48">Định dạng hiển thị</th>
-								<th className="py-2 text-start pl-2 min-w-32 w-32">Giá thành</th>
-								<th className="py-2 text-start pl-2 min-w-28 w-28">Chứng nhận</th>
-								<th className="py-2 text-start pl-2 min-w-28 w-28">Kỹ thuật viên</th>
-								<th className="py-2 text-start pl-2 min-w-[70px] w-[70px]">Thao tác</th>
+								{renderColumnHeader('parameter_uid', 'UID', 'py-2 text-start pl-2 min-w-24 w-24', 'no-filter')}
+								{renderColumnHeader('parameter_name', 'Tên chỉ tiêu', 'py-2 text-start pl-2 min-w-48 w-1/5', 'sort-only')}
+								{renderColumnHeader('field', 'Lĩnh vực', 'py-2 text-start pl-2 min-w-24 w-24', 'select-filter', getUniqueFields())}
+								{renderColumnHeader('matrix', 'Nền mẫu', 'py-2 text-start pl-2 min-w-44 w-1/5', 'input-filter')}
+								{renderColumnHeader('protocol_source', 'Nguồn', 'py-2 text-start pl-2 min-w-24 w-24', 'select-filter', getUniqueSourcesFromCurrent())}
+								{renderColumnHeader('protocol_code', 'Code', 'py-2 text-start pl-2 min-w-44 w-44', 'sort-only')}
+								{renderColumnHeader('default_unit', 'Đơn vị', 'py-2 text-start pl-2 min-w-20 w-20', 'no-action')}
+								{renderColumnHeader('display_style', 'Định dạng hiển thị', 'py-2 text-start pl-2 min-w-56 w-56', 'no-action')}
+								{renderColumnHeader('price', 'Giá thành', 'py-2 text-start pl-2 min-w-32 w-32', 'no-action')}
+								{renderColumnHeader('accreditation', 'Chứng nhận', 'py-2 text-start pl-2 min-w-28 w-28', 'no-action')}
+								{renderColumnHeader('technician_uid', 'KTV', 'py-2 text-start pl-2 min-w-28 w-28', 'sort-only')}
+								{renderColumnHeader('actions', 'Thao tác', 'py-2 text-start pl-2 min-w-24 w-24', 'no-action')}
 							</tr>
 						</thead>
 						<tbody>
@@ -1282,6 +1721,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 									</td>
 									<td className="p-1 text-start relative">
 										<textarea
+											id="param-name-new"
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
 											value={newAnalyte.parameter_name}
@@ -1572,14 +2012,39 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 										}
 									</td>
 									<td className="p-1 text-start">
-										<div className="w-full h-12 bg-white rounded border" style={{ borderRadius: '0.375rem' }}>
-											<textarea
-												id={`tinymce-${'new'}`}
-												className="w-full h-full border-0 resize-none"
-												style={{ borderRadius: '0' }}
-												value={''}
-												onChange={(e) => handleInputChange(analyte.id, 'display_style', e.target.value)}
-											/>
+										<div className="w-full bg-white rounded border" style={{ borderRadius: '0.375rem' }}>
+											<div className="flex flex-col gap-1 p-1">
+												<div className="flex items-center gap-2">
+													<div className="text-xs font-medium text-gray-600 min-w-[50px]">Default:</div>
+													<div className="h-6 bg-white rounded border flex-1">
+														<textarea
+															id="tinymce-new-default"
+															className="w-full h-full border-0 resize-none text-xs"
+															style={{ borderRadius: '0' }}
+															value={getDisplayStyleValue(newAnalyte.display_style, 'default')}
+															onChange={(e) => {
+																const updatedDisplayStyle = setDisplayStyleValue(newAnalyte.display_style, 'default', e.target.value);
+																handleNewAnalyteChange('display_style', updatedDisplayStyle);
+															}}
+														/>
+													</div>
+												</div>
+												<div className="flex items-center gap-2">
+													<div className="text-xs font-medium text-gray-600 min-w-[50px]">English:</div>
+													<div className="h-6 bg-white rounded border flex-1">
+														<textarea
+															id="tinymce-new-eng"
+															className="w-full h-full border-0 resize-none text-xs"
+															style={{ borderRadius: '0' }}
+															value={getDisplayStyleValue(newAnalyte.display_style, 'eng')}
+															onChange={(e) => {
+																const updatedDisplayStyle = setDisplayStyleValue(newAnalyte.display_style, 'eng', e.target.value);
+																handleNewAnalyteChange('display_style', updatedDisplayStyle);
+															}}
+														/>
+													</div>
+												</div>
+											</div>
 										</div>
 									</td>
 									<td className="p-1 text-start">
@@ -2036,21 +2501,61 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 									</td>
 									<td className="p-1 text-start">
 										{editingRow === analyte.id ? (
-											<div className="w-full h-12 bg-white rounded border" style={{ borderRadius: '0.375rem' }}>
-												<textarea
-													id={`tinymce-${analyte.id}`}
-													className="w-full h-full"
-													style={{ borderRadius: '0' }}
-													value={newAnalyte.display_style || ''}
-													onChange={(e) => handleNewAnalyteChange('display_style', e.target.value)}
-												/>
+											<div className="w-full bg-white rounded border" style={{ borderRadius: '0.375rem' }}>
+												<div className="flex flex-col gap-1 p-1">
+													<div className="flex items-center gap-2">
+														<div className="text-xs font-medium text-gray-600 min-w-[50px]">Default:</div>
+														<div className="h-6 bg-white rounded border flex-1">
+															<textarea
+																id={`tinymce-${analyte.id}-default`}
+																className="w-full h-full text-xs"
+																style={{ borderRadius: '0' }}
+																value={getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'default')}
+																onChange={(e) => {
+																	const currentDisplayStyle = initializeDisplayStyle(analyte.display_style);
+																	const updatedDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'default', e.target.value);
+																	handleInputChange(analyte.id, 'display_style', updatedDisplayStyle);
+																}}
+															/>
+														</div>
+													</div>
+													<div className="flex items-center gap-2">
+														<div className="text-xs font-medium text-gray-600 min-w-[50px]">English:</div>
+														<div className="h-6 bg-white rounded border flex-1">
+															<textarea
+																id={`tinymce-${analyte.id}-eng`}
+																className="w-full h-full text-xs"
+																style={{ borderRadius: '0' }}
+																value={getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'eng')}
+																onChange={(e) => {
+																	const currentDisplayStyle = initializeDisplayStyle(analyte.display_style);
+																	const updatedDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'eng', e.target.value);
+																	handleInputChange(analyte.id, 'display_style', updatedDisplayStyle);
+																}}
+															/>
+														</div>
+													</div>
+												</div>
 											</div>
 										) : (
-											<div
-												className="block overflow-hidden text-ellipsis whitespace-pre-wrap max-h-16"
-												style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}
-												dangerouslySetInnerHTML={{ __html: analyte.display_style || '' }}
-											/>
+											<div className="flex flex-col gap-1">
+												<div className="flex items-center gap-2">
+													<div className="text-xs font-medium text-gray-600 min-w-[50px]">Default:</div>
+													<div
+														className="block overflow-hidden text-ellipsis whitespace-pre-wrap max-h-6 text-xs flex-1"
+														style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}
+														dangerouslySetInnerHTML={{ __html: getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'default') || '' }}
+													/>
+												</div>
+												<div className="flex items-center gap-2">
+													<div className="text-xs font-medium text-gray-600 min-w-[50px]">English:</div>
+													<div
+														className="block overflow-hidden text-ellipsis whitespace-pre-wrap max-h-6 text-xs flex-1"
+														style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}
+														dangerouslySetInnerHTML={{ __html: getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'eng') || '' }}
+													/>
+												</div>
+											</div>
 										)}
 									</td>
 									<td className="p-1 text-start">
@@ -2178,7 +2683,38 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 						</tbody>
 					</table>
 				</div>
-				<div className="flex justify-center mt-4">{renderPageNumbers(totalPages, currentPage, handlePageChange)}</div>
+
+				{/* Pagination Controls at Bottom */}
+				<div className="flex justify-between items-center mt-4 p-4 bg-gray-50 rounded-lg">
+					{/* Items per page selector */}
+					<div className="flex items-center gap-2">
+						<span className="text-sm text-gray-600">Hiển thị:</span>
+						<select
+							value={pagination.itemsPerPage}
+							onChange={(e) => handleItemsPerPageChange(e.target.value)}
+							className="px-3 py-1 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+						>
+							<option value={10}>10</option>
+							<option value={25}>25</option>
+							<option value={50}>50</option>
+							<option value={100}>100</option>
+							<option value={200}>200</option>
+						</select>
+						<span className="text-sm text-gray-600">/ trang</span>
+					</div>
+
+					{/* Page info and navigation */}
+					<div className="flex items-center gap-4">
+						<div className="text-sm text-gray-600">
+							Hiển thị {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} - {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} của {pagination.totalItems} kết quả
+						</div>
+						
+						{/* Page navigation */}
+						<div className="flex items-center gap-2">
+							{renderPageNumbers(totalPages, currentPage, handleApiPageChange)}
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
 	);
