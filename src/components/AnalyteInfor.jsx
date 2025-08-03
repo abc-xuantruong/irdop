@@ -31,7 +31,7 @@ const AnalyteInfor = () => {
 		protocol_source: 'IRDOP',
 		display_style: [
 			{ label: 'default', value: '' },
-			{ label: 'eng', value: '' }
+			{ label: 'eng', value: '' },
 		],
 		price: 0,
 	});
@@ -80,7 +80,7 @@ const AnalyteInfor = () => {
 		currentPage: 1,
 		itemsPerPage: 100,
 		totalItems: 0,
-		totalPages: 0
+		totalPages: 0,
 	});
 	const [loading, setLoading] = useState(false);
 	const [columnSort, setColumnSort] = useState('parameter_name');
@@ -171,34 +171,34 @@ const AnalyteInfor = () => {
 		setFilteredAnalytes(filtered);
 	}, [analytes, fieldFilter, matrixFilter, sourceFilter]);
 
-// TinyMCE initialization function
-const initTinyMCE = (selector, initialValue = '', onChange) => {
-	
-	if (typeof window !== 'undefined' && window.tinymce) {
-		const element = document.getElementById(selector);
-		
-		if (!element) {
-			console.error('Element not found for selector:', selector);
-			return;
-		}
+	// TinyMCE initialization function
+	const initTinyMCE = (selector, initialValue = '', onChange) => {
+		if (typeof window !== 'undefined' && window.tinymce) {
+			const element = document.getElementById(selector);
 
-		// Remove existing editor if it exists
-		if (window.tinymce.get(selector)) {
-			console.log('Removing existing editor for:', selector);
-			window.tinymce.get(selector).remove();
-		}
+			if (!element) {
+				console.error('Element not found for selector:', selector);
+				return;
+			}
 
-		window.tinymce.init({
-			selector: `#${selector}`,
-			plugins: '', // Không sử dụng plugins
-			toolbar: false, // Ẩn hoàn toàn toolbar
-			menubar: false,
-			height: '24px', // Reduced height to match our h-6 class
-			width: '100%',
-			statusbar: false,
-			resize: false,
-			border_width: 0, // Loại bỏ viền
-			content_style: `
+			// Remove existing editor if it exists
+			if (window.tinymce.get(selector)) {
+				console.log('Removing existing editor for:', selector);
+				window.tinymce.get(selector).remove();
+			}
+
+			window.tinymce
+				.init({
+					selector: `#${selector}`,
+					plugins: '', // Không sử dụng plugins
+					toolbar: false, // Ẩn hoàn toàn toolbar
+					menubar: false,
+					height: '24px', // Reduced height to match our h-6 class
+					width: '100%',
+					statusbar: false,
+					resize: false,
+					border_width: 0, // Loại bỏ viền
+					content_style: `
 				body { 
 					margin: 0 !important; 
 					padding: 0 !important; 
@@ -221,157 +221,157 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 					line-height: 1.2 !important;
 					}
 			`,
-			body_class: 'no-scroll',
-			setup: function (editor) {
-				
-				editor.on('init', function () {
-					editor.setContent(initialValue || '');
-					
-					// Điều chỉnh container và iframe
-					const container = editor.getContainer();
-					const iframe = container.querySelector('iframe');
-					
-					if (container) {
-						container.style.height = '100%';
-						container.style.width = '100%';
-						container.style.border = 'none';
-						container.style.padding = '0';
-						container.style.margin = '0';
-						container.style.borderRadius = '0';
-						
-						// Loại bỏ border radius của table container
-						const tableContainer = container.querySelector('.mce-container');
-						if (tableContainer) {
-							tableContainer.style.borderRadius = '0';
-						}
-						
-						// Loại bỏ border radius của tất cả elements con
-						const allElements = container.querySelectorAll('*');
-						allElements.forEach(el => {
-							el.style.borderRadius = '0';
-						});
-					}
-					
-					if (iframe) {
-						iframe.style.border = 'none';
-						iframe.style.padding = '0';
-						iframe.style.margin = '0';
-						iframe.style.borderRadius = '0';
-						
-						// Điều chỉnh body bên trong iframe
-						const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-						if (iframeDoc && iframeDoc.body) {
-							iframeDoc.body.style.margin = '0';
-							iframeDoc.body.style.padding = '0';
-							iframeDoc.body.style.border = 'none';
-							iframeDoc.body.style.lineHeight = '1.2';
-							iframeDoc.body.style.overflow = 'hidden';
-							iframeDoc.body.style.borderRadius = '0';
-							
-							// Loại bỏ scrollbar
-							const style = iframeDoc.createElement('style');
-							style.textContent = `
+					body_class: 'no-scroll',
+					setup: function (editor) {
+						editor.on('init', function () {
+							editor.setContent(initialValue || '');
+
+							// Điều chỉnh container và iframe
+							const container = editor.getContainer();
+							const iframe = container.querySelector('iframe');
+
+							if (container) {
+								container.style.height = '100%';
+								container.style.width = '100%';
+								container.style.border = 'none';
+								container.style.padding = '0';
+								container.style.margin = '0';
+								container.style.borderRadius = '0';
+
+								// Loại bỏ border radius của table container
+								const tableContainer = container.querySelector('.mce-container');
+								if (tableContainer) {
+									tableContainer.style.borderRadius = '0';
+								}
+
+								// Loại bỏ border radius của tất cả elements con
+								const allElements = container.querySelectorAll('*');
+								allElements.forEach((el) => {
+									el.style.borderRadius = '0';
+								});
+							}
+
+							if (iframe) {
+								iframe.style.border = 'none';
+								iframe.style.padding = '0';
+								iframe.style.margin = '0';
+								iframe.style.borderRadius = '0';
+
+								// Điều chỉnh body bên trong iframe
+								const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+								if (iframeDoc && iframeDoc.body) {
+									iframeDoc.body.style.margin = '0';
+									iframeDoc.body.style.padding = '0';
+									iframeDoc.body.style.border = 'none';
+									iframeDoc.body.style.lineHeight = '1.2';
+									iframeDoc.body.style.overflow = 'hidden';
+									iframeDoc.body.style.borderRadius = '0';
+
+									// Loại bỏ scrollbar
+									const style = iframeDoc.createElement('style');
+									style.textContent = `
 								body::-webkit-scrollbar { display: none !important; }
 								body { -ms-overflow-style: none !important; scrollbar-width: none !important; }
 								html { overflow: hidden !important; }
 								* { border-radius: 0 !important; }
 							`;
-							iframeDoc.head.appendChild(style);
-						}
-					}
-				});
-
-				editor.on('change input keyup', function () {
-					const content = editor.getContent();
-					if (onChange) {
-						onChange(content);
-					}
-				});
-
-				// Xử lý keyboard shortcuts cho sub/sup và replace *
-				editor.on('keydown', function (e) {
-					
-					// Handle ^ key for superscript (Shift + 6 hoặc caret key)
-					if ((e.shiftKey && e.keyCode === 54) || e.key === '^') {
-						e.preventDefault();
-						
-						const selectedText = editor.selection.getContent();
-						if (selectedText) {
-							// Nếu có text được chọn, wrap với sup
-							editor.selection.setContent(`<sup>${selectedText}</sup>`);
-						} else {
-							// Nếu không có text được chọn, chèn empty sup tag và đặt cursor vào
-							editor.insertContent('<sup>&nbsp;</sup>');
-							// Di chuyển cursor vào trong sup tag
-							const range = editor.selection.getRng();
-							const supElement = editor.dom.select('sup')[editor.dom.select('sup').length - 1];
-							if (supElement) {
-								range.selectNodeContents(supElement);
-								range.collapse(true);
-								editor.selection.setRng(range);
+									iframeDoc.head.appendChild(style);
+								}
 							}
-						}
-						return false;
-					}
-					
-					// Handle _ key for subscript (Shift + - hoặc underscore key)
-					if ((e.shiftKey && e.keyCode === 189) || e.key === '_') {
-						e.preventDefault();
-						console.log('Subscript triggered');
-						
-						const selectedText = editor.selection.getContent();
-						if (selectedText) {
-							// Nếu có text được chọn, wrap với sub
-							editor.selection.setContent(`<sub>${selectedText}</sub>`);
-						} else {
-							// Nếu không có text được chọn, chèn empty sub tag và đặt cursor vào
-							editor.insertContent('<sub>&nbsp;</sub>');
-							// Di chuyển cursor vào trong sub tag
-							const range = editor.selection.getRng();
-							const subElement = editor.dom.select('sub')[editor.dom.select('sub').length - 1];
-							if (subElement) {
-								range.selectNodeContents(subElement);
-								range.collapse(true);
-								editor.selection.setRng(range);
+						});
+
+						editor.on('change input keyup', function () {
+							const content = editor.getContent();
+							if (onChange) {
+								onChange(content);
 							}
-						}
-						return false;
-					}
-				});
+						});
 
-				// Replace * với × khi người dùng gõ
-				editor.on('input', function (e) {
-					setTimeout(() => {
-						const content = editor.getContent();
-						if (content.includes('*')) {
-							const newContent = content.replace(/\*/g, '×');
-							const bookmark = editor.selection.getBookmark();
-							editor.setContent(newContent);
-							editor.selection.moveToBookmark(bookmark);
-						}
-					}, 0);
-				});
+						// Xử lý keyboard shortcuts cho sub/sup và replace *
+						editor.on('keydown', function (e) {
+							// Handle ^ key for superscript (Shift + 6 hoặc caret key)
+							if ((e.shiftKey && e.keyCode === 54) || e.key === '^') {
+								e.preventDefault();
 
-				// Thêm event listener cho paste để xử lý content được paste
-				editor.on('paste', function (e) {
-					setTimeout(() => {
-						const content = editor.getContent();
-						if (content.includes('*')) {
-							const newContent = content.replace(/\*/g, '×');
-							editor.setContent(newContent);
-						}
-					}, 0);
+								const selectedText = editor.selection.getContent();
+								if (selectedText) {
+									// Nếu có text được chọn, wrap với sup
+									editor.selection.setContent(`<sup>${selectedText}</sup>`);
+								} else {
+									// Nếu không có text được chọn, chèn empty sup tag và đặt cursor vào
+									editor.insertContent('<sup>&nbsp;</sup>');
+									// Di chuyển cursor vào trong sup tag
+									const range = editor.selection.getRng();
+									const supElement = editor.dom.select('sup')[editor.dom.select('sup').length - 1];
+									if (supElement) {
+										range.selectNodeContents(supElement);
+										range.collapse(true);
+										editor.selection.setRng(range);
+									}
+								}
+								return false;
+							}
+
+							// Handle _ key for subscript (Shift + - hoặc underscore key)
+							if ((e.shiftKey && e.keyCode === 189) || e.key === '_') {
+								e.preventDefault();
+								console.log('Subscript triggered');
+
+								const selectedText = editor.selection.getContent();
+								if (selectedText) {
+									// Nếu có text được chọn, wrap với sub
+									editor.selection.setContent(`<sub>${selectedText}</sub>`);
+								} else {
+									// Nếu không có text được chọn, chèn empty sub tag và đặt cursor vào
+									editor.insertContent('<sub>&nbsp;</sub>');
+									// Di chuyển cursor vào trong sub tag
+									const range = editor.selection.getRng();
+									const subElement = editor.dom.select('sub')[editor.dom.select('sub').length - 1];
+									if (subElement) {
+										range.selectNodeContents(subElement);
+										range.collapse(true);
+										editor.selection.setRng(range);
+									}
+								}
+								return false;
+							}
+						});
+
+						// Replace * với × khi người dùng gõ
+						editor.on('input', function (e) {
+							setTimeout(() => {
+								const content = editor.getContent();
+								if (content.includes('*')) {
+									const newContent = content.replace(/\*/g, '×');
+									const bookmark = editor.selection.getBookmark();
+									editor.setContent(newContent);
+									editor.selection.moveToBookmark(bookmark);
+								}
+							}, 0);
+						});
+
+						// Thêm event listener cho paste để xử lý content được paste
+						editor.on('paste', function (e) {
+							setTimeout(() => {
+								const content = editor.getContent();
+								if (content.includes('*')) {
+									const newContent = content.replace(/\*/g, '×');
+									editor.setContent(newContent);
+								}
+							}, 0);
+						});
+					},
+				})
+				.then((editors) => {
+					console.log('TinyMCE initialized successfully for:', selector, editors);
+				})
+				.catch((error) => {
+					console.error('TinyMCE initialization failed for:', selector, error);
 				});
-			},
-		}).then((editors) => {
-			console.log('TinyMCE initialized successfully for:', selector, editors);
-		}).catch((error) => {
-			console.error('TinyMCE initialization failed for:', selector, error);
-		});
-	} else {
-		console.error('TinyMCE not available or element not found');
-	}
-};
+		} else {
+			console.error('TinyMCE not available or element not found');
+		}
+	};
 
 	// Clean up TinyMCE editors
 	const cleanupTinyMCE = (selector) => {
@@ -389,7 +389,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			const initEditors = () => {
 				const defaultElement = document.getElementById(`tinymce-${editingRow}-default`);
 				const engElement = document.getElementById(`tinymce-${editingRow}-eng`);
-				
+
 				if (defaultElement && window.tinymce) {
 					const defaultValue = getDisplayStyleValue(displayStyleArray, 'default');
 					initTinyMCE(`tinymce-${editingRow}-default`, defaultValue, (content) => {
@@ -399,7 +399,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 						handleInputChange(editingRow, 'display_style', updatedDisplayStyle);
 					});
 				}
-				
+
 				if (engElement && window.tinymce) {
 					const engValue = getDisplayStyleValue(displayStyleArray, 'eng');
 					initTinyMCE(`tinymce-${editingRow}-eng`, engValue, (content) => {
@@ -409,7 +409,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 						handleInputChange(editingRow, 'display_style', updatedDisplayStyle);
 					});
 				}
-				
+
 				if ((!defaultElement || !engElement) && window.tinymce) {
 					setTimeout(initEditors, 100);
 				}
@@ -438,7 +438,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			const initEditors = () => {
 				const defaultElement = document.getElementById('tinymce-new-default');
 				const engElement = document.getElementById('tinymce-new-eng');
-				
+
 				if (defaultElement && window.tinymce) {
 					const defaultValue = getDisplayStyleValue(newAnalyte.display_style, 'default');
 					initTinyMCE('tinymce-new-default', defaultValue, (content) => {
@@ -446,7 +446,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 						handleNewAnalyteChange('display_style', updatedDisplayStyle);
 					});
 				}
-				
+
 				if (engElement && window.tinymce) {
 					const engValue = getDisplayStyleValue(newAnalyte.display_style, 'eng');
 					initTinyMCE('tinymce-new-eng', engValue, (content) => {
@@ -454,7 +454,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 						handleNewAnalyteChange('display_style', updatedDisplayStyle);
 					});
 				}
-				
+
 				if ((!defaultElement || !engElement) && window.tinymce) {
 					setTimeout(initEditors, 100);
 				}
@@ -476,13 +476,12 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 	}, [isAddingNew]);
 
 	// Cleanup editors when component unmounts or editing ends
-	useEffect(() => {
-	}, []);
+	useEffect(() => {}, []);
 
 	// Helper functions for display_style array management
 	const getDisplayStyleValue = (displayStyleArray, label) => {
 		if (!Array.isArray(displayStyleArray)) return '';
-		const item = displayStyleArray.find(item => item.label === label);
+		const item = displayStyleArray.find((item) => item.label === label);
 		return item ? item.value : '';
 	};
 
@@ -490,27 +489,27 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		if (!Array.isArray(displayStyleArray)) {
 			return [{ label, value }];
 		}
-		
+
 		const updated = [...displayStyleArray];
-		const existingIndex = updated.findIndex(item => item.label === label);
-		
+		const existingIndex = updated.findIndex((item) => item.label === label);
+
 		if (existingIndex >= 0) {
 			updated[existingIndex] = { label, value };
 		} else {
 			updated.push({ label, value });
 		}
-		
+
 		return updated;
 	};
 
 	const initializeDisplayStyle = (existingDisplayStyle) => {
 		const defaultLabels = ['default', 'eng'];
 		const result = [];
-		
+
 		if (Array.isArray(existingDisplayStyle)) {
 			// If it's already an array, use it but ensure all required labels exist
-			defaultLabels.forEach(label => {
-				const existing = existingDisplayStyle.find(item => item.label === label);
+			defaultLabels.forEach((label) => {
+				const existing = existingDisplayStyle.find((item) => item.label === label);
 				result.push(existing || { label, value: '' });
 			});
 		} else if (typeof existingDisplayStyle === 'string') {
@@ -519,35 +518,51 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			result.push({ label: 'eng', value: '' });
 		} else {
 			// If it's null/undefined, create empty array
-			defaultLabels.forEach(label => {
+			defaultLabels.forEach((label) => {
 				result.push({ label, value: '' });
 			});
 		}
-		
+
 		return result;
 	};
 
-	const fetchAnalytes = async (page = 1, itemsPerPage = 100, searchValue = '', filters = {}, sort = 'parameter_name', sortDirection = 'ASC') => {
+	const fetchAnalytes = async (
+		page = 1,
+		itemsPerPage = 100,
+		searchValue = '',
+		filters = {},
+		sort = 'parameter_name',
+		sortDirection = 'ASC',
+	) => {
 		try {
 			setLoading(true);
-			
+
 			// Prepare request body according to the specified format
 			const requestBody = {
 				itemsPerPage: itemsPerPage,
 				page: page,
 				columns: [
-					"id", "parameter_name", "field", "matrix", "protocol_source", 
-					"protocol_code", "default_unit", "display_style", "price", 
-					"accreditation", "technician_uid", "parameter_uid"
+					'id',
+					'parameter_name',
+					'field',
+					'matrix',
+					'protocol_source',
+					'protocol_code',
+					'default_unit',
+					'display_style',
+					'price',
+					'accreditation',
+					'technician_uid',
+					'parameter_uid',
 				],
 				columnSort: sort,
 				sortBy: sortDirection,
 				searchTerm: searchValue,
-				...filters // Spread any column-specific filters
+				...filters, // Spread any column-specific filters
 			};
 
 			const response = await apiPost('https://black.irdop.org/v1/parameter/get', requestBody);
-			
+
 			if (response.data && response.data.result) {
 				const data = response.data.result.map((analyte) => ({
 					...analyte,
@@ -555,10 +570,10 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 						? `${analyte.tat_expected.days} ${analyte.tat_expected.days > 1 ? 'days' : 'day'}`
 						: '',
 				}));
-				
+
 				setAnalytes(data);
 				setOriginalAnalytes(data);
-				
+
 				// Update pagination info
 				if (response.data.pagination) {
 					setPagination(response.data.pagination);
@@ -574,19 +589,18 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 				}));
 				setAnalytes(data);
 				setOriginalAnalytes(data);
-				
+
 				// Set default pagination for fallback
 				setPagination({
 					currentPage: 1,
 					itemsPerPage: data.length,
 					totalItems: data.length,
-					totalPages: 1
+					totalPages: 1,
 				});
 			}
 
 			// Extract unique lists for dropdowns
 			extractUniqueLists(analytes);
-			
 		} catch (error) {
 			console.error('Error fetching analytes:', error);
 			toast.error('Failed to fetch analytes');
@@ -674,16 +688,17 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		return [...new Set(currentList.map((analyte) => analyte.default_unit).filter(Boolean))];
 	};
 
+	// Add scroll to top function
+	const scrollToTop = () => {
+		window.scrollTo({
+			top: 0,
+			behavior: 'smooth',
+		});
+	};
+
 	// Add search and filter handlers
 	const handleSearch = async (searchValue = searchTerm, page = pagination.currentPage) => {
-		await fetchAnalytes(
-			page,
-			pagination.itemsPerPage,
-			searchValue,
-			columnFilters,
-			columnSort,
-			sortBy
-		);
+		await fetchAnalytes(page, pagination.itemsPerPage, searchValue, columnFilters, columnSort, sortBy);
 	};
 
 	const handleColumnFilter = async (column, value) => {
@@ -700,8 +715,9 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			searchTerm,
 			newFilters,
 			columnSort,
-			sortBy
+			sortBy,
 		);
+		scrollToTop(); // Scroll to top when filtering
 	};
 
 	const handleSort = async (column) => {
@@ -714,19 +730,13 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			searchTerm,
 			columnFilters,
 			column,
-			newSortDirection
+			newSortDirection,
 		);
 	};
 
 	const handleApiPageChange = async (page) => {
-		await fetchAnalytes(
-			page,
-			pagination.itemsPerPage,
-			searchTerm,
-			columnFilters,
-			columnSort,
-			sortBy
-		);
+		await fetchAnalytes(page, pagination.itemsPerPage, searchTerm, columnFilters, columnSort, sortBy);
+		scrollToTop(); // Scroll to top when changing page
 	};
 
 	// Add handler for items per page change
@@ -739,8 +749,9 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			searchTerm,
 			columnFilters,
 			columnSort,
-			sortBy
+			sortBy,
 		);
+		scrollToTop(); // Scroll to top when changing items per page
 	};
 
 	// Remove automatic debounced search - now handled manually with Enter/blur
@@ -813,9 +824,9 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 
 	// Add functions for new column header functionality
 	const handleColumnFilterInput = (column, value) => {
-		setColumnFilterInputs(prev => ({
+		setColumnFilterInputs((prev) => ({
 			...prev,
-			[column]: value
+			[column]: value,
 		}));
 	};
 
@@ -827,25 +838,26 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			delete newFilters[column];
 		}
 		setColumnFilters(newFilters);
-		setShowColumnFilters(prev => ({
+		setShowColumnFilters((prev) => ({
 			...prev,
-			[column]: false
+			[column]: false,
 		}));
-		
+
 		await fetchAnalytes(
 			1, // Reset to first page when filtering
 			pagination.itemsPerPage,
 			searchTerm,
 			newFilters,
 			columnSort,
-			sortBy
+			sortBy,
 		);
+		scrollToTop(); // Scroll to top when applying column filter
 	};
 
 	const toggleColumnFilter = (column) => {
-		setShowColumnFilters(prev => ({
+		setShowColumnFilters((prev) => ({
 			...prev,
-			[column]: !prev[column]
+			[column]: !prev[column],
 		}));
 	};
 
@@ -853,15 +865,13 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		if (columnSort !== column) {
 			return <FaSort className="text-gray-400" />;
 		}
-		return sortBy === 'ASC' ? 
-			<FaSortUp className="text-blue-600" /> : 
-			<FaSortDown className="text-blue-600" />;
+		return sortBy === 'ASC' ? <FaSortUp className="text-blue-600" /> : <FaSortDown className="text-blue-600" />;
 	};
 
 	const getFilterIcon = (column) => {
 		const hasFilter = columnFilters[column];
 		const isActive = showColumnFilters[column];
-		
+
 		if (hasFilter) {
 			return <MdFilterAlt className="text-blue-600" />;
 		}
@@ -1139,7 +1149,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 		// Get content from TinyMCE editors before saving
 		const defaultEditorId = `tinymce-${id}-default`;
 		const engEditorId = `tinymce-${id}-eng`;
-		
+
 		const updatedAnalyte = analytes.find((analyte) => analyte.id === id);
 		let currentDisplayStyle = initializeDisplayStyle(updatedAnalyte.display_style);
 
@@ -1180,7 +1190,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 					searchTerm,
 					columnFilters,
 					columnSort,
-					sortBy
+					sortBy,
 				);
 			} else {
 				toast.error('Analyte update failed');
@@ -1234,7 +1244,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 						searchTerm,
 						columnFilters,
 						columnSort,
-						sortBy
+						sortBy,
 					);
 				} else {
 					toast.error('Analyte deletion failed');
@@ -1309,11 +1319,11 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 					protocol_source: 'IRDOP',
 					display_style: [
 						{ label: 'default', value: '' },
-						{ label: 'eng', value: '' }
+						{ label: 'eng', value: '' },
 					],
 					price: '',
 				});
-				
+
 				// Fetch fresh data from server to ensure consistency
 				await fetchAnalytes(
 					1, // Reset to first page for new items
@@ -1321,7 +1331,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 					searchTerm,
 					columnFilters,
 					columnSort,
-					sortBy
+					sortBy,
 				);
 			} else {
 				toast.error('Failed to add new analyte');
@@ -1352,7 +1362,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 			protocol_source: 'IRDOP',
 			display_style: [
 				{ label: 'default', value: '' },
-				{ label: 'eng', value: '' }
+				{ label: 'eng', value: '' },
 			],
 			price: '',
 		});
@@ -1436,8 +1446,6 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 	const handleNewProtocolSourceChange = (value) => {
 		setNewAnalyte({ ...newAnalyte, protocol_source: value });
 	};
-
-
 
 	const handleProtocolPageChange = (pageNumber) => {
 		setProtocolPage(pageNumber);
@@ -1552,47 +1560,49 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 	};
 
 	// Reusable column header component
-	const renderColumnHeader = (column, title, className = "py-2 text-start pl-2", headerType = "default", selectOptions = []) => {
+	const renderColumnHeader = (
+		column,
+		title,
+		className = 'py-2 text-start pl-2',
+		headerType = 'default',
+		selectOptions = [],
+	) => {
 		const handleHeaderClick = () => {
-			if (headerType === "select-filter") {
+			if (headerType === 'select-filter') {
 				// For field and source columns - show select filter
 				toggleColumnFilter(column);
-			} else if (headerType === "input-filter") {
+			} else if (headerType === 'input-filter') {
 				// For matrix column - show input filter
 				toggleColumnFilter(column);
-			} else if (headerType === "sort-only") {
+			} else if (headerType === 'sort-only') {
 				// For sortable columns - handle sort
 				handleSort(column);
-			} else if (headerType === "no-action") {
+			} else if (headerType === 'no-action') {
 				// For price and unit columns - no action
 				return;
 			}
 		};
 
 		// Check if filter button should be shown
-		let showFilterButton = !["no-action", "no-filter"].includes(headerType);
-		
+		let showFilterButton = !['no-action', 'no-filter'].includes(headerType);
+
 		// For select-filter and input-filter types, only show filter button if there's an active filter
-		if (headerType === "select-filter" || headerType === "input-filter") {
+		if (headerType === 'select-filter' || headerType === 'input-filter') {
 			const hasActiveFilter = columnFilters[column] && columnFilters[column] !== '';
 			showFilterButton = showFilterButton && hasActiveFilter;
 		}
-		
-		const showSortIcon = headerType === "sort-only" && (columnSort === column);
+
+		const showSortIcon = headerType === 'sort-only' && columnSort === column;
 
 		return (
 			<th className={`${className} relative`}>
 				<div className="flex items-center justify-between p-1">
-					<span 
-						className={`font-medium ${headerType !== "no-action" ? "cursor-pointer hover:text-blue-600" : ""}`}
+					<span
+						className={`font-medium ${headerType !== 'no-action' ? 'cursor-pointer hover:text-blue-600' : ''}`}
 						onClick={handleHeaderClick}
 					>
 						{title}
-						{showSortIcon && (
-							<span className="ml-1">
-								{getSortIcon(column)}
-							</span>
-						)}
+						{showSortIcon && <span className="ml-1">{getSortIcon(column)}</span>}
 					</span>
 					<div className="flex items-center gap-1">
 						{/* Filter Button */}
@@ -1607,11 +1617,11 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 						)}
 					</div>
 				</div>
-				
+
 				{/* Filter Input */}
 				{showColumnFilters[column] && (
 					<div className="absolute top-full left-0 w-full bg-white border rounded shadow-lg z-10 p-2 column-filter-dropdown">
-						{headerType === "select-filter" ? (
+						{headerType === 'select-filter' ? (
 							<select
 								value={columnFilterInputs[column] || ''}
 								onChange={(e) => {
@@ -1623,7 +1633,9 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 							>
 								<option value="">Tất cả</option>
 								{selectOptions.map((option, index) => (
-									<option key={index} value={option}>{option}</option>
+									<option key={index} value={option}>
+										{option}
+									</option>
 								))}
 							</select>
 						) : (
@@ -1637,9 +1649,9 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 										handleColumnFilterSubmit(column, e.target.value);
 									}
 									if (e.key === 'Escape') {
-										setShowColumnFilters(prev => ({
+										setShowColumnFilters((prev) => ({
 											...prev,
-											[column]: false
+											[column]: false,
 										}));
 									}
 								}}
@@ -1694,19 +1706,40 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 					</div>
 				</div>
 
-
 				<div className="rounded-lg border p-0.5 pb-0 relative z-0 overflow-x-auto" onMouseDown={handleTableMouseDown}>
 					<table className="min-w-screen-xl bg-white text-sm">
 						<thead className="border-b-2">
 							<tr>
-								{renderColumnHeader('parameter_uid', 'UID', 'py-2 text-start pl-2 min-w-24 w-24', 'no-filter')}
-								{renderColumnHeader('parameter_name', 'Tên chỉ tiêu', 'py-2 text-start pl-2 min-w-48 w-1/5', 'sort-only')}
-								{renderColumnHeader('field', 'Lĩnh vực', 'py-2 text-start pl-2 min-w-24 w-24', 'select-filter', getUniqueFields())}
+								{renderColumnHeader('parameter_uid', 'UID', 'py-2 text-start pl-2 min-w-16 w-16', 'no-filter')}
+								{renderColumnHeader(
+									'parameter_name',
+									'Tên chỉ tiêu',
+									'py-2 text-start pl-2 min-w-48 w-1/5',
+									'sort-only',
+								)}
+								{renderColumnHeader(
+									'field',
+									'Lĩnh vực',
+									'py-2 text-start pl-2 min-w-24 w-24',
+									'select-filter',
+									getUniqueFields(),
+								)}
 								{renderColumnHeader('matrix', 'Nền mẫu', 'py-2 text-start pl-2 min-w-44 w-1/5', 'input-filter')}
-								{renderColumnHeader('protocol_source', 'Nguồn', 'py-2 text-start pl-2 min-w-24 w-24', 'select-filter', getUniqueSourcesFromCurrent())}
+								{renderColumnHeader(
+									'protocol_source',
+									'Nguồn',
+									'py-2 text-start pl-2 min-w-24 w-24',
+									'select-filter',
+									getUniqueSourcesFromCurrent(),
+								)}
 								{renderColumnHeader('protocol_code', 'Code', 'py-2 text-start pl-2 min-w-44 w-44', 'sort-only')}
 								{renderColumnHeader('default_unit', 'Đơn vị', 'py-2 text-start pl-2 min-w-20 w-20', 'no-action')}
-								{renderColumnHeader('display_style', 'Định dạng hiển thị', 'py-2 text-start pl-2 min-w-56 w-56', 'no-action')}
+								{renderColumnHeader(
+									'display_style',
+									'Định dạng hiển thị',
+									'py-2 text-start pl-2 min-w-56 w-56',
+									'no-action',
+								)}
 								{renderColumnHeader('price', 'Giá thành', 'py-2 text-start pl-2 min-w-32 w-32', 'no-action')}
 								{renderColumnHeader('accreditation', 'Chứng nhận', 'py-2 text-start pl-2 min-w-28 w-28', 'no-action')}
 								{renderColumnHeader('technician_uid', 'KTV', 'py-2 text-start pl-2 min-w-28 w-28', 'sort-only')}
@@ -1727,14 +1760,17 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 											value={newAnalyte.parameter_name}
 											onChange={(e) => handleParameterNameInput('new', e.target.value)}
 										/>
-										{showParameterNameDropdown && 
+										{showParameterNameDropdown &&
 											createPortal(
 												<div
 													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
 													style={{
 														width: document.getElementById(`param-name-new`)?.offsetWidth + 'px',
-														top: document.getElementById(`param-name-new`)?.getBoundingClientRect().bottom + window.scrollY,
-														left: document.getElementById(`param-name-new`)?.getBoundingClientRect().left + window.scrollX,
+														top:
+															document.getElementById(`param-name-new`)?.getBoundingClientRect().bottom +
+															window.scrollY,
+														left:
+															document.getElementById(`param-name-new`)?.getBoundingClientRect().left + window.scrollX,
 													}}
 												>
 													{getPaginatedParameterNames(parameterNameInput).map((name, index) => (
@@ -1772,9 +1808,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 														</div>
 													)}
 												</div>,
-												document.body
-											)
-										}
+												document.body,
+											)}
 									</td>
 									<td className="p-1 text-start">
 										<select
@@ -1794,7 +1829,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 											value={newAnalyte.matrix}
 											onChange={(e) => handleMatrixInput('new', e.target.value)}
 										/>
-										{showMatrixDropdown && 
+										{showMatrixDropdown &&
 											createPortal(
 												<div
 													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
@@ -1835,9 +1870,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 														</div>
 													)}
 												</div>,
-												document.body
-											)
-										}
+												document.body,
+											)}
 									</td>
 									<td className="p-1 text-start">
 										<select
@@ -1860,14 +1894,18 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 											value={newAnalyte.protocol_code}
 											onChange={(e) => handleProtocolCodeInputChange('new', e.target.value)}
 										/>
-										{showProtocolCodeDropdown && 
+										{showProtocolCodeDropdown &&
 											createPortal(
 												<div
 													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
 													style={{
 														width: document.getElementById(`protocol-code-new`)?.offsetWidth + 'px',
-														top: document.getElementById(`protocol-code-new`)?.getBoundingClientRect().bottom + window.scrollY,
-														left: document.getElementById(`protocol-code-new`)?.getBoundingClientRect().left + window.scrollX,
+														top:
+															document.getElementById(`protocol-code-new`)?.getBoundingClientRect().bottom +
+															window.scrollY,
+														left:
+															document.getElementById(`protocol-code-new`)?.getBoundingClientRect().left +
+															window.scrollX,
 													}}
 												>
 													{getPaginatedProtocolCodes(protocolCodeInput).map((code, index) => (
@@ -1905,17 +1943,20 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 														</div>
 													)}
 												</div>,
-												document.body
-											)
-										}
-										{isProtocolDropdownVisible && 
+												document.body,
+											)}
+										{isProtocolDropdownVisible &&
 											createPortal(
 												<div
 													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
 													style={{
 														width: '320px',
-														top: document.getElementById(`protocol-code-new`)?.getBoundingClientRect().bottom + window.scrollY,
-														left: document.getElementById(`protocol-code-new`)?.getBoundingClientRect().left + window.scrollX,
+														top:
+															document.getElementById(`protocol-code-new`)?.getBoundingClientRect().bottom +
+															window.scrollY,
+														left:
+															document.getElementById(`protocol-code-new`)?.getBoundingClientRect().left +
+															window.scrollX,
 													}}
 												>
 													{paginatedProtocols.map((protocol, index) => (
@@ -1954,9 +1995,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 														</div>
 													)}
 												</div>,
-												document.body
-											)
-										}
+												document.body,
+											)}
 									</td>
 									<td className="p-1 text-center relative">
 										<textarea
@@ -1966,7 +2006,7 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 											value={newAnalyte.default_unit || ''}
 											onChange={(e) => handleUnitInput('new', e.target.value)}
 										/>
-										{showUnitDropdown && 
+										{showUnitDropdown &&
 											createPortal(
 												<div
 													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
@@ -2007,9 +2047,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 														</div>
 													)}
 												</div>,
-												document.body
-											)
-										}
+												document.body,
+											)}
 									</td>
 									<td className="p-1 text-start">
 										<div className="w-full bg-white rounded border" style={{ borderRadius: '0.375rem' }}>
@@ -2023,7 +2062,11 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 															style={{ borderRadius: '0' }}
 															value={getDisplayStyleValue(newAnalyte.display_style, 'default')}
 															onChange={(e) => {
-																const updatedDisplayStyle = setDisplayStyleValue(newAnalyte.display_style, 'default', e.target.value);
+																const updatedDisplayStyle = setDisplayStyleValue(
+																	newAnalyte.display_style,
+																	'default',
+																	e.target.value,
+																);
 																handleNewAnalyteChange('display_style', updatedDisplayStyle);
 															}}
 														/>
@@ -2038,7 +2081,11 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 															style={{ borderRadius: '0' }}
 															value={getDisplayStyleValue(newAnalyte.display_style, 'eng')}
 															onChange={(e) => {
-																const updatedDisplayStyle = setDisplayStyleValue(newAnalyte.display_style, 'eng', e.target.value);
+																const updatedDisplayStyle = setDisplayStyleValue(
+																	newAnalyte.display_style,
+																	'eng',
+																	e.target.value,
+																);
 																handleNewAnalyteChange('display_style', updatedDisplayStyle);
 															}}
 														/>
@@ -2085,14 +2132,17 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 										>
 											{getTechnicianDisplayName(newAnalyte.technician_uid) || 'Chọn kỹ thuật viên'}
 										</div>
-										{technicianDropdowns['new'] && 
+										{technicianDropdowns['new'] &&
 											createPortal(
 												<div
 													className="technician-portal absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
 													style={{
 														width: Math.max(document.getElementById(`technician-new`)?.offsetWidth, 280) + 'px',
-														top: document.getElementById(`technician-new`)?.getBoundingClientRect().bottom + window.scrollY,
-														left: document.getElementById(`technician-new`)?.getBoundingClientRect().left + window.scrollX,
+														top:
+															document.getElementById(`technician-new`)?.getBoundingClientRect().bottom +
+															window.scrollY,
+														left:
+															document.getElementById(`technician-new`)?.getBoundingClientRect().left + window.scrollX,
 													}}
 												>
 													{techniciansList.map((tech, index) => (
@@ -2109,9 +2159,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 														</div>
 													))}
 												</div>,
-												document.body
-											)
-										}
+												document.body,
+											)}
 									</td>
 									<td className="p-1 text-center  ">
 										<button
@@ -2155,14 +2204,19 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 													value={analyte.parameter_name}
 													onChange={(e) => handleParameterNameInput(analyte.id, e.target.value)}
 												/>
-												{showParameterNameDropdown && editingParameterName === analyte.id && 
+												{showParameterNameDropdown &&
+													editingParameterName === analyte.id &&
 													createPortal(
 														<div
 															className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
 															style={{
 																width: document.getElementById(`param-name-${analyte.id}`)?.offsetWidth + 'px',
-																top: document.getElementById(`param-name-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
-																left: document.getElementById(`param-name-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+																top:
+																	document.getElementById(`param-name-${analyte.id}`)?.getBoundingClientRect().bottom +
+																	window.scrollY,
+																left:
+																	document.getElementById(`param-name-${analyte.id}`)?.getBoundingClientRect().left +
+																	window.scrollX,
 															}}
 														>
 															{getPaginatedParameterNames(parameterNameInput).map((name, index) => (
@@ -2200,9 +2254,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 																</div>
 															)}
 														</div>,
-														document.body
-													)
-												}
+														document.body,
+													)}
 											</>
 										) : (
 											<span
@@ -2242,14 +2295,19 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 													value={analyte.matrix}
 													onChange={(e) => handleMatrixInput(analyte.id, e.target.value)}
 												/>
-												{showMatrixDropdown && editingMatrix === analyte.id && 
+												{showMatrixDropdown &&
+													editingMatrix === analyte.id &&
 													createPortal(
 														<div
 															className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
 															style={{
 																width: document.getElementById(`matrix-${analyte.id}`)?.offsetWidth + 'px',
-																top: document.getElementById(`matrix-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
-																left: document.getElementById(`matrix-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+																top:
+																	document.getElementById(`matrix-${analyte.id}`)?.getBoundingClientRect().bottom +
+																	window.scrollY,
+																left:
+																	document.getElementById(`matrix-${analyte.id}`)?.getBoundingClientRect().left +
+																	window.scrollX,
 															}}
 														>
 															{getPaginatedMatrices(matrixInput).map((matrix, index) => (
@@ -2276,16 +2334,17 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 																	<button
 																		className="px-2 py-1 border rounded disabled:opacity-50"
 																		onClick={() => handleMatrixPageChange(matrixPage + 1)}
-																		disabled={matrixPage >= Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)}
+																		disabled={
+																			matrixPage >= Math.ceil(filterMatrices(matrixInput).length / itemsPerPage)
+																		}
 																	>
 																		Next
 																	</button>
 																</div>
 															)}
 														</div>,
-														document.body
-													)
-												}
+														document.body,
+													)}
 											</>
 										) : (
 											<span
@@ -2328,14 +2387,19 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 													value={analyte.protocol_code}
 													onChange={(e) => handleProtocolCodeInputChange(analyte.id, e.target.value)}
 												/>
-												{showProtocolCodeDropdown && editingProtocolCode === analyte.id && 
+												{showProtocolCodeDropdown &&
+													editingProtocolCode === analyte.id &&
 													createPortal(
 														<div
 															className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
 															style={{
 																width: document.getElementById(`protocol-code-${analyte.id}`)?.offsetWidth + 'px',
-																top: document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
-																left: document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+																top:
+																	document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect()
+																		.bottom + window.scrollY,
+																left:
+																	document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().left +
+																	window.scrollX,
 															}}
 														>
 															{getPaginatedProtocolCodes(protocolCodeInput).map((code, index) => (
@@ -2373,9 +2437,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 																</div>
 															)}
 														</div>,
-														document.body
-													)
-												}
+														document.body,
+													)}
 											</>
 										) : (
 											<span
@@ -2385,14 +2448,19 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 												{analyte.protocol_code}
 											</span>
 										)}
-										{isProtocolDropdownVisible && editingRow === analyte.id && 
+										{isProtocolDropdownVisible &&
+											editingRow === analyte.id &&
 											createPortal(
 												<div
 													className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
 													style={{
 														width: '320px',
-														top: document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
-														left: document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+														top:
+															document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().bottom +
+															window.scrollY,
+														left:
+															document.getElementById(`protocol-code-${analyte.id}`)?.getBoundingClientRect().left +
+															window.scrollX,
 													}}
 												>
 													{paginatedProtocols.map((protocol, index) => (
@@ -2431,9 +2499,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 														</div>
 													)}
 												</div>,
-												document.body
-											)
-										}
+												document.body,
+											)}
 									</td>
 									<td className="p-1 text-center relative">
 										{editingRow === analyte.id ? (
@@ -2445,14 +2512,19 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 													value={analyte.default_unit || ''}
 													onChange={(e) => handleUnitInput(analyte.id, e.target.value)}
 												/>
-												{showUnitDropdown && editingUnit === analyte.id && 
+												{showUnitDropdown &&
+													editingUnit === analyte.id &&
 													createPortal(
 														<div
 															className="absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
 															style={{
 																width: document.getElementById(`unit-${analyte.id}`)?.offsetWidth + 'px',
-																top: document.getElementById(`unit-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
-																left: document.getElementById(`unit-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+																top:
+																	document.getElementById(`unit-${analyte.id}`)?.getBoundingClientRect().bottom +
+																	window.scrollY,
+																left:
+																	document.getElementById(`unit-${analyte.id}`)?.getBoundingClientRect().left +
+																	window.scrollX,
 															}}
 														>
 															{getPaginatedUnits(unitInput).map((unit, index) => (
@@ -2486,9 +2558,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 																</div>
 															)}
 														</div>,
-														document.body
-													)
-												}
+														document.body,
+													)}
 											</>
 										) : (
 											<span
@@ -2513,7 +2584,11 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 																value={getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'default')}
 																onChange={(e) => {
 																	const currentDisplayStyle = initializeDisplayStyle(analyte.display_style);
-																	const updatedDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'default', e.target.value);
+																	const updatedDisplayStyle = setDisplayStyleValue(
+																		currentDisplayStyle,
+																		'default',
+																		e.target.value,
+																	);
 																	handleInputChange(analyte.id, 'display_style', updatedDisplayStyle);
 																}}
 															/>
@@ -2529,7 +2604,11 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 																value={getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'eng')}
 																onChange={(e) => {
 																	const currentDisplayStyle = initializeDisplayStyle(analyte.display_style);
-																	const updatedDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'eng', e.target.value);
+																	const updatedDisplayStyle = setDisplayStyleValue(
+																		currentDisplayStyle,
+																		'eng',
+																		e.target.value,
+																	);
 																	handleInputChange(analyte.id, 'display_style', updatedDisplayStyle);
 																}}
 															/>
@@ -2544,7 +2623,10 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 													<div
 														className="block overflow-hidden text-ellipsis whitespace-pre-wrap max-h-6 text-xs flex-1"
 														style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}
-														dangerouslySetInnerHTML={{ __html: getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'default') || '' }}
+														dangerouslySetInnerHTML={{
+															__html:
+																getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'default') || '',
+														}}
 													/>
 												</div>
 												<div className="flex items-center gap-2">
@@ -2552,7 +2634,9 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 													<div
 														className="block overflow-hidden text-ellipsis whitespace-pre-wrap max-h-6 text-xs flex-1"
 														style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}
-														dangerouslySetInnerHTML={{ __html: getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'eng') || '' }}
+														dangerouslySetInnerHTML={{
+															__html: getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'eng') || '',
+														}}
 													/>
 												</div>
 											</div>
@@ -2617,14 +2701,19 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 										>
 											{getTechnicianDisplayName(analyte.technician_uid) || 'Chọn kỹ thuật viên'}
 										</div>
-										{technicianDropdowns[analyte.id] && 
+										{technicianDropdowns[analyte.id] &&
 											createPortal(
 												<div
 													className="technician-portal absolute bg-white border rounded shadow-lg z-[9999] max-h-60 overflow-y-auto"
 													style={{
-														width: Math.max(document.getElementById(`technician-${analyte.id}`)?.offsetWidth, 280) + 'px',
-														top: document.getElementById(`technician-${analyte.id}`)?.getBoundingClientRect().bottom + window.scrollY,
-														left: document.getElementById(`technician-${analyte.id}`)?.getBoundingClientRect().left + window.scrollX,
+														width:
+															Math.max(document.getElementById(`technician-${analyte.id}`)?.offsetWidth, 280) + 'px',
+														top:
+															document.getElementById(`technician-${analyte.id}`)?.getBoundingClientRect().bottom +
+															window.scrollY,
+														left:
+															document.getElementById(`technician-${analyte.id}`)?.getBoundingClientRect().left +
+															window.scrollX,
 													}}
 												>
 													{techniciansList.map((tech, techIndex) => (
@@ -2641,9 +2730,8 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 														</div>
 													))}
 												</div>,
-												document.body
-											)
-										}
+												document.body,
+											)}
 									</td>
 									<td className="p-1 text-center ">
 										{editingRow === analyte.id ? (
@@ -2706,9 +2794,11 @@ const initTinyMCE = (selector, initialValue = '', onChange) => {
 					{/* Page info and navigation */}
 					<div className="flex items-center gap-4">
 						<div className="text-sm text-gray-600">
-							Hiển thị {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} - {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} của {pagination.totalItems} kết quả
+							Hiển thị {(pagination.currentPage - 1) * pagination.itemsPerPage + 1} -{' '}
+							{Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} của{' '}
+							{pagination.totalItems} kết quả
 						</div>
-						
+
 						{/* Page navigation */}
 						<div className="flex items-center gap-2">
 							{renderPageNumbers(totalPages, currentPage, handleApiPageChange)}

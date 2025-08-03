@@ -4,7 +4,11 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Editor Template - IRDOP</title>
-		<link rel="icon" type="image/png" href="https://irdop.org/wp-content/uploads/2024/07/416333459_918989026598929_7536651727234700897_n-removebg-preview.png" />
+		<link
+			rel="icon"
+			type="image/png"
+			href="https://irdop.org/wp-content/uploads/2024/07/416333459_918989026598929_7536651727234700897_n-removebg-preview.png"
+		/>
 		<script src="tinymce/tinymce.min.js"></script>
 		<script src="https://cdn.tailwindcss.com"></script>
 		<style>
@@ -36,7 +40,7 @@
 				display: flex;
 				flex-direction: column;
 				flex: 1;
-				gap: 20px;
+				gap: 5px;
 				min-width: 794px;
 				background: white;
 				border-radius: 10px;
@@ -48,21 +52,21 @@
 			.header-section {
 				flex: 0 0 auto;
 				height: fit-content;
-				padding: 20px 20px 20px 20px;
+				padding: 10px;
 				border-bottom: 1px solid #e5e7eb;
 				overflow-y: auto;
 			}
 
 			.editor-section {
 				flex: 1;
-				padding: 0 20px;
+				padding: 10px;
 				overflow: overlay;
 				box-sizing: border-box;
 			}
 
 			.footer-section {
 				flex: 0 0 auto;
-				padding: 0 20px 20px 20px;
+				padding: 10px;
 				border-top: 1px solid #e5e7eb;
 			}
 
@@ -134,10 +138,11 @@
 				height: 100%;
 				min-width: 210mm; /* Content width 210mm */
 				margin: 0;
-				border: none;
-				border-radius: 0;
+				border: 2px solid #e5e7eb;
+				border-radius: 8px;
 				overflow: overlay; /* Scroll đè lên, không thay đổi kích thước */
 				box-sizing: border-box;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 			}
 
 			/* TinyMCE specific styles */
@@ -146,7 +151,7 @@
 				height: 100% !important;
 				min-width: 210mm !important; /* Content width 210mm */
 				border: none !important;
-				border-radius: 10px !important;
+				border-radius: 8px !important;
 			}
 
 			.tox-edit-area {
@@ -856,6 +861,15 @@
 				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 			}
 
+			/* Sidebar section styles */
+			.sidebar-section {
+				margin-bottom: 0px;
+				padding: 12px;
+				border: 1px solid #e5e7eb;
+				border-radius: 8px;
+				background: #fafafa;
+			}
+
 			/* Modal button styles */
 			.modal-btn {
 				padding: 10px 20px;
@@ -907,14 +921,16 @@
 
 			.document-info-label {
 				font-weight: 500;
-				color: #6b7280;
+				color: #4b5563;
+				font-size: 12px;
 			}
 
 			.document-info-value {
-				color: #374151;
+				color: #000000;
 				text-align: right;
 				flex-shrink: 0;
 				margin-left: 8px;
+				font-size: 12px;
 			}
 
 			.template-dropdown {
@@ -1345,7 +1361,7 @@
 				display: none;
 				align-items: center;
 				justify-content: center;
-				padding: 20px;
+				padding: 0px;
 				box-sizing: border-box;
 			}
 
@@ -1353,12 +1369,15 @@
 				background: white;
 				border-radius: 10px;
 				box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-				max-width: 90%;
-				max-height: 90%;
-				overflow-y: auto;
+				max-width: 95%;
+				max-height: 95%;
+				overflow: hidden;
 				padding: 24px;
 				position: relative;
-				width: 500px;
+				width: 650px;
+				height: 85%;
+				display: flex;
+				flex-direction: column;
 			}
 
 			.sidebar-modal-header {
@@ -1393,6 +1412,10 @@
 			}
 
 			.sidebar-modal-body {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				min-height: 0;
 				margin-bottom: 20px;
 			}
 
@@ -1560,22 +1583,23 @@
 						"
 					>
 						<hr style="border-top: 1px solid #000; margin: 0" />
-						<div style="margin: 5px 0 0 0; text-align: left; display: flex; align-items: center; gap: 8px;">
-							<label style="margin: 0; font-weight: bold;">Mã tài liệu:</label>
-							<input 
-								id="footerDocIdInput" 
-								type="text" 
-								readonly 
+						<div style="margin: 5px 0 0 0; text-align: left; display: flex; align-items: center; gap: 8px">
+							<label style="margin: 0; font-weight: bold">Document fingerprint:</label>
+							<input
+								id="footerDocIdInput"
+								type="text"
+								readonly
 								style="
-									border: 1px solid #d1d5db; 
-									padding: 2px 6px; 
-									font-size: 11px; 
+									border: 1px solid #d1d5db;
+									padding: 2px 6px;
+									font-size: 11px;
 									background: #f9fafb;
 									min-width: 120px;
 									font-family: 'Times New Roman', serif;
 								"
 								placeholder="Chưa có mã"
 							/>
+							<span id="currentDateDisplay" style="font-family: 'Times New Roman', serif"></span>
 						</div>
 					</div>
 				</div>
@@ -1583,16 +1607,13 @@
 
 			<!-- Sidebar - Form tạo mẫu -->
 			<div class="sidebar">
-				<div
-					class="modal-body"
-					style="display: flex; flex-direction: column; height: 100vh; overflow: auto"
-				>
+				<div class="modal-body" style="display: flex; flex-direction: column; height: 100vh; overflow: auto">
 					<!-- Top Action Buttons -->
-					<div style="display: flex; gap: 8px; margin-top: 10px; margin-bottom: 20px;">
+					<div style="display: flex; gap: 8px; margin-top: 10px; margin-bottom: 20px">
 						<button
 							id="previewBtn"
 							class="toolbar-btn"
-							style="flex: 1;"
+							style="flex: 1"
 							title="Preview biên bản"
 							onclick="previewReport()"
 						>
@@ -1601,7 +1622,7 @@
 						<button
 							id="clearFormattingBtn"
 							class="toolbar-btn"
-							style="flex: 1;"
+							style="flex: 1"
 							title="Xóa toàn bộ định dạng"
 							onclick="clearFormatting()"
 						>
@@ -1610,7 +1631,7 @@
 						<button
 							id="clearAllBtn"
 							class="toolbar-btn"
-							style="flex: 1;"
+							style="flex: 1"
 							title="Xóa toàn bộ nội dung"
 							onclick="clearAllContent()"
 						>
@@ -1628,13 +1649,21 @@
 							border: 1px solid #e5e7eb;
 							border-radius: 6px;
 							background: #f9fafb;
-							max-height: 360px;
+							max-height: 840px;
 							overflow-y: hidden;
-							flex-grow: 1;
+							flex-grow: 5;
 						"
 					>
-						<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding:4px 12px">
-							<div style="display: flex; align-items: center;">
+						<div
+							style="
+								display: flex;
+								align-items: center;
+								justify-content: space-between;
+								margin-bottom: 8px;
+								padding: 4px 12px;
+							"
+						>
+							<div style="display: flex; align-items: center">
 								<svg
 									style="width: 16px; height: 16px; margin-right: 6px; color: #6b7280"
 									fill="currentColor"
@@ -1652,12 +1681,12 @@
 								id="selectParametersBtn"
 								class="toolbar-btn"
 								style="
-									background: #ffffff; 
-									color: black; 
+									background: #ffffff;
+									color: black;
 									border: 2px solid #57585a;
-									padding: 4px 8px; 
-									border-radius: 4px; 
-									font-size: 12px; 
+									padding: 4px 8px;
+									border-radius: 4px;
+									font-size: 12px;
 									cursor: pointer;
 									display: flex;
 									align-items: center;
@@ -1671,55 +1700,156 @@
 							</button>
 						</div>
 
-						<div id="tableInfoContent" style="font-size: 12px; color: #6b7280; max-height: 300px; overflow-y: auto; padding: 0 2px 0 10px;">
+						<div
+							id="tableInfoContent"
+							style="
+								font-size: 12px;
+								color: #6b7280;
+								height: calc(100% - 60px);
+								overflow-y: auto;
+								padding: 0 2px 0 10px;
+							"
+						>
 							<div>Đang tải thông tin bảng...</div>
 						</div>
 					</div>
 
-					<!-- Main Action Buttons -->
-					<div style="margin-bottom: 2px; display: flex; gap: 8px;">
-						<button
-							id="editSavedReportBtn"
-							class="toolbar-btn"
-							style="flex: 1;"
-							title="Tìm kiếm biên bản đã lưu"
-							onclick="showEditSavedReportModal()"
-						>
-							Tìm kiếm biên bản đã lưu
-						</button>
-					</div>
-
-					<!-- Document Information Box -->
-					<div id="documentInfoBox" class="document-info-box">
-						<h5>Thông tin chỉnh sửa:</h5>
-						<div class="document-info-item">
-							<span class="document-info-label">Mã tài liệu:</span>
-							<span id="docInfoId" class="document-info-value">Chưa có</span>
-						</div>
-						<div class="document-info-item">
-							<span class="document-info-label">Ngày tạo:</span>
-							<span id="docInfoCreated" class="document-info-value">-</span>
-						</div>
-						<div class="document-info-item">
-							<span class="document-info-label">Ngày sửa:</span>
-							<span id="docInfoModified" class="document-info-value">-</span>
-						</div>
-					</div>
-
 					<!-- Template Information Box (Bottom) -->
-					<div style="margin-top: auto; margin-bottom: 10px;">
+					<div style="margin-top: auto; margin-bottom: 0px">
+						<!-- Document & Reports Information Section -->
+						<div style="margin-bottom: 12px">
+							<div
+								id="documentReportsInfoBox"
+								style="
+									position: relative;
+									padding: 0px;
+									border: 1px solid #e5e7eb;
+									border-radius: 6px;
+									background: #f0fdf4;
+									min-height: fit-content;
+								"
+							>
+								<!-- Document & Reports Section with Minimize/Maximize -->
+								<div id="documentReportsSection" class="sidebar-section">
+									<!-- Minimized state -->
+									<div id="documentReportsMinimized" style="display: block">
+										<div
+											style="
+												padding: 8px 0;
+												cursor: pointer;
+												transition: opacity 0.2s;
+												display: flex;
+												align-items: center;
+												gap: 8px;
+											"
+											onclick="toggleDocumentReportsSection(false)"
+											onMouseOver="this.style.opacity='0.7'"
+											onMouseOut="this.style.opacity='1'"
+										>
+											<span style="font-size: 14px;">📄</span>
+											<span style="font-weight: 600; color: #374151; font-size: 14px;">
+												Thông tin biên bản hiện tại
+											</span>
+											<span style="font-size: 10px; opacity: 0.5; color: #6b7280;">▲</span>
+										</div>
+									</div>
+
+									<!-- Maximized state -->
+									<div id="documentReportsMaximized" style="display: none">
+										<!-- Header with minimize button -->
+										<div
+											style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px"
+										>
+											<h5 
+												style="
+													font-weight: 600; 
+													color: #374151; 
+													margin: 0; 
+													font-size: 16px;
+													cursor: pointer;
+													transition: opacity 0.2s;
+													flex: 1;
+												"
+												onclick="toggleDocumentReportsSection(true)"
+												onMouseOver="this.style.opacity='0.7'"
+												onMouseOut="this.style.opacity='1'"
+												title="Click để thu gọn"
+											>
+												Thông tin biên bản hiện tại:
+											</h5>
+											<button
+												class="minimal-btn"
+												onclick="toggleDocumentReportsSection(true)"
+												style="
+													background: none;
+													border: none;
+													color: #6b7280;
+													cursor: pointer;
+													padding: 4px;
+													border-radius: 4px;
+													font-size: 12px;
+													transition: all 0.2s;
+												"
+												onMouseOver="this.style.backgroundColor='#f3f4f6'; this.style.color='#374151'"
+												onMouseOut="this.style.backgroundColor='transparent'; this.style.color='#6b7280'"
+												title="Thu gọn"
+											>
+												▼
+											</button>
+										</div>
+
+										<div id="documentReportsContent">
+											<!-- Document Information -->
+											<div style="margin-bottom: 12px">
+												<div style="margin-bottom: 8px">
+													<div style="font-size: 12px; color: #374151; margin-bottom: 4px">
+														<strong>Tiêu đề:</strong> <span id="currentDocumentTitle">-</span>
+													</div>
+												</div>
+												<div class="document-info-item">
+													<span class="document-info-label">Mã tài liệu:</span>
+													<span id="docInfoId" class="document-info-value">Chưa có</span>
+												</div>
+												<div class="document-info-item">
+													<span class="document-info-label">Ngày tạo:</span>
+													<span id="docInfoCreated" class="document-info-value">-</span>
+												</div>
+												<div class="document-info-item">
+													<span class="document-info-label">Ngày sửa:</span>
+													<span id="docInfoModified" class="document-info-value">-</span>
+												</div>
+											</div>
+
+											<!-- Recent Reports Button -->
+											<div style="display: flex; flex-direction: column; gap: 8px">
+												<button
+													id="editSavedReportBtn"
+													class="toolbar-btn"
+													style="width: 100%"
+													title="Các biên bản gần đây"
+													onclick="showEditSavedReportModal()"
+												>
+													📋 Các biên bản gần đây
+												</button>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
 						<div
 							id="templateInfoBox"
 							style="
 								position: relative;
-								padding: 12px;
+								padding: 0px;
 								border: 1px solid #e5e7eb;
 								border-radius: 6px;
 								background: #f0f9ff;
-								min-height: 120px;
+								min-height: fit-content;
 							"
 						>
-							<!-- Template Code (Top Right, Absolute Position) -->
+							<!-- Template Code (Top Right, Absolute Position) - Hidden -->
 							<div
 								id="templateCode"
 								style="
@@ -1733,78 +1863,169 @@
 									padding: 4px 8px;
 									border-radius: 4px;
 									border: 1px solid #3b82f6;
+									display: none;
 								"
 							>
-								<span id="templateCodeText">Chưa chọn mẫu</span>
+								<span id="templateCodeTextOld">Chưa chọn mẫu</span>
 							</div>
 
-							<div id="templateInfoContent">
-								<!-- When no template selected -->
-								<div id="noTemplateSelected" style="position: relative;">
-									<h5 style="font-weight: 600; color: #374151; margin-bottom: 8px;">Thông tin mẫu biên bản:</h5>
-									<p style="color: #6b7280; font-size: 12px; margin-bottom: 8px;">Chưa chọn mẫu biên bản</p>
-									<button
-										id="templateSearchBtn"
-										class="toolbar-btn"
-										style="width: 100%; margin-bottom: 8px;"
-										onclick="showTemplateSearchModal()"
+							<!-- Template Section with Minimize/Maximize -->
+							<div id="templateSection" class="sidebar-section">
+								<!-- Minimized state -->
+								<div id="templateMinimized" style="display: block">
+									<div
+										style="
+											padding: 8px 0;
+											cursor: pointer;
+											transition: opacity 0.2s;
+											display: flex;
+											align-items: center;
+											gap: 8px;
+										"
+										onclick="toggleTemplateSection(false)"
+										onMouseOver="this.style.opacity='0.7'"
+										onMouseOut="this.style.opacity='1'"
 									>
-										🔍 Tìm kiếm mẫu biên bản
-									</button>
+										<span style="font-size: 14px;">📋</span>
+										<span style="font-weight: 600; color: #374151; font-size: 14px;">
+											Mẫu biên bản
+										</span>
+										<span style="font-size: 10px; opacity: 0.5; color: #6b7280;">▲</span>
+									</div>
 								</div>
 
-								<!-- When template is selected -->
-								<div id="templateSelected" style="display: none;">
-									<h5 style="font-weight: 600; color: #374151; margin-bottom: 8px;">Thông tin mẫu biên bản:</h5>
-									<div style="font-size: 12px; color: #374151; line-height: 1.4;">
-										<div style="margin-bottom: 4px;">
-											<strong>Tiêu đề:</strong> <span id="templateTitle">-</span>
+								<!-- Maximized state -->
+								<div id="templateMaximized" style="display: none">
+									<!-- Header with minimize button -->
+									<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+										<h5 
+											style="
+												font-weight: 600; 
+												color: #374151; 
+												margin: 0;
+												cursor: pointer;
+												transition: opacity 0.2s;
+												flex: 1;
+											"
+											onclick="toggleTemplateSection(true)"
+											onMouseOver="this.style.opacity='0.7'"
+											onMouseOut="this.style.opacity='1'"
+											title="Click để thu gọn"
+										>
+											Mẫu biên bản
+										</h5>
+										<button
+											class="minimal-btn"
+											onclick="toggleTemplateSection(true)"
+											style="
+												background: none;
+												border: none;
+												color: #6b7280;
+												cursor: pointer;
+												padding: 4px;
+												border-radius: 4px;
+												font-size: 12px;
+												transition: all 0.2s;
+											"
+											onMouseOver="this.style.backgroundColor='#f3f4f6'; this.style.color='#374151'"
+											onMouseOut="this.style.backgroundColor='transparent'; this.style.color='#6b7280'"
+											title="Thu gọn"
+										>
+											▼
+										</button>
+									</div>
+
+									<div id="templateInfoContent">
+										<!-- When no template selected -->
+										<div id="noTemplateSelected" style="position: relative">
+											<div style="margin-bottom: 12px">
+												<p style="color: #6b7280; font-size: 12px; margin-bottom: 8px">Chưa chọn mẫu biên bản</p>
+												<p
+													id="templateCodeLine"
+													style="color: #3b82f6; font-size: 11px; font-weight: 600; margin-bottom: 8px; display: none"
+												>
+													<strong>Mã mẫu:</strong> <span id="templateCodeText"></span>
+												</p>
+											</div>
+
+											<div style="display: flex; flex-direction: column; gap: 8px">
+												<button
+													id="templateSearchBtn"
+													class="toolbar-btn"
+													style="width: 100%"
+													onclick="showTemplateSearchModal()"
+												>
+													🔍 Tìm kiếm mẫu biên bản
+												</button>
+												<button
+													id="createTemplateBtn"
+													class="toolbar-btn"
+													style="width: 100%"
+													onclick="showCreateTemplateModal()"
+												>
+													➕ Tạo mẫu biên bản
+												</button>
+											</div>
 										</div>
-										<div style="margin-bottom: 4px;">
-											<strong>Mô tả:</strong> <span id="templateDescription">-</span>
-										</div>
-										<div style="margin-bottom: 4px;">
-											<strong>Ngày tạo:</strong> <span id="templateCreatedDate">-</span>
-										</div>
-										<div style="margin-bottom: 4px;">
-											<strong>Ngày sửa đổi:</strong> <span id="templateModifiedDate">-</span>
+
+										<!-- When template is selected -->
+										<div id="templateSelected" style="display: none">
+											<div style="margin-bottom: 12px">
+												<div style="font-size: 12px; color: #374151; line-height: 1.4">
+													<div style="margin-bottom: 4px">
+														<strong>Mã mẫu:</strong>
+														<span id="templateCodeTextSelected" style="color: #3b82f6; font-weight: 600">-</span>
+													</div>
+													<div style="margin-bottom: 4px">
+														<strong>Tiêu đề:</strong> <span id="templateTitle">-</span>
+													</div>
+													<div style="margin-bottom: 4px">
+														<strong>Mô tả:</strong> <span id="templateDescription">-</span>
+													</div>
+													<div style="margin-bottom: 4px">
+														<strong>Ngày tạo:</strong> <span id="templateCreatedDate">-</span>
+													</div>
+													<div style="margin-bottom: 4px">
+														<strong>Ngày sửa đổi:</strong> <span id="templateModifiedDate">-</span>
+													</div>
+												</div>
+											</div>
+
+											<div style="display: flex; flex-direction: column; gap: 8px">
+												<button
+													id="templateSearchBtn2"
+													class="toolbar-btn"
+													style="width: 100%"
+													onclick="showTemplateSearchModal()"
+												>
+													🔍 Tìm kiếm mẫu biên bản khác
+												</button>
+												<div style="display: flex; gap: 8px">
+													<button
+														id="createTemplateBtn2"
+														class="toolbar-btn"
+														style="flex: 1"
+														onclick="showCreateTemplateModal()"
+													>
+														➕ Tạo mẫu
+													</button>
+													<button
+														id="editTemplateBtn"
+														class="toolbar-btn"
+														style="flex: 1"
+														onclick="showEditTemplateModal()"
+													>
+														✏️ Sửa mẫu
+													</button>
+												</div>
+											</div>
 										</div>
 									</div>
-									<!-- Always show search button even when template is selected -->
-									<button
-										id="templateSearchBtn2"
-										class="toolbar-btn"
-										style="width: 100%; margin-top: 8px;"
-										onclick="showTemplateSearchModal()"
-									>
-										🔍 Tìm kiếm mẫu biên bản khác
-									</button>
 								</div>
 							</div>
 						</div>
 
-						<!-- Template Action Buttons -->
-						<div style="margin-top: 8px; display:flex; gap: 8px; ">
-							<button
-								id="createTemplateBtn"
-								class="toolbar-btn"
-								style="width: 100%; margin-top: 6px;"
-								onclick="showCreateTemplateModal()"
-							>
-								Tạo mẫu biên bản
-							</button>
-							<button
-								id="editTemplateBtn"
-								class="toolbar-btn hidden"
-								style="width: 100%; margin-top: 6px;"
-								onclick="showEditTemplateModal()"
-							>
-								Sửa mẫu biên bản
-							</button>
-						</div>
-					</div>
-
-					<!-- Hidden Forms and existing content... -->
+						<!-- Hidden Forms and existing content... -->
 						<div
 							id="externalFileArea"
 							class="external-file-area hidden"
@@ -1947,7 +2168,7 @@
 					<!-- Edit Saved Report Form -->
 					<div id="editSavedReportForm" class="create-template-form" style="display: none">
 						<div class="flex items-center justify-between mb-4">
-							<h4 class="text-lg font-semibold text-gray-900">Tìm kiếm biên bản đã lưu</h4>
+							<h4 class="text-lg font-semibold text-gray-900">Các biên bản gần đây</h4>
 							<button
 								type="button"
 								id="closeEditSavedReportBtn"
@@ -1983,8 +2204,6 @@
 							<span class="ml-2 text-gray-600">Đang tải...</span>
 						</div>
 					</div>
-
-
 				</div>
 
 				<!-- Modal Overlay -->
@@ -2096,7 +2315,7 @@
                 
                 body { 
                     font-family: 'Times New Roman', Times, serif; 
-                    font-size: 11px; 
+                    font-size: 16px; 
                     line-height: 1.6;
                     margin: 0;
                     background: white;
@@ -2336,17 +2555,33 @@
 
 			function updateHeaderData() {
 				headerData = getHeaderData();
+
+				// Also update the document title display
+				const currentDocumentTitle = document.getElementById('currentDocumentTitle');
+				if (currentDocumentTitle) {
+					currentDocumentTitle.textContent = headerData.title || '-';
+				}
 			}
 
 			// New sidebar functions
 			async function previewReport() {
+				// Hỏi người dùng có muốn định dạng tài liệu trước khi preview
+				const shouldFormat = confirm('Bạn có muốn định dạng lại tài liệu để phù hợp với trang in không?');
+				
+				if (shouldFormat) {
+					// Thực hiện format trước
+					formatReset();
+					// Đợi một chút để format hoàn thành
+					await new Promise((resolve) => setTimeout(resolve, 500));
+				}
+
 				// Show loading state on preview button
 				const previewBtn = document.getElementById('previewBtn');
 				if (previewBtn) {
 					const originalText = previewBtn.textContent;
 					previewBtn.textContent = 'Đang tạo...';
 					previewBtn.disabled = true;
-					
+
 					// Reset button function
 					const resetButton = () => {
 						previewBtn.textContent = originalText;
@@ -2357,23 +2592,22 @@
 						// Check if we have docId, if not, auto-save first
 						if (!currentDocId) {
 							previewBtn.textContent = 'Đang lưu...';
-							
+
 							// Perform auto-save to get docId
 							await autoSaveLabResultReport();
-							
+
 							// Wait a moment for auto-save to complete
-							await new Promise(resolve => setTimeout(resolve, 1000));
-							
+							await new Promise((resolve) => setTimeout(resolve, 1000));
+
 							// Check if we got docId after auto-save
 							if (!currentDocId) {
 								throw new Error('Không thể tạo mã tài liệu. Vui lòng thử lại.');
 							}
 						}
-						
+
 						// Now proceed with preview
 						previewBtn.textContent = 'Đang tạo...';
 						await createLabResultReport();
-						
 					} catch (error) {
 						console.error('Error in preview:', error);
 						alert('Lỗi khi tạo preview: ' + error.message);
@@ -2411,38 +2645,62 @@
 					if (confirm('Bạn có chắc chắn muốn xóa toàn bộ nội dung? Hành động này không thể hoàn tác.')) {
 						// Clear all editor content
 						editor.setContent('');
-						
+
 						// Clear header inputs
-						const headerInputs = ['headerSubject', 'headerDate', 'headerTime', 'headerLocation', 'headerClient', 'headerExecutor'];
-						headerInputs.forEach(inputId => {
+						const headerInputs = [
+							'headerSubject',
+							'headerDate',
+							'headerTime',
+							'headerLocation',
+							'headerClient',
+							'headerExecutor',
+						];
+						headerInputs.forEach((inputId) => {
 							const input = document.getElementById(inputId);
 							if (input) input.value = '';
 						});
-						
+
 						// Reset current document state
 						currentDocId = null;
 						currentTemplate = null;
-						
+
 						// Update URL to remove docId and templateId
 						updateURLWithDocId(null);
 						updateURLWithTemplateId(null);
-						
+
 						// Stop auto-save
 						stopAutoSave();
-						
+
 						// Clear document info display
 						updateDocumentInfo(null, null, null);
-						
+
 						// Reset template selection UI
 						const noTemplateDiv = document.getElementById('noTemplateSelected');
 						const templateSelectedDiv = document.getElementById('templateSelected');
 						if (noTemplateDiv) noTemplateDiv.style.display = 'block';
 						if (templateSelectedDiv) templateSelectedDiv.style.display = 'none';
-						
+
+						// Clear template information display
+						const templateCodeText = document.getElementById('templateCodeText');
+						const templateCodeTextSelected = document.getElementById('templateCodeTextSelected');
+						const templateTitle = document.getElementById('templateTitle');
+						const templateDescription = document.getElementById('templateDescription');
+						const templateCreatedDate = document.getElementById('templateCreatedDate');
+						const templateModifiedDate = document.getElementById('templateModifiedDate');
+						const templateCodeLine = document.getElementById('templateCodeLine');
+
+						if (templateCodeText) templateCodeText.textContent = '';
+						if (templateCodeTextSelected) templateCodeTextSelected.textContent = '-';
+						if (templateTitle) templateTitle.textContent = '-';
+						if (templateDescription) templateDescription.textContent = '-';
+						if (templateCreatedDate) templateCreatedDate.textContent = '-';
+						if (templateModifiedDate) templateModifiedDate.textContent = '-';
+						if (templateCodeLine) templateCodeLine.style.display = 'none';
+
 						// Reset template button
 						const selectBtn = document.getElementById('selectTemplateBtn');
 						if (selectBtn) selectBtn.textContent = 'Chọn template';
-						
+
 						showAutoHideMessage('Đã xóa toàn bộ nội dung thành công!', 'success');
 					}
 				} else {
@@ -2468,7 +2726,7 @@
 			function handleTemplateInputFocus() {
 				const searchInput = document.getElementById('templateSearchInput');
 				const searchTerm = searchInput ? searchInput.value.trim() : '';
-				
+
 				// Always show dropdown when focusing input, search if there's text
 				showTemplateDropdown();
 				if (searchTerm !== '') {
@@ -2489,7 +2747,7 @@
 			function debounceTemplateSearch() {
 				const searchInput = document.getElementById('templateSearchInput');
 				const searchTerm = searchInput ? searchInput.value.trim() : '';
-				
+
 				// If input is empty, reset template selection
 				if (searchTerm === '') {
 					resetTemplateSelection();
@@ -2506,31 +2764,33 @@
 			// Reset template selection
 			function resetTemplateSelection() {
 				currentTemplate = null;
-				
+
 				// Show "no template selected" and hide "template selected"
 				const noTemplateDiv = document.getElementById('noTemplateSelected');
 				const templateSelectedDiv = document.getElementById('templateSelected');
-				
+
 				if (noTemplateDiv) noTemplateDiv.style.display = 'block';
 				if (templateSelectedDiv) templateSelectedDiv.style.display = 'none';
-				
+
 				// Clear search input
 				const searchInput = document.getElementById('templateSearchInput');
 				if (searchInput) {
 					searchInput.value = '';
 				}
-				
+
 				// Reset template code display
 				const templateCodeText = document.getElementById('templateCodeText');
-				if (templateCodeText) {
-					templateCodeText.textContent = 'Chưa chọn mẫu';
-				}
+				const templateCodeTextSelected = document.getElementById('templateCodeTextSelected');
+				const templateCodeLine = document.getElementById('templateCodeLine');
 
-				// Hide edit template button
-				const editTemplateBtn = document.getElementById('editTemplateBtn');
-				if (editTemplateBtn) {
-					editTemplateBtn.classList.add('hidden');
-					updateTemplateButtonLayout();
+				if (templateCodeLine) {
+					templateCodeLine.style.display = 'none';
+				}
+				if (templateCodeText) {
+					templateCodeText.textContent = '';
+				}
+				if (templateCodeTextSelected) {
+					templateCodeTextSelected.textContent = '';
 				}
 
 				// Hide dropdown
@@ -2544,7 +2804,7 @@
 			async function searchTemplatesForDropdown() {
 				const searchInput = document.getElementById('templateSearchInput');
 				const searchTerm = searchInput ? searchInput.value.trim() : '';
-				
+
 				if (searchTerm === '') {
 					hideTemplateDropdown();
 					return;
@@ -2558,12 +2818,12 @@
 					const searchData = {
 						page: 1,
 						size: 10,
-						search: searchTerm
+						search: searchTerm,
 					};
 
 					// Call API to search templates
 					const response = await apiPost('https://black.irdop.org/v1/lab/test_report/get_template', searchData);
-					
+
 					// Handle the response structure: response.data = { result: [...], pagination: {...} }
 					if (response && response.data && response.data.result && Array.isArray(response.data.result)) {
 						renderTemplateSearchResults(response.data.result, response.data.pagination);
@@ -2577,7 +2837,8 @@
 					// Show error message in dropdown
 					const resultsDiv = document.getElementById('templateSearchResults');
 					if (resultsDiv) {
-						resultsDiv.innerHTML = '<div style="padding: 8px; color: #ef4444; font-size: 12px; text-align: center;">Lỗi tìm kiếm mẫu biên bản</div>';
+						resultsDiv.innerHTML =
+							'<div style="padding: 8px; color: #ef4444; font-size: 12px; text-align: center;">Lỗi tìm kiếm mẫu biên bản</div>';
 						showTemplateDropdown();
 					}
 				} finally {
@@ -2607,7 +2868,8 @@
 				}
 
 				if (!templates || templates.length === 0) {
-					resultsDiv.innerHTML = '<div style="padding: 8px; color: #6b7280; font-size: 12px; text-align: center;">Không tìm thấy template nào</div>';
+					resultsDiv.innerHTML =
+						'<div style="padding: 8px; color: #6b7280; font-size: 12px; text-align: center;">Không tìm thấy template nào</div>';
 					return;
 				}
 
@@ -2623,8 +2885,8 @@
 						border-bottom: 1px solid #f3f4f6;
 						transition: background-color 0.2s;
 					`;
-					item.onmouseover = () => item.style.backgroundColor = '#f9fafb';
-					item.onmouseout = () => item.style.backgroundColor = 'white';
+					item.onmouseover = () => (item.style.backgroundColor = '#f9fafb');
+					item.onmouseout = () => (item.style.backgroundColor = 'white');
 
 					// Format dates safely
 					const createdDate = template.createdAt ? new Date(template.createdAt).toLocaleDateString('vi-VN') : '-';
@@ -2728,22 +2990,49 @@
 					const templateDescription = document.getElementById('templateDescription');
 					const templateCreatedDate = document.getElementById('templateCreatedDate');
 					const templateModifiedDate = document.getElementById('templateModifiedDate');
-					
+
 					if (templateTitle) templateTitle.textContent = template.templateName || template.name || '-';
-					if (templateDescription) templateDescription.textContent = template.templateDescription || template.description || '-';
-					if (templateCreatedDate) templateCreatedDate.textContent = template.createdAt ? new Date(template.createdAt).toLocaleDateString('vi-VN') + ' - ' + template?.authorName.split(':')[1] || '-' : '-';
-					if (templateModifiedDate) templateModifiedDate.textContent = template.modifiedAt ? new Date(template.modifiedAt).toLocaleDateString('vi-VN') + ' - ' + template?.modifiedBy.split(':')[1] || '-' : '-';
+					if (templateDescription)
+						templateDescription.textContent = template.templateDescription || template.description || '-';
+					if (templateCreatedDate)
+						templateCreatedDate.textContent = template.createdAt
+							? new Date(template.createdAt).toLocaleDateString('vi-VN') + ' - ' + template?.authorName.split(':')[1] ||
+							  '-'
+							: '-';
+					if (templateModifiedDate)
+						templateModifiedDate.textContent = template.modifiedAt
+							? new Date(template.modifiedAt).toLocaleDateString('vi-VN') +
+									' - ' +
+									template?.modifiedBy.split(':')[1] || '-'
+							: '-';
 
 					// Update template code display
 					const templateCodeText = document.getElementById('templateCodeText');
-					if (templateCodeText) {
-						templateCodeText.textContent = template.id || 'Chưa có mã';
-					}
+					const templateCodeTextSelected = document.getElementById('templateCodeTextSelected');
+					const templateCodeLine = document.getElementById('templateCodeLine');
 
-					const editTemplateBtn = document.getElementById('editTemplateBtn');
-					if (editTemplateBtn) {
-						editTemplateBtn.classList.remove('hidden');
-						updateTemplateButtonLayout();
+					if (template.id) {
+						// Show template code line when there's a template ID
+						if (templateCodeLine) {
+							templateCodeLine.style.display = 'block';
+						}
+						if (templateCodeText) {
+							templateCodeText.textContent = template.id;
+						}
+						if (templateCodeTextSelected) {
+							templateCodeTextSelected.textContent = template.id;
+						}
+					} else {
+						// Hide template code line when no template ID
+						if (templateCodeLine) {
+							templateCodeLine.style.display = 'none';
+						}
+						if (templateCodeText) {
+							templateCodeText.textContent = '';
+						}
+						if (templateCodeTextSelected) {
+							templateCodeTextSelected.textContent = '';
+						}
 					}
 
 					// Show external file if template has file
@@ -2765,40 +3054,141 @@
 				}
 			}
 
-			// Helper function to update template button layout
-			function updateTemplateButtonLayout() {
-				const createBtn = document.getElementById('createTemplateBtn');
-				const editBtn = document.getElementById('editTemplateBtn');
-				
-				if (!createBtn || !editBtn) return;
+			// Function to update template display information in sidebar
+			function updateTemplateDisplayInfo(template) {
+				if (!template) return;
 
-				const container = createBtn.parentElement;
-				if (!container) return;
+				// Hide "no template selected" and show "template selected"
+				const noTemplateDiv = document.getElementById('noTemplateSelected');
+				const templateSelectedDiv = document.getElementById('templateSelected');
+				if (noTemplateDiv) noTemplateDiv.style.display = 'none';
+				if (templateSelectedDiv) templateSelectedDiv.style.display = 'block';
 
-				const isEditVisible = !editBtn.classList.contains('hidden');
-				
-				if (isEditVisible) {
-					// Both buttons visible - arrange in same row
-					container.style.display = 'flex';
-					container.style.gap = '6px';
-					container.style.marginTop = '8px';
-					
-					createBtn.style.width = 'calc(50% - 3px)';
-					createBtn.style.marginTop = '0';
-					
-					editBtn.style.width = 'calc(50% - 3px)';
-					editBtn.style.marginTop = '0';
+				// Update template info display with dates
+				const templateTitle = document.getElementById('templateTitle');
+				const templateDescription = document.getElementById('templateDescription');
+				const templateCreatedDate = document.getElementById('templateCreatedDate');
+				const templateModifiedDate = document.getElementById('templateModifiedDate');
+
+				if (templateTitle) templateTitle.textContent = template.templateName || template.name || '-';
+				if (templateDescription)
+					templateDescription.textContent = template.templateDescription || template.description || '-';
+				if (templateCreatedDate)
+					templateCreatedDate.textContent = template.createdAt
+						? new Date(template.createdAt).toLocaleDateString('vi-VN') + (template?.authorName ? ' - ' + template.authorName.split(':')[1] : '')
+						: '-';
+				if (templateModifiedDate)
+					templateModifiedDate.textContent = template.modifiedAt
+						? new Date(template.modifiedAt).toLocaleDateString('vi-VN') + (template?.modifiedBy ? ' - ' + template.modifiedBy.split(':')[1] : '')
+						: '-';
+
+				// Update template code display
+				const templateCodeText = document.getElementById('templateCodeText');
+				const templateCodeTextSelected = document.getElementById('templateCodeTextSelected');
+				const templateCodeLine = document.getElementById('templateCodeLine');
+
+				if (template.id) {
+					// Show template code line when there's a template ID
+					if (templateCodeLine) {
+						templateCodeLine.style.display = 'block';
+					}
+					if (templateCodeText) {
+						templateCodeText.textContent = template.id;
+					}
+					if (templateCodeTextSelected) {
+						templateCodeTextSelected.textContent = template.id;
+					}
 				} else {
-					// Only create button visible - full width
-					container.style.display = 'block';
-					container.style.gap = '';
-					container.style.marginTop = '8px';
-					
-					createBtn.style.width = '100%';
-					createBtn.style.marginTop = '0';
-					
-					editBtn.style.width = '100%';
-					editBtn.style.marginTop = '6px';
+					// Hide template code line when no template ID
+					if (templateCodeLine) {
+						templateCodeLine.style.display = 'none';
+					}
+					if (templateCodeText) {
+						templateCodeText.textContent = '';
+					}
+					if (templateCodeTextSelected) {
+						templateCodeTextSelected.textContent = '';
+					}
+				}
+
+				// Show external file if template has file
+				if (template.fileId) {
+					showExternalFile({ name: 'Template File.docx' });
+				}
+
+				// Update table display with new columns if available
+				if (template.columns) {
+					updateTableWithTemplateColumns(template);
+				}
+			}
+
+			// Helper function to update template button layout - Updated for new structure
+			function updateTemplateButtonLayout() {
+				// In the new structure, we don't need this function anymore
+				// as buttons are already properly organized in the template
+				// But we keep it for compatibility with existing code that calls it
+				return;
+			}
+
+			// Toggle template section minimize/maximize
+			function toggleTemplateSection(minimize) {
+				const minimizedDiv = document.getElementById('templateMinimized');
+				const maximizedDiv = document.getElementById('templateMaximized');
+				const tableInfoArea = document.getElementById('tableInfoArea');
+
+				if (minimize) {
+					// Minimize the section
+					if (minimizedDiv) minimizedDiv.style.display = 'block';
+					if (maximizedDiv) maximizedDiv.style.display = 'none';
+					// Increase table info area height when template is minimized
+					if (tableInfoArea) {
+						const currentMaxHeight = parseInt(tableInfoArea.style.maxHeight) || 580;
+						tableInfoArea.style.maxHeight = currentMaxHeight + 140 + 'px';
+						const currentFlexGrow = parseInt(tableInfoArea.style.flexGrow) || 3;
+						tableInfoArea.style.flexGrow = (currentFlexGrow + 1).toString();
+					}
+				} else {
+					// Maximize the section
+					if (minimizedDiv) minimizedDiv.style.display = 'none';
+					if (maximizedDiv) maximizedDiv.style.display = 'block';
+					// Reset table info area height when template is maximized
+					if (tableInfoArea) {
+						const currentMaxHeight = parseInt(tableInfoArea.style.maxHeight) || 720;
+						tableInfoArea.style.maxHeight = Math.max(360, currentMaxHeight - 140) + 'px';
+						const currentFlexGrow = parseInt(tableInfoArea.style.flexGrow) || 4;
+						tableInfoArea.style.flexGrow = Math.max(1, currentFlexGrow - 1).toString();
+					}
+				}
+			}
+
+			// Toggle document & reports section minimize/maximize
+			function toggleDocumentReportsSection(minimize) {
+				const minimizedDiv = document.getElementById('documentReportsMinimized');
+				const maximizedDiv = document.getElementById('documentReportsMaximized');
+				const tableInfoArea = document.getElementById('tableInfoArea');
+
+				if (minimize) {
+					// Minimize the section
+					if (minimizedDiv) minimizedDiv.style.display = 'block';
+					if (maximizedDiv) maximizedDiv.style.display = 'none';
+					// Increase table info area height when document reports is minimized
+					if (tableInfoArea) {
+						const currentMaxHeight = parseInt(tableInfoArea.style.maxHeight) || 580;
+						tableInfoArea.style.maxHeight = currentMaxHeight + 120 + 'px';
+						const currentFlexGrow = parseInt(tableInfoArea.style.flexGrow) || 3;
+						tableInfoArea.style.flexGrow = (currentFlexGrow + 1).toString();
+					}
+				} else {
+					// Maximize the section
+					if (minimizedDiv) minimizedDiv.style.display = 'none';
+					if (maximizedDiv) maximizedDiv.style.display = 'block';
+					// Reset table info area height when document reports is maximized
+					if (tableInfoArea) {
+						const currentMaxHeight = parseInt(tableInfoArea.style.maxHeight) || 700;
+						tableInfoArea.style.maxHeight = Math.max(360, currentMaxHeight - 120) + 'px';
+						const currentFlexGrow = parseInt(tableInfoArea.style.flexGrow) || 4;
+						tableInfoArea.style.flexGrow = Math.max(1, currentFlexGrow - 1).toString();
+					}
 				}
 			}
 
@@ -2812,7 +3202,7 @@
 				const overlay = document.getElementById('sidebarModalOverlay');
 				const modalTitle = document.getElementById('modalTitle');
 				const modalBody = document.getElementById('modalBody');
-				
+
 				if (overlay && modalTitle && modalBody) {
 					modalTitle.textContent = title;
 					modalBody.innerHTML = content;
@@ -2830,100 +3220,207 @@
 			// Template search modal
 			function showTemplateSearchModal() {
 				const searchContent = `
-					<div style="margin-bottom: 16px; position: relative;">
-						<input
-							type="text"
-							id="modalTemplateSearchInput"
-							placeholder="Nhập tên template để tìm kiếm..."
-							style="
-								width: 100%;
-								padding: 12px 40px 12px 12px;
-								border: 1px solid #d1d5db;
-								border-radius: 6px;
-								font-size: 14px;
-								outline: none;
-								transition: border-color 0.2s;
-							"
-							onFocus="this.style.borderColor='#3b82f6'"
-							onBlur="this.style.borderColor='#d1d5db'"
-							onKeyDown="if(event.key==='Enter') searchTemplatesInModal()"
-						/>
-						<button
-							onclick="searchTemplatesInModal()"
-							style="
-								position: absolute;
-								right: 8px;
-								top: 50%;
-								transform: translateY(-50%);
-								background: none;
-								border: none;
-								color: #6b7280;
-								cursor: pointer;
-								padding: 4px;
-								border-radius: 4px;
-							"
-							onMouseOver="this.style.color='#3b82f6'"
-							onMouseOut="this.style.color='#6b7280'"
-						>
-							<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-							</svg>
-						</button>
-					</div>
-					<div id="modalTemplateResults" style="max-height: 400px; overflow-y: auto;">
-						<div style="text-align: center; padding: 20px;"><div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div><br><span style="color: #6b7280;">Đang tải dữ liệu...</span></div>
+					<div style="display: flex; flex-direction: column; height: 100%;">
+						<div style="margin-bottom: 16px; position: relative; flex-shrink: 0;">
+							<input
+								type="text"
+								id="modalTemplateSearchInput"
+								placeholder="Nhập tên template để tìm kiếm..."
+								style="
+									width: 100%;
+									padding: 12px 40px 12px 12px;
+									border: 1px solid #d1d5db;
+									border-radius: 6px;
+									font-size: 14px;
+									outline: none;
+									transition: border-color 0.2s;
+								"
+								onFocus="this.style.borderColor='#3b82f6'"
+								onBlur="this.style.borderColor='#d1d5db'"
+								onKeyDown="if(event.key==='Enter') searchTemplatesInModal()"
+							/>
+							<button
+								onclick="searchTemplatesInModal()"
+								style="
+									position: absolute;
+									right: 8px;
+									top: 50%;
+									transform: translateY(-50%);
+									background: none;
+									border: none;
+									color: #6b7280;
+									cursor: pointer;
+									padding: 4px;
+									border-radius: 4px;
+								"
+								onMouseOver="this.style.color='#3b82f6'"
+								onMouseOut="this.style.color='#6b7280'"
+							>
+								<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+								</svg>
+							</button>
+						</div>
+						<div id="modalTemplateResults" style="flex: 1; overflow-y: auto; min-height: 0;">
+							<div style="text-align: center; padding: 20px;"><div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div><br><span style="color: #6b7280;">Đang tải dữ liệu...</span></div>
+						</div>
 					</div>
 				`;
 				showSidebarModal('Tìm kiếm mẫu biên bản', searchContent);
-				
+
 				// Auto-load data with empty searchTerm
 				setTimeout(() => {
-					autoLoadTemplatesInModal();
+					autoLoadTemplatesInModal(1);
 				}, 100);
 			}
 
+			// Pagination variables for templates
+			let templatesCurrentPage = 1;
+			let templatesTotalPages = 1;
+
 			// Auto-load templates in modal with empty search term
-			async function autoLoadTemplatesInModal() {
+			async function autoLoadTemplatesInModal(page = 1) {
 				const resultsDiv = document.getElementById('modalTemplateResults');
-				
+
 				if (!resultsDiv) return;
-				
+
+				templatesCurrentPage = page;
+
 				try {
-					const response = await apiPost(TEMPLATE_API_ENDPOINT, {
-						searchTerm: '',
-						page: 1,
+					// Scroll to top of results div when changing pages
+					resultsDiv.scrollTop = 0;
+
+					const response = await apiPost('https://black.irdop.org/v1/lab/test_report/get_template', {
+						search: '',
+						page: page,
+						size: 10,
 					});
 
 					if (response.status === 200 && response.data && response.data.result) {
 						const templates = response.data.result;
-						
+						const pagination = response.data.pagination;
+
+						if (pagination) {
+							templatesCurrentPage = pagination.currentPage;
+							templatesTotalPages = pagination.totalPages;
+						}
+
 						if (templates.length === 0) {
-							resultsDiv.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Không có template nào</p>';
+							resultsDiv.innerHTML =
+								'<p style="color: #6b7280; text-align: center; padding: 20px;">Không có template nào</p>';
 							return;
 						}
-						
+
 						let html = '';
 						templates.forEach((template, index) => {
 							html += `
-								<div class="template-search-item" data-template-index="${index}">
-									<div class="template-search-name">${(template.templateName || template.name || 'Không có tên').replace(/'/g, '&#39;').replace(/"/g, '&quot;')}</div>
-									<div class="template-search-desc">${(template.templateDescription || template.description || 'Không có mô tả').replace(/'/g, '&#39;').replace(/"/g, '&quot;')}</div>
-									<div class="template-search-id">ID: ${template.id}</div>
+								<div style="
+									padding: 12px;
+									margin-bottom: 8px;
+									border: 1px solid #e5e7eb;
+									border-radius: 6px;
+									cursor: pointer;
+									transition: all 0.2s;
+									background: white;
+									position: relative;
+								" 
+								onclick="selectTemplateFromModal('${template.id}')"
+								onmouseover="this.style.backgroundColor='#f9fafb'; this.style.borderColor='#3b82f6'"
+								onmouseout="this.style.backgroundColor='white'; this.style.borderColor='#e5e7eb'"
+								>
+									<!-- Preview icon -->
+									<div onclick="event.stopPropagation(); previewTemplateContent('${template.id}')" style="
+										position: absolute;
+										top: 8px;
+										right: 8px;
+										width: 24px;
+										height: 24px;
+										background: #3b82f6;
+										color: white;
+										border-radius: 4px;
+										display: flex;
+										align-items: center;
+										justify-content: center;
+										cursor: pointer;
+										font-size: 12px;
+										transition: all 0.2s;
+										z-index: 10;
+									" 
+									onmouseover="this.style.backgroundColor='#2563eb'; this.style.transform='scale(1.1)'"
+									onmouseout="this.style.backgroundColor='#3b82f6'; this.style.transform='scale(1)'"
+									title="Xem trước nội dung template">
+										👁
+									</div>
+									
+									<div style="font-weight: 600; color: #374151; margin-bottom: 6px; font-size: 14px; padding-right: 32px;">${
+										template.templateName || template.name || 'Không có tên'
+									}</div>
+									<div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">${
+										template.templateDescription || template.description || 'Không có mô tả'
+									}</div>
+									<div style="font-size: 11px; color: #3b82f6; font-weight: 600;">ID: ${template.id}</div>
 								</div>
 							`;
 						});
-						
+
+						// Add pagination controls if available
+						if (pagination && pagination.totalPages > 1) {
+							html += `
+								<div style="
+									padding: 16px;
+									margin-top: 16px;
+									border-top: 1px solid #e5e7eb;
+									background-color: #f9fafb;
+									border-radius: 6px;
+									display: flex;
+									justify-content: space-between;
+									align-items: center;
+								">
+									<div style="font-size: 12px; color: #6b7280;">
+										Trang ${pagination.currentPage}/${pagination.totalPages} - 
+										Hiển thị ${templates.length}/${pagination.totalItems} kết quả
+									</div>
+									<div style="display: flex; gap: 8px;">
+										${
+											pagination.currentPage > 1
+												? `<button onclick="autoLoadTemplatesInModal(${pagination.currentPage - 1})" 
+											style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">
+											Trước</button>`
+												: `<button disabled style="padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; background: #f9fafb; color: #9ca3af; font-size: 12px;">
+											Trước</button>`
+										}
+										${
+											pagination.currentPage < pagination.totalPages
+												? `<button onclick="autoLoadTemplatesInModal(${pagination.currentPage + 1})" 
+											style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">
+											Sau</button>`
+												: `<button disabled style="padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; background: #f9fafb; color: #9ca3af; font-size: 12px;">
+											Sau</button>`
+										}
+									</div>
+								</div>
+							`;
+						} else if (pagination && pagination.totalItems > 0) {
+							html += `
+								<div style="
+									padding: 12px;
+									margin-top: 16px;
+									border-top: 1px solid #e5e7eb;
+									background-color: #f9fafb;
+									border-radius: 6px;
+									font-size: 12px;
+									color: #6b7280;
+									text-align: center;
+								">
+									Hiển thị ${templates.length}/${pagination.totalItems} kết quả
+								</div>
+							`;
+						}
+
 						resultsDiv.innerHTML = html;
-						
-						// Add event listeners to template items
-						const templateItems = resultsDiv.querySelectorAll('.template-search-item');
-						templateItems.forEach((item, index) => {
-							item.addEventListener('click', () => {
-								selectTemplateFromModal(templates[index].id, encodeURIComponent(JSON.stringify(templates[index])));
-							});
-						});
 					} else {
-						resultsDiv.innerHTML = '<p style="color: #ef4444; text-align: center; padding: 20px;">Lỗi khi tải template</p>';
+						resultsDiv.innerHTML =
+							'<p style="color: #ef4444; text-align: center; padding: 20px;">Lỗi khi tải template</p>';
 					}
 				} catch (error) {
 					console.error('Error auto-loading templates:', error);
@@ -2932,52 +3429,153 @@
 			}
 
 			// Search templates in modal
-			async function searchTemplatesInModal() {
+			async function searchTemplatesInModal(page = 1) {
 				const searchInput = document.getElementById('modalTemplateSearchInput');
 				const resultsDiv = document.getElementById('modalTemplateResults');
-				
-				if (!searchInput || !resultsDiv) return;
-				
-				const searchTerm = searchInput.value.trim();
-				
+
+				if (!resultsDiv) return;
+
+				const searchTerm = searchInput ? searchInput.value.trim() : '';
+				templatesCurrentPage = page;
+
 				try {
-					resultsDiv.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div><br><span style="color: #6b7280;">Đang tìm kiếm...</span></div>';
-					
-					const response = await apiPost(TEMPLATE_API_ENDPOINT, {
-						searchTerm: searchTerm,
-						page: 1,
+					// Scroll to top of results div when changing pages or searching
+					resultsDiv.scrollTop = 0;
+
+					resultsDiv.innerHTML =
+						'<div style="text-align: center; padding: 20px;"><div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div><br><span style="color: #6b7280;">Đang tìm kiếm...</span></div>';
+
+					const response = await apiPost('https://black.irdop.org/v1/lab/test_report/get_template', {
+						search: searchTerm,
+						page: page,
+						size: 10,
 					});
 
 					if (response.status === 200 && response.data && response.data.result) {
 						const templates = response.data.result;
-						
+						const pagination = response.data.pagination;
+
+						if (pagination) {
+							templatesCurrentPage = pagination.currentPage;
+							templatesTotalPages = pagination.totalPages;
+						}
+
 						if (templates.length === 0) {
-							resultsDiv.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Không tìm thấy template nào</p>';
+							resultsDiv.innerHTML =
+								'<p style="color: #6b7280; text-align: center; padding: 20px;">Không tìm thấy template nào</p>';
 							return;
 						}
-						
+
 						let html = '';
 						templates.forEach((template, index) => {
 							html += `
-								<div class="template-search-item" data-template-index="${index}">
-									<div class="template-search-name">${(template.templateName || template.name || 'Không có tên').replace(/'/g, '&#39;').replace(/"/g, '&quot;')}</div>
-									<div class="template-search-desc">${(template.templateDescription || template.description || 'Không có mô tả').replace(/'/g, '&#39;').replace(/"/g, '&quot;')}</div>
-									<div class="template-search-id">ID: ${template.id}</div>
+								<div style="
+									padding: 12px;
+									margin-bottom: 8px;
+									border: 1px solid #e5e7eb;
+									border-radius: 6px;
+									cursor: pointer;
+									transition: all 0.2s;
+									background: white;
+									position: relative;
+								" 
+								onclick="selectTemplateFromModal('${template.id}')"
+								onmouseover="this.style.backgroundColor='#f9fafb'; this.style.borderColor='#3b82f6'"
+								onmouseout="this.style.backgroundColor='white'; this.style.borderColor='#e5e7eb'"
+								>
+									<!-- Preview icon -->
+									<div onclick="event.stopPropagation(); previewTemplateContent('${template.id}')" style="
+										position: absolute;
+										top: 8px;
+										right: 8px;
+										width: 24px;
+										height: 24px;
+										background: #3b82f6;
+										color: white;
+										border-radius: 4px;
+										display: flex;
+										align-items: center;
+										justify-content: center;
+										cursor: pointer;
+										font-size: 12px;
+										transition: all 0.2s;
+										z-index: 10;
+									" 
+									onmouseover="this.style.backgroundColor='#2563eb'; this.style.transform='scale(1.1)'"
+									onmouseout="this.style.backgroundColor='#3b82f6'; this.style.transform='scale(1)'"
+									title="Xem trước nội dung template">
+										👁
+									</div>
+									
+									<div style="font-weight: 600; color: #374151; margin-bottom: 6px; font-size: 14px; padding-right: 32px;">${
+										template.templateName || template.name || 'Không có tên'
+									}</div>
+									<div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">${
+										template.templateDescription || template.description || 'Không có mô tả'
+									}</div>
+									<div style="font-size: 11px; color: #3b82f6; font-weight: 600;">ID: ${template.id}</div>
 								</div>
 							`;
 						});
-						
+
+						// Add pagination controls if available
+						if (pagination && pagination.totalPages > 1) {
+							html += `
+								<div style="
+									padding: 16px;
+									margin-top: 16px;
+									border-top: 1px solid #e5e7eb;
+									background-color: #f9fafb;
+									border-radius: 6px;
+									display: flex;
+									justify-content: space-between;
+									align-items: center;
+								">
+									<div style="font-size: 12px; color: #6b7280;">
+										Trang ${pagination.currentPage}/${pagination.totalPages} - 
+										Hiển thị ${templates.length}/${pagination.totalItems} kết quả
+									</div>
+									<div style="display: flex; gap: 8px;">
+										${
+											pagination.currentPage > 1
+												? `<button onclick="searchTemplatesInModal(${pagination.currentPage - 1})" 
+											style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">
+											Trước</button>`
+												: `<button disabled style="padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; background: #f9fafb; color: #9ca3af; font-size: 12px;">
+											Trước</button>`
+										}
+										${
+											pagination.currentPage < pagination.totalPages
+												? `<button onclick="searchTemplatesInModal(${pagination.currentPage + 1})" 
+											style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">
+											Sau</button>`
+												: `<button disabled style="padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; background: #f9fafb; color: #9ca3af; font-size: 12px;">
+											Sau</button>`
+										}
+									</div>
+								</div>
+							`;
+						} else if (pagination && pagination.totalItems > 0) {
+							html += `
+								<div style="
+									padding: 12px;
+									margin-top: 16px;
+									border-top: 1px solid #e5e7eb;
+									background-color: #f9fafb;
+									border-radius: 6px;
+									font-size: 12px;
+									color: #6b7280;
+									text-align: center;
+								">
+									Hiển thị ${templates.length}/${pagination.totalItems} kết quả
+								</div>
+							`;
+						}
+
 						resultsDiv.innerHTML = html;
-						
-						// Add event listeners to template items
-						const templateItems = resultsDiv.querySelectorAll('.template-search-item');
-						templateItems.forEach((item, index) => {
-							item.addEventListener('click', () => {
-								selectTemplateFromModal(templates[index].id, encodeURIComponent(JSON.stringify(templates[index])));
-							});
-						});
 					} else {
-						resultsDiv.innerHTML = '<p style="color: #ef4444; text-align: center; padding: 20px;">Lỗi khi tìm kiếm mẫu biên bản</p>';
+						resultsDiv.innerHTML =
+							'<p style="color: #ef4444; text-align: center; padding: 20px;">Lỗi khi tìm kiếm mẫu biên bản</p>';
 					}
 				} catch (error) {
 					console.error('Error searching templates:', error);
@@ -2986,14 +3584,197 @@
 			}
 
 			// Select template from modal
-			async function selectTemplateFromModal(templateId, encodedTemplate) {
+			async function selectTemplateFromModal(templateId) {
 				try {
-					const template = JSON.parse(decodeURIComponent(encodedTemplate));
-					await selectTemplate(template);
-					closeSidebarModal();
+					const response = await apiPost(TEMPLATE_API_ENDPOINT, {
+						id: templateId,
+						searchTerm: '',
+						page: 1,
+					});
+
+					if (response.status === 200 && response.data && response.data.result && response.data.result.length > 0) {
+						const template = response.data.result[0];
+						await selectTemplate(template);
+						closeSidebarModal();
+						closeTemplatePreviewModal(); // Đóng preview modal khi chọn template
+					} else {
+						throw new Error('Không tìm thấy template');
+					}
 				} catch (error) {
 					console.error('Error selecting template from modal:', error);
 					alert('Lỗi khi chọn template: ' + error.message);
+				}
+			}
+
+			// Function to preview template content
+			async function previewTemplateContent(templateId) {
+				try {
+					const response = await apiPost(TEMPLATE_API_ENDPOINT, {
+						id: templateId,
+						searchTerm: '',
+						page: 1,
+					});
+
+					if (response.status === 200 && response.data && response.data.result && response.data.result.length > 0) {
+						const template = response.data.result[0];
+						showTemplatePreviewModal(template);
+					} else {
+						alert('Không tìm thấy nội dung template');
+					}
+				} catch (error) {
+					console.error('Error previewing template:', error);
+					alert('Lỗi khi xem trước template: ' + error.message);
+				}
+			}
+
+			// Function to show template preview modal
+			function showTemplatePreviewModal(template) {
+				const modalHTML = `
+					<div id="templatePreviewOverlay" style="
+						position: fixed;
+						top: 0;
+						left: 0;
+						width: 100%;
+						height: 100%;
+						background-color: rgba(0, 0, 0, 0.5);
+						display: flex;
+						align-items: center;
+						justify-content: center;
+						z-index: 10000;
+					">
+						<div style="
+							background: white;
+							border-radius: 12px;
+							max-width: 90%;
+							max-height: 90%;
+							width: 800px;
+							display: flex;
+							flex-direction: column;
+							box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+						">
+							<!-- Header -->
+							<div style="
+								padding: 20px;
+								border-bottom: 1px solid #e5e7eb;
+								display: flex;
+								justify-content: space-between;
+								align-items: center;
+								background: #f9fafb;
+								border-radius: 12px 12px 0 0;
+							">
+								<div>
+									<h3 style="
+										margin: 0;
+										font-size: 18px;
+										font-weight: 600;
+										color: #111827;
+									">${template.templateName || template.name || 'Xem trước template'}</h3>
+									<p style="
+										margin: 4px 0 0 0;
+										font-size: 12px;
+										color: #6b7280;
+									">ID: ${template.id}</p>
+								</div>
+								<button onclick="closeTemplatePreviewModal()" style="
+									width: 32px;
+									height: 32px;
+									border: none;
+									background: #ef4444;
+									color: white;
+									border-radius: 6px;
+									cursor: pointer;
+									display: flex;
+									align-items: center;
+									justify-content: center;
+									font-size: 16px;
+									transition: background-color 0.2s;
+								" onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">
+									×
+								</button>
+							</div>
+							
+							<!-- Content -->
+							<div style="
+								padding: 20px;
+								flex: 1;
+								overflow-y: auto;
+								background: white;
+							">
+								<div style="
+									border: 1px solid #e5e7eb;
+									border-radius: 8px;
+									padding: 16px;
+									background: #ffffff;
+									min-height: 300px;
+									font-family: 'Times New Roman', serif;
+									line-height: 1.6;
+								">
+									${template.content || '<p style="color: #6b7280; text-align: center; padding: 20px;">Không có nội dung để hiển thị</p>'}
+								</div>
+							</div>
+							
+							<!-- Footer -->
+							<div style="
+								padding: 16px 20px;
+								border-top: 1px solid #e5e7eb;
+								background: #f9fafb;
+								border-radius: 0 0 12px 12px;
+								display: flex;
+								justify-content: space-between;
+								align-items: center;
+							">
+								<div style="font-size: 12px; color: #6b7280;">
+									${template.templateDescription || template.description || 'Không có mô tả'}
+								</div>
+								<div style="display: flex; gap: 8px;">
+									<button onclick="selectTemplateFromModal('${template.id}')" style="
+										padding: 8px 16px;
+										background: #3b82f6;
+										color: white;
+										border: none;
+										border-radius: 6px;
+										cursor: pointer;
+										font-size: 14px;
+										transition: background-color 0.2s;
+									" onmouseover="this.style.backgroundColor='#2563eb'" onmouseout="this.style.backgroundColor='#3b82f6'">
+										Chọn template này
+									</button>
+									<button onclick="closeTemplatePreviewModal()" style="
+										padding: 8px 16px;
+										background: #6b7280;
+										color: white;
+										border: none;
+										border-radius: 6px;
+										cursor: pointer;
+										font-size: 14px;
+										transition: background-color 0.2s;
+									" onmouseover="this.style.backgroundColor='#4b5563'" onmouseout="this.style.backgroundColor='#6b7280'">
+										Đóng
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				`;
+
+				// Add modal to body
+				const tempDiv = document.createElement('div');
+				tempDiv.innerHTML = modalHTML;
+				document.body.appendChild(tempDiv.firstElementChild);
+
+				// Close on overlay click
+				document.getElementById('templatePreviewOverlay').addEventListener('click', function (e) {
+					if (e.target === this) {
+						closeTemplatePreviewModal();
+					}
+				});
+			}
+
+			// Function to close template preview modal
+			function closeTemplatePreviewModal() {
+				const modal = document.getElementById('templatePreviewOverlay');
+				if (modal) {
+					modal.remove();
 				}
 			}
 
@@ -3067,7 +3848,7 @@
 					alert('Chưa chọn template để chỉnh sửa');
 					return;
 				}
-				
+
 				const formContent = `
 					<div style="space-y: 16px;">
 						<div style="margin-bottom: 16px;">
@@ -3159,107 +3940,208 @@
 			// Edit saved report modal
 			function showEditSavedReportModal() {
 				const searchContent = `
-					<div style="margin-bottom: 16px; position: relative;">
-						<input
-							type="text"
-							id="modalSavedReportSearchInput"
-							placeholder="Nhập từ khóa tìm kiếm báo cáo đã lưu..."
-							style="
-								width: 100%;
-								padding: 12px 40px 12px 12px;
-								border: 1px solid #d1d5db;
-								border-radius: 6px;
-								font-size: 14px;
-								outline: none;
-								transition: border-color 0.2s;
-							"
-							onFocus="this.style.borderColor='#3b82f6'"
-							onBlur="this.style.borderColor='#d1d5db'"
-							onKeyDown="if(event.key==='Enter') searchSavedReportsInModal()"
-						/>
-						<button
-							onclick="searchSavedReportsInModal()"
-							style="
-								position: absolute;
-								right: 8px;
-								top: 50%;
-								transform: translateY(-50%);
-								background: none;
-								border: none;
-								color: #6b7280;
-								cursor: pointer;
-								padding: 4px;
-								border-radius: 4px;
-							"
-							onMouseOver="this.style.color='#3b82f6'"
-							onMouseOut="this.style.color='#6b7280'"
-						>
-							<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-							</svg>
-						</button>
-					</div>
-					<div id="modalSavedReportResults" style="max-height: 400px; overflow-y: auto;">
-						<p style="color: #6b7280; text-align: center; padding: 20px;">Đang tải dữ liệu...</p>
+					<div style="display: flex; flex-direction: column; height: 100%;">
+						<div style="margin-bottom: 16px; position: relative; flex-shrink: 0;">
+							<input
+								type="text"
+								id="modalSavedReportSearchInput"
+								placeholder="Nhập từ khóa tìm kiếm báo cáo đã lưu..."
+								style="
+									width: 100%;
+									padding: 12px 40px 12px 12px;
+									border: 1px solid #d1d5db;
+									border-radius: 6px;
+									font-size: 14px;
+									outline: none;
+									transition: border-color 0.2s;
+								"
+								onFocus="this.style.borderColor='#3b82f6'"
+								onBlur="this.style.borderColor='#d1d5db'"
+								onKeyDown="if(event.key==='Enter') searchSavedReportsInModal()"
+							/>
+							<button
+								onclick="searchSavedReportsInModal()"
+								style="
+									position: absolute;
+									right: 8px;
+									top: 50%;
+									transform: translateY(-50%);
+									background: none;
+									border: none;
+									color: #6b7280;
+									cursor: pointer;
+									padding: 4px;
+									border-radius: 4px;
+								"
+								onMouseOver="this.style.color='#3b82f6'"
+								onMouseOut="this.style.color='#6b7280'"
+							>
+								<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+								</svg>
+							</button>
+						</div>
+						<div id="modalSavedReportResults" style="flex: 1; overflow-y: auto; min-height: 0;">
+							<p style="color: #6b7280; text-align: center; padding: 20px;">Đang tải dữ liệu...</p>
+						</div>
 					</div>
 				`;
-				showSidebarModal('Tìm kiếm biên bản đã lưu', searchContent);
-				
+				showSidebarModal('Các biên bản gần đây', searchContent);
+
 				// Auto load data when modal opens
 				searchSavedReportsInModal();
 			}
 
+			// Pagination variables for saved reports
+			let savedReportsCurrentPage = 1;
+			let savedReportsTotalPages = 1;
+
 			// Search saved reports in modal
-			async function searchSavedReportsInModal() {
+			async function searchSavedReportsInModal(page = 1) {
 				const searchInput = document.getElementById('modalSavedReportSearchInput');
 				const resultsDiv = document.getElementById('modalSavedReportResults');
-				
-				if (!searchInput || !resultsDiv) return;
-				
-				const searchTerm = searchInput.value.trim();
-				
+
+				if (!resultsDiv) return;
+
+				const searchTerm = searchInput ? searchInput.value.trim() : '';
+				savedReportsCurrentPage = page;
+
 				try {
-					resultsDiv.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div><br><span style="color: #6b7280;">Đang tìm kiếm...</span></div>';
-					
+					// Scroll to top of results div when changing pages or searching
+					resultsDiv.scrollTop = 0;
+
+					resultsDiv.innerHTML =
+						'<div style="text-align: center; padding: 20px;"><div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div><br><span style="color: #6b7280;">Đang tìm kiếm...</span></div>';
+
 					const response = await apiPost('https://red.irdop.org/v1/editor/lab_result_report/get_editor', {
-						searchTerm: searchTerm
+						searchTerm: searchTerm,
+						page: page,
 					});
 
 					if (response.status === 200 && response.data) {
 						const result = response.data;
-						
+
 						if (result.error) {
 							throw new Error(result.error);
 						}
-						
+
 						const reports = result.result || [];
-						
+						const pagination = result.pagination;
+
+						if (pagination) {
+							savedReportsCurrentPage = pagination.currentPage;
+							savedReportsTotalPages = pagination.totalPages;
+						}
+
 						if (reports.length === 0) {
-							resultsDiv.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Không tìm thấy báo cáo nào</p>';
+							resultsDiv.innerHTML =
+								'<p style="color: #6b7280; text-align: center; padding: 20px;">Không tìm thấy báo cáo nào</p>';
 							return;
 						}
-						
+
 						let html = '';
 						reports.forEach((report) => {
-							const createdDate = formatDateGMT7(report.createdAt);
-							const modifiedDate = formatDateGMT7(report.modifiedAt);
+							// Format dates with time
+							const createdDate = report.createdAt ? formatDateGMT7(report.createdAt) : '-';
+							const modifiedDate = report.modifiedAt ? formatDateGMT7(report.modifiedAt) : '-';
+
+							// Get title from metadata
+							let title = 'Không có tiêu đề';
+							if (report.metadata?.templateName) {
+								title = report.metadata.templateName;
+							} else if (report.metadata?.header?.title) {
+								title = report.metadata.header.title;
+							}
+
 							html += `
-								<div class="template-search-item" onclick="loadSavedReportFromModal('${report.id}')">
-									<div class="template-search-name">ID: ${report.id}</div>
-									<div class="template-search-desc">Tạo: ${createdDate}</div>
-									<div class="template-search-desc">Sửa: ${modifiedDate}</div>
-									<div class="template-search-id">Template: ${report.metadata?.templateId || 'N/A'}</div>
+								<div style="
+									padding: 12px;
+									margin-bottom: 8px;
+									border: 1px solid #e5e7eb;
+									border-radius: 6px;
+									cursor: pointer;
+									transition: all 0.2s;
+									background: white;
+								" 
+								onclick="loadSavedReportFromModal('${report.id}')"
+								onmouseover="this.style.backgroundColor='#f9fafb'; this.style.borderColor='#3b82f6'"
+								onmouseout="this.style.backgroundColor='white'; this.style.borderColor='#e5e7eb'"
+								>
+									<div style="font-weight: 600; color: #374151; margin-bottom: 6px; font-size: 14px;">${title}</div>
+									<div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">
+										<strong>Mã tài liệu:</strong> ${report.id}
+									</div>
+									<div style="font-size: 12px; color: #6b7280; line-height: 1.4;">
+										<div><strong>Ngày tạo:</strong> ${createdDate}</div>
+										<div><strong>Sửa đổi:</strong> ${modifiedDate}</div>
+									</div>
 								</div>
 							`;
 						});
-						
+
+						// Add pagination controls if available
+						if (pagination && pagination.totalPages > 1) {
+							html += `
+								<div style="
+									padding: 16px;
+									margin-top: 16px;
+									border-top: 1px solid #e5e7eb;
+									background-color: #f9fafb;
+									border-radius: 6px;
+									display: flex;
+									justify-content: space-between;
+									align-items: center;
+								">
+									<div style="font-size: 12px; color: #6b7280;">
+										Trang ${pagination.currentPage}/${pagination.totalPages} - 
+										Hiển thị ${reports.length}/${pagination.totalItems} kết quả
+									</div>
+									<div style="display: flex; gap: 8px;">
+										${
+											pagination.currentPage > 1
+												? `<button onclick="searchSavedReportsInModal(${pagination.currentPage - 1})" 
+											style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">
+											Trước</button>`
+												: `<button disabled style="padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; background: #f9fafb; color: #9ca3af; font-size: 12px;">
+											Trước</button>`
+										}
+										${
+											pagination.currentPage < pagination.totalPages
+												? `<button onclick="searchSavedReportsInModal(${pagination.currentPage + 1})" 
+											style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">
+											Sau</button>`
+												: `<button disabled style="padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 4px; background: #f9fafb; color: #9ca3af; font-size: 12px;">
+											Sau</button>`
+										}
+									</div>
+								</div>
+							`;
+						} else if (pagination && pagination.totalItems > 0) {
+							html += `
+								<div style="
+									padding: 12px;
+									margin-top: 16px;
+									border-top: 1px solid #e5e7eb;
+									background-color: #f9fafb;
+									border-radius: 6px;
+									font-size: 12px;
+									color: #6b7280;
+									text-align: center;
+								">
+									Hiển thị ${reports.length}/${pagination.totalItems} kết quả
+								</div>
+							`;
+						}
+
 						resultsDiv.innerHTML = html;
 					} else {
-						resultsDiv.innerHTML = '<p style="color: #ef4444; text-align: center; padding: 20px;">Lỗi khi tìm kiếm báo cáo</p>';
+						resultsDiv.innerHTML =
+							'<p style="color: #ef4444; text-align: center; padding: 20px;">Lỗi khi tìm kiếm báo cáo</p>';
 					}
 				} catch (error) {
 					console.error('Error searching saved reports:', error);
-					resultsDiv.innerHTML = '<p style="color: #ef4444; text-align: center; padding: 20px;">Lỗi: ' + error.message + '</p>';
+					resultsDiv.innerHTML =
+						'<p style="color: #ef4444; text-align: center; padding: 20px;">Lỗi: ' + error.message + '</p>';
 				}
 			}
 
@@ -3270,10 +4152,9 @@
 					updateURLWithDocId(docId);
 					await loadFromDocId(docId);
 					closeSidebarModal();
-					
+
 					// Do not change button visibility - keep both buttons as they are
 					// The buttons should remain unchanged
-					
 				} catch (error) {
 					console.error('Error loading saved report:', error);
 					alert('Lỗi khi tải báo cáo: ' + error.message);
@@ -3286,27 +4167,27 @@
 				const closeBtn = document.querySelector('#modalBody #closeCreateTemplateBtn');
 				const fileInput = document.querySelector('#modalBody #templateFileInput');
 				const uploadBtn = document.querySelector('#modalBody #uploadFileBtn');
-				
+
 				if (submitBtn) {
-					submitBtn.onclick = function() {
+					submitBtn.onclick = function () {
 						submitCreateTemplateForm();
 					};
 				}
-				
+
 				if (closeBtn) {
-					closeBtn.onclick = function() {
+					closeBtn.onclick = function () {
 						closeSidebarModal();
 					};
 				}
-				
+
 				if (uploadBtn && fileInput) {
-					uploadBtn.onclick = function() {
+					uploadBtn.onclick = function () {
 						fileInput.click();
 					};
 				}
-				
+
 				if (fileInput) {
-					fileInput.onchange = function(event) {
+					fileInput.onchange = function (event) {
 						handleFileUpload(event);
 					};
 				}
@@ -3318,40 +4199,40 @@
 				const deleteBtn = document.querySelector('#modalBody #deleteTemplateBtn');
 				const fileInput = document.querySelector('#modalBody #editTemplateFileInput');
 				const uploadBtn = document.querySelector('#modalBody #editUploadFileBtn');
-				
+
 				if (submitBtn) {
-					submitBtn.onclick = function() {
+					submitBtn.onclick = function () {
 						submitEditTemplateForm();
 					};
 				}
-				
+
 				if (closeBtn) {
-					closeBtn.onclick = function() {
+					closeBtn.onclick = function () {
 						closeSidebarModal();
 					};
 				}
-				
+
 				if (deleteBtn) {
-					deleteBtn.onclick = function() {
+					deleteBtn.onclick = function () {
 						deleteTemplate();
 					};
 				}
-				
+
 				if (uploadBtn && fileInput) {
-					uploadBtn.onclick = function() {
+					uploadBtn.onclick = function () {
 						fileInput.click();
 					};
 				}
-				
+
 				if (fileInput) {
-					fileInput.onchange = function(event) {
+					fileInput.onchange = function (event) {
 						handleEditFileUpload(event);
 					};
 				}
 			}
 
 			// Click outside to close modal
-			document.addEventListener('click', function(event) {
+			document.addEventListener('click', function (event) {
 				const overlay = document.getElementById('sidebarModalOverlay');
 				if (event.target === overlay) {
 					closeSidebarModal();
@@ -3360,6 +4241,24 @@
 
 			// Add event listeners to header inputs when DOM is ready
 			document.addEventListener('DOMContentLoaded', function () {
+				// Display current date in DD/MM/YYYY format
+				function updateCurrentDate() {
+					const now = new Date();
+					const day = String(now.getDate()).padStart(2, '0');
+					const month = String(now.getMonth() + 1).padStart(2, '0');
+					const year = now.getFullYear();
+					const dateString = `${day}/${month}/${year}`;
+
+					const dateDisplay = document.getElementById('currentDateDisplay');
+					if (dateDisplay) {
+						dateDisplay.textContent = dateString;
+					}
+				}
+
+				// Update date immediately and then every minute
+				updateCurrentDate();
+				setInterval(updateCurrentDate, 60000);
+
 				const headerInputs = ['headerTitle', 'headerCode', 'publishNo', 'publishDate'];
 				headerInputs.forEach((inputId) => {
 					const input = document.getElementById(inputId);
@@ -3368,15 +4267,15 @@
 						input.addEventListener('change', updateHeaderData);
 					}
 				});
-				
+
 				// Add click outside listener for forms
-				document.addEventListener('click', function(event) {
+				document.addEventListener('click', function (event) {
 					const templateSearchForm = document.getElementById('templateSearchForm');
 					const editSavedReportForm = document.getElementById('editSavedReportForm');
 					const templateDropdown = document.getElementById('templateSearchDropdown');
 					const templateInput = document.getElementById('templateSearchInput');
 					const button = document.getElementById('selectTemplateBtn');
-					
+
 					// Close template search form when clicking outside
 					if (templateSearchForm && templateSearchForm.style.display === 'block') {
 						if (!templateSearchForm.contains(event.target) && !button.contains(event.target)) {
@@ -3543,15 +4442,22 @@
 					table.removeAttribute('cellspacing');
 					table.removeAttribute('width'); // Xóa thuộc tính width
 
-					// Đặt width về 100%, max-width 100% và border-collapse
-					table.setAttribute('style', 'width: 100%; max-width: 100%; border-collapse: collapse;');
-				});
+				// Đặt width về 100%, max-width 100% và border-collapse
+				table.setAttribute('style', 'width: 100%; max-width: 100%; border-collapse: collapse;');
+			});
 
-				// Cập nhật nội dung editor
-				const cleanedContent = tempContainer.innerHTML;
-				editor.setContent(cleanedContent);
+			// Đặt font-size 11px cho tất cả các thẻ không phải heading
+			const allTags = tempContainer.querySelectorAll('*:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6)');
+			allTags.forEach((element) => {
+				const currentStyle = element.getAttribute('style') || '';
+				// Chỉ đặt font-size nếu chưa có hoặc để ghi đè
+				const styleWithFontSize = currentStyle + (currentStyle ? '; ' : '') + 'font-size: 11px';
+				element.setAttribute('style', styleWithFontSize);
+			});
 
-				// Hiển thị thông báo thành công tự tắt
+			// Cập nhật nội dung editor
+			const cleanedContent = tempContainer.innerHTML;
+			editor.setContent(cleanedContent);				// Hiển thị thông báo thành công tự tắt
 				showAutoHideMessage('Đã định dạng lại các elements thành công!', 'success');
 			}
 
@@ -3713,6 +4619,15 @@
 					table.setAttribute('style', 'width: 100%; max-width: 100%; border-collapse: collapse;');
 				});
 
+				// Đặt font-size 11px cho tất cả các thẻ không phải heading
+				const allTags = tempContainer.querySelectorAll('*:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6)');
+				allTags.forEach((element) => {
+					const currentStyle = element.getAttribute('style') || '';
+					// Chỉ đặt font-size nếu chưa có hoặc để ghi đè
+					const styleWithFontSize = currentStyle + (currentStyle ? '; ' : '') + 'font-size: 11px';
+					element.setAttribute('style', styleWithFontSize);
+				});
+
 				return tempContainer.innerHTML;
 			}
 
@@ -3814,7 +4729,7 @@
 							response.data.createdAt,
 							response.data.modifiedAt || new Date().toISOString(),
 							response.data.authorName,
-							response.data.modifiedBy
+							response.data.modifiedBy,
 						);
 					} else {
 						console.warn('Auto-save response did not contain expected data:', response);
@@ -3847,13 +4762,27 @@
 			}
 
 			// Function to update document information box
-			function updateDocumentInfo(docId = null, createdAt = null, modifiedAt = null, authorName = null, modifiedBy = null) {
+			function updateDocumentInfo(
+				docId = null,
+				createdAt = null,
+				modifiedAt = null,
+				authorName = null,
+				modifiedBy = null,
+			) {
 				const docInfoId = document.getElementById('docInfoId');
 				const docInfoCreated = document.getElementById('docInfoCreated');
 				const docInfoModified = document.getElementById('docInfoModified');
+				const currentDocumentTitle = document.getElementById('currentDocumentTitle');
 
 				if (docInfoId) {
 					docInfoId.textContent = docId || currentDocId || 'Chưa có';
+				}
+
+				// Update document title from header data
+				if (currentDocumentTitle) {
+					const titleInput = document.getElementById('headerTitle');
+					const titleValue = titleInput ? titleInput.value : '';
+					currentDocumentTitle.textContent = titleValue || '-';
 				}
 
 				if (docInfoCreated) {
@@ -4007,15 +4936,18 @@
 				`;
 
 				// Handle iframe load to pass current analysis IDs
-				iframe.onload = function() {
+				iframe.onload = function () {
 					try {
 						const iframeWindow = iframe.contentWindow;
 						if (iframeWindow && window.analysisIds) {
 							// Pass current analysis IDs to the popup
-							iframeWindow.postMessage({
-								type: 'INIT_SELECTION',
-								analysisIds: window.analysisIds || []
-							}, '*');
+							iframeWindow.postMessage(
+								{
+									type: 'INIT_SELECTION',
+									analysisIds: window.analysisIds || [],
+								},
+								'*',
+							);
 						}
 					} catch (error) {
 						console.error('Could not communicate with iframe:', error);
@@ -4027,31 +4959,31 @@
 				document.body.appendChild(overlay);
 
 				// Handle messages from iframe
-				const messageHandler = function(event) {
+				const messageHandler = function (event) {
 					if (event.data && event.data.type === 'SELECTION_CONFIRMED') {
 						// Update analysis IDs and reload table info
 						window.analysisIds = event.data.analysisIds || [];
-						
+
 						// Update URL with new analysis IDs
 						updateURLWithAnalysisIds(window.analysisIds);
-						
+
 						// Reload table information
 						loadTableInfo();
-						
+
 						// Auto-insert/replace table data when selection changes
 						setTimeout(() => {
 							insertTableInfo();
 						}, 500);
-						
+
 						// Close popup
 						closeParameterSelectionPopup();
-						
+
 						// Remove event listener
 						window.removeEventListener('message', messageHandler);
 					} else if (event.data && event.data.type === 'SELECTION_CANCELLED') {
 						// Close popup without changes
 						closeParameterSelectionPopup();
-						
+
 						// Remove event listener
 						window.removeEventListener('message', messageHandler);
 					}
@@ -4061,7 +4993,7 @@
 				window.addEventListener('message', messageHandler);
 
 				// Close on overlay click
-				overlay.addEventListener('click', function(e) {
+				overlay.addEventListener('click', function (e) {
 					if (e.target === overlay) {
 						closeParameterSelectionPopup();
 						window.removeEventListener('message', messageHandler);
@@ -4069,13 +5001,6 @@
 				});
 			}
 
-
-
-
-
-
-
-			
 			// Parameter Selection Popup Function
 			function openParameterSelectionPopup() {
 				// Create popup overlay
@@ -4118,18 +5043,21 @@
 				`;
 
 				// Handle iframe load to pass current analysis IDs
-				iframe.onload = function() {
+				iframe.onload = function () {
 					try {
 						const iframeWindow = iframe.contentWindow;
 						if (iframeWindow && window.analysisIds) {
 							// Pass current analysis IDs to the popup
-							iframeWindow.postMessage({
-								type: 'INIT_SELECTION',
-								analysisIds: window.analysisIds || []
-							}, '*');
+							iframeWindow.postMessage(
+								{
+									type: 'INIT_SELECTION',
+									analysisIds: window.analysisIds || [],
+								},
+								'*',
+							);
 						}
 					} catch (error) {
-						console.log('Could not communicate with iframe:', error);
+
 					}
 				};
 
@@ -4138,31 +5066,31 @@
 				document.body.appendChild(overlay);
 
 				// Handle messages from iframe
-				const messageHandler = function(event) {
+				const messageHandler = function (event) {
 					if (event.data && event.data.type === 'SELECTION_CONFIRMED') {
 						// Update analysis IDs and reload table info
 						window.analysisIds = event.data.analysisIds || [];
-						
+
 						// Update URL with new analysis IDs
 						updateURLWithAnalysisIds(window.analysisIds);
-						
+
 						// Reload table information
 						loadTableInfo();
-						
+
 						// Auto-insert/replace table data when selection changes
 						setTimeout(() => {
 							insertTableInfo();
 						}, 500);
-						
+
 						// Close popup
 						closeParameterSelectionPopup();
-						
+
 						// Remove event listener
 						window.removeEventListener('message', messageHandler);
 					} else if (event.data && event.data.type === 'SELECTION_CANCELLED') {
 						// Close popup without changes
 						closeParameterSelectionPopup();
-						
+
 						// Remove event listener
 						window.removeEventListener('message', messageHandler);
 					}
@@ -4172,7 +5100,7 @@
 				window.addEventListener('message', messageHandler);
 
 				// Close on overlay click
-				overlay.addEventListener('click', function(e) {
+				overlay.addEventListener('click', function (e) {
 					if (e.target === overlay) {
 						closeParameterSelectionPopup();
 						window.removeEventListener('message', messageHandler);
@@ -4189,21 +5117,21 @@
 
 			// Make test functions available globally for console testing
 			window.formatReset = formatReset;
-			
+
 			// Helper function to populate edit template form
 			function populateEditTemplateForm() {
 				if (!currentTemplate) return;
-				
+
 				// Wait for modal to be displayed, then populate
 				setTimeout(() => {
 					const nameInput = document.querySelector('#modalBody #editTemplateName');
 					const descInput = document.querySelector('#modalBody #editTemplateDescription');
-					
+
 					if (nameInput) nameInput.value = currentTemplate.templateName || currentTemplate.name || '';
 					if (descInput) descInput.value = currentTemplate.templateDescription || currentTemplate.description || '';
 				}, 100);
 			}
-			
+
 			// Make new sidebar functions globally available
 			window.previewReport = previewReport;
 			window.clearFormatting = clearFormatting;
@@ -4217,6 +5145,8 @@
 			window.closeParameterSelectionPopup = closeParameterSelectionPopup;
 			window.handleMainAction = handleMainAction;
 			window.updateTemplateButtonLayout = updateTemplateButtonLayout;
+			window.toggleTemplateSection = toggleTemplateSection;
+			window.toggleDocumentReportsSection = toggleDocumentReportsSection;
 			// Add new modal functions to global scope
 			window.showTemplateSearchModal = showTemplateSearchModal;
 			window.showCreateTemplateModal = showCreateTemplateModal;
@@ -4228,8 +5158,9 @@
 			window.selectTemplateFromModal = selectTemplateFromModal;
 			window.searchSavedReportsInModal = searchSavedReportsInModal;
 			window.loadSavedReportFromModal = loadSavedReportFromModal;
-
-
+			window.previewTemplateContent = previewTemplateContent;
+			window.showTemplatePreviewModal = showTemplatePreviewModal;
+			window.closeTemplatePreviewModal = closeTemplatePreviewModal;
 
 			function saveContent() {
 				showLoading(true);
@@ -4254,8 +5185,8 @@
 
 			// Element-by-element pagination function
 			function createElementBasedPagination(content, availableContentHeight) {
-				console.log('=== PAGINATION START ===');
-				console.log('Available content height:', availableContentHeight + 'px');
+
+
 
 				// Create a temporary container to work with elements with TinyMCE-like styling
 				const tempContainer = document.createElement('div');
@@ -4305,7 +5236,7 @@
 							elementId.startsWith('element-tr-') ||
 							elementId.startsWith('element-table-'))
 					) {
-						console.log(`🎯 Using ID-based computed style for ${elementId}`);
+
 						return getElementHeightWithMarginsById(elementId);
 					}
 
@@ -4332,12 +5263,6 @@
 
 					// Total height includes margins (but not padding and borders as they're included in offsetHeight)
 					const totalHeight = height + marginTop + marginBottom;
-
-					console.log(
-						`📏 ${tagName.toUpperCase()}: ${totalHeight}px (height: ${height}px, margins: ${
-							marginTop + marginBottom
-						}px)`,
-					);
 
 					return totalHeight;
 				}
@@ -4400,12 +5325,8 @@
 					document.body.removeChild(testContainer);
 
 					const textContent = testP.textContent || testP.innerText || '';
-					console.log(`📐 P tag: "${textContent.substring(0, 30)}..." -> ${Math.ceil(finalHeight)}px`);
-					console.log(
-						`  - Actual height: ${actualHeight}px, Scroll: ${actualScrollHeight}px, Computed: ${computedHeight}px`,
-					);
-					console.log(`  - Margins: top=${computedMarginTop}px, bottom=${computedMarginBottom}px`);
-					console.log(`  - Padding: top=${computedPaddingTop}px, bottom=${computedPaddingBottom}px`);
+
+
 
 					return Math.ceil(finalHeight); // Round up to ensure accuracy
 				}
@@ -4461,7 +5382,7 @@
 								styleData.paddingBottom,
 						);
 
-						console.log(`🎯 Computed style for ${elementId} (${styleData.tagName}):`, styleData);
+
 
 						return styleData;
 					} catch (error) {
@@ -4479,17 +5400,7 @@
 						return 23; // Default fallback height
 					}
 
-					const totalHeight = styleData.totalHeight;
-
-					console.log(`📏 ${styleData.tagName.toUpperCase()} (${elementId}): ${totalHeight}px`);
-					console.log(`  - Content: "${styleData.textContent.substring(0, 40)}..."`);
-					console.log(
-						`  - Height: ${styleData.height}px, Offset: ${styleData.offsetHeight}px, Scroll: ${styleData.scrollHeight}px`,
-					);
-					console.log(`  - Margins: top=${styleData.marginTop}px, bottom=${styleData.marginBottom}px`);
-					console.log(`  - Padding: top=${styleData.paddingTop}px, bottom=${styleData.paddingBottom}px`);
-
-					return Math.ceil(totalHeight);
+					const totalHeight = styleData.totalHeight;return Math.ceil(totalHeight);
 				}
 
 				// Helper function to calculate total height of multiple elements including margins
@@ -4515,15 +5426,15 @@
 
 				// Helper function to split table if it's too large
 				function splitTable(table, maxHeight) {
-					console.log('🔄 Splitting table...');
-					console.log(`📏 Max height allowed: ${maxHeight}px`);
+
+
 
 					const thead = table.querySelector('thead');
 					const tbody = table.querySelector('tbody');
 					const rows = tbody ? Array.from(tbody.querySelectorAll('tr')) : Array.from(table.querySelectorAll('tr'));
 
 					if (rows.length <= 1) {
-						console.log('⚠️ Table has only 1 row, cannot split');
+
 						return [table];
 					}
 
@@ -4539,7 +5450,7 @@
 						document.body.appendChild(tempHeaderTable);
 						baseTableHeight = getElementHeightWithMargins(tempHeaderTable);
 						document.body.removeChild(tempHeaderTable);
-						console.log('📏 Table header height:', baseTableHeight + 'px');
+
 					}
 
 					// Extract table attributes and styles for consistency
@@ -4575,7 +5486,7 @@
 					});
 
 					// Log individual row heights first
-					console.log('\n=== INDIVIDUAL ROW HEIGHTS ===');
+
 					const rowHeights = [];
 					rows.forEach((row, index) => {
 						// Create test table with header + single row to get exact row height
@@ -4652,17 +5563,14 @@
 							.map((cell) => cell.textContent.trim().substring(0, 20))
 							.join(' | ');
 
-						console.log(`📊 Row ${index + 1}: ${actualRowHeight}px - "${rowContent}..."`);
+
 
 						// Check if this single row exceeds max height
 						if (singleRowTableHeight > maxHeight) {
-							console.log(
-								`⚠️ Warning: Row ${index + 1} alone (${singleRowTableHeight}px) exceeds max height (${maxHeight}px)`,
-							);
 						}
 					});
 
-					console.log('=== END INDIVIDUAL ROW HEIGHTS ===\n');
+
 
 					// Now proceed with table splitting logic
 					const tables = [];
@@ -4671,24 +5579,24 @@
 					const SAFETY_MARGIN = 20;
 					const safeMaxHeight = maxHeight - SAFETY_MARGIN;
 
-					console.log(`📏 Safe max height for table parts: ${safeMaxHeight}px (original: ${maxHeight}px)`);
-					console.log(`📏 Starting with header height: ${baseTableHeight}px`);
+
+
 
 					for (let i = 0; i < rows.length; i++) {
 						const row = rows[i];
 						const rowHeight = rowHeights[i];
 
-						console.log(`\n--- Processing Row ${i + 1} ---`);
-						console.log(`📊 Row height: ${rowHeight}px`);
-						console.log(`📊 Current table height: ${currentTableHeight}px`);
+
+
+
 
 						const newTableHeight = currentTableHeight + rowHeight;
-						console.log(`📊 New table height would be: ${newTableHeight}px`);
+
 
 						// Check if adding this row would exceed safe height
 						if (newTableHeight > safeMaxHeight && currentTableRows.length > 0) {
-							console.log(`🔄 Row ${i + 1} would exceed safe height (${newTableHeight}px > ${safeMaxHeight}px)`);
-							console.log(`✂️ Cutting table here. Current table has ${currentTableRows.length} rows`);
+
+
 
 							// Create table with current rows (before the exceeding row)
 							const newTable = createTableFromRows(
@@ -4700,26 +5608,21 @@
 								rows,
 							);
 							tables.push(newTable);
-							console.log(`✅ Table part ${tables.length} created with rows 1-${currentTableRows.length}`);
+
 
 							// Start new table with the current row (the one that exceeded)
 							currentTableRows = [row];
 							currentTableHeight = baseTableHeight + rowHeight;
-							console.log(`🆕 Started new table with row ${i + 1} (height: ${currentTableHeight}px)`);
+
 						} else if (newTableHeight > safeMaxHeight && currentTableRows.length === 0) {
 							// Single row exceeds height - force add it anyway with warning
-							console.log(`⚠️ Single row ${i + 1} exceeds safe height (${newTableHeight}px) but adding anyway`);
+
 							currentTableRows.push(row);
 							currentTableHeight = newTableHeight;
 						} else {
 							// Add row to current table
 							currentTableRows.push(row);
 							currentTableHeight = newTableHeight;
-							console.log(
-								`➕ Added row ${i + 1} to current table (${
-									currentTableRows.length
-								} total rows, ${currentTableHeight}px total height)`,
-							);
 						}
 					}
 
@@ -4734,10 +5637,10 @@
 							rows,
 						);
 						tables.push(newTable);
-						console.log(`✅ Final table part ${tables.length} created with remaining ${currentTableRows.length} rows`);
+
 					}
 
-					console.log(`🔄 Table split into ${tables.length} parts`);
+
 
 					// Validate each table part height
 					tables.forEach((tablePart, index) => {
@@ -4748,10 +5651,10 @@
 						document.body.appendChild(tempDiv);
 						const partHeight = getElementHeightWithMargins(tempDiv.firstChild);
 						document.body.removeChild(tempDiv);
-						console.log(`📏 Table part ${index + 1} final height: ${partHeight}px`);
+
 
 						if (partHeight > maxHeight) {
-							console.log(`⚠️ Warning: Table part ${index + 1} still exceeds max height`);
+
 						}
 					});
 
@@ -4814,21 +5717,21 @@
 
 				// Get all direct children elements (paragraphs, tables, divs, etc.)
 				const elements = Array.from(tempContainer.children);
-				console.log(`📋 Total elements to process: ${elements.length}`);
+
 
 				for (let i = 0; i < elements.length; i++) {
 					const element = elements[i];
 					const elementType = element.tagName.toLowerCase();
 
-					console.log(`\n--- Processing Element ${i + 1}/${elements.length} (${elementType}) ---`);
+
 
 					// Handle table splitting
 					if (elementType === 'table') {
 						const tableHeight = getElementHeightWithMargins(element);
-						console.log(`📊 Table height: ${tableHeight}px`);
+
 
 						if (tableHeight > availableContentHeight) {
-							console.log('🔄 Table too large, splitting...');
+
 							const splitTables = splitTable(element, availableContentHeight);
 
 							// Process each split table part
@@ -4836,7 +5739,7 @@
 								const tablePart = splitTables[j];
 								const partHeight = getElementHeightWithMargins(tablePart);
 
-								console.log(`📊 Table part ${j + 1} height: ${partHeight}px`);
+
 
 								// Calculate height using simple addition for consistency
 								const testHeight = currentPageHeight + partHeight;
@@ -4856,25 +5759,25 @@
 									// Start new page with table part
 									currentPageElements = [tablePart];
 									currentPageHeight = partHeight;
-									console.log(`🆕 Started new page with table part ${j + 1} (height: ${partHeight}px)`);
+
 								} else {
 									// Add table part to current page
 									currentPageElements.push(tablePart);
 									currentPageHeight = testHeight;
-									console.log(`➕ Added table part ${j + 1} to current page (total height: ${testHeight}px)`);
+
 								}
 							}
 							continue; // Skip normal processing for this table
 						} else {
 							// Table fits in page - treat as normal element
-							console.log('📊 Table fits in available height, processing normally');
+
 							// Will be processed in normal element processing below
 						}
 					}
 
 					// Normal element processing
 					const elementHeight = getElementHeightWithMargins(element);
-					console.log(`📏 Element height: ${elementHeight}px`);
+
 
 					// Calculate height if we add this element to current page
 					// Use simple addition instead of complex recalculation to avoid inconsistencies
@@ -4896,12 +5799,12 @@
 						// Start new page with current element
 						currentPageElements = [element];
 						currentPageHeight = elementHeight;
-						console.log(`🆕 Started new page with element ${i + 1} (height: ${elementHeight}px)`);
+
 					} else {
 						// Add element to current page
 						currentPageElements.push(element);
 						currentPageHeight = testHeight;
-						console.log(`➕ Added element ${i + 1} to current page (total height: ${testHeight}px)`);
+
 					}
 				}
 
@@ -4909,7 +5812,7 @@
 				if (currentPageElements.length > 0) {
 					const pageContent = currentPageElements.map((el) => el.outerHTML).join('');
 					pages.push(pageContent);
-					console.log(`✅ Final page ${pages.length} created with ${currentPageElements.length} elements`);
+
 				}
 
 				// Clean up
@@ -4918,20 +5821,20 @@
 				// Ensure at least one page (handle empty content)
 				if (pages.length === 0) {
 					pages.push(content || '<p>Không có nội dung</p>');
-					console.log('⚠️ No content found, creating empty page');
+
 				}
 
-				console.log('\n=== PAGINATION SUMMARY ===');
-				console.log(`📄 Total pages created: ${pages.length}`);
-				console.log(`📊 Available height per page: ${availableContentHeight}px`);
+
+
+
 
 				pages.forEach((page, idx) => {
 					const elementCount = (page.match(/<(p|div|table|h[1-6]|ul|ol|blockquote)[^>]*>/gi) || []).length;
 					const tableCount = (page.match(/<table[^>]*>/gi) || []).length;
-					console.log(`📄 Page ${idx + 1}: ${elementCount} elements (${tableCount} tables), ${page.length} chars`);
+
 				});
 
-				console.log('=== PAGINATION END ===\n');
+
 
 				return pages;
 			}
@@ -4977,7 +5880,7 @@
 							footer: footerContent,
 							analysisIds: window.analysisIds || [],
 							documentHTML: htmlResponse,
-						}
+						},
 					});
 
 					// Reset preview button on success
@@ -4986,11 +5889,10 @@
 						previewBtn.textContent = 'Preview';
 						previewBtn.disabled = false;
 					}
-
 				} catch (error) {
 					console.error('Error creating lab result report:', error);
 					alert('Có lỗi xảy ra khi tạo biên bản: ' + error.message);
-					
+
 					// Reset preview button on error
 					const previewBtn = document.getElementById('previewBtn');
 					if (previewBtn) {
@@ -5097,7 +5999,7 @@
 				window.currentExportData = exportData;
 
 				// Close on outside click
-				document.getElementById('previewPopup').addEventListener('click', function(e) {
+				document.getElementById('previewPopup').addEventListener('click', function (e) {
 					if (e.target === this) {
 						closePreviewPopup();
 					}
@@ -5121,7 +6023,7 @@
 				}
 
 				const exportData = window.currentExportData;
-				
+
 				if (!exportData.docId) {
 					alert('Chưa có mã tài liệu. Vui lòng lưu tài liệu trước khi xuất.');
 					return;
@@ -5143,7 +6045,7 @@
 					const response = await apiPostBlob('https://red.irdop.org/v1/document/export', {
 						docId: exportData.docId,
 						documentHTML: exportData.metadata.documentHTML,
-						metadata: exportData.metadata
+						metadata: exportData.metadata,
 					});
 
 					if (response.status !== 200) {
@@ -5157,27 +6059,26 @@
 					const url = window.URL.createObjectURL(pdfBlob);
 					const link = document.createElement('a');
 					link.href = url;
-					
+
 					// Generate filename with current date and docId
 					const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 					const filename = `bao-cao-${exportData.docId}-${currentDate}.pdf`;
 					link.download = filename;
-					
+
 					// Trigger download
 					document.body.appendChild(link);
 					link.click();
 					document.body.removeChild(link);
-					
+
 					// Clean up the object URL
 					window.URL.revokeObjectURL(url);
 
 					// Show success message and close popup
 					showAutoHideMessage('Đã tải xuống file PDF thành công!', 'success');
 					closePreviewPopup();
-
 				} catch (error) {
 					console.error('Error exporting report:', error);
-					
+
 					// Try to get error message from response
 					let errorMessage = error.message;
 					try {
@@ -5189,7 +6090,7 @@
 					} catch (parseError) {
 						// Keep original error message if parsing fails
 					}
-					
+
 					alert('Lỗi khi xuất biên bản: ' + errorMessage);
 				} finally {
 					const exportBtn = document.querySelector('[onclick="exportReport()"]');
@@ -5247,112 +6148,100 @@
 
 					// Check if table info already exists and remove it more thoroughly
 					let contentWithoutTables = currentContent;
-					
+
 					// STEP 1: Remove existing auto-generated elements by ID
 					contentWithoutTables = contentWithoutTables.replace(
-						/<p[^>]*id=["']auto-test-date["'][^>]*>[\s\S]*?<\/p>/gi, 
-						''
+						/<p[^>]*id=["']auto-test-date["'][^>]*>[\s\S]*?<\/p>/gi,
+						'',
 					);
-					
+
 					contentWithoutTables = contentWithoutTables.replace(
-						/<table[^>]*id=["']auto-sample-info-table["'][^>]*>[\s\S]*?<\/table>/gi, 
-						''
+						/<table[^>]*id=["']auto-sample-info-table["'][^>]*>[\s\S]*?<\/table>/gi,
+						'',
 					);
-					
+
 					contentWithoutTables = contentWithoutTables.replace(
-						/<table[^>]*id=["']auto-analysis-info-table["'][^>]*>[\s\S]*?<\/table>/gi, 
-						''
+						/<table[^>]*id=["']auto-analysis-info-table["'][^>]*>[\s\S]*?<\/table>/gi,
+						'',
 					);
-					
+
 					contentWithoutTables = contentWithoutTables.replace(
-						/<div[^>]*id=["']auto-signature-section["'][^>]*>[\s\S]*?<\/div>/gi, 
-						''
+						/<div[^>]*id=["']auto-signature-section["'][^>]*>[\s\S]*?<\/div>/gi,
+						'',
 					);
-					
+
 					// STEP 2: Enhanced signature content removal - multiple passes for thorough cleanup
-					
+
 					// Pass 1: Remove any table rows containing signature text
 					contentWithoutTables = contentWithoutTables.replace(
-						/<tr[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/tr>/gi, 
-						''
+						/<tr[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/tr>/gi,
+						'',
 					);
-					
+
 					// Pass 2: Remove any table cells containing signature text
 					contentWithoutTables = contentWithoutTables.replace(
-						/<td[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/td>/gi, 
-						''
+						/<td[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/td>/gi,
+						'',
 					);
-					
+
 					// Pass 3: Remove any div with TinyMCE attributes containing signature text
 					contentWithoutTables = contentWithoutTables.replace(
-						/<div[^>]*data-mce-style[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/div>/gi, 
-						''
+						/<div[^>]*data-mce-style[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/div>/gi,
+						'',
 					);
-					
+
 					// Pass 4: Remove any div (with or without attributes) containing signature text
 					contentWithoutTables = contentWithoutTables.replace(
-						/<div[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/div>/gi, 
-						''
+						/<div[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/div>/gi,
+						'',
 					);
-					
+
 					// Pass 5: Remove any paragraph containing signature text
 					contentWithoutTables = contentWithoutTables.replace(
-						/<p[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/p>/gi, 
-						''
+						/<p[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/p>/gi,
+						'',
 					);
-					
+
 					// Pass 6: Remove any table containing signature text (catch entire tables)
 					contentWithoutTables = contentWithoutTables.replace(
-						/<table[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/table>/gi, 
-						''
+						/<table[^>]*>[\s\S]*?(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/table>/gi,
+						'',
 					);
-					
+
 					// Pass 7: Remove standalone text patterns (any element with signature keywords)
 					contentWithoutTables = contentWithoutTables.replace(
-						/<[^>]+>[^<]*(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[^<]*<\/[^>]+>/gi, 
-						''
+						/<[^>]+>[^<]*(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra)[^<]*<\/[^>]+>/gi,
+						'',
 					);
-					
+
 					// Pass 8: Clean up specific TinyMCE patterns with style attributes
 					contentWithoutTables = contentWithoutTables.replace(
-						/<div[^>]*style="[^"]*"[^>]*data-mce-style="[^"]*"[^>]*>[\s\S]*?(?:Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/div>/gi, 
-						''
+						/<div[^>]*style="[^"]*"[^>]*data-mce-style="[^"]*"[^>]*>[\s\S]*?(?:Ngày thực hiện|Ngày kiểm tra)[\s\S]*?<\/div>/gi,
+						'',
 					);
-					
+
 					// Pass 9: Remove any remaining empty table rows that might be left
-					contentWithoutTables = contentWithoutTables.replace(
-						/<tr[^>]*>\s*<\/tr>/gi, 
-						''
-					);
-					
+					contentWithoutTables = contentWithoutTables.replace(/<tr[^>]*>\s*<\/tr>/gi, '');
+
 					// Pass 10: Remove any remaining empty table cells
-					contentWithoutTables = contentWithoutTables.replace(
-						/<td[^>]*>\s*<\/td>/gi, 
-						''
-					);
-					
+					contentWithoutTables = contentWithoutTables.replace(/<td[^>]*>\s*<\/td>/gi, '');
+
 					// Pass 11: Clean up empty elements
-					contentWithoutTables = contentWithoutTables.replace(
-						/<p[^>]*>\s*<\/p>/gi, 
-						''
-					);
-					
-					contentWithoutTables = contentWithoutTables.replace(
-						/<div[^>]*>\s*<\/div>/gi, 
-						''
-					);
-					
+					contentWithoutTables = contentWithoutTables.replace(/<p[^>]*>\s*<\/p>/gi, '');
+
+					contentWithoutTables = contentWithoutTables.replace(/<div[^>]*>\s*<\/div>/gi, '');
+
 					// Pass 12: Final cleanup - remove any lines containing only signature keywords
 					contentWithoutTables = contentWithoutTables.replace(
-						/.*(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra).*/gi, 
-						''
+						/.*(?:NGƯỜI KIỂM TRA|NGƯỜI THỰC HIỆN|Ngày thực hiện|Ngày kiểm tra).*/gi,
+						'',
 					);
-					
+
 					// Pass 13: Clean up multiple consecutive empty lines
 					contentWithoutTables = contentWithoutTables.replace(/\s{3,}/g, ' ');
 					contentWithoutTables = contentWithoutTables.replace(/(<br\s*\/?>){2,}/gi, '<br>');
-					
-					console.log('Content cleanup completed - removed all signature-related content');
+
+
 
 					// Create test date paragraph with unique ID
 					let testDateHtml = `<p id="auto-test-date">Ngày thử nghiệm: </p>`;
@@ -5426,7 +6315,9 @@
 						</div>`;
 
 					// Insert content without format processing, replacing existing tables
-					editor.setContent(testDateHtml + sampleTableHtml + contentWithoutTables + analysisTableHtml + signatureTableHtml);
+					editor.setContent(
+						testDateHtml + sampleTableHtml + contentWithoutTables + analysisTableHtml + signatureTableHtml,
+					);
 
 					// Reset button state
 					if (btn) {
@@ -5522,7 +6413,7 @@
 						if (paramsUpdated) {
 							const newUrl = window.location.pathname + '?' + urlParams.toString();
 							window.history.replaceState({}, '', newUrl);
-							console.log('URL updated with metadata values:', newUrl);
+
 						}
 
 						// Load content into editors from metadata
@@ -5558,13 +6449,13 @@
 							response.data.createdAt,
 							response.data.modifiedAt,
 							response.data.metadata?.authorName,
-							response.data.metadata?.modifiedBy
+							response.data.metadata?.modifiedBy,
 						);
 
 						// Mark that initial data has been loaded
 						hasInitialDataLoaded = true;
 
-						console.log('Loaded data from docId:', docId, metadata);
+
 					} else {
 						console.warn('No data found for docId:', docId);
 						// Fallback to template loading if available
@@ -5595,7 +6486,7 @@
 					if (response.status === 200 && response.data && response.data.result && response.data.result.length > 0) {
 						const template = response.data.result[0];
 						await selectTemplate(template);
-						console.log('Template loaded from URL:', template);
+
 					} else {
 						console.warn('Template not found for ID:', templateId);
 						// Remove invalid templateId from URL
@@ -5673,8 +6564,8 @@
 				const dropdown = document.getElementById('templateList');
 				if (dropdown) {
 					dropdown.classList.toggle('hidden');
-					console.log('Dropdown toggled:', !dropdown.classList.contains('hidden'));
-					
+
+
 					// Load templates when opening dropdown
 					if (!dropdown.classList.contains('hidden')) {
 						loadTemplates();
@@ -5764,7 +6655,7 @@
 					return {
 						status: response.status,
 						data: data,
-						response: response // Include full response for additional info if needed
+						response: response, // Include full response for additional info if needed
 					};
 				} catch (error) {
 					console.error('API Blob Error:', error);
@@ -5846,7 +6737,7 @@
 				}
 				container.innerHTML = '';
 
-				console.log('Rendering templates:', templates.length, 'templates');
+
 
 				templates.forEach((template) => {
 					const item = document.createElement('div');
@@ -5927,30 +6818,64 @@
 					if (selectBtn) {
 						selectBtn.disabled = false;
 					}
-					
+
 					// Hide "no template selected" and show "template selected"
 					const noTemplateDiv = document.getElementById('noTemplateSelected');
 					const templateSelectedDiv = document.getElementById('templateSelected');
 					if (noTemplateDiv) noTemplateDiv.style.display = 'none';
 					if (templateSelectedDiv) templateSelectedDiv.style.display = 'block';
-					
+
 					// Update template info display with dates
 					const templateTitle = document.getElementById('templateTitle');
 					const templateDescription = document.getElementById('templateDescription');
 					const templateCreatedDate = document.getElementById('templateCreatedDate');
 					const templateModifiedDate = document.getElementById('templateModifiedDate');
-					
+
 					if (templateTitle) templateTitle.textContent = templateDetails.templateName || templateDetails.name || '-';
-					if (templateDescription) templateDescription.textContent = templateDetails.templateDescription || templateDetails.description || '-';
-					if (templateCreatedDate) templateCreatedDate.textContent = templateDetails.createdAt ? new Date(templateDetails.createdAt).toLocaleDateString('vi-VN') + ' - ' + templateDetails.authorName.split(':')[1] || '-' : '-';
-					if (templateModifiedDate) templateModifiedDate.textContent = templateDetails.modifiedAt ? new Date(templateDetails.modifiedAt).toLocaleDateString('vi-VN') + ' - ' + templateDetails.modifiedBy.split(':')[1] || '-' : '-';
-					
-					// Update template code display  
+					if (templateDescription)
+						templateDescription.textContent = templateDetails.templateDescription || templateDetails.description || '-';
+					if (templateCreatedDate)
+						templateCreatedDate.textContent = templateDetails.createdAt
+							? new Date(templateDetails.createdAt).toLocaleDateString('vi-VN') +
+									' - ' +
+									templateDetails.authorName.split(':')[1] || '-'
+							: '-';
+					if (templateModifiedDate)
+						templateModifiedDate.textContent = templateDetails.modifiedAt
+							? new Date(templateDetails.modifiedAt).toLocaleDateString('vi-VN') +
+									' - ' +
+									templateDetails.modifiedBy.split(':')[1] || '-'
+							: '-';
+
+					// Update template code display
 					const templateCodeText = document.getElementById('templateCodeText');
-					if (templateCodeText) {
-						templateCodeText.textContent = templateDetails.id || 'Chưa có mã';
+					const templateCodeTextSelected = document.getElementById('templateCodeTextSelected');
+					const templateCodeLine = document.getElementById('templateCodeLine');
+
+					if (templateDetails.id) {
+						// Show template code line when there's a template ID
+						if (templateCodeLine) {
+							templateCodeLine.style.display = 'block';
+						}
+						if (templateCodeText) {
+							templateCodeText.textContent = templateDetails.id;
+						}
+						if (templateCodeTextSelected) {
+							templateCodeTextSelected.textContent = templateDetails.id;
+						}
+					} else {
+						// Hide template code line when no template ID
+						if (templateCodeLine) {
+							templateCodeLine.style.display = 'none';
+						}
+						if (templateCodeText) {
+							templateCodeText.textContent = '';
+						}
+						if (templateCodeTextSelected) {
+							templateCodeTextSelected.textContent = '';
+						}
 					}
-					
+
 					const editBtn = document.getElementById('editTemplateBtn');
 					if (editBtn) {
 						editBtn.classList.remove('hidden');
@@ -5980,9 +6905,9 @@
 						startAutoSave();
 					}
 
-					console.log('Template applied successfully:', templateDetails);
+
 				} catch (error) {
-  					console.error('Error loading template details:', error);
+					console.error('Error loading template details:', error);
 					alert('Lỗi khi tải chi tiết template: ' + error.message);
 
 					// Fallback to basic template selection
@@ -6000,7 +6925,7 @@
 					if (dropdown) {
 						dropdown.classList.add('hidden');
 					}
-					
+
 					// Close template search form
 					hideTemplateSearchForm();
 				}
@@ -6113,12 +7038,7 @@
 					customRows = [...template.customRows];
 					renderCustomRows();
 					updateModalTable();
-				}
-
-				console.log(
-					`Table updated with ${template.columns.length} columns and ${selectedData ? selectedData.length : 0} rows`,
-				);
-			}
+				}}
 
 			// New function to update table based on template
 			function updateTableFromTemplate(template) {
@@ -6199,7 +7119,6 @@
 			}
 
 			// Template form functions
-
 
 			// Saved report management functions
 			function showEditSavedReportForm() {
@@ -6478,7 +7397,7 @@
 					// Show success message
 					showAutoHideMessage('Đã tải mẫu đã lưu thành công!', 'success');
 
-					console.log('Loaded saved report:', report);
+
 				} catch (error) {
 					console.error('Error loading saved report:', error);
 					alert('Lỗi khi tải mẫu đã lưu: ' + error.message);
@@ -6613,12 +7532,12 @@
 
 			function addInitialColumns() {
 				// Không cần thêm column vì đã ẩn phần này
-				console.log('addInitialColumns - bỏ qua vì đã ẩn phần columns');
+
 			}
 
 			function updatePreviewTable(mode) {
 				// Ẩn phần preview table
-				console.log('updatePreviewTable - bỏ qua vì đã ẩn phần preview');
+
 				return;
 
 				const containerId = mode === 'edit' ? 'editTemplateColumns' : 'templateColumns';
@@ -6734,7 +7653,7 @@
 				// Look for inputs in modal first, then fallback to regular form
 				const modalBody = document.getElementById('modalBody');
 				let templateName, templateDescription;
-				
+
 				if (modalBody) {
 					const nameInput = modalBody.querySelector('#templateName');
 					const descInput = modalBody.querySelector('#templateDescription');
@@ -6794,10 +7713,17 @@
 							templateDescription: templateDescription,
 							columns: requestBody.columns,
 							fileId: fileId,
+							createdAt: new Date().toISOString(), // Add current timestamp
+							modifiedAt: new Date().toISOString(), // Add current timestamp
+							content: content,
+							header: headerContent
 						};
 
 						// Update URL with new templateId
 						updateURLWithTemplateId(result?.id);
+
+						// Update template display in sidebar
+						updateTemplateDisplayInfo(currentTemplate);
 
 						// Update button
 						const selectBtn = document.getElementById('selectTemplateBtn');
@@ -6810,7 +7736,7 @@
 						loadTemplates(); // Reload templates
 						closeSidebarModal(); // Close modal instead of hiding form
 						resetCreateForm();
-						
+
 						// Auto-insert table data after template creation
 						await insertTableInfo();
 					} else {
@@ -6831,7 +7757,7 @@
 				// Look for inputs in modal first, then fallback to regular form
 				const modalBody = document.getElementById('modalBody');
 				let templateName, templateDescription;
-				
+
 				if (modalBody) {
 					const nameInput = modalBody.querySelector('#editTemplateName');
 					const descInput = modalBody.querySelector('#editTemplateDescription');
@@ -6891,11 +7817,17 @@
 							templateName: templateName,
 							templateDescription: templateDescription,
 							columns: requestBody.columns,
+							modifiedAt: new Date().toISOString(), // Add current timestamp
+							content: content,
+							header: headerContent
 						};
+
+						// Update template display in sidebar
+						updateTemplateDisplayInfo(currentTemplate);
 
 						loadTemplates(); // Reload templates
 						closeSidebarModal(); // Close modal instead of hiding form
-						
+
 						// Auto-insert table data after template editing
 						await insertTableInfo();
 					} else {
@@ -7056,7 +7988,7 @@
 
 			// Custom rows functions
 			function addCustomRow() {
-				console.log('addCustomRow - placeholder function');
+
 				// Placeholder implementation
 			}
 
@@ -7835,3 +8767,4 @@
 		</script>
 	</body>
 </html>
+

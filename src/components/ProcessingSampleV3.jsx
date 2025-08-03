@@ -1,12 +1,24 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import parse from 'html-react-parser';
 import Breadcrumb from './Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiGet, apiPost, apiPut } from '../contexts/helperFunctionCallAPI';
 import TinyMceInput from './Input';
 import { toast, ToastContainer } from 'react-toastify';
 import { GrDocumentText, GrPrint } from 'react-icons/gr';
-import { FaCheck, FaSave, FaUndo, FaStickyNote, FaCopy, FaEdit, FaCalendarDay, FaTimes } from 'react-icons/fa';
+import {
+	FaCheck,
+	FaSave,
+	FaUndo,
+	FaStickyNote,
+	FaCopy,
+	FaEdit,
+	FaCalendarDay,
+	FaTimes,
+	FaExpand,
+	FaCompress,
+} from 'react-icons/fa';
 import { useLocation, useNavigate } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -29,6 +41,10 @@ const ProcessingSample = () => {
 	const [displayCount, setDisplayCount] = useState(20); // Number of receipts to display
 	const [showAllReceipts, setShowAllReceipts] = useState(false); // Whether to show all receipts
 	const [showLabReportPopup, setShowLabReportPopup] = useState(false); // State for lab report popup
+	const [showAnalysisContainer, setShowAnalysisContainer] = useState(false); // State for analysis container
+	const [isAnalysisFullscreen, setIsAnalysisFullscreen] = useState(false); // State for fullscreen mode
+	// analysisLoading removed - ProcessingAnalysis.html handles its own loading
+	const [iframeUrl, setIframeUrl] = useState('/ProcessingAnalysis.html'); // State to track iframe URL for re-rendering
 
 	// Function to fetch matrix options from API
 	const fetchMatrixOptions = async () => {
@@ -50,25 +66,132 @@ const ProcessingSample = () => {
 	// Get current mode from URL query parameter
 	const getCurrentMode = () => {
 		const searchParams = new URLSearchParams(location.search);
-		return searchParams.get('mode') || 'sample';
+		const mode = searchParams.get('mode');
+
+		// Map query param values to internal mode values
+		if (mode === 'bangiao') {
+			return 'sample';
+		} else if (mode === 'chitieu') {
+			return 'match';
+		} else if (mode === 'file') {
+			return 'file';
+		}
+		// Default to chitieu mode (match) if no valid mode is specified
+		return 'match';
 	};
 
-	const [currentMode, setCurrentMode] = useState('sample');
+	const [currentMode, setCurrentMode] = useState('match'); // Default to chitieu mode
+
+	// Add message event listener for iframe communication
+	useEffect(() => {
+		const handleMessage = (event) => {
+			// Only accept messages from our iframe
+			if (event.origin !== window.location.origin) {
+				return;
+			}
+
+			// Handle different message types from iframe
+			if (event.data.type === 'updateQueryParams') {
+				const { params } = event.data;
+				const searchParams = new URLSearchParams(location.search);
+
+				// If params is empty object, it means clear all filters
+				if (Object.keys(params).length === 0) {
+					// Clear all filter-related params but keep the mode
+					const currentMode = searchParams.get('mode');
+					searchParams.forEach((value, key) => {
+						if (key !== 'mode') {
+							searchParams.delete(key);
+						}
+					});
+					// Restore mode if it existed
+					if (currentMode) {
+						searchParams.set('mode', currentMode);
+					}
+				} else {
+					// Update query parameters based on iframe request
+					Object.keys(params).forEach((key) => {
+						if (params[key] !== null && params[key] !== undefined) {
+							searchParams.set(key, params[key]);
+						} else {
+							searchParams.delete(key);
+						}
+					});
+				}
+
+				// Update URL without page refresh
+				navigate(
+					{
+						pathname: location.pathname,
+						search: searchParams.toString(),
+					},
+					{ replace: true },
+				);
+
+				// Turn off loading state since iframe operation completed
+			} else if (event.data.type === 'iframeLoaded') {
+				// Handle iframe loaded event - no loading state to manage
+			}
+		};
+
+		// Add event listener
+		window.addEventListener('message', handleMessage);
+
+		// Cleanup event listener on component unmount
+		return () => {
+			window.removeEventListener('message', handleMessage);
+		};
+	}, [location, navigate]);
 
 	// Function to handle mode change
 	const handleModeChange = (mode) => {
+		// Create new clean URLSearchParams - this removes all existing params
+		const searchParams = new URLSearchParams();
+
+		// Reset all filter states when changing mode
+		setFilterUrgent(false);
+		setFilterNoResults(false);
+		setFilterOverdue(false);
+		setFilterContractor(false);
+		setShowTodayDeadlines(false);
+		setFilterInfo({
+			isFilterActive: false,
+			count: 0,
+			startDate: null,
+			endDate: null,
+		});
+
 		if (mode === 'file') {
 			setShowLabReportPopup(true);
+			setShowAnalysisContainer(false);
+			searchParams.set('mode', 'file'); // Only set mode, all other params are cleared
 			toast.info('Đang hiển thị file biên bản...', { autoClose: 800 });
 		} else if (mode === 'match') {
-			// Open ProcessingAnalysis.html in a new tab
-			window.open('/ProcessingAnalysis.html', '_blank');
-			toast.info('Đang mở trang phân tích chỉ tiêu...', { autoClose: 800 });
+			// Show analysis container instead of opening in new tab
+			// No loading state needed - ProcessingAnalysis.html handles its own loading
+			setShowAnalysisContainer(true);
+			setShowLabReportPopup(false);
+			setCurrentMode(mode);
+			searchParams.set('mode', 'chitieu'); // Only set mode, all other params are cleared
+			toast.info('Đang mở trang Danh sách chỉ tiêu đang xử lý...', { autoClose: 800 });
 		} else {
+			// bangiao mode
 			setCurrentMode(mode);
 			setShowLabReportPopup(false);
+			setShowAnalysisContainer(false);
+			// No more loading state to reset
+			searchParams.set('mode', 'bangiao'); // Only set mode, all other params are cleared
 			toast.info('Đang hiển thị giao diện bàn giao...', { autoClose: 800 });
 		}
+
+		// Update the URL with only the new mode parameter (all other params cleared)
+		navigate(
+			{
+				pathname: location.pathname,
+				search: searchParams.toString(),
+			},
+			{ replace: true },
+		);
 	};
 	const [searchTerm, setSearchTerm] = useState('');
 	const [sampleSearchTerm, setSampleSearchTerm] = useState('');
@@ -96,7 +219,10 @@ const ProcessingSample = () => {
 	const [inputValue, setInputValue] = useState('');
 	// Add state for EX information
 	const [exInfo, setExInfo] = useState({}); // Track EX information for each analysis
-	let isFetch = false;
+	const [isFetch, setIsFetch] = useState(false); // Change to useState to persist across re-renders
+	const [isApiCallInProgress, setIsApiCallInProgress] = useState(false);
+	const [iframeInitialized, setIframeInitialized] = useState(false); // Track if iframe URL has been set
+	const isInitialMount = useRef(true); // Track if this is the initial mount
 
 	const [showTodayDeadlines, setShowTodayDeadlines] = useState(false);
 	const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -115,6 +241,22 @@ const ProcessingSample = () => {
 	// Add viewMode v3 functionality
 	// Update the fetchReceiptData to properly update filteredProcessingSample
 	const fetchReceiptData = async () => {
+		// Prevent concurrent API calls
+		if (isApiCallInProgress) {
+			return;
+		}
+
+		// Additional protection against React StrictMode double calls
+		const currentTime = Date.now();
+		const lastCallTime = window._lastFetchTime || 0;
+		if (currentTime - lastCallTime < 1000) {
+			// Prevent calls within 1 second
+			return;
+		}
+		window._lastFetchTime = currentTime;
+
+		setIsApiCallInProgress(true);
+
 		try {
 			// Get query parameters from URL
 			const queryParams = new URLSearchParams(location.search);
@@ -223,9 +365,11 @@ const ProcessingSample = () => {
 				setProcessingSample(data);
 			}
 		} catch (error) {
-			console.error('Error fetching receipt data:', error);
+			console.error('❌ Error fetching receipt data:', error);
 			setProcessingSample([]);
 			setFilteredProcessingSample([]);
+		} finally {
+			setIsApiCallInProgress(false);
 		}
 	};
 	// Update filtered data to remove pagination
@@ -421,26 +565,104 @@ const ProcessingSample = () => {
 		// Update the title
 		setCurrentTitlePage('Mẫu đang xử lý');
 
+		// Handle initial mode setup based on query params
+		const searchParams = new URLSearchParams(location.search);
+		const queryMode = searchParams.get('mode');
+		const previousMode = getCurrentMode(); // Get current mode before update
+
+		// If no mode is specified, default to chitieu
+		if (!queryMode) {
+			searchParams.set('mode', 'chitieu');
+			navigate(
+				{
+					pathname: location.pathname,
+					search: searchParams.toString(),
+				},
+				{ replace: true },
+			);
+			return; // Return early to let the effect run again with the updated URL
+		}
+
 		// Update current mode from URL when location changes
-		setCurrentMode(getCurrentMode());
+		const newMode = getCurrentMode();
+		setCurrentMode(newMode);
 
-		// Fetch data based on current URL
-		fetchReceiptData();
+		if (queryMode === 'chitieu') {
+			// Remove loading state - let ProcessingAnalysis.html handle its own loading
+			setShowAnalysisContainer(true);
+			setShowLabReportPopup(false);
+			// Set iframe URL once when initializing chitieu mode - only if not already initialized
+			if (!iframeInitialized) {
+				const newIframeUrl = getProcessingAnalysisURL();
+				setIframeUrl(newIframeUrl);
+				setIframeInitialized(true);
+			}
+			// Don't fetch receipt data when in chitieu mode - this is key to preventing duplicate API calls
+		} else if (queryMode === 'file') {
+			setShowLabReportPopup(true);
+			setShowAnalysisContainer(false);
+			// Only reset iframe flag if switching from chitieu mode
+			if (previousMode === 'match' || showAnalysisContainer) {
+				setIframeInitialized(false);
+			}
+			// Only fetch data if switching to file mode or if filters changed and we need fresh data
+			if (previousMode !== 'file' || !isFetch || !processingSample) {
+				if (!isApiCallInProgress) {
+					fetchReceiptData();
+				}
+			}
+		} else {
+			// bangiao mode
+			setShowLabReportPopup(false);
+			setShowAnalysisContainer(false);
+			// Only reset iframe flag if switching from chitieu mode
+			if (previousMode === 'match' || showAnalysisContainer) {
+				setIframeInitialized(false);
+			}
+			// Only fetch data if switching to bangiao mode or if filters changed and we need fresh data
+			if (previousMode !== 'sample' || !isFetch || !processingSample) {
+				if (!isApiCallInProgress) {
+					fetchReceiptData();
+				}
+			}
+		}
 
-		// Fetch matrix options
-		fetchMatrixOptions();
+		// Only fetch matrix options when not in chitieu mode
+		if (queryMode !== 'chitieu') {
+			fetchMatrixOptions();
+		}
 
 		// Set isFetch to true so we don't fetch again unnecessarily
-		isFetch = true;
+		setIsFetch(true);
+
+		// Mark that initial mount is complete
+		if (isInitialMount.current) {
+			isInitialMount.current = false;
+		}
 
 		// Log URL changes for debugging
 	}, [location.search]); // This will run whenever the URL query parameters change
 
+	// Cleanup effect to reset global variables when component unmounts
+	useEffect(() => {
+		return () => {
+			// Cleanup when component unmounts
+			window._lastFetchTime = 0;
+		};
+	}, []);
+
 	// Update the interval for periodic refresh
 	useEffect(() => {
 		const interval = setInterval(() => {
-			// Only refresh if no filters are active to avoid overriding filtered data
+			// Don't refresh if in chitieu mode or if API call is already in progress
 			const currentParams = new URLSearchParams(location.search);
+			const currentMode = currentParams.get('mode');
+
+			if (currentMode === 'chitieu' || isApiCallInProgress) {
+				return; // Skip refresh for chitieu mode or if API call is in progress
+			}
+
+			// Only refresh if no filters are active to avoid overriding filtered data
 			const hasActiveFilters =
 				currentParams.has('urgent') ||
 				currentParams.has('no_results') ||
@@ -448,15 +670,16 @@ const ProcessingSample = () => {
 				currentParams.has('deadline_start') ||
 				currentParams.has('contractor');
 
-			if (!hasActiveFilters) {
+			if (!hasActiveFilters && isFetch) {
 				fetchReceiptData();
 			}
 		}, 60000);
 
 		return () => clearInterval(interval);
-	}, [location.search]);
+	}, [location.search, isApiCallInProgress, isFetch]);
 
-	// Handle click outside category dropdown to close it
+	// No need to reload iframe when query params change
+	// ProcessingAnalysis.html handles URL changes internally	// Handle click outside category dropdown to close it
 	useEffect(() => {
 		const handleClickOutside = (event) => {
 			// Check if click is outside the category dropdown area
@@ -1015,7 +1238,28 @@ const ProcessingSample = () => {
 	const toggleUrgentFilter = () => {
 		// Get current URL search params
 		const searchParams = new URLSearchParams(location.search);
+		const currentMode = searchParams.get('mode');
 
+		// Don't call API if we're in chitieu mode - let ProcessingAnalysis.html handle it
+		if (currentMode === 'chitieu') {
+			// For chitieu mode, just update URL - iframe will handle the filtering
+			const hasUrgentParam = searchParams.has('urgent');
+			if (!hasUrgentParam) {
+				searchParams.set('urgent', 'true');
+				toast.info('Đã bật bộ lọc mẫu khẩn');
+			} else {
+				searchParams.delete('urgent');
+				toast.info('Đã tắt bộ lọc mẫu khẩn');
+			}
+
+			navigate({
+				pathname: location.pathname,
+				search: searchParams.toString(),
+			});
+			return; // Exit early for chitieu mode
+		}
+
+		// For bangiao and file modes, continue with existing logic
 		// Check if urgent filter is already active in the URL
 		const hasUrgentParam = searchParams.has('urgent');
 
@@ -1058,7 +1302,28 @@ const ProcessingSample = () => {
 	const toggleNoResultsFilter = () => {
 		// Get current URL search params
 		const searchParams = new URLSearchParams(location.search);
+		const currentMode = searchParams.get('mode');
 
+		// Don't call API if we're in chitieu mode - let ProcessingAnalysis.html handle it
+		if (currentMode === 'chitieu') {
+			// For chitieu mode, just update URL - iframe will handle the filtering
+			const hasNoResultsParam = searchParams.has('no_results');
+			if (!hasNoResultsParam) {
+				searchParams.set('no_results', 'true');
+				toast.info('Đã bật bộ lọc chưa có kết quả');
+			} else {
+				searchParams.delete('no_results');
+				toast.info('Đã tắt bộ lọc chưa có kết quả');
+			}
+
+			navigate({
+				pathname: location.pathname,
+				search: searchParams.toString(),
+			});
+			return; // Exit early for chitieu mode
+		}
+
+		// For bangiao and file modes, continue with existing logic
 		// Check if no_results filter is already active in the URL
 		const hasNoResultsParam = searchParams.has('no_results');
 
@@ -1101,7 +1366,28 @@ const ProcessingSample = () => {
 	const toggleContractorFilter = () => {
 		// Get current URL search params
 		const searchParams = new URLSearchParams(location.search);
+		const currentMode = searchParams.get('mode');
 
+		// Don't call API if we're in chitieu mode - let ProcessingAnalysis.html handle it
+		if (currentMode === 'chitieu') {
+			// For chitieu mode, just update URL - iframe will handle the filtering
+			const hasContractorParam = searchParams.has('contractor');
+			if (!hasContractorParam) {
+				searchParams.set('contractor', 'true');
+				toast.info('Đã bật bộ lọc thầu phụ');
+			} else {
+				searchParams.delete('contractor');
+				toast.info('Đã tắt bộ lọc thầu phụ');
+			}
+
+			navigate({
+				pathname: location.pathname,
+				search: searchParams.toString(),
+			});
+			return; // Exit early for chitieu mode
+		}
+
+		// For bangiao and file modes, continue with existing logic
 		// Check if contractor filter is already active in the URL
 		const hasContractorParam = searchParams.has('contractor');
 
@@ -1276,6 +1562,8 @@ const ProcessingSample = () => {
 
 			// Clear all existing filters first
 			const searchParams = new URLSearchParams(location.search);
+			const currentMode = searchParams.get('mode');
+
 			searchParams.delete('deadline_start');
 			searchParams.delete('deadline_end');
 			searchParams.delete('no_results');
@@ -1294,25 +1582,24 @@ const ProcessingSample = () => {
 					search: searchParams.toString(),
 				},
 				{ replace: true },
-			); // Use replace to avoid adding to history stack
+			);
 
-			// The URL change will trigger the useEffect and fetchReceiptData will be called
-
-			// Store filter information
-			setFilterInfo({
-				isFilterActive: true,
-				count: 0, // Will be updated when data is received
-				startDate: start,
-				endDate: end,
-			});
+			// Only fetch data if not in chitieu mode - chitieu mode iframe handles its own filtering
+			if (currentMode !== 'chitieu') {
+				// The useEffect watching location.search will trigger the API call
+				// Store filter information
+				setFilterInfo({
+					isFilterActive: true,
+					count: 0, // Will be updated when data is received
+					startDate: start,
+					endDate: end,
+				});
+			}
 
 			// Show toast notification
 			const startDateStr = formatDateLocalSimple(start);
 			const endDateStr = formatDateLocalSimple(end);
 			toast.info(`Đã bật bộ lọc ngày trả kết quả: ${startDateStr} - ${endDateStr}`);
-
-			// Note: We don't need to make a direct API call here since the URL change
-			// will trigger fetchReceiptData which will use the correct endpoint
 		} catch (error) {
 			console.error('Error setting up deadline filter:', error);
 			toast.error('Có lỗi xảy ra khi lọc dữ liệu theo hạn trả');
@@ -1657,6 +1944,50 @@ const ProcessingSample = () => {
 		}
 	};
 
+	// Functions to handle analysis container fullscreen mode
+	const toggleAnalysisFullscreen = () => {
+		// No loading state needed - iframe is already loaded
+		setIsAnalysisFullscreen(true);
+	};
+
+	const closeAnalysisContainer = () => {
+		setShowAnalysisContainer(false);
+		setIsAnalysisFullscreen(false);
+		// No loading state to reset
+		setCurrentMode('sample');
+		setIframeInitialized(false); // Reset iframe flag when closing
+
+		// Update URL to bangiao mode
+		const searchParams = new URLSearchParams(location.search);
+		searchParams.set('mode', 'bangiao');
+		navigate(
+			{
+				pathname: location.pathname,
+				search: searchParams.toString(),
+			},
+			{ replace: true },
+		);
+	};
+
+	const closeFullscreenAnalysis = () => {
+		setIsAnalysisFullscreen(false);
+		// No loading state to reset
+	};
+
+	// Function to generate ProcessingAnalysis.html URL with query params
+	const getProcessingAnalysisURL = () => {
+		const currentParams = new URLSearchParams(location.search);
+
+		// Remove mode param as it's for React component routing
+		currentParams.delete('mode');
+
+		// Pass all remaining params to ProcessingAnalysis.html
+		const queryString = currentParams.toString();
+		const finalUrl = `/ProcessingAnalysis.html${queryString ? '?' + queryString : ''}`;
+
+		return finalUrl;
+	};
+
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
@@ -1666,7 +1997,8 @@ const ProcessingSample = () => {
 					<button
 						onClick={() => handleModeChange('sample')}
 						className={`px-4 py-0.5 rounded-lg transition-colors ${
-							currentMode === 'sample' && !showLabReportPopup
+							(currentMode === 'sample' && !showLabReportPopup && !showAnalysisContainer) ||
+							new URLSearchParams(location.search).get('mode') === 'bangiao'
 								? 'bg-blue-500 text-white hover:bg-blue-600'
 								: 'bg-gray-300 text-gray-700 hover:bg-gray-400'
 						}`}
@@ -1676,7 +2008,7 @@ const ProcessingSample = () => {
 					<button
 						onClick={() => handleModeChange('file')}
 						className={`px-4 py-0.5 rounded-lg transition-colors flex items-center gap-2 ${
-							showLabReportPopup
+							showLabReportPopup || new URLSearchParams(location.search).get('mode') === 'file'
 								? 'bg-green-500 text-white hover:bg-green-600'
 								: 'bg-gray-300 text-gray-700 hover:bg-gray-400'
 						}`}
@@ -1686,7 +2018,11 @@ const ProcessingSample = () => {
 					</button>
 					<button
 						onClick={() => handleModeChange('match')}
-						className="px-4 py-0.5 rounded-lg transition-colors flex items-center gap-2 bg-gray-300 text-gray-700 hover:bg-gray-400"
+						className={`px-4 py-0.5 rounded-lg transition-colors flex items-center gap-2 ${
+							showAnalysisContainer || new URLSearchParams(location.search).get('mode') === 'chitieu'
+								? 'bg-orange-500 text-white hover:bg-orange-600'
+								: 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+						}`}
 					>
 						<GrDocumentText size={14} />
 						Chỉ tiêu
@@ -1695,893 +2031,935 @@ const ProcessingSample = () => {
 			</div>
 
 			<div className="w-full h-full flex flex-col justify-center items-center bg-white rounded-lg p-4 shadow">
-				{/* Always show sample processing interface */}
-				<>
-					<div className="w-full flex flex-col mb-4 gap-2">
-						<div className="flex flex-wrap justify-between items-center gap-2">
-							<div className="relative w-[23%]">
-								<input
-									type="text"
-									placeholder="Tìm kiếm theo nền mẫu..."
-									value={matrixSearchTerm}
-									onChange={handleMatrixSearchChange}
-									onKeyDown={handleMatrixSearchKeyDown}
-									className="p-1 border rounded-lg w-full bg-white"
-								/>
-								{showMatrixSuggestions && matrixSearchTerm.length >= 4 && (
-									<div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-b-lg shadow-lg z-50 max-h-40 overflow-y-auto">
-										{getFilteredMatrixSuggestions().map((matrix, index) => (
-											<div
-												key={index}
-												className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
-												onClick={() => handleMatrixSuggestionClick(matrix)}
-											>
-												{matrix}
-											</div>
-										))}
-									</div>
-								)}
+				{showAnalysisContainer ? (
+					// Analysis Container - embedded directly in main content
+					<div className="w-full h-full relative">
+						{/* Header with controls */}
+						<div className="flex items-center justify-between p-2 border-b bg-gray-50 rounded-t-lg mb-2">
+							<h3 className="text-lg font-semibold text-gray-800">Danh sách chỉ tiêu đang xử lý</h3>
+							<div className="flex items-center gap-2">
+								{/* Fullscreen button */}
+								<button
+									onClick={toggleAnalysisFullscreen}
+									className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+									title="Toàn màn hình"
+								>
+									<FaExpand size={16} />
+								</button>
+
+								{/* Close button */}
+								<button
+									onClick={closeAnalysisContainer}
+									className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+									title="Đóng"
+								>
+									<FaTimes size={16} />
+								</button>
 							</div>
-							<input
-								type="text"
-								placeholder="Tìm kiếm theo mã TNM..."
-								value={searchTerm}
-								onChange={handleSearchChange}
-								className="p-1 border rounded-lg w-[23%] bg-white"
-							/>
-							<input
-								type="text"
-								placeholder="Tìm kiếm theo mã mẫu..."
-								value={sampleSearchTerm}
-								onChange={handleSampleSearchChange}
-								className="p-1 border rounded-lg w-[23%] bg-white"
-							/>
-							<input
-								type="text"
-								placeholder="Tìm kiếm theo chỉ tiêu..."
-								value={parameterSearchTerm}
-								onChange={handleParameterSearchChange}
-								className="p-1 border rounded-lg w-[23%] bg-white"
-							/>
 						</div>
 
-						<div className="flex flex-wrap justify-between items-center gap-2 mt-2">
-							{/* Add filter buttons */}
-							<div className="flex flex-wrap gap-2">
-								{/* Add global bulk edit button */}
-								<button
-									className={`px-3 py-1 text-sm rounded-lg border ${
-										new URLSearchParams(location.search).has('urgent')
-											? 'bg-teritary border-primary'
-											: 'bg-gray-100 border-gray-300'
-									}`}
-									onClick={toggleUrgentFilter}
-									title="Hiển thị mẫu khẩn"
-								>
-									Mẫu khẩn
-								</button>
-								<button
-									className={`px-3 py-1 text-sm rounded-lg border ${
-										new URLSearchParams(location.search).has('no_results')
-											? 'bg-teritary border-primary'
-											: 'bg-gray-100 border-gray-300'
-									}`}
-									onClick={toggleNoResultsFilter}
-									title="Hiển thị chỉ tiêu chưa có kết quả"
-								>
-									Chưa có KQ
-								</button>
-								<button
-									className={`px-3 py-1 text-sm rounded-lg border ${
-										filterOverdue ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
-									}`}
-									onClick={() => {
-										// Get current URL search params
-										const searchParams = new URLSearchParams(location.search);
-
-										// Clear all existing filters first
-										searchParams.delete('deadline_start');
-										searchParams.delete('deadline_end');
-										searchParams.delete('no_results');
-										searchParams.delete('urgent');
-										searchParams.delete('overdue');
-										searchParams.delete('contractor');
-
-										// Reset filter info
-										setFilterInfo({
-											isFilterActive: false,
-											count: 0,
-											startDate: null,
-											endDate: null,
-										});
-
-										// Reset UI state for datepicker
-										setShowTodayDeadlines(false);
-
-										if (!filterOverdue) {
-											// Add the parameter if it doesn't exist
-											searchParams.set('overdue', 'true');
-											setFilterOverdue(true);
-											toast.info('Đã bật bộ lọc mẫu quá hạn');
-										} else {
-											// If already active, turn it off
-											setFilterOverdue(false);
-											toast.info('Đã tắt bộ lọc mẫu quá hạn');
-										}
-
-										// Update the URL without reloading the page
-										navigate({
-											pathname: location.pathname,
-											search: searchParams.toString(),
-										});
-									}}
-									title="Hiển thị mẫu quá hạn"
-								>
-									Quá hạn
-								</button>
-								<button
-									className={`px-3 py-1 text-sm rounded-lg border ${
-										filterContractor ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
-									}`}
-									onClick={toggleContractorFilter}
-									title="Hiển thị mẫu thầu phụ (EX)"
-								>
-									Thầu phụ
-								</button>{' '}
-								{/* Add deadline filter button */}
-								<div className="relative">
-									<button
-										className={`p-2 rounded-lg text-sm bg-gray-100 border-gray-300 flex items-center justify-center focus:outline-none gap-2 py-1 ${
-											showTodayDeadlines ? 'bg-teritary border-primary' : 'text-black'
-										}`}
-										onClick={filterTodayDeadlines}
-										title="Lọc theo hạn trả"
-									>
-										Ngày trả KQ
-										{showTodayDeadlines && (
-											<div
-												className="relative z-1000 text-black datepicker-container flex"
-												onClick={(e) => e.stopPropagation()}
-											>
-												<DatePicker
-													ref={datePickerRef}
-													selected={startDate}
-													onChange={handleDateRangeChange}
-													startDate={startDate}
-													endDate={endDate}
-													selectsRange
-													dateFormat="dd/MM/yyyy"
-													placeholderText="Chọn khoảng thời gian"
-													className="p-2 py-0 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-52 cursor-pointer"
-													open={isCalendarOpen}
-													onInputClick={() => setIsCalendarOpen(true)}
-													onClickOutside={() => {
-														// Only close if both dates are selected or clicked outside the calendar
-														if (startDate && endDate) {
-															setIsCalendarOpen(false);
-														}
-													}}
-													// Remove the onBlur handler that causes premature closing
-													shouldCloseOnSelect={false} // Don't close automatically on selection
-													dayClassName={(date) => (isToday(date) ? 'bg-blue-100 font-bold rounded-full' : undefined)}
-												/>
-												<button
-													className="ml-1 p-0.5 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
-													onClick={(e) => {
-														e.stopPropagation();
-														// Close the deadline filter
-														setShowTodayDeadlines(false);
-														setShowDateRangePicker(false);
-														setIsCalendarOpen(false);
-
-														// Clear deadline filters from URL
-														const searchParams = new URLSearchParams(location.search);
-														searchParams.delete('deadline_start');
-														searchParams.delete('deadline_end');
-
-														// Update URL without reloading the page
-														navigate(
-															{
-																pathname: location.pathname,
-																search: searchParams.toString(),
-															},
-															{ replace: true },
-														);
-
-														// Reset filter info
-														setFilterInfo({
-															isFilterActive: false,
-															count: 0,
-															startDate: null,
-															endDate: null,
-														});
-
-														// Show toast notification
-														toast.info('Đã tắt bộ lọc ngày trả kết quả');
-													}}
-													title="Đóng bộ lọc deadline"
-												>
-													<FaTimes size={14} />
-												</button>
-											</div>
-										)}
-									</button>
-								</div>
-							</div>
-							<button
-								className={`px-3 py-1 text-sm rounded-lg border flex items-center gap-1 ${
-									selectedCheckboxesV3.length > 0
-										? 'bg-teritary border-primary cursor-pointer'
-										: 'bg-gray-100 border-gray-300 opacity-50 cursor-not-allowed'
-								}`}
-								onClick={() => {
-									if (selectedCheckboxesV3.length > 0) {
-										setShowGlobalBulkEditForm(true);
-									}
+						{/* Iframe container */}
+						<div className="w-full h-[calc(100vh-200px)] relative overflow-hidden border rounded-lg">
+							<iframe
+								src={iframeUrl}
+								className="w-full h-full border-0"
+								title="Processing Analysis"
+								onLoad={() => {
+									// Simplified - just log that iframe loaded, no loading state to manage
 								}}
-								disabled={selectedCheckboxesV3.length === 0}
-								title={
-									selectedCheckboxesV3.length > 0
-										? `Chỉnh sửa hàng loạt ${selectedCheckboxesV3.length} chỉ tiêu đã chọn`
-										: 'Chọn ít nhất một chỉ tiêu để chỉnh sửa hàng loạt'
-								}
-							>
-								<FaEdit size={12} /> Sửa ({selectedCheckboxesV3.length})
-							</button>
+							/>
 						</div>
 					</div>
+				) : (
+					/* Sample processing interface */
+					<>
+						<div className="w-full flex flex-col mb-4 gap-2">
+							<div className="flex flex-wrap justify-between items-center gap-2">
+								<div className="relative w-[23%]">
+									<input
+										type="text"
+										placeholder="Tìm kiếm theo nền mẫu..."
+										value={matrixSearchTerm}
+										onChange={handleMatrixSearchChange}
+										onKeyDown={handleMatrixSearchKeyDown}
+										className="p-1 border rounded-lg w-full bg-white"
+									/>
+									{showMatrixSuggestions && matrixSearchTerm.length >= 4 && (
+										<div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-b-lg shadow-lg z-50 max-h-40 overflow-y-auto">
+											{getFilteredMatrixSuggestions().map((matrix, index) => (
+												<div
+													key={index}
+													className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+													onClick={() => handleMatrixSuggestionClick(matrix)}
+												>
+													{matrix}
+												</div>
+											))}
+										</div>
+									)}
+								</div>
+								<input
+									type="text"
+									placeholder="Tìm kiếm theo mã TNM..."
+									value={searchTerm}
+									onChange={handleSearchChange}
+									className="p-1 border rounded-lg w-[23%] bg-white"
+								/>
+								<input
+									type="text"
+									placeholder="Tìm kiếm theo mã mẫu..."
+									value={sampleSearchTerm}
+									onChange={handleSampleSearchChange}
+									className="p-1 border rounded-lg w-[23%] bg-white"
+								/>
+								<input
+									type="text"
+									placeholder="Tìm kiếm theo chỉ tiêu..."
+									value={parameterSearchTerm}
+									onChange={handleParameterSearchChange}
+									className="p-1 border rounded-lg w-[23%] bg-white"
+								/>
+							</div>
 
-					<div className="w-full">
-						<div className="w-full min-h-20 flex flex-col mt-1 ">
-							{Array.isArray(filteredProcessingSample) && filteredProcessingSample.length > 0 ? (
-								filteredProcessingSample
-									.slice(0, showAllReceipts ? filteredProcessingSample.length : displayCount)
-									.map((receipt) => (
-										<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto relative">
-											<div className="text-start mb-2 flex justify-between items-center">
-												<div>
-													<div className="flex items-center gap-2">
-														<p className="text-primary font-semibold">{receipt.receipt_uid || 'N/A'}</p>
-														<FaStickyNote
-															className="text-gray-500 cursor-pointer hover:text-blue-500"
-															onClick={() => handleEditNote(receipt)}
-															title="Thêm/Sửa ghi chú"
-															size={14}
-														/>
-													</div>
-													{editingNote === receipt.id && (
-														<div className="flex items-center gap-2 mt-2">
-															<textarea
-																value={noteInput}
-																onChange={(e) => setNoteInput(e.target.value)}
-																className="p-2 border rounded-lg w-full bg-white"
-																rows={3}
-																placeholder="Nhập ghi chú..."
+							<div className="flex flex-wrap justify-between items-center gap-2 mt-2">
+								{/* Add filter buttons */}
+								<div className="flex flex-wrap gap-2">
+									{/* Add global bulk edit button */}
+									<button
+										className={`px-3 py-1 text-sm rounded-lg border ${
+											new URLSearchParams(location.search).has('urgent')
+												? 'bg-teritary border-primary'
+												: 'bg-gray-100 border-gray-300'
+										}`}
+										onClick={toggleUrgentFilter}
+										title="Hiển thị mẫu khẩn"
+									>
+										Mẫu khẩn
+									</button>
+									<button
+										className={`px-3 py-1 text-sm rounded-lg border ${
+											new URLSearchParams(location.search).has('no_results')
+												? 'bg-teritary border-primary'
+												: 'bg-gray-100 border-gray-300'
+										}`}
+										onClick={toggleNoResultsFilter}
+										title="Hiển thị chỉ tiêu chưa có kết quả"
+									>
+										Chưa có KQ
+									</button>
+									<button
+										className={`px-3 py-1 text-sm rounded-lg border ${
+											filterOverdue ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
+										}`}
+										onClick={() => {
+											// Get current URL search params
+											const searchParams = new URLSearchParams(location.search);
+
+											// Clear all existing filters first
+											searchParams.delete('deadline_start');
+											searchParams.delete('deadline_end');
+											searchParams.delete('no_results');
+											searchParams.delete('urgent');
+											searchParams.delete('overdue');
+											searchParams.delete('contractor');
+
+											// Reset filter info
+											setFilterInfo({
+												isFilterActive: false,
+												count: 0,
+												startDate: null,
+												endDate: null,
+											});
+
+											// Reset UI state for datepicker
+											setShowTodayDeadlines(false);
+
+											if (!filterOverdue) {
+												// Add the parameter if it doesn't exist
+												searchParams.set('overdue', 'true');
+												setFilterOverdue(true);
+												toast.info('Đã bật bộ lọc mẫu quá hạn');
+											} else {
+												// If already active, turn it off
+												setFilterOverdue(false);
+												toast.info('Đã tắt bộ lọc mẫu quá hạn');
+											}
+
+											// Update the URL without reloading the page
+											navigate({
+												pathname: location.pathname,
+												search: searchParams.toString(),
+											});
+										}}
+										title="Hiển thị mẫu quá hạn"
+									>
+										Quá hạn
+									</button>
+									<button
+										className={`px-3 py-1 text-sm rounded-lg border ${
+											filterContractor ? 'bg-teritary border-primary' : 'bg-gray-100 border-gray-300'
+										}`}
+										onClick={toggleContractorFilter}
+										title="Hiển thị mẫu thầu phụ (EX)"
+									>
+										Thầu phụ
+									</button>{' '}
+									{/* Add deadline filter button */}
+									<div className="relative">
+										<button
+											className={`p-2 rounded-lg text-sm bg-gray-100 border-gray-300 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+												showTodayDeadlines ? 'bg-teritary border-primary' : 'text-black'
+											}`}
+											onClick={filterTodayDeadlines}
+											title="Lọc theo hạn trả"
+										>
+											Ngày trả KQ
+											{showTodayDeadlines && (
+												<div
+													className="relative z-1000 text-black datepicker-container flex"
+													onClick={(e) => e.stopPropagation()}
+												>
+													<DatePicker
+														ref={datePickerRef}
+														selected={startDate}
+														onChange={handleDateRangeChange}
+														startDate={startDate}
+														endDate={endDate}
+														selectsRange
+														dateFormat="dd/MM/yyyy"
+														placeholderText="Chọn khoảng thời gian"
+														className="p-2 py-0 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-52 cursor-pointer"
+														open={isCalendarOpen}
+														onInputClick={() => setIsCalendarOpen(true)}
+														onClickOutside={() => {
+															// Only close if both dates are selected or clicked outside the calendar
+															if (startDate && endDate) {
+																setIsCalendarOpen(false);
+															}
+														}}
+														// Remove the onBlur handler that causes premature closing
+														shouldCloseOnSelect={false} // Don't close automatically on selection
+														dayClassName={(date) => (isToday(date) ? 'bg-blue-100 font-bold rounded-full' : undefined)}
+													/>
+													<button
+														className="ml-1 p-0.5 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
+														onClick={(e) => {
+															e.stopPropagation();
+															// Close the deadline filter
+															setShowTodayDeadlines(false);
+															setShowDateRangePicker(false);
+															setIsCalendarOpen(false);
+
+															// Clear deadline filters from URL
+															const searchParams = new URLSearchParams(location.search);
+															searchParams.delete('deadline_start');
+															searchParams.delete('deadline_end');
+
+															// Update URL without reloading the page
+															navigate(
+																{
+																	pathname: location.pathname,
+																	search: searchParams.toString(),
+																},
+																{ replace: true },
+															);
+
+															// Reset filter info
+															setFilterInfo({
+																isFilterActive: false,
+																count: 0,
+																startDate: null,
+																endDate: null,
+															});
+
+															// Show toast notification
+															toast.info('Đã tắt bộ lọc ngày trả kết quả');
+														}}
+														title="Đóng bộ lọc deadline"
+													>
+														<FaTimes size={14} />
+													</button>
+												</div>
+											)}
+										</button>
+									</div>
+								</div>
+								<button
+									className={`px-3 py-1 text-sm rounded-lg border flex items-center gap-1 ${
+										selectedCheckboxesV3.length > 0
+											? 'bg-teritary border-primary cursor-pointer'
+											: 'bg-gray-100 border-gray-300 opacity-50 cursor-not-allowed'
+									}`}
+									onClick={() => {
+										if (selectedCheckboxesV3.length > 0) {
+											setShowGlobalBulkEditForm(true);
+										}
+									}}
+									disabled={selectedCheckboxesV3.length === 0}
+									title={
+										selectedCheckboxesV3.length > 0
+											? `Chỉnh sửa hàng loạt ${selectedCheckboxesV3.length} chỉ tiêu đã chọn`
+											: 'Chọn ít nhất một chỉ tiêu để chỉnh sửa hàng loạt'
+									}
+								>
+									<FaEdit size={12} /> Sửa ({selectedCheckboxesV3.length})
+								</button>
+							</div>
+						</div>
+
+						<div className="w-full">
+							<div className="w-full min-h-20 flex flex-col mt-1 ">
+								{Array.isArray(filteredProcessingSample) && filteredProcessingSample.length > 0 ? (
+									filteredProcessingSample
+										.slice(0, showAllReceipts ? filteredProcessingSample.length : displayCount)
+										.map((receipt) => (
+											<div key={receipt.id} className="p-2 border rounded-lg mb-4 text-left overflow-auto relative">
+												<div className="text-start mb-2 flex justify-between items-center">
+													<div>
+														<div className="flex items-center gap-2">
+															<p className="text-primary font-semibold">{receipt.receipt_uid || 'N/A'}</p>
+															<FaStickyNote
+																className="text-gray-500 cursor-pointer hover:text-blue-500"
+																onClick={() => handleEditNote(receipt)}
+																title="Thêm/Sửa ghi chú"
+																size={14}
 															/>
-															<div className="flex flex-col gap-2">
+														</div>
+														{editingNote === receipt.id && (
+															<div className="flex items-center gap-2 mt-2">
+																<textarea
+																	value={noteInput}
+																	onChange={(e) => setNoteInput(e.target.value)}
+																	className="p-2 border rounded-lg w-full bg-white"
+																	rows={3}
+																	placeholder="Nhập ghi chú..."
+																/>
+																<div className="flex flex-col gap-2">
+																	<button
+																		onClick={() => handleSaveNote(receipt)}
+																		className="bg-blue-500 text-white px-2 py-1 rounded-lg w-24"
+																	>
+																		Xác nhận
+																	</button>
+																	<button
+																		onClick={() => setEditingNote(null)}
+																		className="bg-gray-500 text-white px-2 py-1 rounded-lg w-24"
+																	>
+																		Hủy bỏ
+																	</button>
+																</div>
+															</div>
+														)}
+													</div>
+
+													<div className="flex items-center gap-3">
+														{/* Select all checkbox - with new handlers */}
+														<div className="flex items-center">
+															<span className="text-sm min-w-20">Chọn tất cả</span>
+															<input
+																type="checkbox"
+																className="w-5 h-5 receipt-checkbox"
+																title="Chọn tất cả các mẫu hiển thị trong đơn này"
+																checked={isReceiptFullySelected(receipt)}
+																onChange={(e) => handleReceiptCheckboxChange(e, receipt)}
+															/>
+														</div>
+
+														{/* Bulk edit button */}
+														{selectedCheckboxesByReceipt[receipt.id] &&
+															selectedCheckboxesByReceipt[receipt.id].length > 0 && (
 																<button
-																	onClick={() => handleSaveNote(receipt)}
-																	className="bg-blue-500 text-white px-2 py-1 rounded-lg w-24"
+																	className="border-2 border-gray-600 p-1 rounded-lg hover:bg-blue-300 flex items-center h-10"
+																	onClick={() => toggleBulkEditForm(receipt.id)}
 																>
-																	Xác nhận
+																	<FaEdit className="mr-2" /> Chỉnh sửa hàng loạt
 																</button>
+															)}
+													</div>
+												</div>
+												{/* Bulk Edit Form */}
+												{showBulkEditForm === receipt.id && (
+													<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+														<div className="bg-white p-6 rounded-lg shadow-lg min-w-[400px] w-5/6">
+															<h2 className="text-xl font-bold mb-4 flex justify-between items-center">
+																<span>Chỉnh sửa hàng loạt</span>
+																<span className="text-sm font-normal text-gray-600">
+																	({selectedCheckboxesByReceipt[receipt.id]?.length || 0} chỉ tiêu được chọn)
+																</span>
+															</h2>
+															{/* Form with labels on top */}
+															<div className="flex flex-row gap-4 mb-6 overflow-x-auto">
+																{/* Combined Protocol source and code fields */}
+																<div className="flex flex-col min-w-[180px]">
+																	<label className="mb-1 font-medium text-sm text-left">Phương pháp thử</label>
+																	<div className="flex gap-1">
+																		<select
+																			className="p-2 border rounded-lg bg-white w-1/3 text-sm"
+																			value={bulkEditValues.protocol_source || ''}
+																			onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
+																		>
+																			<option value="">--</option>
+																			<option value="IRDOP">IRDOP</option>
+																			<option value="IRDOP VS">IRDOP VS</option>
+																			<option value="EX">EX</option>
+																		</select>
+																		<input
+																			type="text"
+																			className="p-2 border rounded-lg bg-white w-2/3 text-sm"
+																			placeholder="Mã PTT"
+																			value={bulkEditValues.protocol_code || ''}
+																			onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
+																		/>
+																	</div>
+																</div>
+																{/* Reference field */}
+																<div className="flex flex-col min-w-[140px]">
+																	<label className="mb-1 font-medium text-sm text-left">Tham chiếu</label>
+																	<input
+																		type="text"
+																		className="p-2 border rounded-lg bg-white text-sm"
+																		placeholder="Nhập tham chiếu"
+																		value={bulkEditValues.reference || ''}
+																		onChange={(e) => handleBulkEditChange('reference', e.target.value)}
+																	/>
+																</div>
+																{/* EX Name field - only show if protocol_source is EX */}
+																{bulkEditValues.protocol_source === 'EX' && (
+																	<div className="flex items-center gap-2 min-w-[200px]">
+																		<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Tên EX:</label>
+																		<input
+																			type="text"
+																			className="flex-1 p-2 border rounded-lg bg-white text-sm"
+																			placeholder="Nhập tên EX"
+																			value={bulkEditValues.ex_name || ''}
+																			onChange={(e) => handleBulkEditChange('ex_name', e.target.value)}
+																		/>
+																	</div>
+																)}
+																{/* EX Send Date field - only show if protocol_source is EX */}
+																{bulkEditValues.protocol_source === 'EX' && (
+																	<div className="flex items-center gap-2 min-w-[200px]">
+																		<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Ngày gửi:</label>
+																		<input
+																			type="date"
+																			className="flex-1 p-2 border rounded-lg bg-white text-sm"
+																			value={
+																				bulkEditValues.send_at
+																					? new Date(bulkEditValues.send_at).toISOString().split('T')[0]
+																					: ''
+																			}
+																			onChange={(e) => {
+																				const dateValue = e.target.value
+																					? new Date(e.target.value + 'T00:00:00').toISOString()
+																					: '';
+																				handleBulkEditChange('send_at', dateValue);
+																			}}
+																		/>
+																	</div>
+																)}
+																{/* Deadline field */}
+																<div className="flex flex-col min-w-[120px]">
+																	<label className="mb-1 font-medium text-sm text-left">Hạn trả</label>
+																	<input
+																		type="date"
+																		className="p-2 border rounded-lg bg-white text-sm"
+																		value={bulkEditValues.deadline ? bulkEditValues.deadline.split('T')[0] : ''}
+																		onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
+																	/>
+																</div>
+																{/* Result value field */}
+																<div className="flex flex-col min-w-[140px]">
+																	<label className="mb-1 font-medium text-sm text-left">Kết quả</label>
+																	<div
+																		className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
+																		onClick={() => handleBulkEditCellClick('result_value', 'global')}
+																		onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+																	>
+																		{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === 'global' ? (
+																			<TinyMceInput
+																				value={bulkEditValues.result_value || ''}
+																				onUpdate={(content) => handleBulkEditChange('result_value', content)}
+																			/>
+																		) : (
+																			<div
+																				dangerouslySetInnerHTML={{
+																					__html: bulkEditValues.result_value || 'Nhấp để sửa...',
+																				}}
+																				className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
+																			/>
+																		)}
+																	</div>
+																</div>
+																{/* Result unit field */}
+																<div className="flex flex-col min-w-[120px]">
+																	<label className="mb-1 font-medium text-sm text-left">Đơn vị</label>
+																	<div
+																		className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
+																		onClick={() => handleBulkEditCellClick('result_unit', 'global')}
+																		onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+																	>
+																		{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === 'global' ? (
+																			<TinyMceInput
+																				value={bulkEditValues.result_unit || ''}
+																				onUpdate={(content) => handleBulkEditChange('result_unit', content)}
+																				onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+																			/>
+																		) : (
+																			<div
+																				dangerouslySetInnerHTML={{
+																					__html: bulkEditValues.result_unit || 'Nhấp để sửa...',
+																				}}
+																				className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
+																			/>
+																		)}
+																	</div>
+																</div>
+																{/* Technician field */}
+																<div className="flex flex-col min-w-[180px]">
+																	<label className="mb-1 font-medium text-sm text-left">Người thực hiện</label>
+																	<select
+																		className="p-2 border rounded-lg bg-white text-sm"
+																		value={bulkEditValues.technician_uid || ''}
+																		onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
+																	>
+																		<option value="">-- Không thay đổi --</option>
+																		{technicians.map((tech) => (
+																			<option key={tech.identity_uid} value={tech.identity_uid}>
+																				{tech.identity_name}
+																			</option>
+																		))}
+																	</select>
+																</div>
+															</div>
+															{/* Table of selected analyses with preview */}
+															<div className="mb-6 max-h-[300px] overflow-auto">
+																<h3 className="text-md font-semibold mb-2">Xem trước thay đổi</h3>
+																<table className="w-full border-collapse border border-gray-300">
+																	<thead className="bg-gray-100">
+																		<tr>
+																			<th className="border p-1 text-start w-32 min-w-32">Mã mẫu</th>
+																			<th className="border p-1 text-start w-1/5 min-w-40">Chỉ tiêu</th>
+																			<th className="border p-1 text-start w-1/5 min-w-40">Phương pháp</th>
+																			<th className="border p-1 text-start min-w-32">Kết quả</th>
+																			<th className="border p-1 text-start min-w-28">Đơn vị</th>
+																			<th className="border p-1 text-start w-24 min-w-24">Hạn trả</th>
+																			<th className="border p-1 text-start w-32 min-w-32">KTV</th>
+																			<th className="border p-1 text-start w-32">Tham chiếu</th>
+																		</tr>
+																	</thead>
+																	<tbody>
+																		{selectedCheckboxesByReceipt[receipt.id]?.map((analysisId) => {
+																			// Find the analysis in the receipt data
+																			let foundAnalysis = null;
+																			let foundSample = null;
+
+																			// Search through all samples to find the analysis
+																			receipt.samples?.forEach((sample) => {
+																				const analysis = sample.analysis?.find((a) => a.id === analysisId);
+																				if (analysis) {
+																					foundAnalysis = analysis;
+																					foundSample = sample;
+																				}
+																			});
+
+																			return foundAnalysis ? (
+																				<tr key={analysisId} className="hover:bg-gray-50">
+																					<td className="border p-1 text-start">{foundSample?.sample_uid}</td>
+																					<td className="border p-1 text-start">{foundAnalysis.parameter_name}</td>
+																					<td className="border p-1 text-start">
+																						<div className="flex flex-col gap-1">
+																							<div>
+																								<span className="preview-protocol-source">
+																									{bulkEditValues.protocol_source ||
+																										foundAnalysis.protocol_source ||
+																										'--'}
+																								</span>
+																								&nbsp;
+																								<span className="preview-protocol-code">
+																									{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
+																								</span>
+																							</div>
+																							{/* Show EX info if protocol_source is EX */}
+																							{(bulkEditValues.protocol_source === 'EX' ||
+																								foundAnalysis.protocol_source === 'EX') && (
+																								<div className="text-xs text-gray-600 bg-gray-50 p-1 rounded border mt-1">
+																									<div>
+																										<strong>Tên EX:</strong>{' '}
+																										{bulkEditValues.ex_name || foundAnalysis.ex_info?.ex_name || '--'}
+																									</div>
+																									<div>
+																										<strong>Ngày gửi:</strong>{' '}
+																										{bulkEditValues.send_at
+																											? new Date(bulkEditValues.send_at).toLocaleDateString('vi-VN')
+																											: foundAnalysis.ex_info?.send_at
+																											? new Date(foundAnalysis.ex_info.send_at).toLocaleDateString(
+																													'vi-VN',
+																											  )
+																											: '--'}
+																									</div>
+																								</div>
+																							)}
+																						</div>
+																					</td>
+																					<td className="border p-1 text-start">
+																						<div
+																							className="preview-result-value"
+																							dangerouslySetInnerHTML={{
+																								__html:
+																									bulkEditValues.result_value || foundAnalysis.result_value || '--',
+																							}}
+																						/>
+																					</td>
+																					<td className="border p-1 text-start">
+																						<div
+																							className="preview-result-unit"
+																							dangerouslySetInnerHTML={{
+																								__html: bulkEditValues.result_unit || foundAnalysis.result_unit || '--',
+																							}}
+																						/>
+																					</td>
+																					<td className="border p-1 text-start preview-deadline">
+																						{bulkEditValues.deadline
+																							? formatDate(bulkEditValues.deadline)
+																							: foundAnalysis.deadline
+																							? formatDate(foundAnalysis.deadline)
+																							: '--'}
+																					</td>
+																					<td className="border p-1 text-start preview-technician">
+																						{bulkEditValues.technician_uid
+																							? getTechnicianName(bulkEditValues.technician_uid)
+																							: getTechnicianName(foundAnalysis.technician_uid)}
+																					</td>
+																					<td className="border p-1 text-start preview-reference">
+																						{bulkEditValues.reference || foundAnalysis.reference || '--'}
+																					</td>
+																				</tr>
+																			) : null;
+																		})}
+																	</tbody>
+																</table>
+															</div>
+															<div className="flex justify-end gap-3">
 																<button
-																	onClick={() => setEditingNote(null)}
-																	className="bg-gray-500 text-white px-2 py-1 rounded-lg w-24"
+																	className="px-2 py-1 border-2 border-gray-600 text-gray-600 rounded hover:bg-gray-400 w-fit"
+																	onClick={closeBulkEditForm}
 																>
 																	Hủy bỏ
 																</button>
-															</div>
-														</div>
-													)}
-												</div>
-
-												<div className="flex items-center gap-3">
-													{/* Select all checkbox - with new handlers */}
-													<div className="flex items-center">
-														<span className="text-sm min-w-20">Chọn tất cả</span>
-														<input
-															type="checkbox"
-															className="w-5 h-5 receipt-checkbox"
-															title="Chọn tất cả các mẫu hiển thị trong đơn này"
-															checked={isReceiptFullySelected(receipt)}
-															onChange={(e) => handleReceiptCheckboxChange(e, receipt)}
-														/>
-													</div>
-
-													{/* Bulk edit button */}
-													{selectedCheckboxesByReceipt[receipt.id] &&
-														selectedCheckboxesByReceipt[receipt.id].length > 0 && (
-															<button
-																className="border-2 border-gray-600 p-1 rounded-lg hover:bg-blue-300 flex items-center h-10"
-																onClick={() => toggleBulkEditForm(receipt.id)}
-															>
-																<FaEdit className="mr-2" /> Chỉnh sửa hàng loạt
-															</button>
-														)}
-												</div>
-											</div>
-											{/* Bulk Edit Form */}
-											{showBulkEditForm === receipt.id && (
-												<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-													<div className="bg-white p-6 rounded-lg shadow-lg min-w-[400px] w-5/6">
-														<h2 className="text-xl font-bold mb-4 flex justify-between items-center">
-															<span>Chỉnh sửa hàng loạt</span>
-															<span className="text-sm font-normal text-gray-600">
-																({selectedCheckboxesByReceipt[receipt.id]?.length || 0} chỉ tiêu được chọn)
-															</span>
-														</h2>
-														{/* Form with labels on top */}
-														<div className="flex flex-row gap-4 mb-6 overflow-x-auto">
-															{/* Combined Protocol source and code fields */}
-															<div className="flex flex-col min-w-[180px]">
-																<label className="mb-1 font-medium text-sm text-left">Phương pháp thử</label>
-																<div className="flex gap-1">
-																	<select
-																		className="p-2 border rounded-lg bg-white w-1/3 text-sm"
-																		value={bulkEditValues.protocol_source || ''}
-																		onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
-																	>
-																		<option value="">--</option>
-																		<option value="IRDOP">IRDOP</option>
-																		<option value="IRDOP VS">IRDOP VS</option>
-																		<option value="EX">EX</option>
-																	</select>
-																	<input
-																		type="text"
-																		className="p-2 border rounded-lg bg-white w-2/3 text-sm"
-																		placeholder="Mã PTT"
-																		value={bulkEditValues.protocol_code || ''}
-																		onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
-																	/>
-																</div>
-															</div>
-															{/* Reference field */}
-															<div className="flex flex-col min-w-[140px]">
-																<label className="mb-1 font-medium text-sm text-left">Tham chiếu</label>
-																<input
-																	type="text"
-																	className="p-2 border rounded-lg bg-white text-sm"
-																	placeholder="Nhập tham chiếu"
-																	value={bulkEditValues.reference || ''}
-																	onChange={(e) => handleBulkEditChange('reference', e.target.value)}
-																/>
-															</div>
-															{/* EX Name field - only show if protocol_source is EX */}
-															{bulkEditValues.protocol_source === 'EX' && (
-																<div className="flex items-center gap-2 min-w-[200px]">
-																	<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Tên EX:</label>
-																	<input
-																		type="text"
-																		className="flex-1 p-2 border rounded-lg bg-white text-sm"
-																		placeholder="Nhập tên EX"
-																		value={bulkEditValues.ex_name || ''}
-																		onChange={(e) => handleBulkEditChange('ex_name', e.target.value)}
-																	/>
-																</div>
-															)}
-															{/* EX Send Date field - only show if protocol_source is EX */}
-															{bulkEditValues.protocol_source === 'EX' && (
-																<div className="flex items-center gap-2 min-w-[200px]">
-																	<label className="mb-1 font-medium text-sm text-left min-w-[60px]">Ngày gửi:</label>
-																	<input
-																		type="date"
-																		className="flex-1 p-2 border rounded-lg bg-white text-sm"
-																		value={
-																			bulkEditValues.send_at
-																				? new Date(bulkEditValues.send_at).toISOString().split('T')[0]
-																				: ''
-																		}
-																		onChange={(e) => {
-																			const dateValue = e.target.value
-																				? new Date(e.target.value + 'T00:00:00').toISOString()
-																				: '';
-																			handleBulkEditChange('send_at', dateValue);
-																		}}
-																	/>
-																</div>
-															)}
-															{/* Deadline field */}
-															<div className="flex flex-col min-w-[120px]">
-																<label className="mb-1 font-medium text-sm text-left">Hạn trả</label>
-																<input
-																	type="date"
-																	className="p-2 border rounded-lg bg-white text-sm"
-																	value={bulkEditValues.deadline ? bulkEditValues.deadline.split('T')[0] : ''}
-																	onChange={(e) => handleBulkEditChange('deadline', e.target.value)}
-																/>
-															</div>
-															{/* Result value field */}
-															<div className="flex flex-col min-w-[140px]">
-																<label className="mb-1 font-medium text-sm text-left">Kết quả</label>
-																<div
-																	className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
-																	onClick={() => handleBulkEditCellClick('result_value', 'global')}
-																	onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
+																<button
+																	className="px-2 py-1 border-2 border-gray-600 rounded hover:bg-blue-600 flex items-center w-fit"
+																	onClick={() => {
+																		handleBulkUpdate(selectedCheckboxesByReceipt[receipt.id]);
+																		closeBulkEditForm();
+																	}}
 																>
-																	{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === 'global' ? (
-																		<TinyMceInput
-																			value={bulkEditValues.result_value || ''}
-																			onUpdate={(content) => handleBulkEditChange('result_value', content)}
-																		/>
-																	) : (
-																		<div
-																			dangerouslySetInnerHTML={{
-																				__html: bulkEditValues.result_value || 'Nhấp để sửa...',
-																			}}
-																			className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
-																		/>
-																	)}
-																</div>
+																	<FaSave className="mr-2" /> Xác nhận cập nhật
+																</button>
 															</div>
-															{/* Result unit field */}
-															<div className="flex flex-col min-w-[120px]">
-																<label className="mb-1 font-medium text-sm text-left">Đơn vị</label>
-																<div
-																	className="h-10 flex items-center border rounded-lg bg-white hover:border-purple-500 cursor-text text-sm"
-																	onClick={() => handleBulkEditCellClick('result_unit', 'global')}
-																	onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
-																>
-																	{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === 'global' ? (
-																		<TinyMceInput
-																			value={bulkEditValues.result_unit || ''}
-																			onUpdate={(content) => handleBulkEditChange('result_unit', content)}
-																			onBlur={() => setBulkEditCell({ column: null, receiptId: null })}
-																		/>
-																	) : (
-																		<div
-																			dangerouslySetInnerHTML={{
-																				__html: bulkEditValues.result_unit || 'Nhấp để sửa...',
-																			}}
-																			className="overflow-hidden text-ellipsis whitespace-nowrap px-2"
-																		/>
-																	)}
-																</div>
-															</div>
-															{/* Technician field */}
-															<div className="flex flex-col min-w-[180px]">
-																<label className="mb-1 font-medium text-sm text-left">Người thực hiện</label>
-																<select
-																	className="p-2 border rounded-lg bg-white text-sm"
-																	value={bulkEditValues.technician_uid || ''}
-																	onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
-																>
-																	<option value="">-- Không thay đổi --</option>
-																	{technicians.map((tech) => (
-																		<option key={tech.identity_uid} value={tech.identity_uid}>
-																			{tech.identity_name}
-																		</option>
-																	))}
-																</select>
-															</div>
-														</div>
-														{/* Table of selected analyses with preview */}
-														<div className="mb-6 max-h-[300px] overflow-auto">
-															<h3 className="text-md font-semibold mb-2">Xem trước thay đổi</h3>
-															<table className="w-full border-collapse border border-gray-300">
-																<thead className="bg-gray-100">
-																	<tr>
-																		<th className="border p-1 text-start w-32 min-w-32">Mã mẫu</th>
-																		<th className="border p-1 text-start w-1/5 min-w-40">Chỉ tiêu</th>
-																		<th className="border p-1 text-start w-1/5 min-w-40">Phương pháp</th>
-																		<th className="border p-1 text-start min-w-32">Kết quả</th>
-																		<th className="border p-1 text-start min-w-28">Đơn vị</th>
-																		<th className="border p-1 text-start w-24 min-w-24">Hạn trả</th>
-																		<th className="border p-1 text-start w-32 min-w-32">KTV</th>
-																		<th className="border p-1 text-start w-32">Tham chiếu</th>
-																	</tr>
-																</thead>
-																<tbody>
-																	{selectedCheckboxesByReceipt[receipt.id]?.map((analysisId) => {
-																		// Find the analysis in the receipt data
-																		let foundAnalysis = null;
-																		let foundSample = null;
-
-																		// Search through all samples to find the analysis
-																		receipt.samples?.forEach((sample) => {
-																			const analysis = sample.analysis?.find((a) => a.id === analysisId);
-																			if (analysis) {
-																				foundAnalysis = analysis;
-																				foundSample = sample;
-																			}
-																		});
-
-																		return foundAnalysis ? (
-																			<tr key={analysisId} className="hover:bg-gray-50">
-																				<td className="border p-1 text-start">{foundSample?.sample_uid}</td>
-																				<td className="border p-1 text-start">{foundAnalysis.parameter_name}</td>
-																				<td className="border p-1 text-start">
-																					<div className="flex flex-col gap-1">
-																						<div>
-																							<span className="preview-protocol-source">
-																								{bulkEditValues.protocol_source ||
-																									foundAnalysis.protocol_source ||
-																									'--'}
-																							</span>
-																							&nbsp;
-																							<span className="preview-protocol-code">
-																								{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
-																							</span>
-																						</div>
-																						{/* Show EX info if protocol_source is EX */}
-																						{(bulkEditValues.protocol_source === 'EX' ||
-																							foundAnalysis.protocol_source === 'EX') && (
-																							<div className="text-xs text-gray-600 bg-gray-50 p-1 rounded border mt-1">
-																								<div>
-																									<strong>Tên EX:</strong>{' '}
-																									{bulkEditValues.ex_name || foundAnalysis.ex_info?.ex_name || '--'}
-																								</div>
-																								<div>
-																									<strong>Ngày gửi:</strong>{' '}
-																									{bulkEditValues.send_at
-																										? new Date(bulkEditValues.send_at).toLocaleDateString('vi-VN')
-																										: foundAnalysis.ex_info?.send_at
-																										? new Date(foundAnalysis.ex_info.send_at).toLocaleDateString(
-																												'vi-VN',
-																										  )
-																										: '--'}
-																								</div>
-																							</div>
-																						)}
-																					</div>
-																				</td>
-																				<td className="border p-1 text-start">
-																					<div
-																						className="preview-result-value"
-																						dangerouslySetInnerHTML={{
-																							__html: bulkEditValues.result_value || foundAnalysis.result_value || '--',
-																						}}
-																					/>
-																				</td>
-																				<td className="border p-1 text-start">
-																					<div
-																						className="preview-result-unit"
-																						dangerouslySetInnerHTML={{
-																							__html: bulkEditValues.result_unit || foundAnalysis.result_unit || '--',
-																						}}
-																					/>
-																				</td>
-																				<td className="border p-1 text-start preview-deadline">
-																					{bulkEditValues.deadline
-																						? formatDate(bulkEditValues.deadline)
-																						: foundAnalysis.deadline
-																						? formatDate(foundAnalysis.deadline)
-																						: '--'}
-																				</td>
-																				<td className="border p-1 text-start preview-technician">
-																					{bulkEditValues.technician_uid
-																						? getTechnicianName(bulkEditValues.technician_uid)
-																						: getTechnicianName(foundAnalysis.technician_uid)}
-																				</td>
-																				<td className="border p-1 text-start preview-reference">
-																					{bulkEditValues.reference || foundAnalysis.reference || '--'}
-																				</td>
-																			</tr>
-																		) : null;
-																	})}
-																</tbody>
-															</table>
-														</div>
-														<div className="flex justify-end gap-3">
-															<button
-																className="px-2 py-1 border-2 border-gray-600 text-gray-600 rounded hover:bg-gray-400 w-fit"
-																onClick={closeBulkEditForm}
-															>
-																Hủy bỏ
-															</button>
-															<button
-																className="px-2 py-1 border-2 border-gray-600 rounded hover:bg-blue-600 flex items-center w-fit"
-																onClick={() => {
-																	handleBulkUpdate(selectedCheckboxesByReceipt[receipt.id]);
-																	closeBulkEditForm();
-																}}
-															>
-																<FaSave className="mr-2" /> Xác nhận cập nhật
-															</button>
 														</div>
 													</div>
-												</div>
-											)}
-											{/* Organize by samples */}
-											{receipt.samples && receipt.samples.length > 0 ? (
-												receipt.samples.map((sample) => (
-													<div key={sample.id} className="mb-4 border-l-2 border-teritary px-1 overflow-auto">
-														<div className="mb-2 flex justify-between items-center">
-															<div className="flex flex-col">
-																<div className="min-w-40">
-																	<span className="font-semibold">{sample.sample_uid}</span>:{' '}
-																	{sample.sample_name || 'N/A'}
-																</div>
-																<div className="min-w-40">
-																	<span className="font-semibold">Nền mẫu:</span> {sample.matrix || 'N/A'}
-																</div>
-
-																<div className="min-w-40">
-																	<span className="font-semibold">Mô tả:</span> {sample.sample_description || 'N/A'}
-																</div>
-
-																{sample.additional_request && (
-																	<div className="mt-1 mb-2">
-																		<span className="font-semibold">Yêu cầu khách hàng:</span>{' '}
-																		{sample.additional_request}
+												)}
+												{/* Organize by samples */}
+												{receipt.samples && receipt.samples.length > 0 ? (
+													receipt.samples.map((sample) => (
+														<div key={sample.id} className="mb-4 border-l-2 border-teritary px-1 overflow-auto">
+															<div className="mb-2 flex justify-between items-center">
+																<div className="flex flex-col">
+																	<div className="min-w-40">
+																		<span className="font-semibold">{sample.sample_uid}</span>:{' '}
+																		{sample.sample_name || 'N/A'}
 																	</div>
-																)}
-															</div>
-															{/* Add PKQ button in the opposite corner */}
-															<button
-																className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-end active:bg-sky-100 focus:outline-none"
-																onClick={() => window.open(`/result?sample_uid=${sample?.sample_uid}`, '_blank')}
-															>
-																<div className="flex items-center justify-between">
-																	{'PKQ'} <GrDocumentText size={15} className="ml-1.5" />
+																	<div className="min-w-40">
+																		<span className="font-semibold">Nền mẫu:</span> {sample.matrix || 'N/A'}
+																	</div>
+
+																	<div className="min-w-40">
+																		<span className="font-semibold">Mô tả:</span> {sample.sample_description || 'N/A'}
+																	</div>
+
+																	{sample.additional_request && (
+																		<div className="mt-1 mb-2">
+																			<span className="font-semibold">Yêu cầu khách hàng:</span>{' '}
+																			{sample.additional_request}
+																		</div>
+																	)}
 																</div>
-															</button>
-														</div>
-														{/* Analysis table for this sample */}
-														{sample.analysis && sample.analysis.length > 0 ? (
-															<table className="w-full border-collapse border border-gray-200">
-																<thead>
-																	<tr className="bg-gray-100 text-sm text-gray-600">
-																		<th className="font-normal p-1 text-start min-w-20 w-20">Mã chỉ tiêu</th>
-																		<th className="font-normal p-1 text-start min-w-60 w-1/4">Chỉ tiêu</th>
-																		<th className="font-normal p-1 text-start min-w-60 w-1/4">Phương pháp</th>
-																		<th className="font-normal p-1 text-start min-w-40">Kết quả</th>
-																		<th className="font-normal p-1 text-start min-w-32">Đơn vị</th>
-																		<th className="font-normal p-1 text-start w-28 min-w-28">Hạn trả</th>
-																		<th className="font-normal p-1 text-start w-36 min-w-40">Người thực hiện</th>
-																		<th className="font-normal p-1 text-center w-16 min-w-16">
-																			<input
-																				type="checkbox"
-																				className="w-4 h-4 sample-checkbox"
-																				data-receipt-id={receipt.id}
-																				data-sample-id={sample.id}
-																				checked={isSampleFullySelected(sample.id, sample.analysis)}
-																				onChange={(e) =>
-																					handleSampleCheckboxChange(e, receipt.id, sample.id, sample.analysis)
-																				}
-																			/>
-																		</th>
-																	</tr>
-																</thead>
-																<tbody>
-																	{sample.analysis.map((item) => (
-																		<tr
-																			key={item.id}
-																			className={`${
-																				selectedCheckboxesV3.includes(item.id) ? 'bg-gray-100' : ''
-																			} hover:bg-gray-50`}
-																		>
-																			<td className="border p-1 text-start">{item.id || 'N/A'}</td>
-																			<td className="border p-1 text-start">{item.parameter_name || 'N/A'}</td>
-																			<td className="border p-1 text-start ">
-																				<div className="flex flex-col gap-1">
-																					<div className="flex items-center gap-0.5">
-																						<select
-																							className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
-																							onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
-																							value={item.protocol_source || ''}
-																						>
-																							<option value="">--</option>
-																							<option value="IRDOP">IRDOP</option>
-																							<option value="IRDOP VS">IRDOP VS</option>
-																							<option value="EX">EX</option>
-																						</select>
-																						<input
-																							type="text"
-																							className="w-full bg-white border border-white hover:border-purple-500 rounded p-1 py-0 text-left"
-																							placeholder="Mã phương pháp"
-																							value={
-																								editableCell.analysisId === item.id &&
-																								editableCell.column === 'protocol_code'
-																									? inputValue
-																									: item.protocol_code || ''
-																							}
-																							onChange={(e) => handleProtocolCodeChange(item.id, e.target.value)}
-																							onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value)}
-																							onKeyDown={(e) => handleProtocolCodeKeyDown(e, item.id, e.target.value)}
-																						/>
-																					</div>
-																					{/* EX Information - only show if protocol_source is EX */}
-																					{item.protocol_source === 'EX' && (
-																						<div className="flex flex-col gap-2 mt-1 p-2 bg-gray-50 rounded border">
-																							<div className="flex items-center gap-2">
-																								<label className="text-xs font-medium text-gray-600 min-w-[50px]">
-																									Tên EX:
-																								</label>
-																								<input
-																									type="text"
-																									className="flex-1 text-xs bg-white border border-gray-300 hover:border-purple-500 rounded p-1 text-left"
-																									placeholder="Nhập tên EX"
-																									value={
-																										exInfo[item.id]?.ex_name !== undefined
-																											? exInfo[item.id].ex_name
-																											: item.ex_info?.ex_name || ''
-																									}
-																									onChange={(e) =>
-																										handleExInfoChange(item.id, 'ex_name', e.target.value)
-																									}
-																									onBlur={(e) => handleExInfoSave(item.id, 'ex_name', e.target.value)}
-																									onKeyDown={(e) =>
-																										handleExInfoKeyDown(e, item.id, 'ex_name', e.target.value)
-																									}
-																								/>
-																							</div>
-																							<div className="flex items-center gap-2">
-																								<label className="text-xs font-medium text-gray-600 min-w-[50px]">
-																									Ngày gửi:
-																								</label>
-																								<input
-																									type="date"
-																									className="flex-1 text-xs bg-white border border-gray-300 hover:border-purple-500 rounded p-1 text-left"
-																									value={
-																										exInfo[item.id]?.send_at !== undefined
-																											? new Date(exInfo[item.id].send_at).toISOString().split('T')[0]
-																											: item.ex_info?.send_at
-																											? new Date(item.ex_info.send_at).toISOString().split('T')[0]
-																											: ''
-																									}
-																									onChange={(e) => {
-																										const dateValue = e.target.value
-																											? new Date(e.target.value + 'T00:00:00').toISOString()
-																											: '';
-																										handleExInfoChange(item.id, 'send_at', dateValue);
-																									}}
-																									onBlur={(e) => {
-																										const dateValue = e.target.value
-																											? new Date(e.target.value + 'T00:00:00').toISOString()
-																											: '';
-																										handleExInfoSave(item.id, 'send_at', dateValue);
-																									}}
-																									onKeyDown={(e) => {
-																										if (e.key === 'Enter') {
+																{/* Add PKQ button in the opposite corner */}
+																<button
+																	className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-end active:bg-sky-100 focus:outline-none"
+																	onClick={() => window.open(`/result?sample_uid=${sample?.sample_uid}`, '_blank')}
+																>
+																	<div className="flex items-center justify-between">
+																		{'PKQ'} <GrDocumentText size={15} className="ml-1.5" />
+																	</div>
+																</button>
+															</div>
+															{/* Analysis table for this sample */}
+															{sample.analysis && sample.analysis.length > 0 ? (
+																<table className="w-full border-collapse border border-gray-200">
+																	<thead>
+																		<tr className="bg-gray-100 text-sm text-gray-600">
+																			<th className="font-normal p-1 text-start min-w-20 w-20">Mã chỉ tiêu</th>
+																			<th className="font-normal p-1 text-start min-w-60 w-1/4">Chỉ tiêu</th>
+																			<th className="font-normal p-1 text-start min-w-60 w-1/4">Phương pháp</th>
+																			<th className="font-normal p-1 text-start min-w-40">Kết quả</th>
+																			<th className="font-normal p-1 text-start min-w-32">Đơn vị</th>
+																			<th className="font-normal p-1 text-start w-28 min-w-28">Hạn trả</th>
+																			<th className="font-normal p-1 text-start w-36 min-w-40">Người thực hiện</th>
+																			<th className="font-normal p-1 text-center w-16 min-w-16">
+																				<input
+																					type="checkbox"
+																					className="w-4 h-4 sample-checkbox"
+																					data-receipt-id={receipt.id}
+																					data-sample-id={sample.id}
+																					checked={isSampleFullySelected(sample.id, sample.analysis)}
+																					onChange={(e) =>
+																						handleSampleCheckboxChange(e, receipt.id, sample.id, sample.analysis)
+																					}
+																				/>
+																			</th>
+																		</tr>
+																	</thead>
+																	<tbody>
+																		{sample.analysis.map((item) => (
+																			<tr
+																				key={item.id}
+																				className={`${
+																					selectedCheckboxesV3.includes(item.id) ? 'bg-gray-100' : ''
+																				} hover:bg-gray-50`}
+																			>
+																				<td className="border p-1 text-start">{item.id || 'N/A'}</td>
+																				<td className="border p-1 text-start">{item.parameter_name || 'N/A'}</td>
+																				<td className="border p-1 text-start ">
+																					<div className="flex flex-col gap-1">
+																						<div className="flex items-center gap-0.5">
+																							<select
+																								className="min-w-24 max-w-fit p-1 py-0.5 max-h-fit font-semibold bg-white border border-white hover:border-purple-500 rounded text-sm focus:outline-none text-left"
+																								onChange={(e) => handleProtocolSourceChange(item.id, e.target.value)}
+																								value={item.protocol_source || ''}
+																							>
+																								<option value="">--</option>
+																								<option value="IRDOP">IRDOP</option>
+																								<option value="IRDOP VS">IRDOP VS</option>
+																								<option value="EX">EX</option>
+																							</select>
+																							<input
+																								type="text"
+																								className="w-full bg-white border border-white hover:border-purple-500 rounded p-1 py-0 text-left"
+																								placeholder="Mã phương pháp"
+																								value={
+																									editableCell.analysisId === item.id &&
+																									editableCell.column === 'protocol_code'
+																										? inputValue
+																										: item.protocol_code || ''
+																								}
+																								onChange={(e) => handleProtocolCodeChange(item.id, e.target.value)}
+																								onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value)}
+																								onKeyDown={(e) => handleProtocolCodeKeyDown(e, item.id, e.target.value)}
+																							/>
+																						</div>
+																						{/* EX Information - only show if protocol_source is EX */}
+																						{item.protocol_source === 'EX' && (
+																							<div className="flex flex-col gap-2 mt-1 p-2 bg-gray-50 rounded border">
+																								<div className="flex items-center gap-2">
+																									<label className="text-xs font-medium text-gray-600 min-w-[50px]">
+																										Tên EX:
+																									</label>
+																									<input
+																										type="text"
+																										className="flex-1 text-xs bg-white border border-gray-300 hover:border-purple-500 rounded p-1 text-left"
+																										placeholder="Nhập tên EX"
+																										value={
+																											exInfo[item.id]?.ex_name !== undefined
+																												? exInfo[item.id].ex_name
+																												: item.ex_info?.ex_name || ''
+																										}
+																										onChange={(e) =>
+																											handleExInfoChange(item.id, 'ex_name', e.target.value)
+																										}
+																										onBlur={(e) => handleExInfoSave(item.id, 'ex_name', e.target.value)}
+																										onKeyDown={(e) =>
+																											handleExInfoKeyDown(e, item.id, 'ex_name', e.target.value)
+																										}
+																									/>
+																								</div>
+																								<div className="flex items-center gap-2">
+																									<label className="text-xs font-medium text-gray-600 min-w-[50px]">
+																										Ngày gửi:
+																									</label>
+																									<input
+																										type="date"
+																										className="flex-1 text-xs bg-white border border-gray-300 hover:border-purple-500 rounded p-1 text-left"
+																										value={
+																											exInfo[item.id]?.send_at !== undefined
+																												? new Date(exInfo[item.id].send_at).toISOString().split('T')[0]
+																												: item.ex_info?.send_at
+																												? new Date(item.ex_info.send_at).toISOString().split('T')[0]
+																												: ''
+																										}
+																										onChange={(e) => {
+																											const dateValue = e.target.value
+																												? new Date(e.target.value + 'T00:00:00').toISOString()
+																												: '';
+																											handleExInfoChange(item.id, 'send_at', dateValue);
+																										}}
+																										onBlur={(e) => {
 																											const dateValue = e.target.value
 																												? new Date(e.target.value + 'T00:00:00').toISOString()
 																												: '';
 																											handleExInfoSave(item.id, 'send_at', dateValue);
-																										}
-																									}}
-																								/>
+																										}}
+																										onKeyDown={(e) => {
+																											if (e.key === 'Enter') {
+																												const dateValue = e.target.value
+																													? new Date(e.target.value + 'T00:00:00').toISOString()
+																													: '';
+																												handleExInfoSave(item.id, 'send_at', dateValue);
+																											}
+																										}}
+																									/>
+																								</div>
 																							</div>
-																						</div>
-																					)}
-																				</div>
-																			</td>
-																			<td
-																				className="border p-1 text-start"
-																				onClick={() => handleCellClickV3(item.id, 'result_value', item.result_value)}
-																			>
-																				<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
-																					{editableCell.analysisId === item.id &&
-																					editableCell.column === 'result_value' ? (
-																						<TinyMceInput
-																							value={inputValue}
-																							onUpdate={(content) =>
-																								handleSaveContentV3(content, 'result_value', item.id)
-																							}
-																							onKey={handleKeyDownV3}
-																						/>
-																					) : (
-																						<div dangerouslySetInnerHTML={{ __html: `${item.result_value || '--'}` }} />
-																					)}
-																				</div>
-																			</td>
-																			<td
-																				className="border p-1 text-start"
-																				onClick={() => handleCellClickV3(item.id, 'result_unit', item.result_unit)}
-																			>
-																				<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
-																					{editableCell.analysisId === item.id &&
-																					editableCell.column === 'result_unit' ? (
-																						<TinyMceInput
-																							value={inputValue}
-																							onUpdate={(content) =>
-																								handleSaveContentV3(content, 'result_unit', item.id)
-																							}
-																							onKey={handleKeyDownV3}
-																						/>
-																					) : (
-																						<div dangerouslySetInnerHTML={{ __html: `${item.result_unit || '--'}` }} />
-																					)}
-																				</div>
-																			</td>
-																			<td className="border p-1 text-start">
-																				{item.deadline ? formatDate(item.deadline) : 'N/A'}
-																			</td>
-																			<td className="border p-1 text-start">
-																				<div className="relative">
-																					<button
-																						className="font-normal text-start p-1 py-0 w-full dropdown-button rounded"
-																						onClick={(e) => toggleTechnicianDropdown(item.id, e)}
-																					>
-																						{getTechnicianName(item.technician_uid)}
-																					</button>
-																					{technicianDropdownVisible === item.id &&
-																						createPortal(
-																							<ul
-																								className="fixed bg-white border rounded shadow-lg z-[99]"
-																								style={{
-																									top: dropdownPosition.top + 'px',
-																									left: dropdownPosition.left + 'px',
-																									position: 'absolute',
-																									maxHeight: '200px',
-																									overflowY: 'auto',
-																									minWidth: '200px',
-																								}}
-																							>
-																								{technicians.map((identity) => (
-																									<li
-																										key={identity.identity_uid}
-																										className="p-1 cursor-pointer hover:bg-gray-200 dropdown-item"
-																										onClick={() =>
-																											handleTechnicianChange(item.id, identity.identity_uid)
-																										}
-																									>
-																										<p className="font-bold text-primary text-sm">
-																											{identity.alias || ''}
-																										</p>
-																										<p>{identity.identity_name || ''}</p>
-																									</li>
-																								))}
-																							</ul>,
-																							document.body,
 																						)}
-																				</div>
-																			</td>
-																			<td className="border p-1 text-center">
-																				<div className="flex items-center justify-center gap-2">
-																					{item.doc_id && item.doc_id.trim() !== '' && (
+																					</div>
+																				</td>
+																				<td
+																					className="border p-1 text-start"
+																					onClick={() => handleCellClickV3(item.id, 'result_value', item.result_value)}
+																				>
+																					<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
+																						{editableCell.analysisId === item.id &&
+																						editableCell.column === 'result_value' ? (
+																							<TinyMceInput
+																								value={inputValue}
+																								onUpdate={(content) =>
+																									handleSaveContentV3(content, 'result_value', item.id)
+																								}
+																								onKey={handleKeyDownV3}
+																							/>
+																						) : (
+																							<div>{parse(`${item.result_value || '--'}`)}</div>
+																						)}
+																					</div>
+																				</td>
+																				<td
+																					className="border p-1 text-start"
+																					onClick={() => handleCellClickV3(item.id, 'result_unit', item.result_unit)}
+																				>
+																					<div className="hover:border-purple-500 border rounded border-white cursor-pointer">
+																						{editableCell.analysisId === item.id &&
+																						editableCell.column === 'result_unit' ? (
+																							<TinyMceInput
+																								value={inputValue}
+																								onUpdate={(content) =>
+																									handleSaveContentV3(content, 'result_unit', item.id)
+																								}
+																								onKey={handleKeyDownV3}
+																							/>
+																						) : (
+																							<div>{parse(`${item.result_unit || '--'}`)}</div>
+																						)}
+																					</div>
+																				</td>
+																				<td className="border p-1 text-start">
+																					{item.deadline ? formatDate(item.deadline) : 'N/A'}
+																				</td>
+																				<td className="border p-1 text-start">
+																					<div className="relative">
 																						<button
-																							onClick={() => handleFilePreview(item.doc_id, `Analysis_${item.id}`)}
-																							className="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-50 transition-colors"
-																							title="Xem file đính kèm"
+																							className="font-normal text-start p-1 py-0 w-full dropdown-button rounded"
+																							onClick={(e) => toggleTechnicianDropdown(item.id, e)}
 																						>
-																							<GrDocumentText size={16} />
+																							{getTechnicianName(item.technician_uid)}
 																						</button>
-																					)}
-																					<input
-																						type="checkbox"
-																						className="w-4 h-4 row-checkbox"
-																						data-receipt-id={receipt.id}
-																						data-analysis-id={item.id}
-																						data-sample-id={sample.id}
-																						checked={selectedCheckboxesV3.includes(item.id)}
-																						onChange={(e) => handleAnalysisCheckboxChange(e, receipt.id, item.id)}
-																					/>
-																				</div>
-																			</td>
-																		</tr>
-																	))}
-																</tbody>
-															</table>
-														) : (
-															<p className="text-gray-500">Không có dữ liệu phân tích cho mẫu này</p>
-														)}
-													</div>
-												))
-											) : (
-												<p className="text-gray-500">Không có dữ liệu mẫu</p>
-											)}
-										</div>
-									))
-							) : (
-								<div className="w-full text-center py-4 text-gray-500">Không có dữ liệu tiếp nhận mẫu</div>
-							)}
-							{/* Add "Xem thêm" button */}
-							{!showAllReceipts &&
-								Array.isArray(filteredProcessingSample) &&
-								filteredProcessingSample.length > displayCount && (
-									<div className="w-full text-center py-4">
-										<button
-											className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-											onClick={() => setShowAllReceipts(true)}
-										>
-											Xem thêm
-										</button>
-									</div>
+																						{technicianDropdownVisible === item.id &&
+																							createPortal(
+																								<ul
+																									className="fixed bg-white border rounded shadow-lg z-[99]"
+																									style={{
+																										top: dropdownPosition.top + 'px',
+																										left: dropdownPosition.left + 'px',
+																										position: 'absolute',
+																										maxHeight: '200px',
+																										overflowY: 'auto',
+																										minWidth: '200px',
+																									}}
+																								>
+																									{technicians.map((identity) => (
+																										<li
+																											key={identity.identity_uid}
+																											className="p-1 cursor-pointer hover:bg-gray-200 dropdown-item"
+																											onClick={() =>
+																												handleTechnicianChange(item.id, identity.identity_uid)
+																											}
+																										>
+																											<p className="font-bold text-primary text-sm">
+																												{identity.alias || ''}
+																											</p>
+																											<p>{identity.identity_name || ''}</p>
+																										</li>
+																									))}
+																								</ul>,
+																								document.body,
+																							)}
+																					</div>
+																				</td>
+																				<td className="border p-1 text-center">
+																					<div className="flex items-center justify-center gap-2">
+																						{item.doc_id && item.doc_id.trim() !== '' && (
+																							<button
+																								onClick={() => handleFilePreview(item.doc_id, `Analysis_${item.id}`)}
+																								className="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-50 transition-colors"
+																								title="Xem file đính kèm"
+																							>
+																								<GrDocumentText size={16} />
+																							</button>
+																						)}
+																						<input
+																							type="checkbox"
+																							className="w-4 h-4 row-checkbox"
+																							data-receipt-id={receipt.id}
+																							data-analysis-id={item.id}
+																							data-sample-id={sample.id}
+																							checked={selectedCheckboxesV3.includes(item.id)}
+																							onChange={(e) => handleAnalysisCheckboxChange(e, receipt.id, item.id)}
+																						/>
+																					</div>
+																				</td>
+																			</tr>
+																		))}
+																	</tbody>
+																</table>
+															) : (
+																<p className="text-gray-500">Không có dữ liệu phân tích cho mẫu này</p>
+															)}
+														</div>
+													))
+												) : (
+													<p className="text-gray-500">Không có dữ liệu mẫu</p>
+												)}
+											</div>
+										))
+								) : (
+									<div className="w-full text-center py-4 text-gray-500">Không có dữ liệu tiếp nhận mẫu</div>
 								)}
+								{/* Add "Xem thêm" button */}
+								{!showAllReceipts &&
+									Array.isArray(filteredProcessingSample) &&
+									filteredProcessingSample.length > displayCount && (
+										<div className="w-full text-center py-4">
+											<button
+												className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+												onClick={() => setShowAllReceipts(true)}
+											>
+												Xem thêm
+											</button>
+										</div>
+									)}
+							</div>
 						</div>
-					</div>
-				</>
+					</>
+				)}
 			</div>
 
 			{/* Lab Report Popup Modal */}
@@ -2915,6 +3293,35 @@ const ProcessingSample = () => {
 							>
 								<FaSave className="mr-2" /> Xác nhận cập nhật
 							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Fullscreen Analysis Modal */}
+			{isAnalysisFullscreen && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[300]">
+					<div className="bg-white w-full h-full flex flex-col">
+						{/* Header with controls */}
+						<div className="flex items-center justify-between p-4 py-2 border-b bg-gray-50">
+							<h2 className="text-xl font-bold">Danh sách chỉ tiêu đang xử lý - Toàn màn hình</h2>
+							<button
+								onClick={closeFullscreenAnalysis}
+								className="text-gray-500 hover:text-gray-700 text-2xl p-1 hover:bg-gray-200 rounded  border-1 border-gray-500"
+								title="Thu nhỏ"
+							>
+								<FaCompress size={18} />
+							</button>
+						</div>
+						<div className="flex-1 relative">
+							<iframe
+								src={iframeUrl}
+								className="w-full h-full border-0 rounded"
+								title="Processing Analysis Fullscreen"
+								onLoad={() => {
+									// Simplified - ProcessingAnalysis.html handles its own loading
+								}}
+							/>
 						</div>
 					</div>
 				</div>
