@@ -4,8 +4,8 @@ const { useContext, useState, useEffect, useRef } = React;
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { GlobalContext } from '../contexts/GlobalContext';
-import Breadcrumb from './Breadcrumb';
-import TinyMceInput from './Input';
+import Breadcrumb from '../components/Breadcrumb';
+import TinyMceInput from '../components/Input';
 import { RiEdit2Line } from 'react-icons/ri';
 import { GrDocumentText, GrPrint } from 'react-icons/gr';
 import { MdLibraryAdd, MdChevronLeft, MdChevronRight, MdCalendarMonth } from 'react-icons/md';
@@ -85,6 +85,16 @@ const SampleInfor = () => {
 		deadline: new Date().toISOString(),
 		technician_uid: '',
 		sample_id: 0,
+		display_style: [
+			{
+				label: 'default',
+				value: '',
+			},
+			{
+				label: 'eng',
+				value: '',
+			},
+		],
 	});
 	const [editingParameterField, setEditingParameterField] = useState(null); // Add state to track which parameter field is being edited
 	const [editingMatrixField, setEditingMatrixField] = useState(null); // Add state to track which matrix field is being edited
@@ -521,12 +531,22 @@ const SampleInfor = () => {
 
 	const handleParameterSelect = (parameter) => {
 		if (!selectedParameters.some((p) => p.id === parameter.id)) {
-			// Make sure parameter_uid is included when adding parameters
+			// Make sure parameter_uid and display_style are included when adding parameters
 			setSelectedParameters([
 				...selectedParameters,
 				{
 					...parameter,
 					parameter_uid: parameter.parameter_uid || '',
+					display_style: parameter.display_style || [
+						{
+							label: 'default',
+							value: '',
+						},
+						{
+							label: 'eng',
+							value: '',
+						},
+					],
 				},
 			]);
 		}
@@ -552,6 +572,16 @@ const SampleInfor = () => {
 					parameter_id: parameter.parameter_id || 0,
 					parameter_name: parameter.parameter_name,
 					parameter_uid: parameter.parameter_uid || '', // Ensure parameter_uid is included
+					display_style: parameter.display_style || [
+						{
+							label: 'default',
+							value: '',
+						},
+						{
+							label: 'eng',
+							value: '',
+						},
+					],
 					accrenditation: parameter.accrenditation,
 					protocol_id: parameter.protocol_id,
 					technician_uid: parameter.technician_uid,
@@ -614,11 +644,21 @@ const SampleInfor = () => {
 	const handleAddNewParameter = () => {
 		setIsAddingParameter(false);
 		setIsAddingNewParameter(true);
-		// Set the sample_id from the current sample
+		// Set the sample_id from the current sample and ensure display_style is initialized
 		setNewParameter({
 			...newParameter,
 			sample_id: currentSample?.id,
 			matrix: currentSample?.matrix || '',
+			display_style: [
+				{
+					label: 'default',
+					value: '',
+				},
+				{
+					label: 'eng',
+					value: '',
+				},
+			],
 		});
 		// Scroll to the top of the table
 		window.scrollTo({
@@ -773,6 +813,16 @@ const SampleInfor = () => {
 					deadline: new Date().toISOString(),
 					technician_uid: '',
 					sample_id: currentSample?.id || 0,
+					display_style: [
+						{
+							label: 'default',
+							value: '',
+						},
+						{
+							label: 'eng',
+							value: '',
+						},
+					],
 				});
 			} else {
 				Swal.fire({
@@ -795,6 +845,17 @@ const SampleInfor = () => {
 		setNewParameter({
 			...newParameter,
 			[field]: value,
+		});
+	};
+
+	// Function to handle display_style changes for new parameter
+	const handleNewParameterDisplayStyleChange = (label, value) => {
+		const updatedDisplayStyle = newParameter.display_style.map((item) =>
+			item.label === label ? { ...item, value } : item,
+		);
+		setNewParameter({
+			...newParameter,
+			display_style: updatedDisplayStyle,
 		});
 	};
 
@@ -3863,7 +3924,7 @@ const SampleInfor = () => {
 								<th className="p-2 border-x w-[25%] min-w-44 text-left">Phương pháp</th>
 								<th className="p-2 border-x w-[12%] min-w-28 text-left">Kết quả</th>
 								<th className="p-2 border-x w-1/12 min-w-24 text-left">Đơn vị</th>
-								<th className="p-2 border-x w-1/12 min-w-28 text-left">Hạn trả</th>{' '}
+								<th className="p-2 border-x w-1/12 min-w-28 text-left">Hạn trả</th>
 								<th className="p-2 border-x w-[5%] min-w-24 text-left ">Lĩnh vực</th>
 								<th className="p-2 border-x w-[10%] min-w-32 text-left">Thực hiện</th>
 								<th className="py-2 border-x w-10 min-w-10">
@@ -3890,6 +3951,24 @@ const SampleInfor = () => {
 											placeholder="Tên chỉ tiêu"
 											value={newParameter.parameter_name || ''}
 											onChange={(e) => handleNewParameterChange('parameter_name', e.target.value)}
+										/>
+									</td>
+									<td className="p-1 border relative">
+										<input
+											type="text"
+											className="w-full bg-white border rounded p-1 text-left"
+											placeholder="Tên mặc định"
+											value={newParameter.display_style.find((item) => item.label === 'default')?.value || ''}
+											onChange={(e) => handleNewParameterDisplayStyleChange('default', e.target.value)}
+										/>
+									</td>
+									<td className="p-1 border relative">
+										<input
+											type="text"
+											className="w-full bg-white border rounded p-1 text-left"
+											placeholder="Tên tiếng Anh"
+											value={newParameter.display_style.find((item) => item.label === 'eng')?.value || ''}
+											onChange={(e) => handleNewParameterDisplayStyleChange('eng', e.target.value)}
 										/>
 									</td>
 									<td className="p-1 border relative">

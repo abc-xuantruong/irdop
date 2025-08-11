@@ -30,7 +30,7 @@ const Breadcrumb = ({
 	}, [searchTerm]);
 
 	return (
-		<nav className="flex flex-col w-lvw 2xl:max-w-screen-2xl xl:max-w-screen-xl lg:max-w-screen-lg md:max-w-screen-md sm:max-w-screen-sm max-w-sm mb-4 font-semibold py-4 border-b-2">
+		<nav className="flex flex-col w-full mb-4 font-semibold py-4 border-b-2">
 			<div className="flex flex-wrap items-center justify-between gap-4 mb-2">
 				<h1 className="text-2xl md:text-3xl font-bold text-primary text-start">{currentTitlePage}</h1>{' '}
 				{/* Search input - visible on dashboard or when showSearch is true */}

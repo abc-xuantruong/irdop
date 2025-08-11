@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect, useCallback, useRef } from 'react';
-import Breadcrumb from './Breadcrumb';
+import Breadcrumb from '../components/Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiPost, apiGet } from '../contexts/helperFunctionCallAPI';
 import { toast, ToastContainer } from 'react-toastify';

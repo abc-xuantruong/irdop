@@ -2,16 +2,16 @@ import React, { useContext, useEffect, useState, useRef, useCallback } from 'rea
 import { createPortal } from 'react-dom';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { FiRefreshCcw } from 'react-icons/fi';
-import Breadcrumb from './Breadcrumb';
+import Breadcrumb from '../components/Breadcrumb';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import CreateReceipt from './CreateReceipt';
-import CreateReceiptFromCRM from './CreateReceiptFromCRM';
+import CreateReceipt from '../components/CreateReceipt';
+import CreateReceiptFromCRM from '../components/CreateReceiptFromCRM';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import 'react-datepicker/dist/react-datepicker.css';
 import DatePicker from 'react-datepicker';
 import axios from 'axios';
-import ShipmentForm from './ShipmentForm';
+import ShipmentForm from '../components/ShipmentForm';
 
 import {
 	FaMoneyBillWave,

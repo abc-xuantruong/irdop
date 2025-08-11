@@ -2,53 +2,67 @@ import * as React from 'react';
 const { useContext } = React;
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import './App.css';
-import Header from './components/Header';
-import Dashboard from './components/Dashboard';
-import ReceiptInfor from './components/ReceiptInfor';
-import SampleInfor from './components/SampleInfor';
-import { GlobalContext } from './contexts/GlobalContext';
-import Library from './components/Library';
+import Header from './sections/Header';
+import Dashboard from './pages/Dashboard';
+import ReceiptInfor from './pages/ReceiptInfor';
+import SampleInfor from './pages/SampleInfor';
+import Library from './pages/Library';
 import ProtocolInfor from './components/ProtocolInfor';
 import AnalyteInfor from './components/AnalyteInfor';
-import Login from './components/Login';
+import Login from './pages/Login';
+import { GlobalContext } from './contexts/GlobalContext';
 import ClientInfor from './components/ClientInfor';
-import Footer from './components/Footer';
+import Footer from './sections/Footer';
 import Event from './components/Event';
-import ProcessingSample from './components/ProcessingSampleV3';
+import LabDashboard from './pages/LabDashboard';
+import LabDashboardTemporary from './pages/LabDashboardTemporary';
 import ProcessingSampleMachine from './components/ProcessingSampleMachine';
-import Report from './components/Report';
+import Report from './pages/Report';
 import Result from './components/Analysis_result';
 import PrintSampleTag from './components/PrintSampleTag';
-import AccountInfor from './components/AccountInfor';
-import FileInfor from './components/FileInfor';
+import FileInfor from './pages/FileInfor';
+import Editor from './components/lab/Editor';
 
 const App = () => {
 	return (
 		<Router>
-			<div className="h-full min-h-lvh min-w-lvw w-lvw flex flex-col items-center relative ">
-				<Header />
-				<div className="flex justify-center items-center w-full 2xl:max-w-screen-2xl xl:max-w-screen-xl lg:max-w-screen-lg md:max-w-screen-md sm:max-w-screen-sm  max-w-sm mb-60">
-					<Routes>
-						<Route path="library" element={<Library />} />
-						<Route path="library/protocol" element={<ProtocolInfor />} />
-						<Route path="library/analyte" element={<AnalyteInfor />} />
-						<Route path="/intra-h1y25-c1" element={<Event />} />
-						<Route path="/dashboard" element={<Dashboard />} />
-						<Route path="/" element={<Dashboard />} />
-						<Route path="/report" element={<Report />} />
-						<Route path="/result" element={<Result />} />
-						<Route path="/processing" element={<ProcessingSample />} />
-						<Route path="/processing/machine" element={<ProcessingSampleMachine />} />
-						<Route path="/dashboard/receipt" element={<ReceiptInfor />} />
-						<Route path="/dashboard/receipt/print_sp" element={<PrintSampleTag />} />
-						<Route path="/dashboard/sample" element={<SampleInfor />} />
-						<Route path="/login" element={<Login />} />
-						<Route path="library/client" element={<ClientInfor />} />
-						<Route path="/files" element={<FileInfor />} />
-					</Routes>
-				</div>
-				<Footer />
-			</div>
+			<Routes>
+				{/* Fullscreen route without header/footer */}
+				<Route path="/lab" element={<LabDashboard />} />
+				<Route path="/processing" element={<LabDashboardTemporary />} />
+				<Route path="/editor" element={<Editor />} />
+
+				{/* Regular routes with header/footer */}
+				<Route
+					path="*"
+					element={
+						<div className="h-full min-h-lvh min-w-lvw w-lvw flex flex-col items-center relative">
+							<Header />
+							<div className="flex justify-center items-center w-full px-5 mb-60">
+								<Routes>
+									<Route path="library" element={<Library />} />
+									<Route path="library/protocol" element={<ProtocolInfor />} />
+									<Route path="library/analyte" element={<AnalyteInfor />} />
+									<Route path="/intra-h1y25-c1" element={<Event />} />
+									<Route path="/dashboard" element={<Dashboard />} />
+									<Route path="/" element={<Dashboard />} />
+									<Route path="/report" element={<Report />} />
+									<Route path="/result" element={<Result />} />
+									{/* <Route path="/processing" element={<ProcessingSample />} /> */}
+									<Route path="/processing/machine" element={<ProcessingSampleMachine />} />
+									<Route path="/dashboard/receipt" element={<ReceiptInfor />} />
+									<Route path="/dashboard/receipt/print_sp" element={<PrintSampleTag />} />
+									<Route path="/dashboard/sample" element={<SampleInfor />} />
+									<Route path="/login" element={<Login />} />
+									<Route path="library/client" element={<ClientInfor />} />
+									<Route path="/files" element={<FileInfor />} />
+								</Routes>
+							</div>
+							<Footer />
+						</div>
+					}
+				/>
+			</Routes>
 		</Router>
 	);
 };

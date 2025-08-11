@@ -1,9 +1,9 @@
 import * as React from 'react';
 const { useContext, useState, useEffect, useRef } = React;
-import TinyMceInput from './Input';
+import TinyMceInput from '../components/Input';
 import { GlobalContext } from '../contexts/GlobalContext';
-import Breadcrumb from './Breadcrumb';
-import FilterBar from './FilterBar';
+import Breadcrumb from '../components/Breadcrumb';
+import FilterBar from '../components/FilterBar';
 import { NavLink, useSearchParams, useNavigate } from 'react-router-dom';
 import { PiDownloadSimpleBold } from 'react-icons/pi';
 import { CgFileDocument } from 'react-icons/cg';
@@ -25,13 +25,13 @@ import {
 } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import CreateReceipt from './CreateReceipt';
+import CreateReceipt from '../components/CreateReceipt';
 import { apiGet, apiPost, apiGetBlob } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import axios from 'axios'; // Add axios import
-import FileForm from './FileForm';
-import EmailForm from './EmailForm';
-import SampleImageUpload from './SampleImageUpload';
+import FileForm from '../components/FileForm';
+import EmailForm from '../components/EmailForm';
+import SampleImageUpload from '../components/SampleImageUpload';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 // Import the generateReportToHTML function
 
@@ -114,7 +114,7 @@ const ReceiptInfor = ({ receipt }) => {
 	const [sampleImageUrl, setSampleImageUrl] = useState('');
 	const [isLoadingImage, setIsLoadingImage] = useState(false);
 	const [imageError, setImageError] = useState(false);
-	
+
 	// QR Code states
 	const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
 	const [currentUrl, setCurrentUrl] = useState('');
@@ -313,10 +313,15 @@ const ReceiptInfor = ({ receipt }) => {
 		const checkCameraPermission = async () => {
 			try {
 				// Chỉ kiểm tra nếu trình duyệt hỗ trợ
-				if (navigator.permissions && navigator.permissions.query && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+				if (
+					navigator.permissions &&
+					navigator.permissions.query &&
+					navigator.mediaDevices &&
+					navigator.mediaDevices.getUserMedia
+				) {
 					const permission = await navigator.permissions.query({ name: 'camera' });
 					setCameraPermission(permission.state);
-					
+
 					// Listen for permission changes
 					permission.onchange = () => {
 						setCameraPermission(permission.state);
@@ -330,7 +335,7 @@ const ReceiptInfor = ({ receipt }) => {
 				setCameraPermission(null);
 			}
 		};
-		
+
 		checkCameraPermission();
 	}, []);
 
@@ -338,8 +343,8 @@ const ReceiptInfor = ({ receipt }) => {
 	useEffect(() => {
 		return () => {
 			if (qrScannerRef.current) {
-				qrScannerRef.current.clear().catch(error => {
-					console.error("Failed to clear QR scanner on cleanup:", error);
+				qrScannerRef.current.clear().catch((error) => {
+					console.error('Failed to clear QR scanner on cleanup:', error);
 				});
 			}
 		};
@@ -1465,8 +1470,8 @@ const ReceiptInfor = ({ receipt }) => {
 
 		const date = new Date(dateString);
 		return isNaN(date.getTime()) ? new Date() : date;
-	}; 
-	
+	};
+
 	// QR Code functions
 	const generateQRCode = (url) => {
 		const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}`;
@@ -1475,12 +1480,12 @@ const ReceiptInfor = ({ receipt }) => {
 
 	const requestCameraPermission = async () => {
 		setIsRequestingPermission(true);
-		
+
 		// Kiểm tra xem trình duyệt có hỗ trợ getUserMedia không
 		if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 			setIsRequestingPermission(false);
 			setCameraPermission('denied');
-			
+
 			Swal.fire({
 				icon: 'error',
 				title: 'Trình duyệt không hỗ trợ',
@@ -1493,21 +1498,21 @@ const ReceiptInfor = ({ receipt }) => {
 						<li>Kiểm tra cài đặt camera của trình duyệt</li>
 					</ul>
 				`,
-				confirmButtonText: 'Đã hiểu'
+				confirmButtonText: 'Đã hiểu',
 			});
 			return false;
 		}
-		
+
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({ video: true });
 			// Đóng stream ngay lập tức vì chúng ta chỉ cần kiểm tra quyền
-			stream.getTracks().forEach(track => track.stop());
+			stream.getTracks().forEach((track) => track.stop());
 			setCameraPermission('granted');
 			return true;
 		} catch (error) {
 			console.log('Camera permission denied:', error);
 			setCameraPermission('denied');
-			
+
 			// Hiển thị thông báo hướng dẫn người dùng
 			Swal.fire({
 				icon: 'warning',
@@ -1521,7 +1526,7 @@ const ReceiptInfor = ({ receipt }) => {
 					</ol>
 					<p><strong>Lỗi:</strong> ${error.message}</p>
 				`,
-				confirmButtonText: 'Đã hiểu'
+				confirmButtonText: 'Đã hiểu',
 			});
 			return false;
 		} finally {
@@ -1532,7 +1537,7 @@ const ReceiptInfor = ({ receipt }) => {
 	const handleQRScan = async () => {
 		// Luôn mở modal và hiển thị yêu cầu quyền camera
 		setIsQRScannerOpen(true);
-		
+
 		// Yêu cầu quyền camera ngay lập tức
 		setTimeout(async () => {
 			const hasPermission = await requestCameraPermission();
@@ -1551,22 +1556,22 @@ const ReceiptInfor = ({ receipt }) => {
 			console.log('Camera permission not granted');
 			return;
 		}
-		
+
 		if (qrScannerRef.current) {
 			qrScannerRef.current.clear();
 		}
-		
+
 		try {
 			qrScannerRef.current = new Html5QrcodeScanner(
-				"qr-reader",
-				{ 
-					fps: 10, 
+				'qr-reader',
+				{
+					fps: 10,
 					qrbox: { width: 250, height: 250 },
-					aspectRatio: 1.0
+					aspectRatio: 1.0,
 				},
-				false
+				false,
 			);
-			
+
 			qrScannerRef.current.render(handleQRScanSuccess, handleQRScanError);
 		} catch (error) {
 			console.error('Failed to initialize QR scanner:', error);
@@ -1580,11 +1585,14 @@ const ReceiptInfor = ({ receipt }) => {
 
 	const closeQRScanner = () => {
 		if (qrScannerRef.current) {
-			qrScannerRef.current.clear().then(() => {
-				qrScannerRef.current = null;
-			}).catch(error => {
-				console.error("Failed to clear QR scanner:", error);
-			});
+			qrScannerRef.current
+				.clear()
+				.then(() => {
+					qrScannerRef.current = null;
+				})
+				.catch((error) => {
+					console.error('Failed to clear QR scanner:', error);
+				});
 		}
 		setIsQRScannerOpen(false);
 	};
@@ -1592,18 +1600,21 @@ const ReceiptInfor = ({ receipt }) => {
 	const handleQRScanSuccess = (decodedText) => {
 		// Dừng scanner trước
 		if (qrScannerRef.current) {
-			qrScannerRef.current.clear().then(() => {
-				qrScannerRef.current = null;
-			}).catch(error => {
-				console.error("Failed to clear QR scanner:", error);
-			});
+			qrScannerRef.current
+				.clear()
+				.then(() => {
+					qrScannerRef.current = null;
+				})
+				.catch((error) => {
+					console.error('Failed to clear QR scanner:', error);
+				});
 		}
-		
+
 		try {
 			// Validate if the decoded text is a valid URL
 			new URL(decodedText);
 			setIsQRScannerOpen(false);
-			
+
 			// Show confirmation before navigating
 			Swal.fire({
 				icon: 'question',
@@ -1611,7 +1622,7 @@ const ReceiptInfor = ({ receipt }) => {
 				text: `Bạn có muốn chuyển đến: ${decodedText}?`,
 				showCancelButton: true,
 				confirmButtonText: 'Có',
-				cancelButtonText: 'Không'
+				cancelButtonText: 'Không',
 			}).then((result) => {
 				if (result.isConfirmed) {
 					window.location.href = decodedText;
@@ -2846,23 +2857,23 @@ const ReceiptInfor = ({ receipt }) => {
 				.colored-toast .swal2-html-container {
 					color: white;
 				}
-				
+
 				/* QR Scanner custom styles */
 				#qr-reader {
 					position: relative !important;
 				}
-				
+
 				#qr-reader video {
 					width: 100% !important;
 					height: 100% !important;
 					object-fit: cover !important;
 					border-radius: 8px !important;
 				}
-				
+
 				#qr-reader canvas {
 					display: none !important;
 				}
-				
+
 				#qr-reader__dashboard {
 					position: absolute !important;
 					bottom: 0 !important;
@@ -2872,17 +2883,17 @@ const ReceiptInfor = ({ receipt }) => {
 					padding: 10px !important;
 					border-radius: 0 0 8px 8px !important;
 				}
-				
+
 				#qr-reader__dashboard_section {
 					margin: 0 !important;
 				}
-				
+
 				#qr-reader__dashboard_section_info {
 					color: white !important;
 					font-size: 12px !important;
 					text-align: center !important;
 				}
-				
+
 				#qr-reader__camera_selection {
 					background: white !important;
 					border: 1px solid #ccc !important;
@@ -2891,8 +2902,9 @@ const ReceiptInfor = ({ receipt }) => {
 					margin: 5px 0 !important;
 					width: 100% !important;
 				}
-				
-				#qr-reader__start_button, #qr-reader__stop_button {
+
+				#qr-reader__start_button,
+				#qr-reader__stop_button {
 					background: #3b82f6 !important;
 					color: white !important;
 					border: none !important;
@@ -2902,8 +2914,9 @@ const ReceiptInfor = ({ receipt }) => {
 					font-size: 14px !important;
 					margin: 2px !important;
 				}
-				
-				#qr-reader__start_button:hover, #qr-reader__stop_button:hover {
+
+				#qr-reader__start_button:hover,
+				#qr-reader__stop_button:hover {
 					background: #2563eb !important;
 				}
 			`}</style>{' '}
@@ -3163,7 +3176,7 @@ const ReceiptInfor = ({ receipt }) => {
 										)}
 									</div>
 								</div>
-								
+
 								{/* QR Code Section */}
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Truy cập nhanh</label>
@@ -3172,16 +3185,12 @@ const ReceiptInfor = ({ receipt }) => {
 										<div className="hidden md:block">
 											{currentUrl && (
 												<div className="border border-gray-300 rounded-lg p-2 w-fit">
-													<img
-														src={generateQRCode(currentUrl)}
-														alt="QR Code"
-														className="w-24 h-24"
-													/>
+													<img src={generateQRCode(currentUrl)} alt="QR Code" className="w-24 h-24" />
 													<p className="text-xs text-gray-600 mt-1 text-center">Quét để truy cập</p>
 												</div>
 											)}
 										</div>
-										
+
 										{/* Show Scan Button on small screens */}
 										<div className="block md:hidden">
 											<button
@@ -3817,7 +3826,6 @@ const ReceiptInfor = ({ receipt }) => {
 				isVisible={isFileFormVisible}
 				onClose={() => setIsFileFormVisible(false)}
 			/>
-			
 			{/* QR Scanner Modal */}
 			{isQRScannerOpen && (
 				<div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50">
@@ -3832,17 +3840,15 @@ const ReceiptInfor = ({ receipt }) => {
 							<FaCamera className="mr-2 text-blue-500" />
 							Quét mã QR
 						</h3>
-						
+
 						{/* Camera view area - takes most of the space */}
 						<div className="flex-1 flex flex-col">
-							<p className="text-gray-600 mb-3 text-center text-sm">
-								Hướng camera vào mã QR để quét và điều hướng
-							</p>
-							
+							<p className="text-gray-600 mb-3 text-center text-sm">Hướng camera vào mã QR để quét và điều hướng</p>
+
 							{/* QR Scanner area - maximized */}
 							<div className="flex-1 relative">
-								<div 
-									id="qr-reader" 
+								<div
+									id="qr-reader"
 									className="w-full h-full min-h-[300px] border-2 border-dashed border-gray-300 rounded-lg overflow-hidden"
 								>
 									{/* Placeholder content when scanner is not active */}
@@ -3857,7 +3863,7 @@ const ReceiptInfor = ({ receipt }) => {
 								</div>
 							</div>
 						</div>
-						
+
 						{/* Control buttons area */}
 						<div className="mt-4 border-t pt-4">
 							{/* Camera permission status */}
@@ -3866,10 +3872,9 @@ const ReceiptInfor = ({ receipt }) => {
 									<div className="flex items-center justify-center mb-2">
 										<FaCamera className="text-yellow-600 mr-2" />
 										<p className="text-sm text-yellow-800">
-											{cameraPermission === null 
+											{cameraPermission === null
 												? 'Cần kiểm tra và cấp quyền camera'
-												: 'Cần cấp quyền camera để sử dụng chức năng này'
-											}
+												: 'Cần cấp quyền camera để sử dụng chức năng này'}
 										</p>
 									</div>
 									<div className="text-center">
@@ -3883,19 +3888,17 @@ const ReceiptInfor = ({ receipt }) => {
 									</div>
 								</div>
 							)}
-							
+
 							{/* Success message when camera is granted */}
 							{cameraPermission === 'granted' && (
 								<div className="bg-green-50 border border-green-200 rounded-md p-3 mb-3">
 									<div className="flex items-center justify-center">
 										<FaCamera className="text-green-600 mr-2" />
-										<p className="text-sm text-green-800">
-											Camera đã sẵn sàng - Hướng vào mã QR để quét
-										</p>
+										<p className="text-sm text-green-800">Camera đã sẵn sàng - Hướng vào mã QR để quét</p>
 									</div>
 								</div>
 							)}
-							
+
 							{/* Help text */}
 							<div className="text-xs text-gray-500 space-y-1 text-center">
 								<p>💡 Đảm bảo mã QR chứa URL hợp lệ</p>

@@ -1,13 +1,13 @@
 import * as React from 'react';
 const { useContext, useEffect, useState } = React;
 import { useNavigate, useLocation } from 'react-router-dom';
-import Breadcrumb from './Breadcrumb';
+import Breadcrumb from '../components/Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
-import ProtocolInfor from './ProtocolInfor';
-import AnalyteInfor from './AnalyteInfor';
-import ClientInfor from './ClientInfor';
-import AccountInfor from './AccountInfor';
-import TechnicianInfo from './TechnicianInfo';
+import ProtocolInfor from '../components/ProtocolInfor';
+import AnalyteInfor from '../components/AnalyteInfor';
+import ClientInfor from '../components/ClientInfor';
+import AccountInfor from '../components/AccountInfor';
+import TechnicianInfo from '../components/TechnicianInfo';
 import { FaUserAlt, FaBook, FaFlask, FaClipboard } from 'react-icons/fa';
 
 const Library = () => {

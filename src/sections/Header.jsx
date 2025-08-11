@@ -98,7 +98,7 @@ const Header = () => {
 	return (
 		<div className="w-screen bg-white border-b shadow flex justify-center items-center relative z-50">
 			{' '}
-			<div className="flex justify-between items-center w-full 2xl:max-w-screen-2xl xl:max-w-screen-xl lg:max-w-screen-lg md:max-w-screen-md sm:max-w-screen-sm  max-w-sm ">
+			<div className="flex justify-between items-center w-full px-5 ">
 				<div className="text-2xl font-bold">
 					<img src={logo} alt="Logo" className="h-14 py-2 cursor-pointer " onClick={handleLogoClick} />
 				</div>

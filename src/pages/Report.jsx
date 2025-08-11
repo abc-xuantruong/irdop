@@ -22,10 +22,11 @@ export default function MultiPageEditor() {
 	// Add state to track if we're in read-only mode (when a ppt_uid is in the URL)
 	const [isReadOnly, setIsReadOnly] = useState(false);
 
-	// Add new toggle states for VLAS, COMMENT, REFERENCE, and REPLACE
+	// Add new toggle states for VLAS, COMMENT, REFERENCE, ENGLISH, and REPLACE
 	const [showVlas, setShowVlas] = useState(false);
 	const [showComment, setShowComment] = useState(false);
 	const [showReference, setShowReference] = useState(false);
+	const [showEnglish, setShowEnglish] = useState(false);
 	const [showReplace, setShowReplace] = useState(false);
 
 	// State for section HTML content
@@ -699,7 +700,7 @@ export default function MultiPageEditor() {
 
 			extractCurrentReferences();
 		}
-	}, [showVlas, showComment, showReference, showReplace, sampleData]);
+	}, [showVlas, showComment, showReference, showEnglish, showReplace, sampleData]);
 
 	// Function to generate customer section from API data
 	const generateCustomerSection = (clientData) => {
@@ -990,7 +991,52 @@ export default function MultiPageEditor() {
 		if (analysisItems.length > 0) {
 			analysisRows = analysisItems
 				.map((item, index) => {
-					const parameterName = item.parameter_name || '--';
+					// Handle parameter name with display_style logic
+					let parameterName = item.parameter_name || '--';
+
+					// Check if display_style exists and is an array
+					if (item.display_style && Array.isArray(item.display_style)) {
+						// Find the default value
+						const defaultItem = item.display_style.find((style) => style.label === 'default');
+						if (defaultItem && defaultItem.value && defaultItem.value.trim() !== '') {
+							// Keep HTML tags for display_style values (don't remove them)
+							parameterName = defaultItem.value;
+						}
+
+						// Add English translation if showEnglish is true and eng value exists
+						if (showEnglish) {
+							const engItem = item.display_style.find((style) => style.label === 'eng');
+							if (engItem && engItem.value && engItem.value.trim() !== '') {
+								// Insert "/" before the closing tag of the first element
+								if (parameterName.includes('</p>')) {
+									parameterName = parameterName.replace('</p>', '/</p>');
+								} else if (parameterName.includes('>')) {
+									// If it's not a <p> tag, add / at the end of the content
+									const lastTagIndex = parameterName.lastIndexOf('>');
+									if (lastTagIndex !== -1) {
+										parameterName =
+											parameterName.substring(0, lastTagIndex) + '/' + parameterName.substring(lastTagIndex);
+									} else {
+										parameterName += '/';
+									}
+								} else {
+									parameterName += '/';
+								}
+								// Add newline and English value
+								parameterName += engItem.value;
+							}
+						}
+					} else {
+						// If no display_style, use parameter_name and add eng if available
+						if (showEnglish && item.display_style && Array.isArray(item.display_style)) {
+							const engItem = item.display_style.find((style) => style.label === 'eng');
+							if (engItem && engItem.value && engItem.value.trim() !== '') {
+								const engValue = engItem.value;
+								parameterName += ` / \n${engValue}`;
+							}
+						}
+					}
+
 					const result = item.result_value || '--';
 					const unit = item.result_unit || '--';
 					const protocol = item.protocol_code || '--';
@@ -1028,7 +1074,7 @@ export default function MultiPageEditor() {
 					return `
 				<tr id="${rowId}" class="table-row" data-row-index="${index}">
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${index + 1}.</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${parameterName}</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; white-space: pre-line;">${parameterName}</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${result}</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${unit}</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${protocol}</td>
@@ -1070,10 +1116,10 @@ export default function MultiPageEditor() {
 				</th>
 				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:60px; text-align:left; font-size:12px;box-sizing: border-box;">
 					<strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
-				</th>                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box;">
+				</th>                <th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width: 17%; text-align:left; font-size:12px;box-sizing: border-box;">
 					<strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
 				</th>
-				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box; max-width: 115px; ">
+				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; ; text-align:left; font-size:12px;box-sizing: border-box; max-width: 120px; ">
 					<strong>Phạm vi công nhận</strong> <br> <span style="font-size: 12px; color: #444444;">/ Accreditation scope</span>
 				</th>${referenceHeader}
 			</tr>
@@ -1138,24 +1184,6 @@ export default function MultiPageEditor() {
 </div>`;
 	};
 
-	// Add new function to generate signature section
-	const generateSignatureSection = () => {
-		return `
-   <div style="display: flex; flex-direction: column; ">
-        ${showReplace ? '<p style="font-weight: bold;">--</p>' : ''}
-        <div style="padding: 0pt; position: relative; margin-top: 0.3cm; display:flex; height:2.7cm;">
-            <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-                <strong style="font-size:12px; line-height:1.2; margin:0;">PHÒNG PHÂN TÍCH KIỂM NGHIỆM/<br>KIỂM SOÁT CHẤT LƯỢNG / Laboratory Manager</strong>
-                <p style="font-size:12px; margin:0; line-height:1.4;">Trần Thị Lan</p>
-            </div>
-            <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-                <strong style="font-size:12px; line-height:1.2; margin:0;">KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President</strong>
-                <p style="font-size:12px; margin:0; line-height:1.4;">Nguyễn Bá Xuân Trường</p>
-            </div>
-        </div>
-    </div>`;
-	};
-
 	// Add notes and signature sections as constants with standardized styling
 	const notesSection = `
 <div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
@@ -1183,6 +1211,27 @@ export default function MultiPageEditor() {
 		
 	</div>
 </div>`;
+
+	// Add new function to generate signature section
+	const generateSignatureSection = () => {
+		return `
+   <div style="padding-top: 0; display: flex;flex-direction:column; margin:0;">
+   		${showReplace ? '<p style="text-align: left; font-weight: bold; font-size:12px; margin-bottom: 4px;">--</p>' : ''}
+
+        <div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
+            <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
+                <strong style="font-size:12px; line-height:1.2; margin:0;">PHÒNG PHÂN TÍCH KIỂM NGHIỆM/<br>KIỂM SOÁT CHẤT LƯỢNG / Laboratory Manager</strong>
+                <p style="font-size:12px; margin:0; line-height:1.4;">Trần Thị Lan</p>
+            </div>
+            <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
+                <strong style="font-size:12px; line-height:1.2; margin:0;">KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President</strong>
+                <p style="font-size:12px; margin:0; line-height:1.4;">Nguyễn Bá Xuân Trường</p>
+            </div>
+        </div>
+    </div>`;
+	};
+
+	const signatureSection = generateSignatureSection();
 
 	const spacing = `<div style="height: 4mm; margin:0; padding:0;"></div>`;
 
@@ -3663,7 +3712,7 @@ export default function MultiPageEditor() {
 
 		// Call the function to update VLAS visibility
 		updateVlasVisibility();
-	}, [showVlas, showComment, showReference, showReplace, sampleData]);
+	}, [showVlas, showComment, showReference, sampleData]);
 
 	// Custom function to show notifications with SweetAlert instead of alert
 	const showNotification = (message, type = 'success') => {
@@ -3845,6 +3894,18 @@ export default function MultiPageEditor() {
 							disabled={isReadOnly}
 						>
 							REFERENCE
+						</button>
+
+						<button
+							onClick={() => !isReadOnly && setShowEnglish((prev) => !prev)}
+							className={`${
+								showEnglish ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
+							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
+							}`}
+							disabled={isReadOnly}
+						>
+							ENG
 						</button>
 
 						<button

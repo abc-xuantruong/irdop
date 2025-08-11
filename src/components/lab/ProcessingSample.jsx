@@ -1,8 +1,8 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import parse from 'html-react-parser';
-import { GlobalContext } from '../contexts/GlobalContext';
-import { apiPost } from '../contexts/helperFunctionCallAPI';
-import TinyMceInput from './Input';
+import { GlobalContext } from '../../contexts/GlobalContext';
+import { apiPost } from '../../contexts/helperFunctionCallAPI';
+import TinyMceInput from '../Input';
 import { toast, ToastContainer } from 'react-toastify';
 import { FaTimes, FaSearch } from 'react-icons/fa';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
