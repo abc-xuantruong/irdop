@@ -33,9 +33,9 @@ const TinyMceInput = ({ value, onUpdate, onKey }) => {
 			target: editorRef.current,
 			inline: true,
 			menubar: false,
-			toolbar: 'undo redo | superscript subscript',
+			// Remove toolbar UI as requested
+			toolbar: false,
 			// content_style: 'body { font-family:Inter, Helvetica; font-size:10.5pt}',
-			plugins: 'paste',
 			paste_preprocess: function (plugin, args) {
 				// Check if content contains table tags (likely from Excel)
 				if (args.content.indexOf('<table') !== -1) {
@@ -75,16 +75,33 @@ const TinyMceInput = ({ value, onUpdate, onKey }) => {
 					onUpdate(content);
 				});
 
-				// Lắng nghe sự kiện keydown để cập nhật khi nhấn Enter hoặc X
+				// Key handling
 				editor.on('keydown', (e) => {
+					// Enter key -> trigger parent handler
 					if (e.key === 'Enter') {
-						e.preventDefault(); // Ngăn chặn hành vi mặc định
+						e.preventDefault();
 						const content = editor.getContent();
 						onKey(e, content);
-						// onUpdate(content);
-					} else if (e.key === '*') {
+						return;
+					}
+					// Replace '*' with multiplication sign
+					if (e.key === '*') {
 						e.preventDefault();
 						editor.execCommand('mceInsertContent', false, '×');
+						return;
+					}
+					// '^' toggles superscript
+					if (e.key === '^') {
+						e.preventDefault();
+						// TinyMCE command name for superscript
+						editor.execCommand('Superscript');
+						return;
+					}
+					// '_' toggles subscript
+					if (e.key === '_') {
+						e.preventDefault();
+						editor.execCommand('Subscript');
+						return;
 					}
 				});
 			},

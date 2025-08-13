@@ -2,9 +2,28 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 import Swal from 'sweetalert2';
 
+// Hàm để lấy access key tương ứng với app uid
+const getAccessKeyByAppUid = (appUid) => {
+	const mapping = {
+		'LIMS-IRDOP-PRD': import.meta.env.VITE_ACCESS_KEY_PRD,
+		'LIMS-IRDOP-DEV': import.meta.env.VITE_ACCESS_KEY_DEV,
+	};
+
+	return mapping[appUid] || import.meta.env.VITE_ACCESS_KEY_PRD; // fallback to PRD access key
+};
+
+// Hàm để lấy app uid mặc định từ ENV
+const getDefaultAppUid = () => {
+	const defaultEnv = import.meta.env.VITE_DEFAULT_ENV || 'PRD';
+	return defaultEnv === 'DEV' ? import.meta.env.VITE_APP_UID_DEV : import.meta.env.VITE_APP_UID_PRD;
+};
+
 const getAuthHeader = () => {
 	const authToken = Cookies.get('auth');
 	const identityUID = Cookies.get('identityUID');
+	const appUID = Cookies.get('appUID') || getDefaultAppUid();
+	const accessKey = getAccessKeyByAppUid(appUID);
+
 	// Kiểm tra nếu không có auth token thì return null
 	if (!authToken || authToken === 'undefined') {
 		return null;
@@ -18,6 +37,8 @@ const getAuthHeader = () => {
 	if (identityUID) {
 		headers['identity-uid'] = identityUID;
 	}
+	headers['x-fh-app-uid'] = appUID;
+	headers['x-fh-access-key'] = accessKey;
 
 	return headers;
 };
@@ -61,8 +82,6 @@ export const checkAuth = async () => {
 		const headers = {
 			'Content-Type': 'application/json',
 			...authHeaders,
-			'x-fh-app-uid': 'LIMS-IRDOP-PRD',
-			'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
 		};
 		await axios.post('https://pink.irdop.org/ab4dg2/auth/me', {}, { headers });
 		return { status: 200, data: { message: 'Session valid' } };
@@ -77,6 +96,19 @@ export const checkAuth = async () => {
 	}
 };
 
+// Hàm để check auth khi load trang
+export const initialAuthCheck = async () => {
+	const authHeaders = getAuthHeader();
+
+	// Nếu không có auth headers thì redirect login
+	if (!authHeaders) {
+		redirectToLogin('Vui lòng đăng nhập để tiếp tục...');
+		return { status: 401, data: { message: 'No auth token' } };
+	}
+
+	return await checkAuth(); // Kiểm tra xác thực
+};
+
 export const apiGet = async (url, customHeaders = {}) => {
 	try {
 		const authHeaders = getAuthHeader();
@@ -87,13 +119,9 @@ export const apiGet = async (url, customHeaders = {}) => {
 			return { status: 401, data: { message: 'No auth token' } };
 		}
 
-		await checkAuth(); // Kiểm tra xác thực trước khi gửi yêu cầu
-
 		const headers = {
 			'Content-Type': 'application/json',
 			...authHeaders,
-			'x-fh-app-uid': 'LIMS-IRDOP-PRD',
-			'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
 			...customHeaders,
 		};
 		const response = await axios.get(url, { headers });
@@ -126,13 +154,9 @@ export const apiPost = async (url, body, customHeaders = {}) => {
 			return { status: 401, data: { message: 'No auth token' } };
 		}
 
-		await checkAuth(); // Kiểm tra xác thực trước khi gửi yêu cầu
-
 		const headers = {
 			'Content-Type': 'application/json',
 			...authHeaders,
-			'x-fh-app-uid': 'LIMS-IRDOP-PRD',
-			'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
 			...customHeaders,
 		};
 		const response = await axios.post(url, body, { headers });
@@ -167,8 +191,6 @@ export const apiPut = async (url, body, customHeaders = {}) => {
 		const headers = {
 			'Content-Type': 'application/json',
 			...authHeaders,
-			'x-fh-app-uid': 'LIMS-IRDOP-PRD',
-			'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
 			...customHeaders,
 		};
 		const response = await axios.put(url, body, { headers });
@@ -203,8 +225,6 @@ export const apiGetBlob = async (url, customHeaders = {}) => {
 
 		const headers = {
 			...authHeaders,
-			'x-fh-app-uid': 'LIMS-IRDOP-PRD',
-			'x-fh-access-key': 'lELlAk8o5fmUgvJRYhvf',
 			...customHeaders,
 		};
 
@@ -229,4 +249,27 @@ export const apiGetBlob = async (url, customHeaders = {}) => {
 		}
 		return { status: 500, data: { message: error.message || 'Lỗi kết nối đến máy chủ' } };
 	}
+};
+
+// Utility functions để quản lý app uid
+export const setAppUid = (appUid) => {
+	Cookies.set('appUID', appUid, { expires: 7 }); // Lưu 7 ngày
+};
+
+export const getCurrentAppUid = () => {
+	return Cookies.get('appUID') || getDefaultAppUid();
+};
+
+export const switchToProduction = () => {
+	setAppUid(import.meta.env.VITE_APP_UID_PRD);
+};
+
+export const switchToDevelopment = () => {
+	setAppUid(import.meta.env.VITE_APP_UID_DEV);
+};
+
+// Export constants để sử dụng ở các component khác
+export const APP_UIDS = {
+	PRODUCTION: import.meta.env.VITE_APP_UID_PRD,
+	DEVELOPMENT: import.meta.env.VITE_APP_UID_DEV,
 };

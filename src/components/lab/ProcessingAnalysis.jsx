@@ -4,8 +4,8 @@ import { GlobalContext } from '../../contexts/GlobalContext';
 import { apiGet, apiPost } from '../../contexts/helperFunctionCallAPI';
 import { useLocation } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
-import { FaTimes } from 'react-icons/fa';
 import TinyMceInput from '../Input';
+import LabBulkUpdate from './LabBulkUpdate';
 
 // Custom CSS for thin scrollbars and enhanced editing experience
 const customScrollbarStyle = `
@@ -183,12 +183,27 @@ table td {
 	50% {
 		opacity: 0.5;
 	}
-}
 `;
 
-const ProcessingAnalysis = () => {
+const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const { technicians } = useContext(GlobalContext);
 	const location = useLocation();
+
+	/*
+	FILTERING AND URL MANAGEMENT LOGIC:
+	
+	1. Initial Load:
+	   - Check for filter-related query params on first load
+	   - If params exist: parse them into state and load data accordingly
+	   - If no params: use default values without writing defaults to URL
+	   - Load both sidebar and table data in single API call
+	
+	2. After Initial Load:
+	   - Any filter changes (sidebar selections, table filters, sorting) update URL params
+	   - URL params trigger new API calls for both sidebar and table data
+	   - Search box input does NOT update URL (uses debounced API calls only)
+	   - Default values (page=1, itemsPerPage=100, etc.) are not written to URL
+	*/
 
 	// State management
 	const [loading, setLoading] = useState(true);
@@ -224,8 +239,6 @@ const ProcessingAnalysis = () => {
 	// Editing state - Updated to match ProcessingSampleV3 approach
 	const [editingCell, setEditingCell] = useState(null);
 	const [editValue, setEditValue] = useState('');
-	const [originalValue, setOriginalValue] = useState('');
-	const [isSaving, setIsSaving] = useState(false);
 
 	// New state for improved editing like ProcessingSampleV3
 	const [editableCell, setEditableCell] = useState({ analysisId: null, column: null });
@@ -236,8 +249,6 @@ const ProcessingAnalysis = () => {
 
 	// Bulk edit states
 	const [showBulkEditBox, setShowBulkEditBox] = useState(false);
-	const [bulkEditCell, setBulkEditCell] = useState({ column: null, receiptId: null });
-	const [bulkEditValues, setBulkEditValues] = useState({});
 
 	// Filter states
 	const [filters, setFilters] = useState({
@@ -277,6 +288,9 @@ const ProcessingAnalysis = () => {
 	// Scroll position state for maintaining position during updates
 	const [scrollPosition, setScrollPosition] = useState(0);
 	const scrollContainerRef = useRef(null);
+
+	// State to track if this is the initial load
+	const [isInitialLoad, setIsInitialLoad] = useState(true);
 
 	// Handle drag selection
 	const handleMouseDown = (e, index, rowId, item) => {
@@ -352,108 +366,170 @@ const ProcessingAnalysis = () => {
 		}
 	}, [isDragging]);
 
-	// Parse URL parameters and sync with state
-	useEffect(() => {
+	// Load initial data function
+	const loadInitialData = async () => {
 		const searchParams = new URLSearchParams(location.search);
-		const newFilters = { ...filters };
 
-		// Parse query parameters
-		searchParams.forEach((value, key) => {
-			if (key === 'itemsPerPage') {
-				setItemsPerPage(parseInt(value) || 100);
-			} else if (key === 'page') {
-				setCurrentPage(parseInt(value) || 1);
-			} else if (key === 'parameters') {
-				try {
-					const parsedParameters = JSON.parse(value);
-					newFilters.parameters = Array.isArray(parsedParameters) ? parsedParameters : [];
-				} catch (e) {
-					newFilters.parameters = [];
-				}
-			} else if (key === 'protocols') {
-				try {
-					const parsedProtocols = JSON.parse(value);
-					newFilters.protocols = Array.isArray(parsedProtocols) ? parsedProtocols : [];
-				} catch (e) {
-					newFilters.protocols = [];
-				}
-			} else if (key === 'columnSort') {
-				newFilters.columnSort = value;
-			} else if (key === 'sortBy') {
-				newFilters.sortBy = value;
-			} else if (key !== 'mode') {
-				// Handle header filters
-				try {
-					const parsedValue = JSON.parse(value);
-					newFilters.headerFilters = newFilters.headerFilters || {};
-					newFilters.headerFilters[key] = parsedValue;
-				} catch (e) {
-					newFilters.headerFilters = newFilters.headerFilters || {};
-					newFilters.headerFilters[key] = value;
-				}
-			}
-		});
+		// Check if there are any filter-related query params
+		const hasFilterParams = Array.from(searchParams.keys()).some((key) =>
+			[
+				'parameters',
+				'protocols',
+				'columnSort',
+				'sortBy',
+				'sample_uid',
+				'parameter_name',
+				'protocol_code',
+				'matrix',
+				'deadline',
+				'doc_id',
+				'result_value',
+			].includes(key),
+		);
 
-		setFilters(newFilters);
-	}, [location.search]);
+		let newFilters = { ...filters };
+		let newCurrentPage = currentPage;
+		let newItemsPerPage = itemsPerPage;
+		let newSortConfig = { ...sortConfig };
 
-	// Update URL parameters when filters change
-	const updateUrlParams = (newFilters, newPage = currentPage, newItemsPerPage = itemsPerPage) => {
-		const searchParams = new URLSearchParams();
-
-		// Add pagination params
-		searchParams.set('itemsPerPage', newItemsPerPage.toString());
-		searchParams.set('page', newPage.toString());
-
-		// Add filter params
-		if (newFilters.parameters && newFilters.parameters.length > 0) {
-			searchParams.set('parameters', JSON.stringify(newFilters.parameters));
-		}
-
-		if (newFilters.protocols && newFilters.protocols.length > 0) {
-			searchParams.set('protocols', JSON.stringify(newFilters.protocols));
-		}
-
-		if (newFilters.columnSort) {
-			searchParams.set('columnSort', newFilters.columnSort);
-		}
-
-		if (newFilters.sortBy) {
-			searchParams.set('sortBy', newFilters.sortBy);
-		}
-
-		// Add header filters
-		if (newFilters.headerFilters) {
-			Object.keys(newFilters.headerFilters).forEach((key) => {
-				const value = newFilters.headerFilters[key];
-				if (value !== undefined && value !== null) {
-					if (typeof value === 'object' && Array.isArray(value)) {
-						if (value.length > 0) {
-							searchParams.set(key, JSON.stringify(value));
-						}
-					} else if (typeof value === 'string' && value.trim() !== '') {
-						searchParams.set(key, value);
-					} else if (typeof value !== 'string') {
-						searchParams.set(key, JSON.stringify(value));
+		if (hasFilterParams) {
+			// Parse query parameters if they exist
+			searchParams.forEach((value, key) => {
+				if (key === 'itemsPerPage') {
+					newItemsPerPage = parseInt(value) || 100;
+				} else if (key === 'page') {
+					newCurrentPage = parseInt(value) || 1;
+				} else if (key === 'parameters') {
+					try {
+						const parsedParameters = JSON.parse(value);
+						newFilters.parameters = Array.isArray(parsedParameters) ? parsedParameters : [];
+					} catch (e) {
+						newFilters.parameters = [];
+					}
+				} else if (key === 'protocols') {
+					try {
+						const parsedProtocols = JSON.parse(value);
+						newFilters.protocols = Array.isArray(parsedProtocols) ? parsedProtocols : [];
+					} catch (e) {
+						newFilters.protocols = [];
+					}
+				} else if (key === 'columnSort') {
+					newFilters.columnSort = value;
+					newSortConfig.column = value;
+				} else if (key === 'sortBy') {
+					newFilters.sortBy = value;
+					newSortConfig.direction = value;
+				} else if (key !== 'mode') {
+					// Handle header filters
+					try {
+						const parsedValue = JSON.parse(value);
+						newFilters.headerFilters = newFilters.headerFilters || {};
+						newFilters.headerFilters[key] = parsedValue;
+					} catch (e) {
+						newFilters.headerFilters = newFilters.headerFilters || {};
+						newFilters.headerFilters[key] = value;
 					}
 				}
 			});
 		}
 
-		// Update URL without triggering navigation
+		// Load data FIRST before updating states to avoid triggering other useEffects
+		await Promise.all([
+			fetchParameters('', newFilters),
+			fetchAnalysisData(false, newFilters, newCurrentPage, newItemsPerPage),
+		]);
+
+		// Update states AFTER data is loaded
+		if (newCurrentPage !== currentPage) setCurrentPage(newCurrentPage);
+		if (newItemsPerPage !== itemsPerPage) setItemsPerPage(newItemsPerPage);
+		if (JSON.stringify(newSortConfig) !== JSON.stringify(sortConfig)) setSortConfig(newSortConfig);
+		if (JSON.stringify(newFilters) !== JSON.stringify(filters)) setFilters(newFilters);
+	};
+
+	// Update URL parameters when filters change
+	const updateUrlParams = (newFilters, newPage = currentPage, newItemsPerPage = itemsPerPage) => {
+		// Start with existing URL parameters; only modify controlled keys
+		const searchParams = new URLSearchParams(location.search);
+
+		// Only set pagination params if they differ from defaults
+		if (newItemsPerPage !== 100) {
+			searchParams.set('itemsPerPage', newItemsPerPage.toString());
+		} else {
+			searchParams.delete('itemsPerPage');
+		}
+
+		if (newPage !== 1) {
+			searchParams.set('page', newPage.toString());
+		} else {
+			searchParams.delete('page');
+		}
+
+		// Controlled filter params (arrays serialized as JSON)
+		if (newFilters.parameters && newFilters.parameters.length > 0) {
+			searchParams.set('parameters', JSON.stringify(newFilters.parameters));
+		} else {
+			searchParams.delete('parameters');
+		}
+
+		if (newFilters.protocols && newFilters.protocols.length > 0) {
+			searchParams.set('protocols', JSON.stringify(newFilters.protocols));
+		} else {
+			searchParams.delete('protocols');
+		}
+
+		// Only set sort params if they differ from defaults
+		if (newFilters.columnSort && newFilters.columnSort !== 'sample_uid') {
+			searchParams.set('columnSort', newFilters.columnSort);
+		} else {
+			searchParams.delete('columnSort');
+		}
+
+		if (newFilters.sortBy && newFilters.sortBy !== 'ASC') {
+			searchParams.set('sortBy', newFilters.sortBy);
+		} else {
+			searchParams.delete('sortBy');
+		}
+
+		// Header filter keys we manage (include existing + known set)
+		const managedHeaderKeys = new Set([
+			'sample_uid',
+			'parameter_name',
+			'protocol_code',
+			'matrix',
+			'deadline',
+			'doc_id',
+			'result_value',
+			...Object.keys(newFilters.headerFilters || {}),
+		]);
+
+		managedHeaderKeys.forEach((key) => {
+			const value = newFilters.headerFilters ? newFilters.headerFilters[key] : undefined;
+			if (value === undefined || value === null || (Array.isArray(value) && value.length === 0) || value === '') {
+				// Remove only if we control it
+				searchParams.delete(key);
+			} else {
+				if (Array.isArray(value)) {
+					searchParams.set(key, JSON.stringify(value));
+				} else if (typeof value === 'object') {
+					searchParams.set(key, JSON.stringify(value));
+				} else {
+					searchParams.set(key, value);
+				}
+			}
+		});
+
+		// Push updated state without clearing unrelated params
 		const newUrl = `${window.location.pathname}?${searchParams.toString()}`;
 		window.history.replaceState({}, '', newUrl);
 	};
 
-	const getCookie = (name) => {
-		const value = `; ${document.cookie}`;
-		const parts = value.split(`; ${name}=`);
-		if (parts.length === 2) return parts.pop().split(';').shift();
-		return '';
-	};
-
 	// Fetch analysis data
-	const fetchAnalysisData = async (preserveScroll = false) => {
+	const fetchAnalysisData = async (
+		preserveScroll = false,
+		customFilters = null,
+		customCurrentPage = null,
+		customItemsPerPage = null,
+	) => {
 		// Save current scroll position if preserving scroll
 		if (preserveScroll && scrollContainerRef.current) {
 			setScrollPosition(scrollContainerRef.current.scrollTop);
@@ -461,33 +537,38 @@ const ProcessingAnalysis = () => {
 
 		setLoading(true);
 		try {
+			// Use custom parameters if provided, otherwise use current state
+			const useFilters = customFilters || filters;
+			const useCurrentPage = customCurrentPage || currentPage;
+			const useItemsPerPage = customItemsPerPage || itemsPerPage;
+
 			// Prepare columns for API
-			const apiColumns = [...filters.columns];
+			const apiColumns = [...useFilters.columns];
 			if (!apiColumns.includes('id')) {
 				apiColumns.push('id');
 			}
 
 			// Prepare request body
 			const requestBody = {
-				itemsPerPage: itemsPerPage,
-				page: currentPage,
+				itemsPerPage: useItemsPerPage,
+				page: useCurrentPage,
 				columns: apiColumns,
-				columnSort: filters.columnSort,
-				sortBy: filters.sortBy,
+				columnSort: useFilters.columnSort,
+				sortBy: useFilters.sortBy,
 			};
 
 			// Add filters
-			if (filters.parameters.length > 0) {
-				requestBody.parameters = [...filters.parameters];
+			if (useFilters.parameters.length > 0) {
+				requestBody.parameters = [...useFilters.parameters];
 			}
 
-			if (filters.protocols.length > 0) {
-				requestBody.protocols = [...filters.protocols];
+			if (useFilters.protocols.length > 0) {
+				requestBody.protocols = [...useFilters.protocols];
 			}
 
 			// Add header filters
-			Object.keys(filters.headerFilters).forEach((column) => {
-				const filterValue = filters.headerFilters[column];
+			Object.keys(useFilters.headerFilters).forEach((column) => {
+				const filterValue = useFilters.headerFilters[column];
 
 				if (column === 'sample_uid' && filterValue) {
 					if (!requestBody.sampleUIDs) requestBody.sampleUIDs = [];
@@ -579,13 +660,14 @@ const ProcessingAnalysis = () => {
 	};
 
 	// Fetch parameters list
-	const fetchParameters = async (searchTerm = '') => {
+	const fetchParameters = async (searchTerm = '', customFilters = null) => {
 		try {
+			const useFilters = customFilters || filters;
 			const requestBody = { searchTerm: searchTerm };
 
 			// Add deadline filter if active
-			if (filters.headerFilters.deadline) {
-				requestBody.deadline = filters.headerFilters.deadline;
+			if (useFilters.headerFilters.deadline) {
+				requestBody.deadline = useFilters.headerFilters.deadline;
 			}
 
 			const response = await apiPost(PARAMETER_API_ENDPOINT, requestBody);
@@ -667,10 +749,8 @@ const ProcessingAnalysis = () => {
 		}
 	};
 
-	// Initial data load
+	// Initial data load (inject custom scrollbar styles)
 	useEffect(() => {
-		fetchParameters();
-
 		// Inject custom scrollbar styles
 		const styleSheet = document.createElement('style');
 		styleSheet.textContent = customScrollbarStyle;
@@ -684,32 +764,49 @@ const ProcessingAnalysis = () => {
 		};
 	}, []);
 
-	// Refetch parameters when deadline filter changes
-	useEffect(() => {
-		fetchParameters();
-	}, [filters.headerFilters.deadline]);
-
 	// API Constants
 	const API_ENDPOINT = 'https://black.irdop.org/v1/analysis/processing/list';
 	const PARAMETER_API_ENDPOINT = 'https://black.irdop.org/v1/lab/get/analysis/by_parameter';
 
+	// Parse URL parameters and load initial data
 	useEffect(() => {
-		fetchAnalysisData();
-	}, [currentPage, itemsPerPage, filters.parameters, filters.protocols, filters.headerFilters, sortConfig]);
+		if (isInitialLoad) {
+			loadInitialData();
+			setIsInitialLoad(false);
+		}
+	}, []);
 
-	// Update URL when filters change
+	// Handle filter changes after initial load (update URL and fetch data)
 	useEffect(() => {
-		updateUrlParams(filters, currentPage, itemsPerPage);
-	}, [filters, currentPage, itemsPerPage]);
+		if (!isInitialLoad) {
+			// Update URL parameters
+			updateUrlParams(filters, currentPage, itemsPerPage);
 
-	// Search parameters with debounce
+			// Fetch both sidebar and table data
+			fetchParameters();
+			fetchAnalysisData();
+		}
+	}, [
+		currentPage,
+		itemsPerPage,
+		filters.parameters,
+		filters.protocols,
+		filters.headerFilters,
+		sortConfig,
+		// isInitialLoad,
+	]);
+
+	// Search parameters with debounce (only for search box, doesn't update URL)
 	useEffect(() => {
-		const timeoutId = setTimeout(() => {
-			fetchParameters(parameterSearchTerm);
-		}, 300);
+		// Don't fetch during initial load or when search term is empty
+		if (!isInitialLoad && parameterSearchTerm) {
+			const timeoutId = setTimeout(() => {
+				fetchParameters(parameterSearchTerm);
+			}, 300);
 
-		return () => clearTimeout(timeoutId);
-	}, [parameterSearchTerm]);
+			return () => clearTimeout(timeoutId);
+		}
+	}, [parameterSearchTerm, isInitialLoad]);
 
 	// Search filter values with debounce
 	useEffect(() => {
@@ -733,22 +830,66 @@ const ProcessingAnalysis = () => {
 
 	// Auto-refresh data every 60 seconds
 	useEffect(() => {
-		const autoRefreshInterval = setInterval(() => {
-			// Prevent auto-refresh when editing with any system or when filtering
-			if (
-				!updating &&
-				!editingCell &&
-				!editableCell.analysisId &&
-				!editingProtocolSource &&
-				!isFilterCreationMode &&
-				!activeFilterColumn
-			) {
-				fetchAnalysisData(true); // Preserve scroll position during auto-refresh
-			}
-		}, 60000); // 60 seconds
+		if (!isInitialLoad) {
+			const autoRefreshInterval = setInterval(() => {
+				// Only prevent auto-refresh when actively editing a cell
+				if (!updating && !editingCell && !editableCell.analysisId && !editingProtocolSource) {
+					// Parse current URL parameters to get latest filters
+					const searchParams = new URLSearchParams(location.search);
+					let currentFilters = { ...filters };
+					let currentPage = 1;
+					let currentItemsPerPage = 100;
 
-		return () => clearInterval(autoRefreshInterval);
-	}, [updating, editingCell, editableCell.analysisId, editingProtocolSource, isFilterCreationMode, activeFilterColumn]);
+					// Parse URL parameters to get current state
+					searchParams.forEach((value, key) => {
+						if (key === 'itemsPerPage') {
+							currentItemsPerPage = parseInt(value) || 100;
+						} else if (key === 'page') {
+							currentPage = parseInt(value) || 1;
+						} else if (key === 'parameters') {
+							try {
+								currentFilters.parameters = JSON.parse(value);
+							} catch (e) {
+								console.warn('Failed to parse parameters from URL:', e);
+							}
+						} else if (key === 'protocols') {
+							try {
+								currentFilters.protocols = JSON.parse(value);
+							} catch (e) {
+								console.warn('Failed to parse protocols from URL:', e);
+							}
+						} else if (key === 'columnSort') {
+							currentFilters.columnSort = value;
+						} else if (key === 'sortBy') {
+							currentFilters.sortBy = value;
+						} else if (
+							[
+								'sample_uid',
+								'parameter_name',
+								'protocol_code',
+								'matrix',
+								'deadline',
+								'doc_id',
+								'result_value',
+							].includes(key)
+						) {
+							if (!currentFilters.headerFilters) currentFilters.headerFilters = {};
+							try {
+								currentFilters.headerFilters[key] = JSON.parse(value);
+							} catch (e) {
+								currentFilters.headerFilters[key] = value;
+							}
+						}
+					});
+
+					// Fetch data with current URL state
+					fetchAnalysisData(true, currentFilters, currentPage, currentItemsPerPage);
+				}
+			}, 60000); // 60 seconds
+
+			return () => clearInterval(autoRefreshInterval);
+		}
+	}, [updating, editingCell, editableCell.analysisId, editingProtocolSource, isInitialLoad, location.search]);
 
 	// Keyboard shortcuts
 	useEffect(() => {
@@ -831,8 +972,7 @@ const ProcessingAnalysis = () => {
 
 			if (type === 'analysis') {
 				const normalizedProtocolCode = protocolCode && protocolCode.trim() ? protocolCode : 'null';
-				newFilters.parameters = [itemName];
-				newFilters.protocols = [normalizedProtocolCode];
+				// Only use headerFilters for analysis selection to avoid duplicates
 				newFilters.headerFilters.parameter_name = [itemName];
 				newFilters.headerFilters.protocol_code = [normalizedProtocolCode];
 				// Clear other filters
@@ -914,8 +1054,45 @@ const ProcessingAnalysis = () => {
 		clearAllSelections();
 	};
 
+	// Helper function to normalize content for comparison (especially for TinyMCE)
+	const normalizeContent = (content) => {
+		if (!content || typeof content !== 'string') return '';
+
+		// Remove leading <p> and trailing </p> tags for TinyMCE content
+		let normalized = content.trim();
+		if (normalized.startsWith('<p>') && normalized.endsWith('</p>')) {
+			normalized = normalized.slice(3, -4);
+		}
+
+		// Remove other common HTML artifacts that TinyMCE might add
+		normalized = normalized.replace(/&nbsp;/g, ' ').trim();
+
+		return normalized;
+	};
+
+	// Helper function to check if content has actually changed
+	const hasContentChanged = (newContent, currentData, analysisId, column) => {
+		const currentItem = currentData.find((item) => item.id === analysisId);
+		if (!currentItem) return true; // If item not found, assume it changed
+
+		const currentValue = currentItem[column] || '';
+		const normalizedNew = normalizeContent(newContent);
+		const normalizedCurrent = normalizeContent(currentValue);
+
+		return normalizedNew !== normalizedCurrent;
+	};
+
 	// Update analysis field
 	const updateAnalysisField = async (rowId, column, value) => {
+		// Check if content has actually changed
+		if (!hasContentChanged(value, data, parseInt(rowId), column)) {
+			console.log(`No changes detected for ${column}, skipping API call`);
+			// Still clear editing state
+			setEditingCell(null);
+			setEditValue('');
+			return;
+		}
+
 		setUpdating(true);
 		try {
 			const body = {
@@ -950,20 +1127,24 @@ const ProcessingAnalysis = () => {
 	const handleCellEdit = (rowId, column, value) => {
 		setEditingCell({ rowId, column });
 		setEditValue(value || '');
-		setOriginalValue(value || '');
-	};
-
-	// Handle technician change
-	const handleTechnicianChange = async (rowId, technicianUid) => {
-		await updateAnalysisField(rowId, 'technician_uid', technicianUid);
 	};
 
 	// Save cell edit
 	const handleSaveEdit = async () => {
 		if (!editingCell) return;
 
+		const { rowId, column } = editingCell;
+
+		// Check if content has actually changed
+		if (!hasContentChanged(editValue, data, parseInt(rowId), column)) {
+			console.log(`No changes detected for ${column}, skipping API call`);
+			// Still clear editing state
+			setEditingCell(null);
+			setEditValue('');
+			return;
+		}
+
 		try {
-			const { rowId, column } = editingCell;
 			await updateAnalysisField(rowId, column, editValue);
 		} catch (error) {
 			console.error('Error updating:', error);
@@ -977,27 +1158,37 @@ const ProcessingAnalysis = () => {
 	const handleCancelEdit = () => {
 		setEditingCell(null);
 		setEditValue('');
-		setOriginalValue('');
-		setIsSaving(false);
 	};
 
 	// New improved editing functions inspired by ProcessingSampleV3
 	const handleCellClickV3 = (analysisId, column, currentValue) => {
-		setEditableCell({ analysisId, column });
-		setInputValue(currentValue || '');
+		openEditorWithAutoSave(analysisId, column, currentValue);
+	};
 
-		// Focus management for better UX
-		setTimeout(() => {
-			const editor = document.querySelector(`[data-edit-id="${analysisId}-${column}"] .tox-edit-area__iframe`);
-			if (editor) {
-				editor.focus();
-			}
-		}, 100);
+	const handleKeyDownV3 = (e) => {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			setEditableCell({ analysisId: null, column: null });
+		} else if (e.key === 'Escape') {
+			setEditableCell({ analysisId: null, column: null });
+		}
 	};
 
 	const handleSaveContentV3 = async (content, column, analysisId) => {
-		if (!editableCell.analysisId || editableCell.column !== column) {
-			return; // Prevent duplicate API calls
+		// Bỏ guard để vẫn lưu được ô cũ khi đã click sang ô mới
+		// if (!editableCell.analysisId || editableCell.column !== column) { return; }
+
+		// Check if content has actually changed
+		if (!hasContentChanged(content, data, analysisId, column)) {
+			console.log(`No changes detected for ${column}, skipping API call`);
+			// Chỉ reset nếu ô hiện tại vẫn là ô này
+			setEditableCell((prev) => {
+				if (prev.analysisId === analysisId && prev.column === column) {
+					return { analysisId: null, column: null };
+				}
+				return prev;
+			});
+			return;
 		}
 
 		try {
@@ -1035,17 +1226,15 @@ const ProcessingAnalysis = () => {
 				},
 			};
 
-			// Add submit_result_by for result_value updates like ProcessingSampleV3
+			// Add submit_result_by for result_value updates
 			if (column === 'result_value' && technicians.length > 0) {
-				// Find current user or use first technician as fallback
-				const currentUser = technicians[0]; // You might need to get actual current user
+				const currentUser = technicians[0];
 				body.analysis.submit_result_by = currentUser?.identity_name || 'System';
 			}
 
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', body);
 
 			if (response?.status === 200) {
-				// Show success with better feedback
 				toast.success(`Cập nhật ${column === 'result_value' ? 'kết quả' : 'đơn vị'} thành công`, {
 					position: 'top-right',
 					autoClose: 500,
@@ -1055,24 +1244,19 @@ const ProcessingAnalysis = () => {
 					draggable: false,
 				});
 
-				// Update local data immediately for better UX
 				setData((prevData) =>
 					prevData.map((item) => {
 						if (item.id === analysisId) {
 							const updatedItem = { ...item, [column]: content };
-
-							// Add timestamp for result_value updates
 							if (column === 'result_value') {
 								updatedItem.last_updated = new Date().toISOString();
 							}
-
 							return updatedItem;
 						}
 						return item;
 					}),
 				);
 
-				// Trigger a background refresh to ensure data consistency
 				setTimeout(() => {
 					fetchAnalysisData(true);
 				}, 1000);
@@ -1099,21 +1283,51 @@ const ProcessingAnalysis = () => {
 			});
 		} finally {
 			setUpdating(false);
-			setEditableCell({ analysisId: null, column: null }); // Reset editable cell
+			// Chỉ reset nếu vẫn đang ở ô đó
+			setEditableCell((prev) => {
+				if (prev.analysisId === analysisId && prev.column === column) {
+					return { analysisId: null, column: null };
+				}
+				return prev;
+			});
 		}
 	};
 
-	const handleKeyDownV3 = (e) => {
-		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault();
-			setEditableCell({ analysisId: null, column: null });
-		} else if (e.key === 'Escape') {
-			setEditableCell({ analysisId: null, column: null });
+	// Hàm mở editor với auto-save ô cũ
+	const openEditorWithAutoSave = async (analysisId, column, currentValue) => {
+		if (editableCell.analysisId && (editableCell.analysisId !== analysisId || editableCell.column !== column)) {
+			try {
+				// Lấy content hiện tại từ TinyMCE active editor (nếu có)
+				const activeEditor = window.tinymce?.activeEditor;
+				if (activeEditor) {
+					const prevContent = activeEditor.getContent();
+					await handleSaveContentV3(prevContent, editableCell.column, editableCell.analysisId);
+				}
+			} catch (e) {
+				console.warn('Auto-save previous cell failed or not needed:', e);
+			}
 		}
+
+		// Mở ô mới
+		setEditableCell({ analysisId, column });
+		setInputValue(currentValue || '');
+
+		setTimeout(() => {
+			const editor = document.querySelector(`[data-edit-id="${analysisId}-${column}"] .tox-edit-area__iframe`);
+			if (editor) editor.focus();
+		}, 100);
 	};
 
 	// Handle select dropdown changes for protocol_source
 	const handleProtocolSourceChange = async (value, analysisId) => {
+		// Check if value has actually changed
+		if (!hasContentChanged(value, data, analysisId, 'protocol_source')) {
+			console.log(`No changes detected for protocol_source, skipping API call`);
+			// Still close editing state without showing notification
+			setEditingProtocolSource(null);
+			return;
+		}
+
 		try {
 			setUpdating(true);
 
@@ -1187,91 +1401,16 @@ const ProcessingAnalysis = () => {
 		setEditingProtocolSource(null);
 	};
 
-	// Bulk edit handlers
-	const handleBulkEdit = (field, value) => {
-		const promises = Array.from(selectedRows).map((rowId) => {
-			return handleSaveContentV3(value, field, parseInt(rowId));
-		});
-
-		Promise.all(promises).then(() => {
-			setShowBulkEditBox(false);
-			clearAllSelections();
-		});
-	};
-
-	// Handle bulk edit value changes
-	const handleBulkEditChange = (field, value) => {
-		setBulkEditValues((prev) => ({
-			...prev,
-			[field]: value,
-		}));
-	};
-
-	// Handle bulk edit cell click
-	const handleBulkEditCellClick = (column, receiptId) => {
-		setBulkEditCell({ column, receiptId });
-	};
-
-	// Handle bulk update submission
-	const handleBulkUpdate = async () => {
-		const updates = [];
-
-		// Prepare updates for all selected analyses
-		Array.from(selectedRows).forEach((rowId) => {
-			const updateData = { id: parseInt(rowId) };
-
-			// Add fields that have values in bulkEditValues
-			Object.keys(bulkEditValues).forEach((field) => {
-				if (bulkEditValues[field] !== '' && bulkEditValues[field] !== null && bulkEditValues[field] !== undefined) {
-					updateData[field] = bulkEditValues[field];
-				}
-			});
-
-			if (Object.keys(updateData).length > 1) {
-				// More than just id
-				updates.push(updateData);
-			}
-		});
-
-		if (updates.length === 0) {
-			toast.warning('Không có thay đổi nào để cập nhật');
-			return;
-		}
-
-		try {
-			setUpdating(true);
-			// Update each analysis
-			for (const update of updates) {
-				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: update,
-				});
-
-				if (response?.status !== 200) {
-					throw new Error(`Failed to update analysis ${update.id}`);
-				}
-			}
-
-			toast.success(`Đã cập nhật ${updates.length} chỉ tiêu thành công`);
-
-			// Clear selections and close modal
-			clearAllSelections();
-			setShowBulkEditBox(false);
-			setBulkEditValues({});
-
-			// Refresh data
-			setTimeout(() => {
-				fetchAnalysisData(true);
-			}, 1000);
-		} catch (error) {
-			console.error('Error in bulk update:', error);
-			toast.error('Lỗi khi cập nhật hàng loạt');
-		} finally {
-			setUpdating(false);
-		}
-	};
-
 	const handleBulkEditClick = () => {
 		setShowBulkEditBox(true);
+	};
+
+	// Handle bulk update completion
+	const handleBulkUpdateComplete = () => {
+		clearAllSelections();
+		setTimeout(() => {
+			fetchAnalysisData(true);
+		}, 1000);
 	};
 
 	// Show notifications
@@ -1308,6 +1447,12 @@ const ProcessingAnalysis = () => {
 		if (!technician_uid || !technicians) return '--';
 		const technician = technicians.find((tech) => tech.identity_uid === technician_uid);
 		return technician ? `${technician.identity_name} (${technician.alias})` : '--';
+	};
+
+	// Handle cell click
+	const handleCellClick = (rowId, column, value) => {
+		setEditingCell({ rowId, column });
+		setEditValue(value || '');
 	};
 
 	// Toggle row selection
@@ -1834,7 +1979,9 @@ const ProcessingAnalysis = () => {
 									</svg>
 								</button>
 							)}
-							<span className="hover:underline">PHÒNG THỬ NGHIỆM</span>
+							<span className="hover:underline" onClick={() => onNavigateToLab && onNavigateToLab('analysis')}>
+								PHÒNG THỬ NGHIỆM
+							</span>
 							<span>/</span>
 							<span className="text-blue-700 font-bold hover:underline">DANH SÁCH PHÉP THỬ</span>
 						</div>
@@ -2073,7 +2220,7 @@ const ProcessingAnalysis = () => {
 																			onChange={(e) => setEditValue(e.target.value)}
 																			className="w-full h-full min-h-[20px] p-1 border border-blue-500 rounded text-xs bg-white text-black text-left resize-none"
 																			autoFocus
-																			placeholder="Mã PTT"
+																			placeholder="Mã Phương pháp thử"
 																			onClick={(e) => e.stopPropagation()}
 																			onKeyDown={(e) => {
 																				if (e.key === 'Enter' && !e.shiftKey) {
@@ -2500,222 +2647,19 @@ const ProcessingAnalysis = () => {
 				style={{ zIndex: 9999 }}
 			/>
 
-			{/* Enhanced Bulk Edit Box */}
-			{showBulkEditBox && (
-				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[100]">
-					<div className="bg-white p-6 rounded-lg shadow-lg min-w-[600px] w-5/6 max-h-[90vh] overflow-auto">
-						<div className="flex items-center justify-between mb-4">
-							<h2 className="text-xl font-bold">
-								Chỉnh sửa hàng loạt
-								<span className="text-sm font-normal text-gray-600 ml-2">({selectedRows.size} chỉ tiêu được chọn)</span>
-							</h2>
-							<button onClick={() => setShowBulkEditBox(false)} className="text-gray-500 hover:text-gray-700 text-xl">
-								<FaTimes />
-							</button>
-						</div>
-
-						{/* Input Fields Section */}
-						<div className="mb-6">
-							<h3 className="text-md font-semibold mb-3">Thông tin cập nhật</h3>
-							<div className="flex flex-wrap gap-4 items-end">
-								{/* Protocol Source */}
-								<div className="flex-shrink-0" style={{ minWidth: '120px', maxWidth: '140px' }}>
-									<label className="block text-sm font-medium text-gray-700 mb-1">Nguồn</label>
-									<select
-										className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
-										value={bulkEditValues.protocol_source || ''}
-										onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
-									>
-										<option value="">-- Không thay đổi --</option>
-										<option value="IRDOP">IRDOP</option>
-										<option value="IRDOP VS">IRDOP VS</option>
-										<option value="EX">EX</option>
-									</select>
-								</div>
-
-								{/* Protocol Code */}
-								<div className="flex-grow" style={{ minWidth: '150px' }}>
-									<label className="block text-sm font-medium text-gray-700 mb-1">Phương pháp</label>
-									<input
-										type="text"
-										className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
-										placeholder="Nhập mã phương pháp..."
-										value={bulkEditValues.protocol_code || ''}
-										onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
-									/>
-								</div>
-
-								{/* Result Value */}
-								<div className="flex-grow" style={{ minWidth: '150px' }}>
-									<label className="block text-sm font-medium text-gray-700 mb-1">Kết quả</label>
-									<div
-										className="w-full p-2 border border-gray-300 rounded-md min-h-[38px] cursor-text hover:border-blue-500 flex items-center bg-white"
-										onClick={() => handleBulkEditCellClick('result_value', 'global')}
-									>
-										{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === 'global' ? (
-											<TinyMceInput
-												value={bulkEditValues.result_value || ''}
-												onUpdate={(content) => handleBulkEditChange('result_value', content)}
-												onKey={(e) => {
-													if (e.key === 'Enter') {
-														setBulkEditCell({ column: null, receiptId: null });
-													}
-												}}
-											/>
-										) : (
-											<div
-												className="text-sm"
-												dangerouslySetInnerHTML={{
-													__html: bulkEditValues.result_value || 'Nhấp để nhập kết quả...',
-												}}
-											/>
-										)}
-									</div>
-								</div>
-
-								{/* Result Unit */}
-								<div className="flex-grow" style={{ minWidth: '120px' }}>
-									<label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị</label>
-									<div
-										className="w-full p-2 border border-gray-300 rounded-md min-h-[38px] cursor-text hover:border-blue-500 flex items-center bg-white"
-										onClick={() => handleBulkEditCellClick('result_unit', 'global')}
-									>
-										{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === 'global' ? (
-											<TinyMceInput
-												value={bulkEditValues.result_unit || ''}
-												onUpdate={(content) => handleBulkEditChange('result_unit', content)}
-												onKey={(e) => {
-													if (e.key === 'Enter') {
-														setBulkEditCell({ column: null, receiptId: null });
-													}
-												}}
-											/>
-										) : (
-											<div
-												className="text-sm"
-												dangerouslySetInnerHTML={{
-													__html: bulkEditValues.result_unit || 'Nhấp để nhập đơn vị...',
-												}}
-											/>
-										)}
-									</div>
-								</div>
-
-								{/* Technician */}
-								<div className="flex-grow" style={{ minWidth: '180px' }}>
-									<label className="block text-sm font-medium text-gray-700 mb-1">Người thực hiện</label>
-									<select
-										className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
-										value={bulkEditValues.technician_uid || ''}
-										onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
-									>
-										<option value="">-- Không thay đổi --</option>
-										{technicians?.map((tech) => (
-											<option key={tech.identity_uid} value={tech.identity_uid}>
-												{tech.identity_name} ({tech.alias})
-											</option>
-										))}
-									</select>
-								</div>
-							</div>
-						</div>
-
-						{/* Preview table showing all selected analyses */}
-						<div className="mb-6">
-							<h3 className="text-md font-semibold mb-3">Xem trước thay đổi ({selectedRows.size} mục)</h3>
-							<div className="max-h-[300px] overflow-auto border border-gray-300 rounded-md">
-								<table className="w-full border-collapse">
-									<thead className="bg-gray-100 sticky top-0">
-										<tr>
-											<th className="border border-gray-300 p-2 text-start text-sm font-medium">Mẫu thử</th>
-											<th className="border border-gray-300 p-2 text-start text-sm font-medium">Chỉ tiêu</th>
-											<th className="border border-gray-300 p-2 text-start text-sm font-medium">Nguồn</th>
-											<th className="border border-gray-300 p-2 text-start text-sm font-medium">Phương pháp</th>
-											<th className="border border-gray-300 p-2 text-start text-sm font-medium">Kết quả</th>
-											<th className="border border-gray-300 p-2 text-start text-sm font-medium">Đơn vị</th>
-											<th className="border border-gray-300 p-2 text-start text-sm font-medium">Hạn trả</th>
-											<th className="border border-gray-300 p-2 text-start text-sm font-medium">Người thực hiện</th>
-										</tr>
-									</thead>
-									<tbody>
-										{Array.from(selectedRows).map((rowId) => {
-											// Find the analysis in data
-											const foundAnalysis = data.find((item) => item.id === parseInt(rowId));
-
-											return foundAnalysis ? (
-												<tr key={rowId} className="hover:bg-gray-50">
-													<td className="border border-gray-300 p-2 text-sm text-start">{foundAnalysis.sample_uid}</td>
-													<td className="border border-gray-300 p-2 text-sm text-start">
-														{foundAnalysis.parameter_name}
-													</td>
-													<td className="border border-gray-300 p-2 text-sm text-start">
-														<span className={bulkEditValues.protocol_source ? 'font-semibold text-blue-600' : ''}>
-															{bulkEditValues.protocol_source || foundAnalysis.protocol_source || '--'}
-														</span>
-													</td>
-													<td className="border border-gray-300 p-2 text-sm text-start">
-														<span className={bulkEditValues.protocol_code ? 'font-semibold text-blue-600' : ''}>
-															{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
-														</span>
-													</td>
-													<td className="border border-gray-300 p-2 text-sm text-start">
-														<div
-															className={bulkEditValues.result_value ? 'font-semibold text-blue-600' : ''}
-															dangerouslySetInnerHTML={{
-																__html: bulkEditValues.result_value || foundAnalysis.result_value || '--',
-															}}
-														/>
-													</td>
-													<td className="border border-gray-300 p-2 text-sm text-start">
-														<div
-															className={bulkEditValues.result_unit ? 'font-semibold text-blue-600' : ''}
-															dangerouslySetInnerHTML={{
-																__html: bulkEditValues.result_unit || foundAnalysis.result_unit || '--',
-															}}
-														/>
-													</td>
-													<td className="border border-gray-300 p-2 text-sm text-start">
-														{formatDate(foundAnalysis.deadline)}
-													</td>
-													<td className="border border-gray-300 p-2 text-sm text-start">
-														<span className={bulkEditValues.technician_uid ? 'font-semibold text-blue-600' : ''}>
-															{bulkEditValues.technician_uid
-																? getTechnicianName(bulkEditValues.technician_uid)
-																: getTechnicianName(foundAnalysis.technician_uid)}
-														</span>
-													</td>
-												</tr>
-											) : null;
-										})}
-									</tbody>
-								</table>
-							</div>
-						</div>
-
-						{/* Action buttons */}
-						<div className="flex justify-end space-x-3">
-							<button
-								onClick={() => setShowBulkEditBox(false)}
-								className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-							>
-								Hủy
-							</button>
-							<button
-								onClick={handleBulkUpdate}
-								className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-								disabled={Object.keys(bulkEditValues).length === 0}
-							>
-								Cập nhật ({selectedRows.size} mục)
-							</button>
-						</div>
-
-						<div className="mt-4 text-xs text-gray-500">
-							<strong>Lưu ý:</strong> Chỉ những trường có giá trị mới sẽ được cập nhật. Trường để trống sẽ không thay
-							đổi giá trị hiện tại.
-						</div>
-					</div>
-				</div>
-			)}
+			{/* LabBulkUpdate Component */}
+			<LabBulkUpdate
+				isOpen={showBulkEditBox}
+				onClose={() => setShowBulkEditBox(false)}
+				selectedRows={selectedRows}
+				selectedData={Array.from(selectedRows)
+					.map((rowId) => selectedRowsData.get(rowId))
+					.filter(Boolean)}
+				technicians={technicians}
+				onUpdateComplete={handleBulkUpdateComplete}
+				updating={updating}
+				setUpdating={setUpdating}
+			/>
 		</div>
 	);
 };

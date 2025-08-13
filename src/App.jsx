@@ -16,53 +16,53 @@ import Footer from './sections/Footer';
 import Event from './components/Event';
 import LabDashboard from './pages/LabDashboard';
 import LabDashboardTemporary from './pages/LabDashboardTemporary';
-import ProcessingSampleMachine from './components/ProcessingSampleMachine';
 import Report from './pages/Report';
 import Result from './components/Analysis_result';
 import PrintSampleTag from './components/PrintSampleTag';
 import FileInfor from './pages/FileInfor';
 import Editor from './components/lab/Editor';
+import AuthGuard from './components/AuthGuard';
 
 const App = () => {
 	return (
 		<Router>
-			<Routes>
-				{/* Fullscreen route without header/footer */}
-				<Route path="/lab" element={<LabDashboard />} />
-				<Route path="/processing" element={<LabDashboardTemporary />} />
-				<Route path="/editor" element={<Editor />} />
+			<AuthGuard>
+				<Routes>
+					{/* Fullscreen route without header/footer */}
+					<Route path="/lab" element={<LabDashboard />} />
+					<Route path="/processing" element={<LabDashboardTemporary />} />
+					<Route path="/editor" element={<Editor />} />
 
-				{/* Regular routes with header/footer */}
-				<Route
-					path="*"
-					element={
-						<div className="h-full min-h-lvh min-w-lvw w-lvw flex flex-col items-center relative">
-							<Header />
-							<div className="flex justify-center items-center w-full px-5 mb-60">
-								<Routes>
-									<Route path="library" element={<Library />} />
-									<Route path="library/protocol" element={<ProtocolInfor />} />
-									<Route path="library/analyte" element={<AnalyteInfor />} />
-									<Route path="/intra-h1y25-c1" element={<Event />} />
-									<Route path="/dashboard" element={<Dashboard />} />
-									<Route path="/" element={<Dashboard />} />
-									<Route path="/report" element={<Report />} />
-									<Route path="/result" element={<Result />} />
-									{/* <Route path="/processing" element={<ProcessingSample />} /> */}
-									<Route path="/processing/machine" element={<ProcessingSampleMachine />} />
-									<Route path="/dashboard/receipt" element={<ReceiptInfor />} />
-									<Route path="/dashboard/receipt/print_sp" element={<PrintSampleTag />} />
-									<Route path="/dashboard/sample" element={<SampleInfor />} />
-									<Route path="/login" element={<Login />} />
-									<Route path="library/client" element={<ClientInfor />} />
-									<Route path="/files" element={<FileInfor />} />
-								</Routes>
+					{/* Regular routes with header/footer */}
+					<Route
+						path="*"
+						element={
+							<div className="h-full min-h-lvh min-w-lvw w-lvw flex flex-col items-center relative">
+								<Header />
+								<div className="flex justify-center items-center w-full px-5 mb-60">
+									<Routes>
+										<Route path="library" element={<Library />} />
+										<Route path="library/protocol" element={<ProtocolInfor />} />
+										<Route path="library/analyte" element={<AnalyteInfor />} />
+										<Route path="/intra-h1y25-c1" element={<Event />} />
+										<Route path="/dashboard" element={<Dashboard />} />
+										<Route path="/" element={<Dashboard />} />
+										<Route path="/report" element={<Report />} />
+										<Route path="/result" element={<Result />} />
+										<Route path="/dashboard/receipt" element={<ReceiptInfor />} />
+										<Route path="/dashboard/receipt/print_sp" element={<PrintSampleTag />} />
+										<Route path="/dashboard/sample" element={<SampleInfor />} />
+										<Route path="/login" element={<Login />} />
+										<Route path="library/client" element={<ClientInfor />} />
+										<Route path="/files" element={<FileInfor />} />
+									</Routes>
+								</div>
+								<Footer />
 							</div>
-							<Footer />
-						</div>
-					}
-				/>
-			</Routes>
+						}
+					/>
+				</Routes>
+			</AuthGuard>
 		</Router>
 	);
 };

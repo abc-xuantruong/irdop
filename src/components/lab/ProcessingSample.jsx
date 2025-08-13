@@ -4,8 +4,9 @@ import { GlobalContext } from '../../contexts/GlobalContext';
 import { apiPost } from '../../contexts/helperFunctionCallAPI';
 import TinyMceInput from '../Input';
 import { toast, ToastContainer } from 'react-toastify';
-import { FaTimes, FaSearch } from 'react-icons/fa';
+import { FaSearch } from 'react-icons/fa';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
+import LabBulkUpdate from './LabBulkUpdate';
 
 // Custom CSS for enhanced UI
 const customStyles = `
@@ -73,17 +74,59 @@ const customStyles = `
 	background: linear-gradient(135deg, #f8fafc, #f1f5f9);
 }
 
+/* Enhanced editing styles like ProcessingAnalysis */
 .editable-cell {
 	transition: all 0.2s ease-in-out;
-	min-height: 32px;
-	display: flex;
-	align-items: center;
 }
 
 .editable-cell:hover {
 	background-color: #f0f8ff !important;
-	border-color: #3b82f6 !important;
-	box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+	border-color: #7c3aed !important;
+	box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.2);
+}
+
+.editing-active {
+	background-color: #ffffff !important;
+	border-color: #7c3aed !important;
+	box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+}
+
+.result-cell-placeholder {
+	color: #9ca3af;
+	font-style: italic;
+}
+
+.save-indicator {
+	animation: pulse 1s infinite;
+}
+
+/* Protocol source select styling like ProcessingAnalysis */
+.protocol-source-select {
+	position: relative;
+	z-index: 100;
+	overflow: visible !important;
+}
+
+.protocol-source-select select {
+	appearance: none;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	background-image: none;
+	cursor: pointer;
+	background-color: white !important;
+	position: relative;
+	z-index: 999;
+}
+
+.protocol-source-select select:focus {
+	outline: none;
+	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+	border-color: #2563eb !important;
+}
+
+.protocol-source-select select:hover {
+	border-color: #2563eb !important;
+	background-color: #f8fafc !important;
 }
 
 .result-cell {
@@ -294,7 +337,7 @@ textarea:focus {
 }
 `;
 
-const ProcessingSample = () => {
+const ProcessingSample = ({ onNavigateToLab }) => {
 	const { setCurrentTitlePage, status, currentUser, technicians, formatDate } = useContext(GlobalContext);
 	const location = useLocation();
 	const navigate = useNavigate();
@@ -305,14 +348,10 @@ const ProcessingSample = () => {
 	const [itemsPerPage, setItemsPerPage] = useState(20);
 	const [totalItems, setTotalItems] = useState(0);
 	const [totalPages, setTotalPages] = useState(1);
-	const [sortConfig, setSortConfig] = useState({ column: 'sample_uid', direction: 'ASC' });
 
 	// Selection states
-	const [selectedRows, setSelectedRows] = useState(new Set());
-	const [selectedRowsData, setSelectedRowsData] = useState(new Map());
 	const [selectedAnalysisIds, setSelectedAnalysisIds] = useState(new Set());
-	const [selectedCheckboxesV3, setSelectedCheckboxesV3] = useState([]);
-	const [selectedCheckboxesByReceipt, setSelectedCheckboxesByReceipt] = useState({});
+	const [showBulkEdit, setShowBulkEdit] = useState(false);
 
 	// Drag selection states
 	const [isDragging, setIsDragging] = useState(false);
@@ -322,17 +361,18 @@ const ProcessingSample = () => {
 	const [scrollPosition, setScrollPosition] = useState(0);
 	const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-	// Editing states
+	// Editing states - enhanced to match ProcessingAnalysis
 	const [editableCell, setEditableCell] = useState({ analysisId: null, column: null });
 	const [inputValue, setInputValue] = useState('');
 	const [editingProtocolSource, setEditingProtocolSource] = useState(null);
 	const [editingProtocolCode, setEditingProtocolCode] = useState(null);
-	const [showBulkEditBox, setShowBulkEditBox] = useState(false);
-	const [bulkEditCell, setBulkEditCell] = useState({ column: null, receiptId: null }); // Track which bulk edit cell is being edited
-	const [bulkEditValues, setBulkEditValues] = useState({}); // Add state to track bulk edit values
 	const [technicianDropdownVisible, setTechnicianDropdownVisible] = useState(null);
 	const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
 	const [isLoadingFilter, setIsLoadingFilter] = useState(false);
+
+	// Enhanced editing states like ProcessingAnalysis
+	const [editingCell, setEditingCell] = useState(null);
+	const [editValue, setEditValue] = useState('');
 
 	// Filter states - match ProcessingAnalysis
 	const [filters, setFilters] = useState({
@@ -387,21 +427,7 @@ const ProcessingSample = () => {
 		};
 	}, []);
 
-	// Function to fetch matrix options from API
-	const fetchMatrixOptions = async () => {
-		try {
-			const response = await apiPost('https://black.irdop.org/v1/sample/processing/search_filter_column', {
-				filterColumn: 'matrix',
-				searchTerm: '',
-			});
-			if (response?.data?.result && Array.isArray(response.data.result)) {
-				const matrixOptions = response.data.result.map((item) => item.matrix || item.value || '');
-				// Set matrix options if needed for autocomplete or suggestions
-			}
-		} catch (error) {
-			console.error('Error fetching matrix options:', error);
-		}
-	};
+	// Function to fetch matrix options from API - removed unused function
 
 	// Fetch sample data with new API endpoint
 	const fetchSampleData = async (preserveScroll = false) => {
@@ -733,12 +759,6 @@ const ProcessingSample = () => {
 	// Get grouped data for display
 	const groupedSampleData = getGroupedSampleData();
 
-	// Handle search input changes
-	const handleSearchChange = (e) => setSearchTerm(e.target.value);
-	const handleSampleSearchChange = (e) => setSampleSearchTerm(e.target.value);
-	const handleParameterSearchChange = (e) => setParameterSearchTerm(e.target.value);
-	const handleMatrixSearchChange = (e) => setMatrixSearchTerm(e.target.value);
-
 	// Handle column sorting with ASC → DESC → no sort cycle
 	const handleColumnSort = (columnName) => {
 		if (isFilterCreationMode) return; // Don't sort in filter creation mode
@@ -823,12 +843,27 @@ const ProcessingSample = () => {
 	// Get grouped data for current page
 	const groupedSampleDataForPage = getGroupedSampleDataForPage();
 
-	// Handle cell editing like ProcessingSampleV3
-	const handleCellClickV3 = (analysisId, column, currentValue) => {
+	// Enhanced cell editing like ProcessingAnalysis with auto-save
+	const openEditorWithAutoSave = async (analysisId, column, currentValue) => {
+		// Auto-save current editing cell if exists
+		if (editableCell.analysisId && editableCell.analysisId !== analysisId) {
+			try {
+				await handleSaveContentV3(inputValue, editableCell.column, editableCell.analysisId);
+			} catch (error) {
+				console.error('Error auto-saving previous cell:', error);
+			}
+		}
+
+		// Set new editing cell
 		setEditableCell({ analysisId, column });
 		setInputValue(currentValue || '');
 	};
 
+	const handleCellClickV3 = (analysisId, column, currentValue) => {
+		openEditorWithAutoSave(analysisId, column, currentValue);
+	};
+
+	// Enhanced save content with better feedback like ProcessingAnalysis
 	const handleSaveContentV3 = async (content, column, analysisId) => {
 		if (!editableCell.analysisId || editableCell.column !== column) return;
 
@@ -839,6 +874,12 @@ const ProcessingSample = () => {
 				return str.replace(/^<p>/, '').replace(/<\/p>$/, '');
 			};
 
+			// Helper function to normalize content for comparison
+			const normalizeContent = (content) => {
+				if (!content) return '';
+				return content.toString().trim().replace(/\s+/g, ' ');
+			};
+
 			// Get original value for comparison from grouped data for current page
 			let originalValue = '';
 			groupedSampleDataForPage.forEach((group) => {
@@ -846,7 +887,9 @@ const ProcessingSample = () => {
 				if (currentAnalysis) {
 					originalValue = currentAnalysis[column] || '';
 				}
-			}); // Clean both values for comparison if it's result_value or result_unit
+			});
+
+			// Clean and normalize both values for comparison
 			let cleanedContent = content;
 			let cleanedOriginal = originalValue;
 
@@ -855,8 +898,12 @@ const ProcessingSample = () => {
 				cleanedOriginal = cleanContent(originalValue);
 			}
 
+			// Normalize for final comparison
+			const normalizedNew = normalizeContent(cleanedContent);
+			const normalizedOriginal = normalizeContent(cleanedOriginal);
+
 			// Only proceed if there's actual change
-			if (cleanedContent === cleanedOriginal) {
+			if (normalizedNew === normalizedOriginal) {
 				setEditableCell({ analysisId: null, column: null });
 				return;
 			}
@@ -872,10 +919,12 @@ const ProcessingSample = () => {
 				body.analysis.submit_result_by = currentUser.identity_name;
 			}
 
+			// Show saving indicator
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', body);
 
 			if (response?.status === 200) {
-				toast.success('Cập nhật thành công');
+				// Success notification like ProcessingAnalysis
+				showSuccessNotification('Cập nhật thành công');
 
 				// Update both processingSample data for consistency
 				setProcessingSample((prevData) => {
@@ -899,14 +948,37 @@ const ProcessingSample = () => {
 					fetchSampleData(true);
 				}, 1000);
 			} else {
-				toast.error('Cập nhật thất bại');
+				showErrorNotification('Cập nhật thất bại');
 			}
 		} catch (error) {
 			console.error('Error updating analysis:', error);
-			toast.error('Lỗi khi cập nhật');
+			showErrorNotification('Lỗi khi cập nhật');
 		} finally {
 			setEditableCell({ analysisId: null, column: null });
 		}
+	};
+
+	// Enhanced notification functions like ProcessingAnalysis
+	const showSuccessNotification = (message) => {
+		toast.success(message, {
+			position: 'top-right',
+			autoClose: 1000,
+			hideProgressBar: false,
+			closeOnClick: true,
+			pauseOnHover: true,
+			draggable: true,
+		});
+	};
+
+	const showErrorNotification = (message) => {
+		toast.error(message, {
+			position: 'top-right',
+			autoClose: 3000,
+			hideProgressBar: false,
+			closeOnClick: true,
+			pauseOnHover: true,
+			draggable: true,
+		});
 	};
 
 	const handleKeyDownV3 = (e) => {
@@ -915,8 +987,8 @@ const ProcessingSample = () => {
 		}
 	};
 
-	// Handle protocol source changes
-	const handleProtocolSourceChange = async (analysisId, value) => {
+	// Enhanced protocol source handling like ProcessingAnalysis
+	const handleProtocolSourceChange = async (value, analysisId) => {
 		try {
 			// Update local data immediately
 			setProcessingSample((prevData) => {
@@ -939,42 +1011,52 @@ const ProcessingSample = () => {
 				analysis: { id: analysisId, protocol_source: value },
 			});
 
-			if (response?.status !== 200) {
+			if (response?.status === 200) {
+				showSuccessNotification('Cập nhật nguồn thành công');
+				// Background refresh
+				setTimeout(() => {
+					fetchSampleData(true);
+				}, 1000);
+			} else {
 				throw new Error('Failed to update protocol source');
 			}
-			toast.success('Cập nhật thành công');
-
-			// Background refresh
-			setTimeout(() => {
-				fetchSampleData(true);
-			}, 1000);
 		} catch (error) {
 			console.error('Error updating protocol source:', error);
-			toast.error('Lỗi khi cập nhật');
+			showErrorNotification('Lỗi khi cập nhật nguồn');
 		}
 	};
 
-	// Handle protocol source click to edit
+	// Handle protocol source click to edit - enhanced like ProcessingAnalysis
 	const handleProtocolSourceClick = (analysisId, currentValue) => {
+		// Auto-save current editing cell if exists
+		if (editableCell.analysisId && editableCell.analysisId !== analysisId) {
+			handleSaveContentV3(inputValue, editableCell.column, editableCell.analysisId);
+		}
+
 		setEditingProtocolSource(analysisId);
 		setInputValue(currentValue || '');
 	};
 
-	// Handle protocol source blur
+	// Handle protocol source blur - enhanced like ProcessingAnalysis
 	const handleProtocolSourceBlur = async (analysisId, newValue, originalValue) => {
 		setEditingProtocolSource(null);
-		if (newValue !== originalValue && newValue !== '') {
-			await handleProtocolSourceChange(analysisId, newValue);
+		if (newValue !== originalValue) {
+			await handleProtocolSourceChange(newValue, analysisId);
 		}
 	};
 
-	// Handle protocol code click to edit
+	// Handle protocol code click to edit - enhanced like ProcessingAnalysis
 	const handleProtocolCodeClick = (analysisId, currentValue) => {
+		// Auto-save current editing cell if exists
+		if (editableCell.analysisId && editableCell.analysisId !== analysisId) {
+			handleSaveContentV3(inputValue, editableCell.column, editableCell.analysisId);
+		}
+
 		setEditingProtocolCode(analysisId);
 		setInputValue(currentValue || '');
 	};
 
-	// Handle protocol code blur
+	// Handle protocol code blur - enhanced like ProcessingAnalysis
 	const handleProtocolCodeBlur = async (analysisId, newValue, originalValue) => {
 		setEditingProtocolCode(null);
 
@@ -1001,51 +1083,23 @@ const ProcessingSample = () => {
 					analysis: { id: analysisId, protocol_code: newValue },
 				});
 
-				if (response?.status !== 200) {
+				if (response?.status === 200) {
+					showSuccessNotification('Cập nhật phương pháp thành công');
+					// Background refresh
+					setTimeout(() => {
+						fetchSampleData(true);
+					}, 1000);
+				} else {
 					throw new Error('Failed to update protocol code');
 				}
-				toast.success('Cập nhật thành công!');
-
-				// Background refresh
-				setTimeout(() => {
-					fetchSampleData(true);
-				}, 1000);
 			} catch (error) {
 				console.error('Error updating protocol_code:', error);
-				toast.error('Có lỗi xảy ra khi cập nhật!');
+				showErrorNotification('Có lỗi xảy ra khi cập nhật phương pháp');
 			}
 		}
 	};
 
-	// Handle checkbox selections
-	const handleAnalysisCheckboxChange = (e, receiptId, analysisId) => {
-		const isChecked = e.target.checked;
-
-		setSelectedCheckboxesV3((prev) => {
-			if (isChecked) {
-				return [...prev, analysisId];
-			} else {
-				return prev.filter((id) => id !== analysisId);
-			}
-		});
-
-		setSelectedCheckboxesByReceipt((prev) => {
-			const current = { ...prev };
-			if (!current[receiptId]) current[receiptId] = [];
-
-			if (isChecked) {
-				current[receiptId] = [...current[receiptId], analysisId];
-			} else {
-				current[receiptId] = current[receiptId].filter((id) => id !== analysisId);
-			}
-
-			if (current[receiptId].length === 0) {
-				delete current[receiptId];
-			}
-
-			return current;
-		});
-	};
+	// Handle checkbox selections - removed unused handlers
 
 	// Handle technician changes
 	const handleTechnicianChange = async (analysisId, technicianUid) => {
@@ -1174,82 +1228,14 @@ const ProcessingSample = () => {
 		});
 
 		Promise.all(promises).then(() => {
-			setShowBulkEditBox(false);
 			setSelectedAnalysisIds(new Set());
+			setShowBulkEdit(false);
 		});
-	};
-
-	// Add function to handle bulk edit value changes
-	const handleBulkEditChange = (field, value) => {
-		setBulkEditValues((prev) => ({
-			...prev,
-			[field]: value,
-		}));
-	};
-
-	// Add function to handle bulk edit cell click
-	const handleBulkEditCellClick = (column, receiptId) => {
-		setBulkEditCell({ column, receiptId });
-	};
-
-	// Add function to handle bulk update submission
-	const handleBulkUpdate = async () => {
-		const updates = [];
-
-		// Prepare updates for all selected analyses
-		Array.from(selectedAnalysisIds).forEach((analysisId) => {
-			const updateData = { id: analysisId };
-
-			// Add fields that have values in bulkEditValues
-			Object.keys(bulkEditValues).forEach((field) => {
-				if (bulkEditValues[field] !== '' && bulkEditValues[field] !== null && bulkEditValues[field] !== undefined) {
-					updateData[field] = bulkEditValues[field];
-				}
-			});
-
-			if (Object.keys(updateData).length > 1) {
-				// More than just id
-				updates.push(updateData);
-			}
-		});
-
-		if (updates.length === 0) {
-			toast.warning('Không có thay đổi nào để cập nhật');
-			return;
-		}
-
-		try {
-			// Update each analysis
-			for (const update of updates) {
-				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: update,
-				});
-
-				if (response?.status !== 200) {
-					throw new Error(`Failed to update analysis ${update.id}`);
-				}
-			}
-
-			toast.success(`Đã cập nhật ${updates.length} chỉ tiêu thành công`);
-
-			// Clear selections and close modal
-			setSelectedAnalysisIds(new Set());
-			setShowBulkEditBox(false);
-			setBulkEditValues({});
-
-			// Refresh data
-			setTimeout(() => {
-				fetchSampleData(true);
-			}, 1000);
-		} catch (error) {
-			console.error('Error in bulk update:', error);
-			toast.error('Lỗi khi cập nhật hàng loạt');
-		}
 	};
 
 	const clearSelection = () => {
 		setSelectedAnalysisIds(new Set());
-		setShowBulkEditBox(false);
+		setShowBulkEdit(false);
 	};
 
 	// Filter mode toggle handler
@@ -1298,10 +1284,11 @@ const ProcessingSample = () => {
 
 	const cancelSelection = () => {
 		setSelectedAnalysisIds(new Set());
+		setShowBulkEdit(false);
 	};
 
 	const handleBulkEditClick = () => {
-		setShowBulkEditBox(true);
+		setShowBulkEdit(true);
 	};
 
 	// Check if there are selected samples
@@ -1679,7 +1666,7 @@ const ProcessingSample = () => {
 		setIsFetch(true);
 	}, [location.search, currentPage, itemsPerPage, filters]);
 
-	// Auto-refresh every 60 seconds
+	// Auto-refresh every 60 seconds - enhanced like ProcessingAnalysis
 	useEffect(() => {
 		const interval = setInterval(() => {
 			if (
@@ -1687,14 +1674,48 @@ const ProcessingSample = () => {
 				isFetch &&
 				!editableCell.analysisId &&
 				!editingProtocolSource &&
-				!editingProtocolCode
+				!editingProtocolCode &&
+				!isFilterCreationMode &&
+				!activeFilterColumn
 			) {
 				fetchSampleData(true); // Preserve scroll position during auto-refresh
 			}
 		}, 60000);
 
 		return () => clearInterval(interval);
-	}, [isApiCallInProgress, isFetch, editableCell.analysisId, editingProtocolSource, editingProtocolCode]);
+	}, [
+		isApiCallInProgress,
+		isFetch,
+		editableCell.analysisId,
+		editingProtocolSource,
+		editingProtocolCode,
+		isFilterCreationMode,
+		activeFilterColumn,
+	]);
+
+	// Keyboard shortcuts like ProcessingAnalysis
+	useEffect(() => {
+		const handleKeyDown = (e) => {
+			// ESC to cancel editing
+			if (e.key === 'Escape') {
+				if (editableCell.analysisId) {
+					setEditableCell({ analysisId: null, column: null });
+					setInputValue('');
+				}
+				if (editingProtocolSource) {
+					setEditingProtocolSource(null);
+					setInputValue('');
+				}
+				if (editingProtocolCode) {
+					setEditingProtocolCode(null);
+					setInputValue('');
+				}
+			}
+		};
+
+		document.addEventListener('keydown', handleKeyDown);
+		return () => document.removeEventListener('keydown', handleKeyDown);
+	}, [editableCell.analysisId, editingProtocolSource, editingProtocolCode]);
 
 	// Scroll to top when page changes
 	useEffect(() => {
@@ -1743,13 +1764,26 @@ const ProcessingSample = () => {
 
 	return (
 		<div className="w-full h-full relative bg-gray-50">
-			<ToastContainer position="top-right" autoClose={500} />
+			<ToastContainer
+				position="top-right"
+				autoClose={1000}
+				hideProgressBar={false}
+				newestOnTop={false}
+				closeOnClick
+				rtl={false}
+				pauseOnFocusLoss
+				draggable
+				pauseOnHover
+				theme="light"
+			/>
 
 			{/* Breadcrumb */}
 			<div className="bg-white p-4 text-sm">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center space-x-2 font-bold text-sm text-gray-500 cursor-pointer min-w-fit mr-2">
-						<span className="hover:underline">PHÒNG THỬ NGHIỆM</span>
+						<span className="hover:underline" onClick={() => onNavigateToLab && onNavigateToLab('samples')}>
+							PHÒNG THỬ NGHIỆM
+						</span>
 						<span>/</span>
 						<span className="text-gray-900 font-bold hover:underline">DANH SÁCH PHÉP THỬ</span>
 					</div>
@@ -1982,11 +2016,11 @@ const ProcessingSample = () => {
 												<span className="text-sm font-medium">{item.parameter_name || 'N/A'}</span>
 											</td>
 
-											{/* Nguồn */}
-											<td className="border border-gray-300 px-3 py-2 text-left">
+											{/* Nguồn - enhanced styling like ProcessingAnalysis */}
+											<td className="border border-gray-300 px-3 py-2 text-left protocol-source-select">
 												{editingProtocolSource === item.id ? (
 													<select
-														className="protocol-select text-sm font-semibold w-full"
+														className="w-full text-sm font-semibold border border-blue-500 rounded p-1 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
 														value={inputValue}
 														onChange={(e) => setInputValue(e.target.value)}
 														onBlur={(e) => handleProtocolSourceBlur(item.id, e.target.value, item.protocol_source)}
@@ -1999,7 +2033,7 @@ const ProcessingSample = () => {
 													</select>
 												) : (
 													<div
-														className="text-sm font-medium cursor-pointer hover:bg-blue-50 p-1 rounded"
+														className="text-sm font-medium cursor-pointer hover:bg-blue-50 p-1 rounded editable-cell"
 														onClick={() => handleProtocolSourceClick(item.id, item.protocol_source)}
 													>
 														{item.protocol_source || '--'}
@@ -2007,12 +2041,12 @@ const ProcessingSample = () => {
 												)}
 											</td>
 
-											{/* Phương pháp */}
+											{/* Phương pháp - enhanced styling like ProcessingAnalysis */}
 											<td className="border border-gray-300 px-3 py-2 text-left">
 												{editingProtocolCode === item.id ? (
 													<input
 														type="text"
-														className="w-full text-sm border border-blue-500 rounded p-1 bg-white"
+														className="w-full text-sm border border-blue-500 rounded p-1 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
 														value={inputValue}
 														onChange={(e) => setInputValue(e.target.value)}
 														onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value, item.protocol_code)}
@@ -2025,7 +2059,7 @@ const ProcessingSample = () => {
 													/>
 												) : (
 													<div
-														className="text-sm cursor-pointer hover:bg-blue-50 p-1 rounded"
+														className="text-sm cursor-pointer hover:bg-blue-50 p-1 rounded editable-cell"
 														onClick={() => handleProtocolCodeClick(item.id, item.protocol_code)}
 													>
 														{item.protocol_code || '--'}
@@ -2033,9 +2067,13 @@ const ProcessingSample = () => {
 												)}
 											</td>
 
-											{/* Kết quả */}
+											{/* Kết quả - enhanced styling like ProcessingAnalysis */}
 											<td
-												className="border border-gray-300 px-3 py-2 text-left cursor-pointer hover:bg-blue-50"
+												className={`border border-gray-300 px-3 py-2 text-left cursor-pointer editable-cell ${
+													editableCell.analysisId === item.id && editableCell.column === 'result_value'
+														? 'editing-active'
+														: 'hover:bg-blue-50'
+												}`}
 												style={{ minWidth: '32px' }}
 												onClick={() => handleCellClickV3(item.id, 'result_value', item.result_value)}
 											>
@@ -2046,13 +2084,19 @@ const ProcessingSample = () => {
 														onKey={handleKeyDownV3}
 													/>
 												) : (
-													<div className="text-sm">{item.result_value ? parse(item.result_value) : '--'}</div>
+													<div className={`text-sm ${!item.result_value ? 'result-cell-placeholder' : ''}`}>
+														{item.result_value ? parse(item.result_value) : 'Nhập kết quả...'}
+													</div>
 												)}
 											</td>
 
-											{/* Đơn vị */}
+											{/* Đơn vị - enhanced styling like ProcessingAnalysis */}
 											<td
-												className="border border-gray-300 px-3 py-2 text-left cursor-pointer hover:bg-blue-50"
+												className={`border border-gray-300 px-3 py-2 text-left cursor-pointer editable-cell ${
+													editableCell.analysisId === item.id && editableCell.column === 'result_unit'
+														? 'editing-active'
+														: 'hover:bg-blue-50'
+												}`}
 												style={{ minWidth: '32px' }}
 												onClick={() => handleCellClickV3(item.id, 'result_unit', item.result_unit)}
 											>
@@ -2063,7 +2107,9 @@ const ProcessingSample = () => {
 														onKey={handleKeyDownV3}
 													/>
 												) : (
-													<div className="text-sm">{item.result_unit ? parse(item.result_unit) : '--'}</div>
+													<div className={`text-sm ${!item.result_unit ? 'result-cell-placeholder' : ''}`}>
+														{item.result_unit ? parse(item.result_unit) : 'Nhập đơn vị...'}
+													</div>
 												)}
 											</td>
 
@@ -2131,436 +2177,41 @@ const ProcessingSample = () => {
 						</div>
 					</div>
 				) : (
-					<div className="custom-scrollbar overflow-auto max-h-[calc(100vh-120px)]">
-						{/* Table with headers always visible */}
-						<table className="w-full border-collapse" style={{ minWidth: '1000px' }}>
-							<thead className="sticky top-0 z-20 border-b-2 border-gray-300 bg-sky-400">
-								<tr>
-									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 w-1/6 max-w-[16.666667%] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : 'cursor-pointer hover:bg-gray-100'
-										} ${isColumnFiltered('sample_uid') ? 'text-blue-600 underline' : ''}`}
-										onClick={() =>
-											isFilterCreationMode ? handleColumnFilter('sample_uid') : handleColumnSort('sample_uid')
-										}
-										style={{ minWidth: '140px' }}
-									>
-										Mẫu thử
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
-										{!isFilterCreationMode && filters.columnSort === 'sample_uid' && (
-											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
-										)}
-									</th>
-									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
-										} ${isColumnFiltered('parameter_name') ? 'text-blue-600 underline' : ''}`}
-										onClick={() => isFilterCreationMode && handleColumnFilter('parameter_name')}
-										style={{ minWidth: '120px' }}
-									>
-										Chỉ tiêu
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
-									</th>
-									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
-										} ${isColumnFiltered('protocol_source') ? 'text-blue-600 underline' : ''}`}
-										onClick={() => isFilterCreationMode && handleColumnFilter('protocol_source')}
-										style={{ minWidth: '100px' }}
-									>
-										Nguồn
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
-									</th>
-									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
-										} ${isColumnFiltered('protocol_code') ? 'text-blue-600 underline' : ''}`}
-										onClick={() => isFilterCreationMode && handleColumnFilter('protocol_code')}
-										style={{ minWidth: '120px' }}
-									>
-										Phương pháp
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
-									</th>
-									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-36 ${
-											!isFilterCreationMode ? 'cursor-pointer hover:bg-gray-100' : ''
-										}`}
-										onClick={() => !isFilterCreationMode && handleColumnSort('result_value')}
-										style={{ minWidth: '140px' }}
-									>
-										Kết quả
-										{!isFilterCreationMode && filters.columnSort === 'result_value' && (
-											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
-										)}
-									</th>
-									<th
-										className="border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-32"
-										style={{ minWidth: '100px' }}
-									>
-										Đơn vị
-									</th>
-									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : 'cursor-pointer hover:bg-gray-100'
-										} ${isColumnFiltered('deadline') ? 'text-blue-600 underline' : ''}`}
-										onClick={() =>
-											isFilterCreationMode ? handleColumnFilter('deadline') : handleColumnSort('deadline')
-										}
-										style={{ minWidth: '100px' }}
-									>
-										Hạn trả
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
-										{!isFilterCreationMode && filters.columnSort === 'deadline' && (
-											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
-										)}
-									</th>
-									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
-										} ${isColumnFiltered('technician_uid') ? 'text-blue-600 underline' : ''}`}
-										onClick={() => isFilterCreationMode && handleColumnFilter('technician_uid')}
-										style={{ minWidth: '150px' }}
-									>
-										Người thực hiện
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
-									</th>
-								</tr>
-							</thead>
-							<tbody>
-								{Array.isArray(groupedSampleDataForPage) && groupedSampleDataForPage.length > 0 ? (
-									groupedSampleDataForPage.map((group, groupIndex) =>
-										group.analyses.map((item, analysisIndex) => (
-											<tr
-												key={`${group.sample.sample_uid}-${item.id}`}
-												className={`${
-													urgentAnalysisIds.has(item.id) ? 'border-red-500 border-2' : ''
-												} hover:bg-gray-50 ${selectedAnalysisIds.has(item.id) ? 'bg-blue-100' : ''}`}
-												onMouseDown={(e) => handleMouseDown(e, item.id)}
-												onMouseEnter={(e) => handleMouseEnter(e, item.id)}
-												onMouseUp={handleMouseUp}
-											>
-												{/* Sample UID with merged cells */}
-												{analysisIndex === 0 && (
-													<td className="border border-gray-300 px-3 py-2 text-left" rowSpan={group.analyses.length}>
-														<div className="font-medium text-sm mb-1">{group.sample.sample_uid}</div>
-														{group.receipt.handover_info && (
-															<div className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
-																{parse(group.receipt.handover_info)}
-															</div>
-														)}
-													</td>
-												)}
-
-												{/* Chỉ tiêu */}
-												<td className="border border-gray-300 px-3 py-2 text-left">
-													<div className="text-sm">{item.parameter_name}</div>
-												</td>
-
-												{/* Nguồn */}
-												<td className="border border-gray-300 px-3 py-2 text-left">
-													<div className="text-sm">{item.protocol_source || '--'}</div>
-												</td>
-
-												{/* Phương pháp */}
-												<td className="border border-gray-300 px-3 py-2 text-left">
-													<div className="text-sm">{item.protocol_code || '--'}</div>
-												</td>
-
-												{/* Kết quả */}
-												<td
-													className="border border-gray-300 px-3 py-2 text-left cursor-pointer hover:bg-blue-50"
-													onClick={(e) => {
-														e.stopPropagation();
-														handleCellClick(item.id, 'result_value', item.result_value);
-													}}
-												>
-													{editingCell?.analysisId === item.id && editingCell?.column === 'result_value' ? (
-														<TinyMceInput
-															value={inputValue}
-															onUpdate={(content) => handleSaveContent(content, 'result_value', item.id)}
-															onKey={handleKeyDown}
-															placeholder="Nhập kết quả..."
-														/>
-													) : (
-														<div className="text-sm">{item.result_value ? parse(item.result_value) : '--'}</div>
-													)}
-												</td>
-
-												{/* Đơn vị */}
-												<td
-													className="border border-gray-300 px-3 py-2 text-left cursor-pointer hover:bg-blue-50"
-													onClick={(e) => {
-														e.stopPropagation();
-														handleCellClick(item.id, 'result_unit', item.result_unit);
-													}}
-												>
-													{editingCell?.analysisId === item.id && editingCell?.column === 'result_unit' ? (
-														<TinyMceInput
-															value={inputValue}
-															onUpdate={(content) => handleSaveContent(content, 'result_unit', item.id)}
-															onKey={handleKeyDown}
-															placeholder="Nhập đơn vị..."
-														/>
-													) : (
-														<div className="text-sm">{item.result_unit ? parse(item.result_unit) : '--'}</div>
-													)}
-												</td>
-
-												{/* Hạn trả */}
-												<td className="border border-gray-300 px-3 py-2 text-left">
-													<span className={`text-sm ${getDeadlineColor(item.deadline)}`}>
-														{item.deadline ? formatDate(item.deadline) : 'N/A'}
-													</span>
-												</td>
-
-												{/* Người thực hiện */}
-												<td className="border border-gray-300 px-3 py-2 text-left">
-													<div className="text-sm">{getTechnicianName(item.technician_uid)}</div>
-												</td>
-											</tr>
-										)),
-									)
-								) : (
-									<tr>
-										<td colSpan="8" className="border border-gray-300 px-3 py-12 text-center text-gray-500">
-											<FaSearch size={32} className="mx-auto mb-2 opacity-50" />
-											<p className="text-base">Không có dữ liệu mẫu thử</p>
-										</td>
-									</tr>
-								)}
-							</tbody>
-						</table>
+					<div className="flex items-center justify-center py-12">
+						<FaSearch size={32} className="mx-auto mb-2 opacity-50" />
+						<p className="text-base text-gray-500">Không có dữ liệu mẫu thử</p>
 					</div>
 				)}
 			</div>
 
-			{/* Enhanced Bulk Edit Box */}
-			{showBulkEditBox && (
-				<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[100]">
-					<div className="bg-white p-6 rounded-lg shadow-lg min-w-[600px] w-5/6 max-h-[90vh] overflow-auto">
-						<div className="flex items-center justify-between mb-4">
-							<h2 className="text-xl font-bold">
-								Chỉnh sửa hàng loạt
-								<span className="text-sm font-normal text-gray-600 ml-2">
-									({selectedAnalysisIds.size} chỉ tiêu được chọn)
-								</span>
-							</h2>
-							<button onClick={() => setShowBulkEditBox(false)} className="text-gray-500 hover:text-gray-700 text-xl">
-								<FaTimes />
-							</button>
-						</div>
-
-						{/* Input Fields Section */}
-						<div className="mb-6">
-							<h3 className="text-md font-semibold mb-3">Thông tin cập nhật</h3>
-							<div className="flex flex-wrap gap-4 items-end">
-								{/* Protocol Source */}
-								<div className="flex-shrink-0" style={{ minWidth: '120px', maxWidth: '140px' }}>
-									<label className="block text-sm font-medium text-gray-700 mb-1">Nguồn</label>
-									<select
-										className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
-										value={bulkEditValues.protocol_source || ''}
-										onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
-									>
-										<option value="">-- Không thay đổi --</option>
-										<option value="IRDOP">IRDOP</option>
-										<option value="IRDOP VS">IRDOP VS</option>
-										<option value="EX">EX</option>
-									</select>
-								</div>
-
-								{/* Protocol Code */}
-								<div className="flex-grow" style={{ minWidth: '150px' }}>
-									<label className="block text-sm font-medium text-gray-700 mb-1">Phương pháp</label>
-									<input
-										type="text"
-										className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
-										placeholder="Nhập mã phương pháp..."
-										value={bulkEditValues.protocol_code || ''}
-										onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
-									/>
-								</div>
-
-								{/* Result Value */}
-								<div className="flex-grow" style={{ minWidth: '150px' }}>
-									<label className="block text-sm font-medium text-gray-700 mb-1">Kết quả</label>
-									<div
-										className="w-full p-2 border border-gray-300 rounded-md min-h-[38px] cursor-text hover:border-blue-500 flex items-center bg-white"
-										onClick={() => handleBulkEditCellClick('result_value', 'global')}
-									>
-										{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === 'global' ? (
-											<TinyMceInput
-												value={bulkEditValues.result_value || ''}
-												onUpdate={(content) => handleBulkEditChange('result_value', content)}
-												onKey={(e) => {
-													if (e.key === 'Enter') {
-														setBulkEditCell({ column: null, receiptId: null });
-													}
-												}}
-											/>
-										) : (
-											<div
-												className="text-sm"
-												dangerouslySetInnerHTML={{
-													__html: bulkEditValues.result_value || 'Nhấp để nhập kết quả...',
-												}}
-											/>
-										)}
-									</div>
-								</div>
-
-								{/* Result Unit */}
-								<div className="flex-grow" style={{ minWidth: '120px' }}>
-									<label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị</label>
-									<div
-										className="w-full p-2 border border-gray-300 rounded-md min-h-[38px] cursor-text hover:border-blue-500 flex items-center bg-white"
-										onClick={() => handleBulkEditCellClick('result_unit', 'global')}
-									>
-										{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === 'global' ? (
-											<TinyMceInput
-												value={bulkEditValues.result_unit || ''}
-												onUpdate={(content) => handleBulkEditChange('result_unit', content)}
-												onKey={(e) => {
-													if (e.key === 'Enter') {
-														setBulkEditCell({ column: null, receiptId: null });
-													}
-												}}
-											/>
-										) : (
-											<div
-												className="text-sm"
-												dangerouslySetInnerHTML={{
-													__html: bulkEditValues.result_unit || 'Nhấp để nhập đơn vị...',
-												}}
-											/>
-										)}
-									</div>
-								</div>
-
-								{/* Technician */}
-								<div className="flex-grow" style={{ minWidth: '180px' }}>
-									<label className="block text-sm font-medium text-gray-700 mb-1">Người thực hiện</label>
-									<select
-										className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
-										value={bulkEditValues.technician_uid || ''}
-										onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
-									>
-										<option value="">-- Không thay đổi --</option>
-										{technicians?.map((tech) => (
-											<option key={tech.identity_uid} value={tech.identity_uid}>
-												{tech.identity_name} ({tech.alias})
-											</option>
-										))}
-									</select>
-								</div>
-							</div>
-						</div>
-
-						{/* Preview table showing all selected analyses */}
-						<div className="mb-6">
-							<h3 className="text-md font-semibold mb-3">Xem trước thay đổi ({selectedAnalysisIds.size} mục)</h3>
-							<div className="max-h-[300px] overflow-auto border border-gray-300 rounded-md">
-								<table className="w-full border-collapse">
-									<thead className="bg-gray-100 sticky top-0">
-										<tr>
-											<th className="border border-gray-300 p-2 text-left text-sm font-medium">Mẫu thử</th>
-											<th className="border border-gray-300 p-2 text-left text-sm font-medium">Chỉ tiêu</th>
-											<th className="border border-gray-300 p-2 text-left text-sm font-medium">Nguồn</th>
-											<th className="border border-gray-300 p-2 text-left text-sm font-medium">Phương pháp</th>
-											<th className="border border-gray-300 p-2 text-left text-sm font-medium">Kết quả</th>
-											<th className="border border-gray-300 p-2 text-left text-sm font-medium">Đơn vị</th>
-											<th className="border border-gray-300 p-2 text-left text-sm font-medium">Hạn trả</th>
-											<th className="border border-gray-300 p-2 text-left text-sm font-medium">Người thực hiện</th>
-										</tr>
-									</thead>
-									<tbody>
-										{Array.from(selectedAnalysisIds).map((analysisId) => {
-											// Find the analysis in grouped data
-											let foundAnalysis = null;
-											let foundSample = null;
-
-											groupedSampleDataForPage.forEach((group) => {
-												const analysis = group.analyses.find((a) => a.id === analysisId);
-												if (analysis) {
-													foundAnalysis = analysis;
-													foundSample = group.sample;
-												}
-											});
-
-											return foundAnalysis ? (
-												<tr key={analysisId} className="hover:bg-gray-50">
-													<td className="border border-gray-300 p-2 text-sm">{foundAnalysis.sample_uid}</td>
-													<td className="border border-gray-300 p-2 text-sm">{foundAnalysis.parameter_name}</td>
-													<td className="border border-gray-300 p-2 text-sm">
-														<span className={bulkEditValues.protocol_source ? 'font-semibold text-blue-600' : ''}>
-															{bulkEditValues.protocol_source || foundAnalysis.protocol_source || '--'}
-														</span>
-													</td>
-													<td className="border border-gray-300 p-2 text-sm">
-														<span className={bulkEditValues.protocol_code ? 'font-semibold text-blue-600' : ''}>
-															{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
-														</span>
-													</td>
-													<td className="border border-gray-300 p-2 text-sm">
-														<div
-															className={bulkEditValues.result_value ? 'font-semibold text-blue-600' : ''}
-															dangerouslySetInnerHTML={{
-																__html: bulkEditValues.result_value || foundAnalysis.result_value || '--',
-															}}
-														/>
-													</td>
-													<td className="border border-gray-300 p-2 text-sm">
-														<div
-															className={bulkEditValues.result_unit ? 'font-semibold text-blue-600' : ''}
-															dangerouslySetInnerHTML={{
-																__html: bulkEditValues.result_unit || foundAnalysis.result_unit || '--',
-															}}
-														/>
-													</td>
-													<td className="border border-gray-300 p-2 text-sm text-left">
-														<span className={getDeadlineColor(foundAnalysis.deadline)}>
-															{foundAnalysis.deadline ? formatDate(foundAnalysis.deadline) : 'N/A'}
-														</span>
-													</td>
-													<td className="border border-gray-300 p-2 text-sm">
-														<span className={bulkEditValues.technician_uid ? 'font-semibold text-blue-600' : ''}>
-															{bulkEditValues.technician_uid
-																? getTechnicianName(bulkEditValues.technician_uid)
-																: getTechnicianName(foundAnalysis.technician_uid)}
-														</span>
-													</td>
-												</tr>
-											) : null;
-										})}
-									</tbody>
-								</table>
-							</div>
-						</div>
-
-						{/* Action buttons */}
-						<div className="flex justify-end space-x-3">
-							<button
-								onClick={() => setShowBulkEditBox(false)}
-								className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-							>
-								Hủy
-							</button>
-							<button
-								onClick={handleBulkUpdate}
-								className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-								disabled={Object.keys(bulkEditValues).length === 0}
-							>
-								Cập nhật ({selectedAnalysisIds.size} mục)
-							</button>
-						</div>
-
-						<div className="mt-4 text-xs text-gray-500">
-							<strong>Lưu ý:</strong> Chỉ những trường có giá trị mới sẽ được cập nhật. Trường để trống sẽ không thay
-							đổi giá trị hiện tại.
-						</div>
-					</div>
-				</div>
-			)}
+			{/* Bulk Update Component - only show when explicitly requested */}
+			<LabBulkUpdate
+				isOpen={showBulkEdit && selectedAnalysisIds.size > 0}
+				onClose={() => {
+					setShowBulkEdit(false);
+					setSelectedAnalysisIds(new Set());
+				}}
+				selectedRows={Array.from(selectedAnalysisIds)}
+				selectedData={Array.from(selectedAnalysisIds)
+					.map((analysisId) => {
+						let foundAnalysis = null;
+						groupedSampleDataForPage.forEach((group) => {
+							const analysis = group.analyses.find((a) => a.id === analysisId);
+							if (analysis) foundAnalysis = analysis;
+						});
+						return foundAnalysis;
+					})
+					.filter(Boolean)}
+				technicians={technicians}
+				onUpdateComplete={() => {
+					setShowBulkEdit(false);
+					setTimeout(() => {
+						fetchSampleData(true);
+					}, 1000);
+				}}
+				updating={updating}
+				setUpdating={setUpdating}
+			/>
 
 			{/* Filter Modal */}
 			{activeFilterColumn && (

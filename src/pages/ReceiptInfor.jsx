@@ -1856,6 +1856,26 @@ const ReceiptInfor = ({ receipt }) => {
 	const fetchEmailFormData = async () => {
 		if (!currentReceipt?.receipt_uid) return;
 
+		// Check if receipt status is already "Đã tiếp nhận"
+		if (currentReceipt?.status === 'Đã tiếp nhận') {
+			// Show confirmation dialog asking to resend email
+			const result = await Swal.fire({
+				icon: 'warning',
+				title: 'Xác nhận gửi lại email',
+				html: 'Phiếu tiếp nhận này đã gửi email thông báo rồi.<br/>Bạn có muốn gửi lại email không?',
+				showCancelButton: true,
+				confirmButtonText: 'Gửi lại',
+				cancelButtonText: 'Hủy',
+				confirmButtonColor: '#3085d6',
+				cancelButtonColor: '#d33',
+			});
+
+			// If user cancels, return without proceeding
+			if (!result.isConfirmed) {
+				return;
+			}
+		}
+
 		setIsLoadingEmailData(true);
 		try {
 			showToast('Đang tải dữ liệu email...', 'info');

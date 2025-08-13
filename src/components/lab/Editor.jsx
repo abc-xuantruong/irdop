@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Editor as TinyMCEEditor } from '@tinymce/tinymce-react';
-import DiagramEditor from './DiagramEditor';
 import { apiPost } from '../../contexts/helperFunctionCallAPI';
+import Cookies from 'js-cookie';
 
 // Helper function to extract specific CSS property from style string
 const extractStyleProperty = (styleString, property) => {
@@ -114,73 +114,47 @@ const Editor = () => {
 		publishDate: '',
 	});
 
-	const [selectedData, setSelectedData] = useState([]);
 	const [currentTemplate, setCurrentTemplate] = useState(null);
-	const [currentFileId, setCurrentFileId] = useState(null);
 	const [templates, setTemplates] = useState([]);
-	const [currentDocId, setCurrentDocId] = useState(null);
+	const [currentEditId, setCurrentEditId] = useState(null);
 	const [isAutoSaveEnabled, setIsAutoSaveEnabled] = useState(false);
 	const [analysisIds, setAnalysisIds] = useState([]);
-	const [tableInfoContent, setTableInfoContent] = useState('Đang tải thông tin bảng...');
+	const [tableInfoContent, setTableInfoContent] = useState('Chưa có thông tin mẫu thử - chỉ tiêu đã chọn...');
+	const [sampleUIDs, setSampleUIDs] = useState([]);
 
-	// Component state
+	// Component state for template search
 	const [showTemplateSearchForm, setShowTemplateSearchForm] = useState(false);
-	const [showEditSavedReportForm, setShowEditSavedReportForm] = useState(false);
-	const [templateMinimized, setTemplateMinimized] = useState(true);
-	const [documentReportsMinimized, setDocumentReportsMinimized] = useState(true);
-
-	// New states for enhanced functionality
-	const [savedReports, setSavedReports] = useState([]);
-	const [savedReportsLoading, setSavedReportsLoading] = useState(false);
 	const [templateSearchLoading, setTemplateSearchLoading] = useState(false);
+
+	// Component state for icon insertion
+	const [showIconPicker, setShowIconPicker] = useState(false);
 
 	// Document information state
 	const [documentStatus, setDocumentStatus] = useState('Draft'); // 'Draft' | 'Published'
-	const [publishedBy, setPublishedBy] = useState('');
-	const [publishedAt, setPublishedAt] = useState('');
 	const [lastModified, setLastModified] = useState('');
 	const [lastModifiedAt, setLastModifiedAt] = useState('');
 	const [author, setAuthor] = useState('');
 	const [authorAt, setAuthorAt] = useState('');
-	const [documentType, setDocumentType] = useState('BIEN_BAN_KET_QUA_THU_NGHIEM'); // Default to test result report
+	const [publishedAt, setPublishedAt] = useState('');
+	const [publishedBy, setPublishedBy] = useState('');
+	const [classifierCode, setClassifierCode] = useState('BIEN_BAN_KET_QUA_THU_NGHIEM'); // Default to test result report
+	const [fileId, setFileId] = useState(''); // Store fileId from published document metadata
 
 	const [editorContent, setEditorContent] = useState('');
-
-	// Popup states
-	const [showDiagramPopup, setShowDiagramPopup] = useState(false);
-	const [showMathPopup, setShowMathPopup] = useState(false);
 
 	// Refs
 	const editorRef = useRef(null);
 	const autoSaveIntervalRef = useRef(null);
-
-	// Available columns
-	const availableColumns = {
-		sample_uid: 'Mã mẫu',
-		id: 'Mã chỉ tiêu',
-		parameter_name: 'Chỉ tiêu',
-	};
+	const loadTableInfoTimeoutRef = useRef(null);
+	const isLoadingTableInfo = useRef(false);
+	const lastAnalysisIdsRef = useRef(null);
 
 	useEffect(() => {
-		// Load MathLive dynamically
-		const loadMathLive = async () => {
-			if (!window.MathLive) {
-				try {
-					const { convertLatexToMarkup } = await import('https://unpkg.com/mathlive/dist/mathlive.min.mjs');
-					window.convertLatexToMarkup = convertLatexToMarkup;
-				} catch (error) {
-					console.warn('MathLive could not be loaded:', error);
-				}
-			}
-		};
-
-		loadMathLive();
-
 		// Update current date
 		updateCurrentDate();
 
-		// Load data from URL if available
-		loadDataFromURL();
+		// Xử lý dữ liệu khi load trang lần đầu
+		handleInitialPageLoad();
 
 		// Set up interval to update date every 10 seconds
 		const dateInterval = setInterval(updateCurrentDate, 10000);
@@ -190,6 +164,9 @@ const Editor = () => {
 			if (autoSaveIntervalRef.current) {
 				clearInterval(autoSaveIntervalRef.current);
 			}
+			if (loadTableInfoTimeoutRef.current) {
+				clearTimeout(loadTableInfoTimeoutRef.current);
+			}
 			clearInterval(dateInterval);
 		};
 	}, []);
@@ -197,116 +174,455 @@ const Editor = () => {
 	// Separate useEffect to reload table info when analysisIds change
 	useEffect(() => {
 		if (analysisIds && analysisIds.length > 0) {
-			loadTableInfo();
+			// Check if analysisIds actually changed to prevent unnecessary calls
+			const analysisIdsString = JSON.stringify(analysisIds.sort());
+			if (lastAnalysisIdsRef.current === analysisIdsString) {
+				console.log('analysisIds unchanged, skipping loadTableInfo');
+				return;
+			}
+
+			console.log('analysisIds changed from', lastAnalysisIdsRef.current, 'to', analysisIdsString);
+			lastAnalysisIdsRef.current = analysisIdsString;
+
+			// Clear any existing timeout
+			if (loadTableInfoTimeoutRef.current) {
+				clearTimeout(loadTableInfoTimeoutRef.current);
+			}
+
+			// Use longer delay to avoid rapid successive calls during popup operations
+			const delay = 500;
+
+			// Add a delay to prevent multiple calls during popup selection
+			loadTableInfoTimeoutRef.current = setTimeout(() => {
+				// Only load if there's no popup open to prevent flickering
+				const popupExists = document.getElementById('parameterSelectionOverlay');
+				if (!popupExists) {
+					loadTableInfo();
+				} else {
+					console.log('Popup is open, deferring loadTableInfo');
+					// Schedule another check after popup might be closed
+					setTimeout(() => {
+						const popupStillExists = document.getElementById('parameterSelectionOverlay');
+						if (!popupStillExists) {
+							loadTableInfo();
+						}
+					}, 1000);
+				}
+			}, delay);
+
+			return () => {
+				if (loadTableInfoTimeoutRef.current) {
+					clearTimeout(loadTableInfoTimeoutRef.current);
+				}
+			};
+		} else {
+			// Reset cache when no analysisIds
+			lastAnalysisIdsRef.current = null;
 		}
 	}, [analysisIds]);
 
 	// Auto start auto-save when template is selected or content exists
 	useEffect(() => {
+		console.log('Auto-save useEffect triggered:', {
+			currentTemplate: !!currentTemplate,
+			editorContent: !!editorContent,
+			isAutoSaveEnabled,
+		});
 		if (currentTemplate || editorContent) {
 			if (!isAutoSaveEnabled) {
 				startAutoSave();
 			}
 		}
-	}, [currentTemplate, editorContent]);
+	}, [currentTemplate, editorContent, isAutoSaveEnabled]);
 
-	const initializeTinyMCE = () => {
-		// This function is no longer needed as we use TinyMCEEditor component
-		return;
-	};
-
-	const loadDataFromURL = async () => {
+	// Hàm xử lý dữ liệu khi load trang lần đầu
+	const handleInitialPageLoad = async () => {
+		console.log('=== handleInitialPageLoad started ===');
 		const urlParams = new URLSearchParams(window.location.search);
+		const docId = urlParams.get('docId');
+		const editId = urlParams.get('editId');
+		const templateId = urlParams.get('templateId');
 		const analysisIdsParam = urlParams.get('analysisIds');
-		const docIdParam = urlParams.get('docId');
-		const templateIdParam = urlParams.get('templateId');
-		const docTypeCodeParam = urlParams.get('docTypeCode');
+		const classifierCodeParam = urlParams.get('classifierCode');
 
-		// Store analysisIds
-		if (analysisIdsParam) {
-			const ids = analysisIdsParam.split(',').filter((id) => id.trim());
-			setAnalysisIds(ids);
-			// Also set global for backward compatibility
-			if (typeof window !== 'undefined') {
-				window.analysisIds = ids;
+		console.log('URL params:', { docId, editId, templateId, analysisIdsParam, classifierCodeParam });
+
+		try {
+			// Parse analysisIds if available
+			let analysisIds = [];
+			if (analysisIdsParam) {
+				analysisIds = analysisIdsParam.split(',').filter((id) => id.trim());
 			}
-		} else {
-			setAnalysisIds([]);
-			if (typeof window !== 'undefined') {
-				window.analysisIds = [];
+
+			// Xử lý theo thứ tự ưu tiên
+			if (docId) {
+				// 1. Nếu có docId: load metadata của document đã publish
+				await handleDocIdLoad(docId);
+			} else if (editId) {
+				// 2. Nếu có editId: load metadata của document draft
+				await handleEditIdLoad(editId);
+			} else if (templateId) {
+				// 3. Nếu có templateId: load template data
+				await handleTemplateIdLoad(templateId, analysisIds, classifierCodeParam);
+			} else if (analysisIds.length > 0 || classifierCodeParam) {
+				// 4. Nếu có analysisIds + classifierCode
+				await handleAnalysisIdsAndClassifierCode(analysisIds, classifierCodeParam);
 			}
+
+			// Sau khi xử lý, gọi auto_save và cập nhật URL
+			await performAutoSaveAndCleanURL();
+		} catch (error) {
+			console.error('Error in handleInitialPageLoad:', error);
+			showAutoHideMessage('Lỗi khi tải dữ liệu trang: ' + error.message, 'error');
 		}
 
-		// Store docId
-		if (docIdParam) {
-			setCurrentDocId(docIdParam);
-		}
-
-		// Handle docTypeCode
-		if (docTypeCodeParam) {
-			setDocumentType(docTypeCodeParam);
-		}
-
-		// Load template if templateId exists
-		if (templateIdParam) {
-			try {
-				await loadTemplateById(templateIdParam);
-			} catch (error) {
-				console.error('Failed to load template:', error);
-			}
-		}
-
-		// Load table info if we have analysisIds
-		if (analysisIdsParam) {
-			await loadTableInfo();
-		}
-
-		// Initialize default content for header and footer after all data is loaded
-		setTimeout(initializeDefaultContent, 1000);
+		console.log('=== handleInitialPageLoad completed ===');
 	};
 
-	const loadTemplateById = async (templateId) => {
-		try {
-			const response = await apiPost('https://black.irdop.org/v1/lab/test_report/get_template', {
-				id: templateId,
-				searchTerm: '',
-				page: 1,
+	// Xử lý khi có docId
+	const handleDocIdLoad = async (docId) => {
+		console.log('Loading published document by docId:', docId);
+
+		// Reset fileId state trước khi load mới
+		setFileId('');
+
+		const response = await apiPost('https://red.irdop.org/v1/document/get_doc', {
+			docId: docId,
+		});
+
+		if (response.status === 200 && response.data && response.data.metadata) {
+			const metadata = response.data.metadata;
+
+			console.log('handleDocIdLoad response.data:', response.data);
+			console.log('Available fileId locations:', {
+				'response.data.fileId': response.data.fileId,
+				'metadata.fileId': metadata.fileId,
 			});
 
-			if (response.status === 200 && response.data && response.data.result && response.data.result.length > 0) {
-				const template = response.data.result[0];
-				setCurrentTemplate(template);
+			// Gán header data
+			if (metadata.header) {
+				setHeaderData({
+					title: metadata.header.title || '',
+					code: metadata.header.code || '',
+					publishNo: metadata.header.publishNo || '',
+					publishDate: metadata.header.publishDate || '',
+				});
+			}
 
-				// Apply template content to editor if available
-				if (template.content && editorRef.current) {
-					editorRef.current.setContent(template.content);
-					setEditorContent(template.content);
+			// Gán content vào editor
+			if (metadata.content) {
+				setEditorContent(metadata.content);
+				// Set content to editor when it's ready
+				const setContentWhenReady = () => {
+					if (editorRef.current && editorRef.current.initialized) {
+						editorRef.current.setContent(metadata.content);
+					} else {
+						setTimeout(setContentWhenReady, 200);
+					}
+				};
+				setTimeout(setContentWhenReady, 500);
+			}
+
+			// Gán thông tin publish
+			if (metadata.publishedAt) {
+				setPublishedAt(metadata.publishedAt);
+				setDocumentStatus('Published');
+			}
+			if (metadata.publishedByUID) {
+				setPublishedBy(metadata.publishedByUID);
+			}
+
+			// Gán fileId từ docrecord (for file preview) - chỉ lấy fileId thực sự
+			const docFileId = response.data.fileId || metadata.fileId;
+			if (docFileId) {
+				console.log('Setting fileId to:', docFileId);
+				setFileId(docFileId);
+			} else {
+				console.log('No fileId found in response');
+			}
+
+			// Gán template info
+			if (metadata.templateId) {
+				setCurrentTemplate({
+					id: metadata.templateId,
+					templateName: metadata.templateName || '',
+					name: metadata.templateName || '',
+				});
+			}
+
+			// Gán classifier code
+			if (metadata.classifierCode) {
+				setClassifierCode(metadata.classifierCode);
+			}
+
+			// Load table info với analysisIds
+			if (metadata.analysisIds && metadata.analysisIds.length > 0) {
+				setAnalysisIds(metadata.analysisIds);
+				if (typeof window !== 'undefined') {
+					window.analysisIds = metadata.analysisIds;
 				}
+			}
 
-				// Apply template header data if available
-				if (template.header) {
+			// Gán sample UIDs
+			if (metadata.sampleUIDs) {
+				setSampleUIDs(metadata.sampleUIDs);
+			}
+
+			showAutoHideMessage(`Đã tải tài liệu đã xuất bản: ${metadata.header?.title || 'Tài liệu'}`, 'success');
+		} else {
+			throw new Error('Không tìm thấy tài liệu với docId: ' + docId);
+		}
+	};
+
+	// Xử lý khi có editId
+	const handleEditIdLoad = async (editId) => {
+		console.log('Loading draft document by editId:', editId);
+
+		// Reset fileId state trước khi load mới (draft documents thường không có fileId)
+		setFileId('');
+
+		const response = await apiPost('https://red.irdop.org/v1/editor/lab_result_report/get_editor', {
+			id: editId,
+			searchTerm: '',
+			page: 1,
+		});
+
+		if (response.status === 200 && response.data) {
+			let document = null;
+
+			// Find document in response
+			if (response.data.result) {
+				if (Array.isArray(response.data.result)) {
+					document = response.data.result.find((doc) => doc.id === editId);
+				} else if (response.data.result.id === editId) {
+					document = response.data.result;
+				}
+			}
+
+			if (document && document.metadata) {
+				const metadata = document.metadata;
+
+				// Gán header data
+				if (metadata.header) {
 					setHeaderData({
-						title: template.header.title || '',
-						code: template.header.code || '',
-						publishNo: template.header.publishNo || '',
-						publishDate: template.header.publishDate || '',
+						title: metadata.header.title || '',
+						code: metadata.header.code || '',
+						publishNo: metadata.header.publishNo || '',
+						publishDate: metadata.header.publishDate || '',
 					});
 				}
 
-				showAutoHideMessage(`Đã tải mẫu: ${template.templateName || template.name}`, 'success');
+				// Gán content vào editor
+				if (metadata.content) {
+					setEditorContent(metadata.content);
+					const setContentWhenReady = () => {
+						if (editorRef.current && editorRef.current.initialized) {
+							editorRef.current.setContent(metadata.content);
+						} else {
+							setTimeout(setContentWhenReady, 200);
+						}
+					};
+					setTimeout(setContentWhenReady, 500);
+				}
+
+				// Gán template info
+				if (metadata.templateId) {
+					setCurrentTemplate({
+						id: metadata.templateId,
+						templateName: metadata.templateName || '',
+						name: metadata.templateName || '',
+					});
+				}
+
+				// Gán classifier code
+				if (metadata.classifierCode) {
+					setClassifierCode(metadata.classifierCode);
+				}
+
+				// Load table info với analysisIds
+				if (metadata.analysisIds && metadata.analysisIds.length > 0) {
+					setAnalysisIds(metadata.analysisIds);
+					if (typeof window !== 'undefined') {
+						window.analysisIds = metadata.analysisIds;
+					}
+				}
+
+				// Set current editId
+				setCurrentEditId(editId);
+
+				// Update document info
+				updateDocumentInfo(
+					document.id,
+					document.createdAt,
+					document.modifiedAt,
+					document.authorName,
+					document.modifiedBy,
+				);
+
+				showAutoHideMessage(
+					`Đã tải tài liệu: ${metadata.templateName || metadata.header?.title || 'Tài liệu'}`,
+					'success',
+				);
+			} else {
+				throw new Error('Không tìm thấy tài liệu với editId: ' + editId);
 			}
+		} else {
+			throw new Error('Lỗi API khi tải tài liệu draft');
+		}
+	};
+
+	// Xử lý khi có templateId
+	const handleTemplateIdLoad = async (templateId, analysisIds, classifierCodeParam) => {
+		console.log('Loading template by templateId:', templateId);
+
+		// Reset fileId state trước khi load mới (templates thường không có fileId)
+		setFileId('');
+
+		const response = await apiPost('https://black.irdop.org/v1/lab/test_report/get_template', {
+			id: templateId,
+			searchTerm: '',
+			page: 1,
+		});
+
+		if (response.status === 200 && response.data && response.data.result && response.data.result.length > 0) {
+			const template = response.data.result[0];
+
+			// Gán template info
+			setCurrentTemplate({
+				id: template.id,
+				templateName: template.templateName || template.name || '',
+				name: template.templateName || template.name || '',
+			});
+
+			// Gán header data từ template
+			if (template.header) {
+				setHeaderData({
+					title: template.header.title || '',
+					code: template.header.code || '',
+					publishNo: template.header.publishNo || '',
+					publishDate: template.header.publishDate || '',
+				});
+			}
+
+			// Gán content vào editor
+			if (template.content) {
+				setEditorContent(template.content);
+				const setContentWhenReady = () => {
+					if (editorRef.current && editorRef.current.initialized) {
+						editorRef.current.setContent(template.content);
+					} else {
+						setTimeout(setContentWhenReady, 200);
+					}
+				};
+				setTimeout(setContentWhenReady, 500);
+			}
+
+			// Load table info với analysisIds nếu có
+			if (analysisIds && analysisIds.length > 0) {
+				setAnalysisIds(analysisIds);
+				if (typeof window !== 'undefined') {
+					window.analysisIds = analysisIds;
+				}
+			}
+
+			// Gán classifier code nếu có
+			if (classifierCodeParam) {
+				setClassifierCode(classifierCodeParam);
+			}
+
+			showAutoHideMessage(`Đã tải mẫu: ${template.templateName || template.name}`, 'success');
+		} else {
+			throw new Error('Không tìm thấy template với templateId: ' + templateId);
+		}
+	};
+
+	// Xử lý khi chỉ có analysisIds + classifierCode
+	const handleAnalysisIdsAndClassifierCode = async (analysisIds, classifierCodeParam) => {
+		console.log('Loading with analysisIds and classifierCode:', { analysisIds, classifierCodeParam });
+
+		// Reset fileId state trước khi load mới (không có document nào được load)
+		setFileId('');
+
+		// Load table info với analysisIds nếu có
+		if (analysisIds && analysisIds.length > 0) {
+			setAnalysisIds(analysisIds);
+			if (typeof window !== 'undefined') {
+				window.analysisIds = analysisIds;
+			}
+		}
+
+		// Gán classifier code nếu có
+		if (classifierCodeParam) {
+			setClassifierCode(classifierCodeParam);
+		}
+	};
+
+	// Thực hiện auto_save và clean URL
+	const performAutoSaveAndCleanURL = async () => {
+		console.log('Performing auto save and cleaning URL...');
+
+		try {
+			// Gọi auto_save
+			const urlParams = new URLSearchParams(window.location.search);
+			const originalEditId = urlParams.get('editId');
+			const docId = urlParams.get('docId');
+
+			// Chỉ auto save nếu không có docId (vì docId là published document)
+			if (!docId) {
+				await autoSaveLabResultReport();
+			}
+
+			// Lấy editId hiện tại (có thể được tạo mới từ autoSave)
+			const finalEditId = currentEditId || originalEditId;
+
+			// Clean URL - chỉ giữ lại editId
+			const newUrl = new URL(window.location);
+			newUrl.search = ''; // Clear all params
+
+			// Thêm editId nếu có
+			if (finalEditId) {
+				newUrl.searchParams.set('editId', finalEditId);
+				console.log('Document ID set to:', finalEditId);
+
+				// Đảm bảo currentEditId được set
+				if (!currentEditId && originalEditId) {
+					setCurrentEditId(originalEditId);
+				}
+			}
+
+			window.history.replaceState({}, '', newUrl);
+			console.log('URL cleaned, only editId remains');
 		} catch (error) {
-			console.error('Error loading template:', error);
-			showAutoHideMessage('Lỗi khi tải mẫu biên bản', 'error');
+			console.error('Error in performAutoSaveAndCleanURL:', error);
 		}
 	};
 
 	const loadTableInfo = async () => {
 		try {
-			if (!analysisIds || analysisIds.length === 0) {
-				setTableInfoContent('Không có ID phân tích để hiển thị thông tin bảng.');
+			// Prevent multiple simultaneous calls
+			if (isLoadingTableInfo.current) {
+				console.log('loadTableInfo already running, skipping...');
 				return;
 			}
+
+			if (!analysisIds || analysisIds.length === 0) {
+				setTableInfoContent('Không có ID chỉ tiêu để hiển thị thông tin bảng.');
+				return;
+			}
+
+			// Check if popup is open, if so, defer the call
+			const popupExists = document.getElementById('parameterSelectionOverlay');
+			if (popupExists) {
+				console.log('Popup is open, deferring loadTableInfo call');
+				return;
+			}
+
+			isLoadingTableInfo.current = true;
+			const analysisIdsString = JSON.stringify(analysisIds.sort());
+			console.log('Loading table info for analysisIds:', analysisIds, 'cache key:', analysisIdsString);
+
+			// Show loading state in the UI
+			setTableInfoContent('<div style="color: #6b7280;">Đang tải thông tin...</div>');
 
 			const response = await apiPost('https://black.irdop.org/v1/template/get_table', {
 				listIds: analysisIds,
@@ -324,9 +640,11 @@ const Editor = () => {
 
 			const { tableAnalysisInfo, tableSampleInfo } = result;
 
-			let tableInfoHtml = '';
+			// Extract and store sample UIDs
+			const extractedSampleUIDs = tableSampleInfo?.map((sample) => sample.sample_uid).filter((uid) => uid) || [];
+			setSampleUIDs(extractedSampleUIDs);
 
-			// Display sample info
+			let tableInfoHtml = ''; // Display sample info
 			if (tableSampleInfo && tableSampleInfo.length > 0) {
 				tableInfoHtml += '<div style="margin-bottom: 12px;"><strong>Thông tin mẫu thử:</strong></div>';
 				tableInfoHtml += '<div style="margin-bottom: 8px;">';
@@ -358,24 +676,12 @@ const Editor = () => {
 			}
 
 			setTableInfoContent(tableInfoHtml);
+			console.log('loadTableInfo completed successfully');
 		} catch (error) {
 			console.error('Error loading table info:', error);
 			setTableInfoContent(`<div style="color: #ef4444;">Lỗi khi tải thông tin bảng: ${error.message}</div>`);
-		}
-	};
-
-	const initializeDefaultContent = () => {
-		// Only set default content if no docId exists and header fields are empty
-		if (!currentDocId) {
-			// Don't auto-fill any values for header fields
-			// Just keep current values if they exist
-			const currentHeader = headerData;
-			setHeaderData({
-				title: currentHeader.title || '',
-				code: currentHeader.code || '',
-				publishNo: currentHeader.publishNo || '',
-				publishDate: currentHeader.publishDate || '',
-			});
+		} finally {
+			isLoadingTableInfo.current = false;
 		}
 	};
 
@@ -388,9 +694,9 @@ const Editor = () => {
 		}
 
 		try {
-			if (!currentDocId) {
+			if (!currentEditId) {
 				await autoSaveLabResultReport();
-				if (!currentDocId) {
+				if (!currentEditId) {
 					throw new Error('Không thể tạo mã tài liệu. Vui lòng thử lại.');
 				}
 			}
@@ -417,9 +723,7 @@ const Editor = () => {
 					publishNo: '',
 					publishDate: '',
 				});
-				setCurrentDocId(null);
-				setCurrentTemplate(null);
-				setCurrentFileId(null);
+				setCurrentEditId(null);
 			}
 		}
 	};
@@ -466,9 +770,14 @@ const Editor = () => {
 
 	const autoSaveLabResultReport = async () => {
 		try {
+			console.log('Auto-save triggered');
 			const content =
 				editorRef.current && editorRef.current.getContent ? editorRef.current.getContent() : editorContent;
-			const footerContent = currentDocId || '';
+
+			// Check if we have editId from URL, but only if we're not loading from docId
+			const urlParams = new URLSearchParams(window.location.search);
+			const urlEditId = urlParams.get('editId');
+			const urlDocId = urlParams.get('docId');
 
 			const requestBody = {
 				metadata: {
@@ -476,27 +785,47 @@ const Editor = () => {
 					templateName: currentTemplate?.templateName || currentTemplate?.name || null,
 					header: headerData, // Now this is a JSONB object
 					content: content,
-					footer: footerContent,
+					footer: currentEditId,
 					analysisIds: analysisIds || [],
+					sampleUIDs: sampleUIDs || [],
+					classifierCode: classifierCode || null,
 				},
 			};
 
-			// Add editorId if we have docId
-			if (currentDocId) {
-				requestBody.editorId = currentDocId;
+			// Add editorId only if we have a valid editId AND we're not loading from docId
+			// When loading from docId, we want to create a NEW document, not update existing one
+			let editId = null;
+			if (!urlDocId) {
+				// Only use editId if we're not loading from docId
+				editId = currentEditId || urlEditId;
+			}
+			// If loading from docId, editId stays null to create new document
+
+			if (editId) {
+				requestBody.editorId = editId;
+				console.log('Auto-save with existing editId:', editId);
+			} else {
+				console.log('Auto-save creating new document (no editId)');
 			}
 
+			console.log('Auto-save request body:', requestBody);
 			const response = await apiPost('https://red.irdop.org/v1/editor/auto_save/lab_result_report', requestBody);
 
 			if (response.status === 200 && response.data && response.data.id) {
-				// If this is the first save (no docId yet), update URL and footer
-				if (!currentDocId) {
-					const newDocId = response.data.id;
-					setCurrentDocId(newDocId);
-					updateURLWithDocId(newDocId);
+				// If this is the first save (no editId in request), update URL and footer
+				if (!editId) {
+					// This was a new document creation (no editId in request body)
+					const newEditId = response.data.id;
+					setCurrentEditId(newEditId);
 
-					// Show success message for first save
-					showAutoHideMessage(`Đã tạo mã tài liệu: ${newDocId}`, 'success');
+					// Update URL to only show editId
+					const newUrl = new URL(window.location);
+					newUrl.search = '';
+					newUrl.searchParams.set('editId', newEditId);
+					window.history.replaceState({}, '', newUrl);
+
+					// Show success message ONLY for new document creation
+					showAutoHideMessage(`Đã tạo mã tài liệu: ${newEditId}`, 'success');
 				}
 
 				// Update document info with auto-save data
@@ -517,14 +846,13 @@ const Editor = () => {
 
 	const createLabResultReport = async () => {
 		try {
-			// Prepare report data with exact structure: {header, content, footer, analysisIds}
+			// Prepare report data with exact structure: {header, content, footer, analysisIds, sampleUIDs}
 			const reportData = {
 				header: headerData,
 				content: editorContent,
-				footer: currentDocId
-					? `Document fingerprint: ${currentDocId} - ${new Date().toLocaleDateString('vi-VN')}`
-					: 'Document fingerprint: - -',
+				footer: currentEditId,
 				analysisIds: analysisIds || [],
+				sampleUIDs: sampleUIDs || [],
 			};
 
 			const response = await apiPost('https://black.irdop.org/khsi19me/convert/lab_result_report_html', reportData);
@@ -535,7 +863,7 @@ const Editor = () => {
 				// Show popup instead of new tab
 				const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
 				showPreviewPopup(htmlResponse, {
-					docId: currentDocId,
+					editId: currentEditId,
 					metadata: {
 						templateId: currentTemplate?.id,
 						templateName: currentTemplate?.templateName || currentTemplate?.name,
@@ -543,6 +871,7 @@ const Editor = () => {
 						content: editorContent,
 						footer: reportData.footer,
 						analysisIds: analysisIds || [],
+						sampleUIDs: sampleUIDs || [],
 						documentHTML: htmlResponse,
 					},
 				});
@@ -556,14 +885,14 @@ const Editor = () => {
 	};
 
 	const updateDocumentInfo = (
-		docId = null,
+		editId = null,
 		createdAt = null,
 		modifiedAt = null,
 		authorName = null,
 		modifiedBy = null,
 	) => {
-		if (docId && docId !== currentDocId) {
-			setCurrentDocId(docId);
+		if (editId && editId !== currentEditId) {
+			setCurrentEditId(editId);
 		}
 
 		// Update document information state
@@ -589,6 +918,13 @@ const Editor = () => {
 	};
 
 	const openParameterSelectionPopup = () => {
+		// Check if popup already exists to prevent multiple instances
+		const existingOverlay = document.getElementById('parameterSelectionOverlay');
+		if (existingOverlay) {
+			console.log('Popup already exists, not creating new one');
+			return;
+		}
+
 		// Create popup overlay
 		const overlay = document.createElement('div');
 		overlay.id = 'parameterSelectionOverlay';
@@ -628,16 +964,19 @@ const Editor = () => {
 			border-radius: 8px;
 		`;
 
+		// Store reference to current analysisIds to prevent unnecessary updates
+		const currentAnalysisIds = [...(analysisIds || [])];
+
 		// Handle iframe load to pass current analysis IDs
 		iframe.onload = function () {
 			try {
 				const iframeWindow = iframe.contentWindow;
-				if (iframeWindow && analysisIds) {
+				if (iframeWindow) {
 					// Pass current analysis IDs to the popup
 					iframeWindow.postMessage(
 						{
 							type: 'INIT_SELECTION',
-							analysisIds: analysisIds || [],
+							analysisIds: currentAnalysisIds,
 						},
 						'*',
 					);
@@ -654,25 +993,34 @@ const Editor = () => {
 		// Handle messages from iframe
 		const messageHandler = function (event) {
 			if (event.data && event.data.type === 'SELECTION_CONFIRMED') {
-				// Update analysis IDs and reload table info
+				// Update analysis IDs only if they actually changed
 				const newAnalysisIds = event.data.analysisIds || [];
-				setAnalysisIds(newAnalysisIds);
+				const newAnalysisIdsString = JSON.stringify(newAnalysisIds.sort());
+				const currentAnalysisIdsString = JSON.stringify(currentAnalysisIds.sort());
 
-				// Also update global for backward compatibility
-				if (typeof window !== 'undefined') {
-					window.analysisIds = newAnalysisIds;
+				if (newAnalysisIdsString !== currentAnalysisIdsString) {
+					console.log('Analysis IDs changed, updating...');
+					setAnalysisIds(newAnalysisIds);
+
+					// Also update global for backward compatibility
+					if (typeof window !== 'undefined') {
+						window.analysisIds = newAnalysisIds;
+					}
+
+					// Update URL with new analysis IDs (keep only editId and analysisIds)
+					const newUrl = new URL(window.location);
+					const currentEditId = newUrl.searchParams.get('editId');
+					newUrl.search = '';
+					if (currentEditId) {
+						newUrl.searchParams.set('editId', currentEditId);
+					}
+					if (newAnalysisIds.length > 0) {
+						newUrl.searchParams.set('analysisIds', newAnalysisIds.join(','));
+					}
+					window.history.replaceState({}, '', newUrl);
+				} else {
+					console.log('Analysis IDs unchanged, no update needed');
 				}
-
-				// Update URL with new analysis IDs
-				updateURLWithAnalysisIds(newAnalysisIds);
-
-				// Reload table information
-				loadTableInfo();
-
-				// Auto-insert/replace table data when selection changes
-				setTimeout(() => {
-					insertTableInfo();
-				}, 500);
 
 				// Close popup
 				closeParameterSelectionPopup();
@@ -704,11 +1052,18 @@ const Editor = () => {
 		const overlay = document.getElementById('parameterSelectionOverlay');
 		if (overlay) {
 			overlay.remove();
+			// After popup is closed, check if we need to load table info
+			setTimeout(() => {
+				if (analysisIds && analysisIds.length > 0 && !isLoadingTableInfo.current) {
+					console.log('Popup closed, loading table info if needed');
+					loadTableInfo();
+				}
+			}, 200);
 		}
 	};
 
 	const insertTableInfo = async () => {
-		// This function inserts the current analysis data as a table in the editor
+		// This function inserts table 1 at the beginning and table 2 at the end of the editor
 		if (!analysisIds || analysisIds.length === 0) {
 			showAutoHideMessage('Không có chỉ tiêu nào được chọn để chèn bảng', 'warning');
 			return;
@@ -731,7 +1086,7 @@ const Editor = () => {
 
 		try {
 			// Double check that methods exist
-			if (typeof editor.insertContent !== 'function') {
+			if (typeof editor.getContent !== 'function' || typeof editor.setContent !== 'function') {
 				showAutoHideMessage('Editor chưa sẵn sàng, vui lòng thử lại...', 'warning');
 				return;
 			}
@@ -752,31 +1107,33 @@ const Editor = () => {
 
 			const { tableAnalysisInfo, tableSampleInfo } = result;
 
-			let tableHTML = '';
+			// Extract and update sample UIDs
+			const extractedSampleUIDs = tableSampleInfo?.map((sample) => sample.sample_uid).filter((uid) => uid) || [];
+			setSampleUIDs(extractedSampleUIDs);
 
-			// Create sample info table if available
+			let table1HTML = '';
+			let table2HTML = '';
+
+			// Bảng 1: Thông tin mẫu thử (Mã mẫu, Tên mẫu, Mô tả mẫu)
 			if (tableSampleInfo && tableSampleInfo.length > 0) {
 				const sampleRows = tableSampleInfo
 					.map(
 						(sample, index) =>
-							`<tr><td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${
-								index + 1
-							}</td><td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${
-								sample.sample_uid || 'N/A'
-							}</td><td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${
-								sample.sample_name || 'N/A'
-							}</td></tr>`,
+							`<tr>
+								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${sample.sample_uid || 'N/A'}</td>
+								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${sample.sample_name || 'N/A'}</td>
+								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;"></td>
+							</tr>`,
 					)
 					.join('');
 
-				tableHTML += `
-					<h4>Thông tin mẫu thử</h4>
+				table1HTML = `
 					<table style="width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 16px;">
 						<thead>
 							<tr>
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">STT</th>
 								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Mã mẫu</th>
 								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Tên mẫu</th>
+								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Mô tả mẫu</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -786,29 +1143,28 @@ const Editor = () => {
 				`;
 			}
 
-			// Create analysis info table if available
+			// Bảng 2: Thông tin chỉ tiêu kiểm nghiệm (Mã mẫu, Mã chỉ tiêu, Chỉ tiêu, Kết quả)
 			if (tableAnalysisInfo && tableAnalysisInfo.length > 0) {
 				const analysisRows = tableAnalysisInfo
 					.map(
 						(analysis, index) =>
-							`<tr><td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${
-								index + 1
-							}</td><td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${
-								analysis.sample_uid || 'N/A'
-							}</td><td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${
-								analysis.parameter_name || 'N/A'
-							}</td></tr>`,
+							`<tr>
+								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${analysis.sample_uid || 'N/A'}</td>
+								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${analysis.id || 'N/A'}</td>
+								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${analysis.parameter_name || 'N/A'}</td>
+								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;"></td>
+							</tr>`,
 					)
 					.join('');
 
-				tableHTML += `
-					<h4>Thông tin chỉ tiêu kiểm nghiệm</h4>
-					<table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
+				table2HTML = `
+					<table style="width: 100%; border-collapse: collapse; border: 1px solid #000; margin-top: 16px;">
 						<thead>
 							<tr>
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">STT</th>
 								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Mã mẫu</th>
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Tên chỉ tiêu</th>
+								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Mã chỉ tiêu</th>
+								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Chỉ tiêu</th>
+								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Kết quả</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -818,10 +1174,18 @@ const Editor = () => {
 				`;
 			}
 
-			if (tableHTML) {
-				// Insert the table at the current cursor position
-				editor.insertContent(tableHTML);
-				showAutoHideMessage('Đã chèn bảng thông tin chỉ tiêu thành công', 'success');
+			if (table1HTML || table2HTML) {
+				// Get current editor content
+				const currentContent = editor.getContent();
+
+				// Combine: Table 1 + Current Content + Table 2
+				const newContent = table1HTML + currentContent + table2HTML;
+
+				// Set the new content (Table 1 at beginning, current content in middle, Table 2 at end)
+				editor.setContent(newContent);
+				setEditorContent(newContent);
+
+				showAutoHideMessage('Đã chèn bảng thông tin (Bảng 1 ở đầu, Bảng 2 ở cuối) thành công', 'success');
 			} else {
 				showAutoHideMessage('Không có dữ liệu để tạo bảng', 'warning');
 			}
@@ -829,14 +1193,6 @@ const Editor = () => {
 			console.error('Error inserting table info:', error);
 			showAutoHideMessage('Lỗi khi chèn bảng: ' + error.message, 'error');
 		}
-	};
-
-	const toggleTemplateSection = (minimize) => {
-		setTemplateMinimized(minimize);
-	};
-
-	const toggleDocumentReportsSection = (minimize) => {
-		setDocumentReportsMinimized(minimize);
 	};
 
 	const showTemplateSearchModal = () => {
@@ -888,8 +1244,15 @@ const Editor = () => {
 				});
 			}
 
-			// Update URL with template ID
-			updateURLWithTemplateId(template.id);
+			// Update URL with template ID (keep only editId and templateId)
+			const newUrl = new URL(window.location);
+			const currentEditId = newUrl.searchParams.get('editId');
+			newUrl.search = '';
+			if (currentEditId) {
+				newUrl.searchParams.set('editId', currentEditId);
+			}
+			newUrl.searchParams.set('templateId', template.id);
+			window.history.replaceState({}, '', newUrl);
 
 			setShowTemplateSearchForm(false);
 			showAutoHideMessage(`Đã chọn mẫu: ${template.templateName || template.name}`, 'success');
@@ -897,11 +1260,6 @@ const Editor = () => {
 			console.error('Error selecting template:', error);
 			showAutoHideMessage('Lỗi khi chọn mẫu biên bản', 'error');
 		}
-	};
-
-	const showCreateTemplateModal = () => {
-		// Implementation for create template modal
-		console.log('Show create template modal');
 	};
 
 	// New API functions added from EditorTemplate.html
@@ -927,148 +1285,18 @@ const Editor = () => {
 		}
 	};
 
-	const createTemplate = async (templateData) => {
-		try {
-			const requestBody = {
-				templateName: templateData.templateName,
-				templateDescription: templateData.templateDescription,
-				columns: templateData.columns || [
-					{ columnName: 'Mã mẫu', valueColumn: 'sample_uid', width: '30%', resizable: true },
-					{ columnName: 'Mã chỉ tiêu', valueColumn: 'id', width: '30%', resizable: true },
-					{ columnName: 'Chỉ tiêu', valueColumn: 'parameter_name', width: '40%', resizable: true },
-				],
-				customRows: [],
-				header: templateData.header || headerData,
-				content: templateData.content || editorContent,
-				footer:
-					templateData.footer ||
-					`Document fingerprint: ${currentDocId || ''} - ${new Date().toLocaleDateString('vi-VN')}`,
-			};
-
-			// Add fileId if available
-			if (templateData.fileId) {
-				requestBody.fileId = templateData.fileId;
-			}
-
-			const response = await apiPost('https://black.irdop.org/v1/lab/test_report/create_template', requestBody);
-
-			if (response.status < 300 && response.data) {
-				const result = response.data;
-				if (result.error) {
-					throw new Error(result.error);
-				}
-				showAutoHideMessage('Tạo mẫu thành công!', 'success');
-				return result;
-			} else {
-				throw new Error('Lỗi API: ' + (response.data?.error || 'Unknown error'));
-			}
-		} catch (error) {
-			console.error('Lỗi khi tạo template:', error);
-			showAutoHideMessage('Có lỗi xảy ra khi tạo mẫu: ' + error.message, 'error');
-			throw error;
-		}
-	};
-
-	const updateTemplate = async (templateId, templateData) => {
-		try {
-			const requestBody = {
-				id: templateId,
-				templateName: templateData.templateName,
-				templateDescription: templateData.templateDescription,
-				columns: templateData.columns || [
-					{ columnName: 'Mã mẫu', valueColumn: 'sample_uid', width: '30%', resizable: true },
-					{ columnName: 'Mã chỉ tiêu', valueColumn: 'id', width: '30%', resizable: true },
-					{ columnName: 'Chỉ tiêu', valueColumn: 'parameter_name', width: '40%', resizable: true },
-				],
-				customRows: [],
-				header: templateData.header || headerData,
-				content: templateData.content || editorContent,
-				footer:
-					templateData.footer ||
-					`Document fingerprint: ${currentDocId || ''} - ${new Date().toLocaleDateString('vi-VN')}`,
-			};
-
-			// Add fileId if available
-			if (templateData.fileId) {
-				requestBody.fileId = templateData.fileId;
-			}
-
-			const response = await apiPost('https://black.irdop.org/v1/lab/test_report/update_template', requestBody);
-
-			if (response.status === 200 && response.data) {
-				const result = response.data;
-				if (result.error) {
-					throw new Error(result.error);
-				}
-				showAutoHideMessage('Cập nhật mẫu thành công!', 'success');
-				return result;
-			} else {
-				throw new Error('Lỗi API: ' + (response.data?.error || 'Unknown error'));
-			}
-		} catch (error) {
-			console.error('Lỗi khi cập nhật template:', error);
-			showAutoHideMessage('Có lỗi xảy ra khi cập nhật mẫu: ' + error.message, 'error');
-			throw error;
-		}
-	};
-
-	const deleteTemplate = async (templateId) => {
-		try {
-			const response = await apiPost('https://black.irdop.org/v1/lab/test_report/delete_template', {
-				id: templateId,
-			});
-
-			if (response.status === 200 && response.data) {
-				const result = response.data;
-				if (result.error) {
-					throw new Error(result.error);
-				}
-				showAutoHideMessage('Xóa mẫu thành công!', 'success');
-				return result;
-			} else {
-				throw new Error('Lỗi API: ' + (response.data?.error || 'Unknown error'));
-			}
-		} catch (error) {
-			console.error('Error deleting template:', error);
-			showAutoHideMessage('Lỗi khi xóa mẫu: ' + error.message, 'error');
-			throw error;
-		}
-	};
-
-	const uploadFile = async (file) => {
-		try {
-			const uploadPayload = {
-				fileName: file.name,
-				fileSize: file.size,
-				fileType: file.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-			};
-
-			const uploadResponse = await apiPost('https://red.irdop.org/v1/file/upload', uploadPayload);
-
-			if (uploadResponse.status !== 200 || !uploadResponse.data.result) {
-				throw new Error('Failed to upload file');
-			}
-
-			const { fileId } = uploadResponse.data.result;
-			showAutoHideMessage('Upload file thành công!', 'success');
-			return fileId;
-		} catch (error) {
-			console.error('File upload error:', error);
-			showAutoHideMessage('Lỗi khi upload file: ' + error.message, 'error');
-			throw error;
-		}
-	};
-
 	const exportDocument = async () => {
 		try {
 			const response = await apiPost('https://red.irdop.org/v1/document/export', {
-				docId: currentDocId,
+				editId: currentEditId,
 				format: 'pdf', // or 'docx', 'html'
 				metadata: {
 					templateId: currentTemplate?.id || null,
 					templateName: currentTemplate?.templateName || null,
 					analysisIds: analysisIds || [],
+					sampleUIDs: sampleUIDs || [],
 					title: headerData.title || 'Lab Result Report',
+					classifierCode: classifierCode || null,
 				},
 			});
 
@@ -1079,7 +1307,7 @@ const Editor = () => {
 				const a = document.createElement('a');
 				a.style.display = 'none';
 				a.href = url;
-				a.download = `${headerData.title || 'document'}_${currentDocId || 'new'}.pdf`;
+				a.download = `${headerData.title || 'document'}_${currentEditId || 'new'}.pdf`;
 				document.body.appendChild(a);
 				a.click();
 				window.URL.revokeObjectURL(url);
@@ -1258,32 +1486,49 @@ const Editor = () => {
 	// Handle document publish
 	const handlePublishDocument = async (documentData) => {
 		try {
-			if (!documentData.docId) {
-				showAutoHideMessage('Không có ID tài liệu để publish', 'error');
+			if (!documentData.editId) {
+				showAutoHideMessage('Không có ID tài liệu để export', 'error');
 				return;
 			}
 
-			// Confirm publish action
+			// Confirm export action
 			const confirmPublish = window.confirm(
-				`Bạn có chắc chắn muốn publish tài liệu "${documentData.metadata.header.title || 'Lab Result Report'}"?`,
+				`Bạn có chắc chắn muốn export tài liệu "${documentData.metadata.header.title || 'Lab Result Report'}"?`,
 			);
 
 			if (!confirmPublish) {
 				return;
 			}
 
-			// Call publish API (similar to EditorTemplate.html logic)
-			const publishResponse = await apiPost('https://red.irdop.org/v1/document/publish', {
-				docId: documentData.docId,
-				metadata: documentData.metadata,
+			// Call export API (instead of publish)
+			const currentDateTime = new Date()
+				.toLocaleString('vi-VN', {
+					timeZone: 'Asia/Ho_Chi_Minh',
+					hour: '2-digit',
+					minute: '2-digit',
+					day: '2-digit',
+					month: '2-digit',
+					year: 'numeric',
+					hour12: false,
+				})
+				.replace(/(\d{2}):(\d{2}), (\d{2})\/(\d{2})\/(\d{4})/, '$1:$2 $3/$4/$5');
+
+			const publishResponse = await apiPost('https://red.irdop.org/v1/document/export', {
+				editId: documentData.editId,
+				metadata: {
+					...documentData.metadata,
+					classifierCode: classifierCode || null,
+					publishedAt: currentDateTime,
+					publishedByUID: Cookies.get('identityUID') || '',
+				},
 			});
 
 			if (publishResponse.status === 200 && publishResponse.data) {
-				showAutoHideMessage('Publish thành công!', 'success');
+				showAutoHideMessage('Export thành công!', 'success');
 
 				// Update document status
 				setDocumentStatus('Published');
-				setPublishedAt(new Date().toLocaleDateString('vi-VN'));
+				setPublishedAt(currentDateTime);
 				setPublishedBy('Current User'); // You might want to get this from auth context
 
 				// Close popup
@@ -1295,8 +1540,8 @@ const Editor = () => {
 				throw new Error('Lỗi API: ' + (publishResponse.data?.error || 'Unknown error'));
 			}
 		} catch (error) {
-			console.error('Publish error:', error);
-			showAutoHideMessage('Lỗi khi publish: ' + error.message, 'error');
+			console.error('Export error:', error);
+			showAutoHideMessage('Lỗi khi export: ' + error.message, 'error');
 		}
 	};
 
@@ -1332,45 +1577,9 @@ const Editor = () => {
 		}
 	};
 
-	const getDocIdFromURL = () => {
+	const getEditIdFromURL = () => {
 		const urlParams = new URLSearchParams(window.location.search);
-		return urlParams.get('docId');
-	};
-
-	const updateURLWithAnalysisIds = (analysisIds) => {
-		const url = new URL(window.location);
-		if (analysisIds && analysisIds.length > 0) {
-			url.searchParams.set('analysisIds', analysisIds.join(','));
-		} else {
-			url.searchParams.delete('analysisIds');
-		}
-		// Add current docTypeCode
-		url.searchParams.set('docTypeCode', documentType);
-		window.history.replaceState({}, '', url);
-	};
-
-	const updateURLWithDocId = (docId) => {
-		const url = new URL(window.location);
-		if (docId) {
-			url.searchParams.set('docId', docId);
-		} else {
-			url.searchParams.delete('docId');
-		}
-		// Ensure current docTypeCode is set
-		url.searchParams.set('docTypeCode', documentType);
-		window.history.replaceState({}, '', url);
-	};
-
-	const updateURLWithTemplateId = (templateId) => {
-		const url = new URL(window.location);
-		if (templateId) {
-			url.searchParams.set('templateId', templateId);
-		} else {
-			url.searchParams.delete('templateId');
-		}
-		// Ensure current docTypeCode is set
-		url.searchParams.set('docTypeCode', documentType);
-		window.history.replaceState({}, '', url);
+		return urlParams.get('editId');
 	};
 
 	const showAutoHideMessage = (message, type = 'info') => {
@@ -1435,16 +1644,18 @@ const Editor = () => {
 	};
 
 	const startAutoSave = () => {
+		console.log('Starting auto-save...');
 		if (autoSaveIntervalRef.current) {
 			clearInterval(autoSaveIntervalRef.current);
 		}
 
 		setIsAutoSaveEnabled(true);
-		// Save immediately first, then every 30 seconds
+		// Save immediately first, then every 10 seconds
 		autoSaveLabResultReport();
 		autoSaveIntervalRef.current = setInterval(() => {
 			autoSaveLabResultReport();
-		}, 30000);
+		}, 10000);
+		console.log('Auto-save interval set');
 	};
 
 	const stopAutoSave = () => {
@@ -1455,34 +1666,104 @@ const Editor = () => {
 		setIsAutoSaveEnabled(false);
 	};
 
-	const showEditSavedReportModal = () => {
-		setShowEditSavedReportForm(true);
-	};
+	const handleClassifierCodeChange = (e) => {
+		const newClassifierCode = e.target.value;
+		setClassifierCode(newClassifierCode);
 
-	const handleMathClick = () => {
-		setShowMathPopup(true);
-	};
-
-	const handleDiagramClick = () => {
-		setShowDiagramPopup(true);
-	};
-
-	const closeMathPopup = () => {
-		setShowMathPopup(false);
-	};
-
-	const closeDiagramPopup = () => {
-		setShowDiagramPopup(false);
-	};
-
-	const handleDocumentTypeChange = (e) => {
-		const newDocType = e.target.value;
-		setDocumentType(newDocType);
-
-		// Update URL with new docTypeCode
+		// Update URL with new classifierCode
 		const url = new URL(window.location);
-		url.searchParams.set('docTypeCode', newDocType);
+		url.searchParams.set('classifierCode', newClassifierCode);
 		window.history.replaceState({}, '', url);
+	};
+
+	// File preview functionality (similar to DocumentEditor)
+	const handleFilePreview = async (fileId) => {
+		try {
+			// Get download link directly using fileId
+			const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
+				expiry: 60 * 10, // 10 minutes
+				mode: 'view',
+				fileId: fileId, // Use fileId directly instead of fileRecord
+			});
+
+			if (response.status === 200 && response.data) {
+				// Open file directly in new tab instead of popup window
+				window.open(response.data, '_blank');
+			} else {
+				throw new Error('Không thể lấy link download');
+			}
+		} catch (error) {
+			console.error('File preview failed:', error);
+			alert('Không thể xem file. Vui lòng thử lại.');
+		}
+	};
+
+	// Icon insertion functionality
+	const iconList = [
+		{
+			name: 'Checkbox trống',
+			html: '☐',
+			unicode: '&#9744;',
+		},
+		{
+			name: 'Checkbox có tick',
+			html: '☑',
+			unicode: '&#9745;',
+		},
+		{
+			name: 'Dấu tick',
+			html: '✓',
+			unicode: '&#10003;',
+		},
+		{
+			name: 'Phân số (a/b)',
+			html: '<span style="display: inline-block; text-align: center; vertical-align: middle; font-family: \'Times New Roman\', serif;"><span style="display: block; border-bottom: 1px solid black; font-size: 0.8em; line-height: 1; padding-bottom: 1px;">a</span><span style="display: block; font-size: 0.8em; line-height: 1; padding-top: 1px;">b</span></span>',
+			unicode: null,
+		},
+		{
+			name: 'Tổng xích ma (Σ)',
+			html: '<span style="position: relative; display: inline-block; font-size: 1.2em; vertical-align: middle; font-family: \'Times New Roman\', serif;">Σ<sup style="position: absolute; top: -0.5em; right: -0.8em; font-size: 0.6em;">n</sup><sub style="position: absolute; bottom: -0.3em; right: -0.8em; font-size: 0.6em;">i=1</sub></span>',
+			unicode: null,
+		},
+		{
+			name: 'Tổng xích ma tùy chỉnh',
+			html: '<span style="position: relative; display: inline-block; font-size: 1.2em; vertical-align: middle; font-family: \'Times New Roman\', serif;">Σ<sup style="position: absolute; top: -0.5em; right: -0.8em; font-size: 0.6em;">top</sup><sub style="position: absolute; bottom: -0.3em; right: -0.8em; font-size: 0.6em;">bottom</sub></span>',
+			unicode: null,
+		},
+	];
+
+	const showIconPickerModal = () => {
+		setShowIconPicker(true);
+	};
+
+	const copyIconToClipboard = async (icon) => {
+		try {
+			const textToCopy = icon.unicode || icon.html;
+			await navigator.clipboard.writeText(textToCopy);
+			showAutoHideMessage(`Đã copy ${icon.name} vào clipboard!`, 'success');
+			setShowIconPicker(false);
+		} catch (error) {
+			console.error('Failed to copy to clipboard:', error);
+			// Fallback: create a temporary textarea and copy
+			const textarea = document.createElement('textarea');
+			textarea.value = icon.unicode || icon.html;
+			document.body.appendChild(textarea);
+			textarea.select();
+			document.execCommand('copy');
+			document.body.removeChild(textarea);
+			showAutoHideMessage(`Đã copy ${icon.name} vào clipboard!`, 'success');
+			setShowIconPicker(false);
+		}
+	};
+
+	const insertIconIntoEditor = (icon) => {
+		if (editorRef.current && editorRef.current.initialized) {
+			editorRef.current.insertContent(icon.html);
+			showAutoHideMessage(`Đã chèn ${icon.name} vào editor!`, 'success');
+			setShowIconPicker(false);
+		} else {
+			showAutoHideMessage('Editor chưa sẵn sàng', 'warning');
+		}
 	};
 
 	// Initialize document info on component mount
@@ -1497,47 +1778,8 @@ const Editor = () => {
 
 	return (
 		<>
-			{/* MathLive CSS and Scripts */}
-			<link rel="stylesheet" href="https://unpkg.com/mathlive/dist/mathlive-static.css" />
 			<style>
 				{`
-        /* MathLive Styles */
-        .draggable-math { 
-          cursor: move; 
-          display: inline-block; 
-          padding: 8px 12px; 
-          margin: 4px; 
-          border: 2px solid #6b7280; 
-          background: white; 
-          border-radius: 6px;
-          font-size: 12px;
-          user-select: none;
-          transition: all 0.2s ease;
-          font-weight: 600;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-        .draggable-math:hover {
-          background: #f9fafb;
-          border-color: #4b5563;
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-        }
-        math-field {
-          border: 2px solid #6b7280;
-          border-radius: 8px;
-          padding: 12px;
-          min-height: 60px;
-          width: 100%;
-          display: block;
-          margin: 12px 0;
-          background: white;
-          color: black;
-        }
-        math-field:focus {
-          border-color: #374151;
-          outline: none;
-          box-shadow: 0 0 0 3px rgba(75, 85, 99, 0.1);
-        }
-
         /* Modern TinyMCE Custom Styles */
         .tox-tinymce {
           border: 2px solid #6b7280 !important;
@@ -1711,6 +1953,63 @@ const Editor = () => {
           border-color: #4b5563;
           box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
         }
+
+        /* Icon Picker Modal Styles */
+        .icon-preview {
+          min-height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: 'Times New Roman', serif;
+        }
+
+        .icon-preview span {
+          font-family: 'Times New Roman', serif;
+        }
+
+        .fraction-style {
+          display: inline-block;
+          text-align: center;
+          vertical-align: middle;
+          font-family: 'Times New Roman', serif;
+        }
+
+        .fraction-numerator {
+          display: block;
+          border-bottom: 1px solid black;
+          font-size: 0.8em;
+          line-height: 1;
+          padding-bottom: 1px;
+        }
+
+        .fraction-denominator {
+          display: block;
+          font-size: 0.8em;
+          line-height: 1;
+          padding-top: 1px;
+        }
+
+        .sigma-style {
+          position: relative;
+          display: inline-block;
+          font-size: 1.2em;
+          vertical-align: middle;
+          font-family: 'Times New Roman', serif;
+        }
+
+        .sigma-superscript {
+          position: absolute;
+          top: -0.5em;
+          right: -0.8em;
+          font-size: 0.6em;
+        }
+
+        .sigma-subscript {
+          position: absolute;
+          bottom: -0.3em;
+          right: -0.8em;
+          font-size: 0.6em;
+        }
         `}
 			</style>
 			<div
@@ -1789,18 +2088,17 @@ const Editor = () => {
 								<div className="flex gap-2">
 									<button
 										className="py-1 px-3 text-xs font-semibold bg-white text-black border-2 border-gray-500 rounded hover:bg-gray-50 hover:border-gray-700 transition-all shadow-sm"
-										title="Chèn công thức toán học"
-										onClick={handleMathClick}
+										title="Chèn bảng thông tin chỉ tiêu"
+										onClick={insertTableInfo}
 									>
-										Math
+										Insert Table
 									</button>
-
 									<button
 										className="py-1 px-3 text-xs font-semibold bg-white text-black border-2 border-gray-500 rounded hover:bg-gray-50 hover:border-gray-700 transition-all shadow-sm"
-										title="Chèn sơ đồ"
-										onClick={handleDiagramClick}
+										title="Chèn biểu tượng và ký hiệu"
+										onClick={showIconPickerModal}
 									>
-										Diagram
+										Insert Icon
 									</button>
 								</div>
 
@@ -1811,7 +2109,7 @@ const Editor = () => {
 										title="Xóa toàn bộ định dạng"
 										onClick={clearFormatting}
 									>
-										Format
+										Auto Format
 									</button>
 									<button
 										id="clearAllBtn"
@@ -1967,6 +2265,29 @@ const Editor = () => {
 												}
 												await loadDataFromURL();
 											});
+
+											// Add keyboard shortcuts
+											editor.on('keydown', function (e) {
+												// Replace '*' with multiplication sign
+												if (e.key === '*') {
+													e.preventDefault();
+													editor.execCommand('mceInsertContent', false, '×');
+													return;
+												}
+												// '^' toggles superscript
+												if (e.key === '^') {
+													e.preventDefault();
+													// TinyMCE command name for superscript
+													editor.execCommand('Superscript');
+													return;
+												}
+												// '_' toggles subscript
+												if (e.key === '_') {
+													e.preventDefault();
+													editor.execCommand('Subscript');
+													return;
+												}
+											});
 										},
 									}}
 								/>
@@ -1983,13 +2304,13 @@ const Editor = () => {
 									<div className="flex items-center gap-3">
 										<label className="font-semibold text-gray-700 text-left">Mã tài liệu:</label>
 										<input
-											id="footerDocIdInput"
+											id="footerEditIdInput"
 											type="text"
 											readOnly
 											placeholder="Chưa có mã"
 											className="px-3 py-1 text-sm font-semibold bg-white text-black min-w-32 border-2 border-gray-500 rounded-md focus:border-gray-700 shadow-sm"
 											style={{ fontFamily: "'Times New Roman', serif" }}
-											value={currentDocId || ''}
+											value={currentEditId || ''}
 										/>
 									</div>
 									<span
@@ -2025,7 +2346,24 @@ const Editor = () => {
 										<span className="font-semibold text-gray-700">Trạng thái: </span>
 										{documentStatus === 'Published' ? (
 											<span className="text-gray-600 font-semibold">
-												Publish {publishedBy && `by ${publishedBy}`} {publishedAt && `at ${publishedAt}`}
+												Published{publishedBy ? ` by ${publishedBy}` : ''}
+												{publishedAt ? ` - ${publishedAt}` : ''}
+												{fileId && (
+													<span
+														className="text-blue-600 underline cursor-pointer ml-2 hover:text-blue-800 transition-colors"
+														onClick={() => {
+															console.log('Clicking XEM button with fileId:', fileId);
+															handleFilePreview(fileId);
+														}}
+														title="Xem file đính kèm"
+													>
+														XEM
+													</span>
+												)}
+												{/* Debug info - remove in production */}
+												{process.env.NODE_ENV === 'development' && (
+													<span className="text-xs text-gray-400 ml-2">(fileId: {fileId || 'null'})</span>
+												)}
 											</span>
 										) : (
 											<span className="text-gray-600 font-semibold">Draft</span>
@@ -2068,16 +2406,16 @@ const Editor = () => {
 										<input
 											type="radio"
 											id="bien_ban"
-											name="documentType"
+											name="classifierCode"
 											value="BIEN_BAN_KET_QUA_THU_NGHIEM"
-											checked={documentType === 'BIEN_BAN_KET_QUA_THU_NGHIEM'}
-											onChange={handleDocumentTypeChange}
+											checked={classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM'}
+											onChange={handleClassifierCodeChange}
 											className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 focus:ring-2"
 										/>
 										<label
 											htmlFor="bien_ban"
 											className={`ml-3 text-sm font-semibold cursor-pointer transition-colors duration-200 ${
-												documentType === 'BIEN_BAN_KET_QUA_THU_NGHIEM' ? 'text-blue-600' : 'text-gray-700'
+												classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' ? 'text-blue-600' : 'text-gray-700'
 											}`}
 										>
 											Biên bản kiểm nghiệm
@@ -2088,16 +2426,16 @@ const Editor = () => {
 										<input
 											type="radio"
 											id="tai_lieu"
-											name="documentType"
+											name="classifierCode"
 											value="TAI_LIEU_KHAC"
-											checked={documentType === 'TAI_LIEU_KHAC'}
-											onChange={handleDocumentTypeChange}
+											checked={classifierCode === 'TAI_LIEU_KHAC'}
+											onChange={handleClassifierCodeChange}
 											className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 focus:ring-2"
 										/>
 										<label
 											htmlFor="tai_lieu"
 											className={`ml-3 text-sm font-semibold cursor-pointer transition-colors duration-200 ${
-												documentType === 'TAI_LIEU_KHAC' ? 'text-blue-600' : 'text-gray-700'
+												classifierCode === 'TAI_LIEU_KHAC' ? 'text-blue-600' : 'text-gray-700'
 											}`}
 										>
 											Tài liệu khác
@@ -2106,7 +2444,7 @@ const Editor = () => {
 								</div>
 
 								{/* Thông tin mẫu biên bản (chỉ hiện khi chọn biên bản kiểm nghiệm) */}
-								{documentType === 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
+								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
 									<div className="mt-4">
 										<div className="text-sm font-semibold text-gray-700 mb-2 text-left ml-2">
 											Thông tin mẫu biên bản
@@ -2114,7 +2452,7 @@ const Editor = () => {
 										<div className="">
 											{currentTemplate ? (
 												<div className="space-y-2">
-													<div className="ml-4 -3 bg-gray-50 rounded-lg border-2 border-gray-400">
+													<div className="ml-4 -3 bg-gray-50 rounded-lg">
 														<div className="text-sm font-semibold text-gray-800 text-left">
 															{currentTemplate.templateName || 'Mẫu đã chọn'}
 														</div>
@@ -2153,7 +2491,7 @@ const Editor = () => {
 							</div>
 							<div className="p-4 bg-white rounded-box-content min-h-fit">
 								{/* Chỉ tiêu đã chọn (chỉ hiện khi là biên bản kiểm nghiệm) */}
-								{documentType === 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
+								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
 									<div>
 										<div className="flex items-center justify-between mb-3">
 											<p className="text-sm font-semibold text-gray-700 text-left">
@@ -2188,22 +2526,13 @@ const Editor = () => {
 				</div>
 			</div>
 
-			{/* DiagramEditor Component */}
-			<DiagramEditor
-				showMathPopup={showMathPopup}
-				closeMathPopup={closeMathPopup}
-				showDiagramPopup={showDiagramPopup}
-				closeDiagramPopup={closeDiagramPopup}
-				editorRef={editorRef}
-			/>
-
 			{/* Template Search Modal */}
 			{showTemplateSearchForm && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
 					<div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-auto">
 						<div className="flex justify-between items-center mb-4">
 							<h3 className="text-lg font-semibold text-gray-800">
-								{documentType === 'BIEN_BAN_KET_QUA_THU_NGHIEM' ? 'Tìm kiếm mẫu biên bản' : 'Tìm kiếm mẫu tài liệu'}
+								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' ? 'Tìm kiếm mẫu biên bản' : 'Tìm kiếm mẫu tài liệu'}
 							</h3>
 							<button onClick={() => setShowTemplateSearchForm(false)} className="text-gray-500 hover:text-gray-700">
 								<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2243,7 +2572,7 @@ const Editor = () => {
 							) : (
 								<div className="text-center py-8">
 									<div className="text-gray-600">
-										{documentType === 'BIEN_BAN_KET_QUA_THU_NGHIEM'
+										{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM'
 											? 'Không tìm thấy mẫu biên bản nào'
 											: 'Không tìm thấy mẫu tài liệu nào'}
 									</div>
@@ -2255,6 +2584,67 @@ const Editor = () => {
 						<div className="mt-4 flex justify-end">
 							<button
 								onClick={() => setShowTemplateSearchForm(false)}
+								className="px-4 py-2 text-sm font-semibold bg-white text-black border-2 border-gray-500 rounded-md hover:bg-gray-50 hover:border-gray-700 transition-all shadow-sm"
+							>
+								Đóng
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Icon Picker Modal */}
+			{showIconPicker && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-auto">
+						<div className="flex justify-between items-center mb-4">
+							<h3 className="text-lg font-semibold text-gray-800">Chọn biểu tượng để chèn</h3>
+							<button
+								onClick={() => setShowIconPicker(false)}
+								className="text-gray-500 hover:text-gray-700 text-xl font-bold"
+							>
+								×
+							</button>
+						</div>
+
+						<div className="grid grid-cols-2 gap-4">
+							{iconList.map((icon, index) => (
+								<div
+									key={index}
+									className="border border-gray-300 rounded-lg p-4 hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer"
+								>
+									<div className="flex items-center justify-between mb-2">
+										<span className="font-medium text-sm text-gray-700">{icon.name}</span>
+									</div>
+
+									<div
+										className="icon-preview text-2xl mb-3 p-2 bg-gray-50 rounded text-center"
+										dangerouslySetInnerHTML={{ __html: icon.html }}
+									/>
+
+									<div className="flex gap-2">
+										<button
+											onClick={() => copyIconToClipboard(icon)}
+											className="flex-1 py-1 px-2 text-xs font-semibold bg-blue-500 text-white rounded hover:bg-blue-600 transition-all"
+											title="Copy vào clipboard"
+										>
+											Copy
+										</button>
+										<button
+											onClick={() => insertIconIntoEditor(icon)}
+											className="flex-1 py-1 px-2 text-xs font-semibold bg-green-500 text-white rounded hover:bg-green-600 transition-all"
+											title="Chèn vào editor"
+										>
+											Insert
+										</button>
+									</div>
+								</div>
+							))}
+						</div>
+
+						<div className="mt-4 flex justify-end">
+							<button
+								onClick={() => setShowIconPicker(false)}
 								className="px-4 py-2 text-sm font-semibold bg-white text-black border-2 border-gray-500 rounded-md hover:bg-gray-50 hover:border-gray-700 transition-all shadow-sm"
 							>
 								Đóng

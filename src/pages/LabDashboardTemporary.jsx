@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FaFlask, FaClipboardList, FaBook, FaFolder, FaUser, FaChevronDown } from 'react-icons/fa';
+import { FaFlask, FaClipboardList, FaBook, FaFolder, FaUser, FaChevronDown, FaEdit } from 'react-icons/fa';
 import ProcessingAnalysis from '../components/lab/ProcessingAnalysis';
+import DocumentEditor from '../components/lab/DocumentEditor';
 import { GlobalContext } from '../contexts/GlobalContext';
 import Cookies from 'js-cookie';
 
@@ -12,6 +13,10 @@ const LabDashboardTemporary = () => {
 
 	// Use GlobalContext instead of local state
 	const { currentUser, setCurrentUser, fetchUser } = useContext(GlobalContext);
+
+	// Get current view from query params (default: analysis)
+	const searchParams = new URLSearchParams(location.search);
+	const currentView = searchParams.get('view') || 'analysis';
 
 	// Local state
 	const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -76,9 +81,22 @@ const LabDashboardTemporary = () => {
 		setTooltip({ show: false, content: '', x: 0, y: 0 });
 	};
 
+	// Handle view navigation
+	const handleViewChange = (view) => {
+		const searchParams = new URLSearchParams(location.search);
+		searchParams.set('view', view);
+		navigate(`${location.pathname}?${searchParams.toString()}`);
+	};
+
 	// Navigation items
 	const navigationItems = [
-		{ to: '/processing', icon: FaFlask, label: 'Lab', isActive: currentPath.includes('/processing') },
+		{
+			action: () => handleViewChange('analysis'),
+			icon: FaFlask,
+			label: 'Lab',
+			isActive: currentView === 'analysis',
+			isAction: true,
+		},
 		{
 			to: '/dashboard',
 			icon: FaClipboardList,
@@ -87,6 +105,13 @@ const LabDashboardTemporary = () => {
 		},
 		{ to: '/library', icon: FaBook, label: 'Thư viện', isActive: currentPath.includes('/library') },
 		{ to: '/files', icon: FaFolder, label: 'Files', isActive: currentPath.includes('/files') },
+		{
+			action: () => handleViewChange('editor'),
+			icon: FaEdit,
+			label: 'Soạn thảo',
+			isActive: currentView === 'editor',
+			isAction: true,
+		},
 	];
 
 	// Truncate name for display
@@ -114,9 +139,21 @@ const LabDashboardTemporary = () => {
 					{/* Main Navigation */}
 					<div className="p-2 pt-4">
 						<nav className="space-y-2">
-							{navigationItems.map((item) => {
+							{navigationItems.map((item, index) => {
 								const IconComponent = item.icon;
-								return (
+								return item.isAction ? (
+									<button
+										key={index}
+										onClick={item.action}
+										className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+											item.isActive ? 'bg-sky-400 text-white' : 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+										}`}
+										onMouseEnter={(e) => showTooltip(item.label, e)}
+										onMouseLeave={hideTooltip}
+									>
+										<IconComponent className="w-5 h-5" />
+									</button>
+								) : (
 									<Link
 										key={item.to}
 										to={item.to}
@@ -214,7 +251,15 @@ const LabDashboardTemporary = () => {
 
 			{/* Main Content Area */}
 			<div className="flex-1 bg-white overflow-y-hidden overflow-x-auto">
-				<ProcessingAnalysis />
+				{currentView === 'editor' ? (
+					<div className="h-full flex flex-col">
+						<div className="flex-1 overflow-hidden p-4">
+							<DocumentEditor />
+						</div>
+					</div>
+				) : (
+					<ProcessingAnalysis />
+				)}
 			</div>
 
 			{/* Tooltip */}

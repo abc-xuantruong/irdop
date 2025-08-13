@@ -142,6 +142,7 @@
 				overflow-y: auto;
 				display: block;
 				background: white;
+				transition: opacity 0.2s ease-in-out;
 			}
 
 			#dataTable tbody tr {
@@ -678,8 +679,8 @@
 					if (event.data && event.data.type === 'INIT_SELECTION') {
 						preSelectedIds = event.data.analysisIds || [];
 						console.log('Pre-selected IDs:', preSelectedIds);
-						// Re-render table to show selections
-						renderTable();
+						// Re-render table to show selections with smooth update
+						updateTableContent();
 					}
 				});
 			});
@@ -724,8 +725,8 @@
 				// Update UI indicators
 				updateSortIndicators();
 
-				// Fetch data with new sorting
-				fetchData();
+				// Fetch data with new sorting (without full loading indicator)
+				fetchData(false);
 			}
 
 			// Update sort indicators in table headers
@@ -766,7 +767,7 @@
 					itemsPerPageSelect.addEventListener('change', (e) => {
 						pagination.itemsPerPage = parseInt(e.target.value);
 						pagination.currentPage = 1; // Reset to first page
-						fetchData();
+						fetchData(false); // Don't show full loading for pagination changes
 					});
 				}
 			}
@@ -778,7 +779,7 @@
 					debounce(() => {
 						filters.sample = document.getElementById('sampleFilter').value;
 						resetPagination();
-						fetchData();
+						fetchData(false); // Don't show loading for filter changes
 					}, 300),
 				);
 
@@ -787,7 +788,7 @@
 					debounce(() => {
 						filters.parameter = document.getElementById('parameterFilter').value;
 						resetPagination();
-						fetchData();
+						fetchData(false); // Don't show loading for filter changes
 					}, 300),
 				);
 
@@ -796,20 +797,20 @@
 					debounce(() => {
 						filters.protocol = document.getElementById('protocolFilter').value;
 						resetPagination();
-						fetchData();
+						fetchData(false); // Don't show loading for filter changes
 					}, 300),
 				);
 
 				document.getElementById('resultFilter').addEventListener('change', () => {
 					filters.result = document.getElementById('resultFilter').value;
 					resetPagination();
-					fetchData();
+					fetchData(false); // Don't show loading for filter changes
 				});
 
 				document.getElementById('documentFilter').addEventListener('change', () => {
 					filters.document = document.getElementById('documentFilter').value;
 					resetPagination();
-					fetchData();
+					fetchData(false); // Don't show loading for filter changes
 				});
 			}
 
@@ -875,8 +876,10 @@
 			}
 
 			// Fetch data from API
-			async function fetchData() {
-				showLoading(true);
+			async function fetchData(showLoadingIndicator = true) {
+				if (showLoadingIndicator) {
+					showLoading(true);
+				}
 
 				try {
 					const apiColumns = [
@@ -952,6 +955,10 @@
 					const result = response;
 
 					if (result) {
+						// Store previous selections
+						const previousSelections = new Set(selectedRows);
+						const previousSelectionsData = new Map(selectedRowsData);
+
 						// Ensure data is an array
 						if (result.result && Array.isArray(result.result)) {
 							data = result.result;
@@ -972,7 +979,12 @@
 							pagination.totalPages = Math.ceil(pagination.totalItems / pagination.itemsPerPage);
 						}
 
-						renderTable();
+						// Preserve selections when updating table
+						selectedRows = previousSelections;
+						selectedRowsData = previousSelectionsData;
+
+						// Use smooth update instead of full re-render
+						updateTableContent();
 						updatePaginationControls();
 					} else {
 						console.error('No result data in response:', result);
@@ -986,17 +998,21 @@
 
 					// Ensure data is always an array even on error
 					data = [];
-					renderTable();
+					updateTableContent();
 					updatePaginationControls();
 				} finally {
-					showLoading(false);
+					if (showLoadingIndicator) {
+						showLoading(false);
+					}
 				}
 			}
 
-			// Render table
-			function renderTable() {
+			// Smooth update table content without full re-render
+			function updateTableContent() {
 				const tbody = document.getElementById('tableBody');
-				tbody.innerHTML = '';
+
+				// Create document fragment for better performance
+				const fragment = document.createDocumentFragment();
 
 				// Ensure data is an array
 				if (!Array.isArray(data) || data.length === 0) {
@@ -1069,11 +1085,25 @@
 						<td>${documentStatus}</td>
 					`;
 
-					tbody.appendChild(row);
+					fragment.appendChild(row);
 				});
 
-				updateSelectedCount();
-				updateSortIndicators();
+				// Smooth replacement using fade effect
+				tbody.style.opacity = '0.5';
+				setTimeout(() => {
+					tbody.innerHTML = '';
+					tbody.appendChild(fragment);
+					tbody.style.opacity = '1';
+
+					updateSelectedCount();
+					updateSortIndicators();
+				}, 100);
+			}
+
+			// Render table (kept for initial load and special cases)
+			function renderTable() {
+				// Use smooth update for normal data updates
+				updateTableContent();
 			}
 
 			// Simple drag selection functions
@@ -1351,7 +1381,7 @@
 			function changePage(page) {
 				if (page >= 1 && page <= pagination.totalPages) {
 					pagination.currentPage = page;
-					fetchData();
+					fetchData(false); // Don't show full loading for page changes
 				}
 			}
 

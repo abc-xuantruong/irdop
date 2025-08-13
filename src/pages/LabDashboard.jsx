@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import logo from '../assets/IRDOP-LOGO .png';
 import {
 	FaFlask,
 	FaFileAlt,
@@ -30,6 +29,7 @@ import {
 	FaBoxOpen,
 	FaCalendarAlt,
 	FaArrowLeft,
+	FaUser,
 } from 'react-icons/fa';
 import { apiPost } from '../contexts/helperFunctionCallAPI';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
@@ -38,6 +38,10 @@ import ProcessingSample from '../components/lab/ProcessingSample';
 import ProcessingAnalysis from '../components/lab/ProcessingAnalysis';
 import DocumentEditor from '../components/lab/DocumentEditor';
 import LabFile from '../components/lab/LabFile';
+
+// Import logo images
+import logoCollapsed from '../assets/IRDOP-LOGO.png';
+import logoExpanded from '../assets/IRDOP-LOGO_FULL.png';
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -73,10 +77,28 @@ const LabDashboard = () => {
 		};
 	};
 
+	// Tooltip state for sidebar
+	const [tooltip, setTooltip] = useState({ show: false, content: '', x: 0, y: 0 });
+
+	// Show tooltip function
+	const showTooltip = (content, event) => {
+		const rect = event.currentTarget.getBoundingClientRect();
+		setTooltip({
+			show: true,
+			content,
+			x: rect.right + 10,
+			y: rect.top + rect.height / 2,
+		});
+	};
+
+	// Hide tooltip function
+	const hideTooltip = () => {
+		setTooltip({ show: false, content: '', x: 0, y: 0 });
+	};
+
 	const [timeFilter, setTimeFilter] = useState('Week');
 	const [sortBy, setSortBy] = useState('Date');
 	const [dropdownOpen, setDropdownOpen] = useState(false);
-	const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, data: null });
 	const [activeView, setActiveView] = useState(getInitialView()); // Initialize from URL
 
 	// Initialize popup states from URL
@@ -91,7 +113,15 @@ const LabDashboard = () => {
 	const [scannedSampleUID, setScannedSampleUID] = useState(initialPopupStates.scannedSampleUID);
 	const [handoverVolume, setHandoverVolume] = useState('');
 	const [showHandoverForm, setShowHandoverForm] = useState(initialPopupStates.showHandoverForm);
-	const [handoverSubmitting, setHandoverSubmitting] = useState(false); // Analysis data states - using mock data only
+	const [handoverSubmitting, setHandoverSubmitting] = useState(false);
+
+	// Check if any popup is open
+	const isAnyPopupOpen = showSamplePopup || showAnalysisPopup || showQRScanner || showHandoverForm;
+
+	// Hide tooltip when sidebar state changes (expand/collapse)
+	useEffect(() => {
+		hideTooltip();
+	}, [isAnyPopupOpen]); // Analysis data states - using mock data only
 	const [analysisLoading, setAnalysisLoading] = useState(false);
 	const [analysisWidgetData] = useState({
 		analysis: {
@@ -375,10 +405,35 @@ const LabDashboard = () => {
 
 	// Handle view change with URL parameters
 	const handleViewChange = (view) => {
+		// Close any open popups when changing views
+		setShowSamplePopup(false);
+		setShowAnalysisPopup(false);
+		setShowQRScanner(false);
+		setShowHandoverForm(false);
+		setScannedSampleUID('');
+		setHandoverVolume('');
+
 		setActiveView(view);
 		// Clear all params and only set the view param
 		const searchParams = new URLSearchParams();
 		searchParams.set('view', view);
+		navigate(`${location.pathname}?${searchParams.toString()}`, { replace: true });
+	};
+
+	// Handle navigation to lab dashboard from breadcrumb
+	const handleNavigateToLab = (targetView = 'samples') => {
+		// Close any open popups
+		setShowSamplePopup(false);
+		setShowAnalysisPopup(false);
+		setShowQRScanner(false);
+		setShowHandoverForm(false);
+		setScannedSampleUID('');
+		setHandoverVolume('');
+
+		// Navigate to the specified view
+		setActiveView(targetView);
+		const searchParams = new URLSearchParams();
+		searchParams.set('view', targetView);
 		navigate(`${location.pathname}?${searchParams.toString()}`, { replace: true });
 	};
 
@@ -953,154 +1008,293 @@ const LabDashboard = () => {
 	return (
 		<div className="h-screen w-screen bg-gray-100 flex overflow-hidden">
 			{/* Sidebar */}
-			<div className="w-64 bg-gray-100 flex flex-col h-full">
+			<div
+				className={`${isAnyPopupOpen ? 'w-16' : 'w-64'} bg-gray-100 flex flex-col h-full transition-all duration-300`}
+			>
 				{/* Top Section - Logo and Navigation */}
 				<div className="flex-1 flex flex-col">
 					{/* Logo Section */}
 					<div className="p-4 border-b border-gray-200">
-						<img src={logo} alt="Logo" className="h-8 mx-auto" />
-					</div>
-
-					{/* Main Navigation */}
-					<div className="p-4">
-						<nav className="space-y-1">
-							<Link
-								to="/processing"
-								className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-									currentPath.includes('/processing')
-										? 'bg-blue-600 text-white'
-										: 'text-gray-700 hover:bg-white hover:text-gray-900'
-								}`}
-							>
-								<FaFlask className="w-4 h-4" />
-								<span>Lab</span>
-							</Link>
-							<Link
-								to="/dashboard"
-								className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-									currentPath === '/' || currentPath.includes('/dashboard')
-										? 'bg-blue-600 text-white'
-										: 'text-gray-700 hover:bg-white hover:text-gray-900'
-								}`}
-							>
-								<FaClipboardList className="w-4 h-4" />
-								<span>Tiếp nhận</span>
-							</Link>
-							<Link
-								to="/library"
-								className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-									currentPath.includes('/library')
-										? 'bg-blue-600 text-white'
-										: 'text-gray-700 hover:bg-white hover:text-gray-900'
-								}`}
-							>
-								<FaFileAlt className="w-4 h-4" />
-								<span>Thư viện</span>
-							</Link>
-							<Link
-								to="/files"
-								className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-									currentPath.includes('/files')
-										? 'bg-blue-600 text-white'
-										: 'text-gray-700 hover:bg-white hover:text-gray-900'
-								}`}
-							>
-								<FaFileAlt className="w-4 h-4" />
-								<span>Files</span>
-							</Link>
-						</nav>
-					</div>
-
-					{/* Lab Dashboard Tabs - Adjacent to Main Navigation */}
-					<div className="px-4">
-						<div className="mb-3">
-							<h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Lab Dashboard</h3>
+						<div className="h-8 flex justify-center items-center">
+							<img
+								// src={isAnyPopupOpen ? logoCollapsed : logoExpanded}
+								src={logoCollapsed} // Use the collapsed logo for both states
+								alt="IRDOP Logo"
+								className={`object-contain transition-all duration-300 ${isAnyPopupOpen ? 'h-8 w-8' : 'h-8'}`}
+								loading="eager"
+							/>
 						</div>
-						<nav className="space-y-1">
-							<button
-								onClick={() => handleViewChange('overview')}
-								className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-									activeView === 'overview'
-										? 'bg-blue-600 text-white'
-										: 'text-gray-700 hover:bg-white hover:text-gray-900'
-								}`}
-							>
-								<FaChartBar className="w-4 h-4" />
-								<span>Tổng quan</span>
-							</button>
-							<button
-								onClick={() => handleViewChange('analysis')}
-								className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-									activeView === 'analysis'
-										? 'bg-blue-600 text-white'
-										: 'text-gray-700 hover:bg-white hover:text-gray-900'
-								}`}
-							>
-								<FaFlask className="w-4 h-4" />
-								<span>Chỉ tiêu</span>
-							</button>
-							<button
-								onClick={() => handleViewChange('samples')}
-								className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-									activeView === 'samples'
-										? 'bg-blue-600 text-white'
-										: 'text-gray-700 hover:bg-white hover:text-gray-900'
-								}`}
-							>
-								<FaBoxOpen className="w-4 h-4" />
-								<span>Mẫu thử</span>
-							</button>
-							<button
-								onClick={() => handleViewChange('document')}
-								className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-									activeView === 'document'
-										? 'bg-blue-600 text-white'
-										: 'text-gray-700 hover:bg-white hover:text-gray-900'
-								}`}
-							>
-								<FaFileAlt className="w-4 h-4" />
-								<span>Tài liệu - Biên bản</span>
-							</button>
-							<button
-								onClick={() => handleViewChange('editor')}
-								className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-									activeView === 'editor'
-										? 'bg-blue-600 text-white'
-										: 'text-gray-700 hover:bg-white hover:text-gray-900'
-								}`}
-							>
-								<FaEdit className="w-4 h-4" />
-								<span>Soạn thảo</span>
-							</button>
-							<button className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-white hover:text-gray-900 transition-colors">
-								<FaHistory className="w-4 h-4" />
-								<span>Nhật ký</span>
-							</button>
-						</nav>
 					</div>
+
+					{isAnyPopupOpen ? (
+						/* Collapsed Sidebar - Icons Only */
+						<div className="p-2 pt-4">
+							<nav className="space-y-2">
+								{/* Lab Dashboard Icons */}
+								<button
+									onClick={() => handleViewChange('overview')}
+									className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+										activeView === 'overview'
+											? 'bg-blue-600 text-white'
+											: 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+									}`}
+									onMouseEnter={(e) => showTooltip('Tổng quan', e)}
+									onMouseLeave={hideTooltip}
+								>
+									<FaChartBar className="w-5 h-5" />
+								</button>
+								<button
+									onClick={() => handleViewChange('analysis')}
+									className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+										activeView === 'analysis'
+											? 'bg-blue-600 text-white'
+											: 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+									}`}
+									onMouseEnter={(e) => showTooltip('Chỉ tiêu', e)}
+									onMouseLeave={hideTooltip}
+								>
+									<FaFlask className="w-5 h-5" />
+								</button>
+								<button
+									onClick={() => handleViewChange('samples')}
+									className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+										activeView === 'samples'
+											? 'bg-blue-600 text-white'
+											: 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+									}`}
+									onMouseEnter={(e) => showTooltip('Mẫu thử', e)}
+									onMouseLeave={hideTooltip}
+								>
+									<FaBoxOpen className="w-5 h-5" />
+								</button>
+								<button
+									onClick={() => handleViewChange('document')}
+									className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+										activeView === 'document'
+											? 'bg-blue-600 text-white'
+											: 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+									}`}
+									onMouseEnter={(e) => showTooltip('Tài liệu - Biên bản', e)}
+									onMouseLeave={hideTooltip}
+								>
+									<FaFileAlt className="w-5 h-5" />
+								</button>
+								<button
+									onClick={() => handleViewChange('editor')}
+									className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+										activeView === 'editor'
+											? 'bg-blue-600 text-white'
+											: 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+									}`}
+									onMouseEnter={(e) => showTooltip('Soạn thảo', e)}
+									onMouseLeave={hideTooltip}
+								>
+									<FaEdit className="w-5 h-5" />
+								</button>
+								<button
+									className="w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-200 hover:text-blue-600 transition-colors"
+									onMouseEnter={(e) => showTooltip('Nhật ký', e)}
+									onMouseLeave={hideTooltip}
+								>
+									<FaHistory className="w-5 h-5" />
+								</button>
+
+								{/* Divider */}
+								<div className="border-t border-gray-300 my-2"></div>
+
+								{/* Main Navigation Icons */}
+								<Link
+									to="/dashboard"
+									className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+										currentPath === '/' || currentPath.includes('/dashboard')
+											? 'bg-blue-600 text-white'
+											: 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+									}`}
+									onMouseEnter={(e) => showTooltip('Tiếp nhận', e)}
+									onMouseLeave={hideTooltip}
+								>
+									<FaClipboardList className="w-5 h-5" />
+								</Link>
+								<Link
+									to="/library"
+									className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+										currentPath.includes('/library')
+											? 'bg-blue-600 text-white'
+											: 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+									}`}
+									onMouseEnter={(e) => showTooltip('Thư viện', e)}
+									onMouseLeave={hideTooltip}
+								>
+									<FaFileAlt className="w-5 h-5" />
+								</Link>
+								<Link
+									to="/files"
+									className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+										currentPath.includes('/files')
+											? 'bg-blue-600 text-white'
+											: 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+									}`}
+									onMouseEnter={(e) => showTooltip('Files', e)}
+									onMouseLeave={hideTooltip}
+								>
+									<FaFileAlt className="w-5 h-5" />
+								</Link>
+							</nav>
+						</div>
+					) : (
+						/* Full Sidebar */
+						<>
+							{/* Lab Dashboard Tabs - Moved to top */}
+							<div className="px-4 pt-4">
+								<div className="mb-3">
+									<h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Lab Dashboard</h3>
+								</div>
+								<nav className="space-y-1">
+									<button
+										onClick={() => handleViewChange('overview')}
+										className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+											activeView === 'overview'
+												? 'bg-blue-600 text-white'
+												: 'text-gray-700 hover:bg-white hover:text-gray-900'
+										}`}
+									>
+										<FaChartBar className="w-4 h-4" />
+										<span>Tổng quan</span>
+									</button>
+									<button
+										onClick={() => handleViewChange('analysis')}
+										className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+											activeView === 'analysis'
+												? 'bg-blue-600 text-white'
+												: 'text-gray-700 hover:bg-white hover:text-gray-900'
+										}`}
+									>
+										<FaFlask className="w-4 h-4" />
+										<span>Chỉ tiêu</span>
+									</button>
+									<button
+										onClick={() => handleViewChange('samples')}
+										className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+											activeView === 'samples'
+												? 'bg-blue-600 text-white'
+												: 'text-gray-700 hover:bg-white hover:text-gray-900'
+										}`}
+									>
+										<FaBoxOpen className="w-4 h-4" />
+										<span>Mẫu thử</span>
+									</button>
+									<button
+										onClick={() => handleViewChange('document')}
+										className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+											activeView === 'document'
+												? 'bg-blue-600 text-white'
+												: 'text-gray-700 hover:bg-white hover:text-gray-900'
+										}`}
+									>
+										<FaFileAlt className="w-4 h-4" />
+										<span>Tài liệu - Biên bản</span>
+									</button>
+									<button
+										onClick={() => handleViewChange('editor')}
+										className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+											activeView === 'editor'
+												? 'bg-blue-600 text-white'
+												: 'text-gray-700 hover:bg-white hover:text-gray-900'
+										}`}
+									>
+										<FaEdit className="w-4 h-4" />
+										<span>Soạn thảo</span>
+									</button>
+									<button className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-white hover:text-gray-900 transition-colors">
+										<FaHistory className="w-4 h-4" />
+										<span>Nhật ký</span>
+									</button>
+								</nav>
+							</div>
+
+							{/* Main Navigation - Moved below Lab Dashboard */}
+							<div className="p-4">
+								<div className="mb-3">
+									<h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Điều hướng</h3>
+								</div>
+								<nav className="space-y-1">
+									<Link
+										to="/dashboard"
+										className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+											currentPath === '/' || currentPath.includes('/dashboard')
+												? 'bg-blue-600 text-white'
+												: 'text-gray-700 hover:bg-white hover:text-gray-900'
+										}`}
+									>
+										<FaClipboardList className="w-4 h-4" />
+										<span>Tiếp nhận</span>
+									</Link>
+									<Link
+										to="/library"
+										className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+											currentPath.includes('/library')
+												? 'bg-blue-600 text-white'
+												: 'text-gray-700 hover:bg-white hover:text-gray-900'
+										}`}
+									>
+										<FaFileAlt className="w-4 h-4" />
+										<span>Thư viện</span>
+									</Link>
+									<Link
+										to="/files"
+										className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+											currentPath.includes('/files')
+												? 'bg-blue-600 text-white'
+												: 'text-gray-700 hover:bg-white hover:text-gray-900'
+										}`}
+									>
+										<FaFileAlt className="w-4 h-4" />
+										<span>Files</span>
+									</Link>
+								</nav>
+							</div>
+						</>
+					)}
 				</div>
 
 				{/* Bottom Section - Account/Identity */}
-				<div className="p-4 border-t border-gray-200">
+				<div className="p-2 border-t border-gray-200">
 					<div className="relative">
-						<button
-							onClick={() => setDropdownOpen(!dropdownOpen)}
-							className="w-full flex items-center space-x-3 p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors"
-						>
-							<div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-								<span className="text-blue-600 font-semibold text-sm">
-									{currentUser?.identity_name?.charAt(0) || 'T'}
-								</span>
-							</div>
-							<div className="flex-1 text-left">
-								<p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
-								<p className="text-xs text-gray-500">Nhân viên lab</p>
-							</div>
-							<FaChevronDown className="w-4 h-4 text-gray-400" />
-						</button>
+						{isAnyPopupOpen ? (
+							/* Collapsed User Icon */
+							<button
+								onClick={() => setDropdownOpen(!dropdownOpen)}
+								className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-200 transition-colors"
+								onMouseEnter={(e) => showTooltip(displayName, e)}
+								onMouseLeave={hideTooltip}
+							>
+								<FaUser className="w-5 h-5" />
+							</button>
+						) : (
+							/* Full User Info */
+							<button
+								onClick={() => setDropdownOpen(!dropdownOpen)}
+								className="w-full flex items-center space-x-3 p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors"
+							>
+								<div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+									<span className="text-blue-600 font-semibold text-sm">
+										{currentUser?.identity_name?.charAt(0) || 'T'}
+									</span>
+								</div>
+								<div className="flex-1 text-left">
+									<p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+									<p className="text-xs text-gray-500">Nhân viên lab</p>
+								</div>
+								<FaChevronDown className="w-4 h-4 text-gray-400" />
+							</button>
+						)}
 
 						{dropdownOpen && (
-							<div className="absolute bottom-full left-0 right-0 mb-2 bg-white border rounded-lg shadow-lg z-50">
+							<div
+								className={`absolute ${
+									isAnyPopupOpen ? 'bottom-full left-16 mb-2 w-64' : 'bottom-full left-0 right-0 mb-2'
+								} bg-white border rounded-lg shadow-lg z-50`}
+							>
 								<div className="p-3 border-b">
 									<p className="text-sm font-medium text-gray-900">{displayName}</p>
 									<p className="text-xs text-gray-500">{currentUser?.identity_uid}</p>
@@ -1122,33 +1316,10 @@ const LabDashboard = () => {
 				{/* Show Popups in this area instead of full screen */}
 				{showSamplePopup || showAnalysisPopup || showQRScanner || showHandoverForm ? (
 					<div className="w-full h-full">
-						{/* Popup Header */}
-						<div className="flex items-center justify-between p-4 border-b bg-gray-50">
-							<div className="flex items-center space-x-3">
-								<button
-									onClick={() => {
-										if (showSamplePopup) closeSamplePopup();
-										if (showAnalysisPopup) closeAnalysisPopup();
-										if (showQRScanner) closeQRScanner();
-										if (showHandoverForm) closeHandoverForm();
-									}}
-									className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
-								>
-									<FaArrowLeft className="w-5 h-5" />
-								</button>
-								<h2 className="text-xl font-semibold text-gray-800">
-									{showSamplePopup && 'Thông tin mẫu - Xử lý'}
-									{showAnalysisPopup && 'Chỉ tiêu - Phân tích'}
-									{showQRScanner && 'Quét mã QR mẫu thử'}
-									{showHandoverForm && 'Thông tin bàn giao mẫu'}
-								</h2>
-							</div>
-						</div>
-
-						{/* Popup Content */}
+						{/* Popup Content - No header */}
 						<div className="h-full overflow-auto">
-							{showSamplePopup && <ProcessingSample />}
-							{showAnalysisPopup && <ProcessingAnalysis />}
+							{showSamplePopup && <ProcessingSample onNavigateToLab={handleNavigateToLab} />}
+							{showAnalysisPopup && <ProcessingAnalysis onNavigateToLab={handleNavigateToLab} />}
 							{showQRScanner && (
 								<div className="p-6 text-center h-full flex flex-col justify-center">
 									<div className="w-32 h-32 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
@@ -1911,13 +2082,8 @@ const LabDashboard = () => {
 						{/* Document Editor View */}
 						{activeView === 'editor' && (
 							<>
-								{/* Editor Header */}
-								<div className="flex items-center justify-between">
-									<h2 className="text-2xl font-semibold text-gray-900">Soạn thảo tài liệu</h2>
-								</div>
-
 								{/* Editor Content */}
-								<div className="min-h-screen">
+								<div className="h-full">
 									<DocumentEditor />
 								</div>
 							</>
@@ -1943,6 +2109,26 @@ const LabDashboard = () => {
 
 			{/* Click outside to close dropdown */}
 			{dropdownOpen && <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)}></div>}
+
+			{/* Tooltip */}
+			{tooltip.show && (
+				<div
+					className="fixed bg-gray-900 text-white text-sm px-2 py-1 rounded shadow-lg z-50 pointer-events-none"
+					style={{
+						left: tooltip.x,
+						top: tooltip.y - 12,
+						transform: 'translateY(-50%)',
+					}}
+				>
+					{tooltip.content}
+					<div
+						className="absolute top-1/2 left-0 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900"
+						style={{
+							transform: 'translateY(-50%) translateX(-100%)',
+						}}
+					></div>
+				</div>
+			)}
 
 			{/* Add custom scrollbar styles */}
 			<style jsx global>{`

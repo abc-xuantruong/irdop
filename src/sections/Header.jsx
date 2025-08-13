@@ -1,7 +1,7 @@
 import * as React from 'react';
 const { useContext } = React;
 import { Link, useNavigate } from 'react-router-dom';
-import logo from '../assets/IRDOP-LOGO .png';
+import logo from '../assets/IRDOP-LOGO_FULL.png';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiGet } from '../contexts/helperFunctionCallAPI';
 import { useState, useEffect } from 'react';
