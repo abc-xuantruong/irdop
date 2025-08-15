@@ -176,6 +176,81 @@ table td {
 	overflow: visible !important;
 }
 
+/* Custom Tooltip Styles */
+.custom-tooltip {
+	position: absolute;
+	background: rgba(0, 0, 0, 0.9);
+	color: white;
+	padding: 8px 12px;
+	border-radius: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	white-space: nowrap;
+	pointer-events: none;
+	z-index: 10000;
+	transform: translateX(-50%) translateY(-100%);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	opacity: 0;
+	transition: opacity 0.2s ease-in-out;
+}
+
+.custom-tooltip.visible {
+	opacity: 1;
+}
+
+.custom-tooltip::after {
+	content: '';
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	border: 5px solid transparent;
+	border-top-color: rgba(0, 0, 0, 0.9);
+}
+
+/* Sample Tooltip Styles */
+.sample-tooltip {
+	position: absolute;
+	background: white;
+	border: 1px solid #d1d5db;
+	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+	border-radius: 8px;
+	padding: 12px;
+	font-size: 12px;
+	white-space: nowrap;
+	pointer-events: none;
+	z-index: 10001;
+	transform: translateX(-50%) translateY(-100%);
+	opacity: 0;
+	transition: opacity 0.2s ease-in-out;
+	min-width: 200px;
+}
+
+.sample-tooltip.visible {
+	opacity: 1;
+}
+
+.sample-tooltip::after {
+	content: '';
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	border: 6px solid transparent;
+	border-top-color: white;
+}
+
+.sample-tooltip::before {
+	content: '';
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	border: 7px solid transparent;
+	border-top-color: #d1d5db;
+	margin-top: 1px;
+}
+
 @keyframes pulse {
 	0%, 100% {
 		opacity: 1;
@@ -183,6 +258,97 @@ table td {
 	50% {
 		opacity: 0.5;
 	}
+`;
+
+// Document preview modal CSS
+const documentPreviewStyles = `
+.document-preview-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 10000;
+}
+
+.document-preview-content {
+	background: white;
+	border-radius: 12px;
+	box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+	max-width: 95vw;
+	max-height: 95vh;
+	width: 1200px;
+	height: 800px;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.document-preview-header {
+	background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+	color: white;
+	padding: 16px 24px;
+	display: flex;
+	align-items: center;
+	justify-content: between;
+	border-radius: 12px 12px 0 0;
+}
+
+.document-preview-body {
+	flex: 1;
+	overflow: auto;
+	padding: 0;
+}
+
+.document-preview-iframe {
+	width: 100%;
+	height: 100%;
+	border: none;
+	background: white;
+}
+
+.close-button {
+	background: rgba(255, 255, 255, 0.2);
+	border: none;
+	color: white;
+	border-radius: 6px;
+	padding: 8px 12px;
+	cursor: pointer;
+	transition: background 0.2s ease;
+	font-weight: 600;
+}
+
+.close-button:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+.loading-spinner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 200px;
+	font-size: 16px;
+	color: #6b7280;
+}
+
+.spinner {
+	width: 24px;
+	height: 24px;
+	border: 3px solid #e5e7eb;
+	border-top: 3px solid #3b82f6;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+	margin-right: 12px;
+}
+
+@keyframes spin {
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
+}
 `;
 
 const ProcessingAnalysis = ({ onNavigateToLab }) => {
@@ -291,6 +457,30 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// State to track if this is the initial load
 	const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+	// Tooltip state
+	const [tooltip, setTooltip] = useState({
+		visible: false,
+		content: '',
+		x: 0,
+		y: 0,
+	});
+
+	// Sample info tooltip state
+	const [sampleTooltip, setSampleTooltip] = useState({
+		visible: false,
+		content: null,
+		x: 0,
+		y: 0,
+	});
+
+	// Document preview states
+	const [documentPreview, setDocumentPreview] = useState({
+		visible: false,
+		content: '',
+		loading: false,
+		docId: null,
+	});
 
 	// Handle drag selection
 	const handleMouseDown = (e, index, rowId, item) => {
@@ -618,8 +808,15 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					} else if (filterValue === 'noResult') {
 						requestBody.hasResult = false;
 					}
+				} else if (column === 'protocol_source' && filterValue) {
+					requestBody.sources = Array.isArray(filterValue) ? filterValue : [filterValue];
 				}
 			});
+
+			// Debug log to check if sources filter is added
+			if (requestBody.sources) {
+				console.log('Protocol source filter applied:', requestBody.sources);
+			}
 
 			const response = await apiPost(API_ENDPOINT, requestBody);
 
@@ -756,10 +953,18 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		styleSheet.textContent = customScrollbarStyle;
 		document.head.appendChild(styleSheet);
 
+		// Inject document preview modal styles
+		const documentStyleSheet = document.createElement('style');
+		documentStyleSheet.textContent = documentPreviewStyles;
+		document.head.appendChild(documentStyleSheet);
+
 		return () => {
-			// Clean up the style sheet on unmount
+			// Clean up the style sheets on unmount
 			if (document.head.contains(styleSheet)) {
 				document.head.removeChild(styleSheet);
+			}
+			if (document.head.contains(documentStyleSheet)) {
+				document.head.removeChild(documentStyleSheet);
 			}
 		};
 	}, []);
@@ -834,62 +1039,14 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			const autoRefreshInterval = setInterval(() => {
 				// Only prevent auto-refresh when actively editing a cell
 				if (!updating && !editingCell && !editableCell.analysisId && !editingProtocolSource) {
-					// Parse current URL parameters to get latest filters
-					const searchParams = new URLSearchParams(location.search);
-					let currentFilters = { ...filters };
-					let currentPage = 1;
-					let currentItemsPerPage = 100;
-
-					// Parse URL parameters to get current state
-					searchParams.forEach((value, key) => {
-						if (key === 'itemsPerPage') {
-							currentItemsPerPage = parseInt(value) || 100;
-						} else if (key === 'page') {
-							currentPage = parseInt(value) || 1;
-						} else if (key === 'parameters') {
-							try {
-								currentFilters.parameters = JSON.parse(value);
-							} catch (e) {
-								console.warn('Failed to parse parameters from URL:', e);
-							}
-						} else if (key === 'protocols') {
-							try {
-								currentFilters.protocols = JSON.parse(value);
-							} catch (e) {
-								console.warn('Failed to parse protocols from URL:', e);
-							}
-						} else if (key === 'columnSort') {
-							currentFilters.columnSort = value;
-						} else if (key === 'sortBy') {
-							currentFilters.sortBy = value;
-						} else if (
-							[
-								'sample_uid',
-								'parameter_name',
-								'protocol_code',
-								'matrix',
-								'deadline',
-								'doc_id',
-								'result_value',
-							].includes(key)
-						) {
-							if (!currentFilters.headerFilters) currentFilters.headerFilters = {};
-							try {
-								currentFilters.headerFilters[key] = JSON.parse(value);
-							} catch (e) {
-								currentFilters.headerFilters[key] = value;
-							}
-						}
-					});
-
-					// Fetch data with current URL state
-					fetchAnalysisData(true, currentFilters, currentPage, currentItemsPerPage);
+					// Use current state instead of parsing URL to maintain filters
+					fetchAnalysisData(true, filters, currentPage, itemsPerPage);
 				}
 			}, 60000); // 60 seconds
 
 			return () => clearInterval(autoRefreshInterval);
 		}
-	}, [updating, editingCell, editableCell.analysisId, editingProtocolSource, isInitialLoad, location.search]);
+	}, [updating, editingCell, editableCell.analysisId, editingProtocolSource, isInitialLoad, filters, currentPage, itemsPerPage]);
 
 	// Keyboard shortcuts
 	useEffect(() => {
@@ -1494,7 +1651,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				return `${sampleUid} - ${parameterName}`;
 			});
 
-			const message = `${itemDescriptions.join(', ')} đã được tạo biên bản, vẫn tiếp tục tạo biên bản?`;
+			const message = `${itemDescriptions.join(', ')} đã được lập biên bản, vẫn tiếp tục lập biên bản?`;
 
 			if (!window.confirm(message)) {
 				return;
@@ -1514,51 +1671,23 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		const analysisIds = selectedData.map((item) => item.id).filter((id) => id);
 
 		// Build editor URL with query parameters
-		let editorUrl = 'EditorTemplate.html';
+		let editorUrl = '/editor';
 		if (analysisIds.length > 0) {
 			const queryParams = new URLSearchParams();
 			queryParams.set('analysisIds', analysisIds.join(','));
 			editorUrl += '?' + queryParams.toString();
 		}
 
-		// Open editor in new tab/window
+		// open in new tab to editor page
 		window.open(editorUrl, '_blank');
 	};
 
 	// Open document
 	const openDocument = async (docId) => {
-		if (docId && docId.includes('edit')) {
-			const editorUrl = `../EditorTemplate.html?docId=${docId}`;
-			window.open(editorUrl, '_blank');
-		} else if (docId && docId.includes('Doc')) {
-			try {
-				const response = await apiPost('https://red.irdop.org/v1/document/preview_doc', {
-					id: docId,
-				});
-
-				if (response && response.status >= 200 && response.status < 300) {
-					if (response.data && typeof response.data === 'string') {
-						if (response.data.startsWith('http')) {
-							window.open(response.data, '_blank');
-						} else {
-							const popup = window.open('', '_blank', 'width=800,height=800,scrollbars=yes,resizable=yes');
-							if (popup) {
-								popup.document.open();
-								popup.document.write(response.data);
-								popup.document.close();
-							} else {
-								showErrorNotification('Không thể mở cửa sổ popup. Vui lòng kiểm tra cài đặt trình duyệt.');
-							}
-						}
-					}
-				} else {
-					showErrorNotification('Không thể xem tài liệu: ' + (response.data || 'Lỗi không xác định'));
-				}
-			} catch (error) {
-				console.error('Error previewing document:', error);
-				showErrorNotification('Lỗi khi xem tài liệu: ' + error.message);
-			}
-		}
+	
+			// Use the new modal preview for all document types
+			handleDocumentPreview(docId);
+		
 	};
 
 	// Handle sorting
@@ -1682,6 +1811,45 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		setSelectedFilterValues([]);
 	};
 
+	// Remove filter for specific column
+	const removeColumnFilter = (column) => {
+		const newFilters = {
+			...filters,
+			headerFilters: {
+				...filters.headerFilters,
+			},
+		};
+		
+		// Remove the specific column filter
+		delete newFilters.headerFilters[column];
+		
+		// Also clear related sidebar filters if needed
+		if (column === 'parameter_name') {
+			newFilters.parameters = [];
+		} else if (column === 'protocol_code') {
+			newFilters.protocols = [];
+		} else if (column === 'deadline') {
+			// Clear deadline filter completely
+			delete newFilters.headerFilters.deadline;
+		} else if (column === 'matrix' || column === 'sample_uid') {
+			// Clear the selected parameter if it's related to matrix or sample
+			if (selectedParameter && 
+				((column === 'matrix' && selectedParameter.includes('matrix|')) ||
+				 (column === 'sample_uid' && selectedParameter.includes('sample|')))) {
+				setSelectedParameter('');
+			}
+		}
+		
+		setFilters(newFilters);
+		
+		// Clear selected parameter if all filters are cleared
+		if (Object.keys(newFilters.headerFilters).length === 0 && 
+			newFilters.parameters.length === 0 && 
+			newFilters.protocols.length === 0) {
+			setSelectedParameter('');
+		}
+	};
+
 	// Available columns
 	const availableColumns = {
 		sample_uid: 'Mã mẫu',
@@ -1702,6 +1870,100 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	// Pagination calculations
 	const startIndex = (currentPage - 1) * itemsPerPage + 1;
 	const endIndex = Math.min(currentPage * itemsPerPage, totalItems);
+
+	// Tooltip functions
+	const showTooltip = (event, content) => {
+		const rect = event.target.getBoundingClientRect();
+		const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+		const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+		
+		setTooltip({
+			visible: true,
+			content,
+			x: rect.left + scrollLeft + rect.width / 2,
+			y: rect.top + scrollTop - 10,
+		});
+	};
+
+	const hideTooltip = () => {
+		setTooltip({
+			visible: false,
+			content: '',
+			x: 0,
+			y: 0,
+		});
+	};
+
+	// Sample tooltip functions
+	const showSampleTooltip = (event, sampleData) => {
+		const rect = event.target.getBoundingClientRect();
+		const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+		const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+		
+		setSampleTooltip({
+			visible: true,
+			content: sampleData,
+			x: rect.left + scrollLeft + rect.width / 2,
+			y: rect.top + scrollTop - 10,
+		});
+	};
+
+	const hideSampleTooltip = () => {
+		setSampleTooltip({
+			visible: false,
+			content: null,
+			x: 0,
+			y: 0,
+		});
+	};
+
+	// Document preview handlers
+	const handleDocumentPreview = async (docId) => {
+		if (!docId) return;
+
+		setDocumentPreview({
+			visible: true,
+			content: '',
+			loading: true,
+			docId: docId,
+		});
+
+		try {
+			const response = await apiPost('https://red.irdop.org/v1/document/preview_doc', {
+				id: docId,
+			});
+
+			if (response?.status < 300 && response?.data) {
+				setDocumentPreview({
+					visible: true,
+					content: response.data,
+					loading: false,
+					docId: docId,
+				});
+			} else {
+				throw new Error('Failed to load document');
+			}
+		} catch (error) {
+			console.error('Error loading document:', error);
+			setDocumentPreview({
+				visible: true,
+				content: '<div class="text-red-600 p-4">Lỗi khi tải tài liệu: ' + error.message + '</div>',
+				loading: false,
+				docId: docId,
+			});
+			showErrorNotification('Lỗi khi tải tài liệu');
+		}
+	};
+
+	// Close document preview
+	const closeDocumentPreview = () => {
+		setDocumentPreview({
+			visible: false,
+			content: '',
+			loading: false,
+			docId: null,
+		});
+	};
 
 	return (
 		<div className="flex h-full bg-gray-100 relative">
@@ -1729,7 +1991,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 							<button
 								onClick={toggleSidebarCollapse}
 								className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors"
-								title="Thu gọn sidebar"
+								onMouseEnter={(e) => showTooltip(e, 'Thu gọn sidebar')}
+								onMouseLeave={hideTooltip}
 							>
 								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
@@ -1972,7 +2235,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								<button
 									onClick={toggleSidebarCollapse}
 									className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors mr-2"
-									title="Mở rộng sidebar"
+									onMouseEnter={(e) => showTooltip(e, 'Mở rộng sidebar')}
+									onMouseLeave={hideTooltip}
 								>
 									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
@@ -1994,7 +2258,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									<div
 										className="px-3 py-2 bg-yellow-100 text-yellow-800 rounded-md text-sm font-medium border border-yellow-200 cursor-pointer hover:bg-yellow-200 transition-colors"
 										onClick={clearAllFilters}
-										title="Click để xóa tất cả bộ lọc và bỏ chọn"
+										onMouseEnter={(e) => showTooltip(e, 'Click để xóa tất cả bộ lọc và bỏ chọn')}
+										onMouseLeave={hideTooltip}
 									>
 										<span>{selectedRows.size} mục đã chọn</span>
 									</div>
@@ -2023,7 +2288,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									className="px-3 py-2 bg-white border-2 border-gray-400 text-gray-700 rounded-md text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm"
 									onClick={openEditor}
 								>
-									<span>Tạo biên bản</span>
+									<span>Lập biên bản</span>
 								</button>
 
 								{selectedRows.size > 0 && (
@@ -2068,14 +2333,16 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																		  (column === 'parameter_name' && filters.parameters.length > 0) ||
 																		  (column === 'protocol_code' && filters.protocols.length > 0) ||
 																		  (column === 'matrix' && filters.parameters.some((p) => p.includes('matrix|'))) ||
-																		  (column === 'sample_uid' && filters.parameters.some((p) => p.includes('sample|')))
+																		  (column === 'sample_uid' && filters.parameters.some((p) => p.includes('sample|'))) ||
+																		  (column === 'deadline' && filters.headerFilters.deadline)
 																		? 'underline font-black'
 																		: 'underline'
 																	: filters.headerFilters[column] ||
 																	  (column === 'parameter_name' && filters.parameters.length > 0) ||
 																	  (column === 'protocol_code' && filters.protocols.length > 0) ||
 																	  (column === 'matrix' && filters.parameters.some((p) => p.includes('matrix|'))) ||
-																	  (column === 'sample_uid' && filters.parameters.some((p) => p.includes('sample|')))
+																	  (column === 'sample_uid' && filters.parameters.some((p) => p.includes('sample|'))) ||
+																	  (column === 'deadline' && filters.headerFilters.deadline)
 																	? 'text-blue-600 font-bold underline'
 																	: ''
 															}`}
@@ -2083,6 +2350,24 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 															{availableColumns[column] || column}
 														</span>
 														<div className="flex items-center space-x-1">
+															{/* Clear filter button - only show if filter is active */}
+															{(filters.headerFilters[column] ||
+																(column === 'parameter_name' && filters.parameters.length > 0) ||
+																(column === 'protocol_code' && filters.protocols.length > 0) ||
+																(column === 'matrix' && filters.parameters.some((p) => p.includes('matrix|'))) ||
+																(column === 'sample_uid' && filters.parameters.some((p) => p.includes('sample|'))) ||
+																(column === 'deadline' && filters.headerFilters.deadline)) && (
+																<button
+																	className="text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full p-1 text-xs leading-none"
+																	onClick={(e) => {
+																		e.stopPropagation();
+																		removeColumnFilter(column);
+																	}}
+																	title={`Xóa bộ lọc ${availableColumns[column] || column}`}
+																>
+																	✕
+																</button>
+															)}
 															{!isFilterCreationMode && sortConfig.column === column && (
 																<span className="text-blue-600">{sortConfig.direction === 'ASC' ? '↑' : '↓'}</span>
 															)}
@@ -2128,21 +2413,20 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 														.map((column) => (
 															<td key={column} className="px-2 py-1 text-sm text-gray-900 align-top text-left">
 																{column === 'sample_uid' ? (
-																	<div className="relative text-left w-full group">
+																	<div className="relative text-left w-full">
 																		<span className="text-left">{row.sample_uid || ''}</span>
 																		{row.sample_uid && (
-																			<>
-																				<span className="ml-1 inline-flex items-center justify-center w-4 h-4 text-blue-800 border border-gray-400 rounded-full text-xs cursor-help font-bold">
-																					i
-																				</span>
-																				<div className="absolute left-0 top-6 bg-white border border-gray-300 shadow-lg text-xs p-3 rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 whitespace-nowrap text-left min-w-[200px]">
-																					<div className="text-left">
-																						<div>Mã mẫu: {row.sample_uid}</div>
-																						<div>Tên mẫu: {row.sample_name || 'Không có'}</div>
-																						<div>Mô tả: {row.sample_description || 'Không có'}</div>
-																					</div>
-																				</div>
-																			</>
+																			<span 
+																				className="ml-1 inline-flex items-center justify-center w-4 h-4 text-blue-800 border border-gray-400 rounded-full text-xs cursor-help font-bold"
+																				onMouseEnter={(e) => showSampleTooltip(e, {
+																					sample_uid: row.sample_uid,
+																					sample_name: row.sample_name,
+																					sample_description: row.sample_description
+																				})}
+																				onMouseLeave={hideSampleTooltip}
+																			>
+																				i
+																			</span>
 																		)}
 																	</div>
 																) : column === 'protocol_source' ? (
@@ -2199,7 +2483,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																					e.stopPropagation();
 																					handleProtocolSourceClick(row.id, row.protocol_source);
 																				}}
-																				title="Nhấp để chỉnh sửa nguồn"
+																				onMouseEnter={(e) => showTooltip(e, 'Nhấp để chỉnh sửa nguồn')}
+																				onMouseLeave={hideTooltip}
 																			>
 																				{row.protocol_source || '--'}
 																			</div>
@@ -2279,7 +2564,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																						e.stopPropagation();
 																						handleCellClickV3(row.id, 'result_value', row.result_value);
 																					}}
-																					title="Nhấp để chỉnh sửa kết quả"
+																					onMouseEnter={(e) => showTooltip(e, 'Nhấp để chỉnh sửa kết quả')}
+																					onMouseLeave={hideTooltip}
 																				>
 																					{row.result_value ? (
 																						<div dangerouslySetInnerHTML={{ __html: row.result_value }} />
@@ -2343,7 +2629,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																						e.stopPropagation();
 																						handleCellClickV3(row.id, 'result_unit', row.result_unit);
 																					}}
-																					title="Nhấp để chỉnh sửa đơn vị"
+																					onMouseEnter={(e) => showTooltip(e, 'Nhấp để chỉnh sửa đơn vị')}
+																					onMouseLeave={hideTooltip}
 																				>
 																					{row.result_unit ? (
 																						<div dangerouslySetInnerHTML={{ __html: row.result_unit }} />
@@ -2660,6 +2947,80 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				updating={updating}
 				setUpdating={setUpdating}
 			/>
+
+			{/* Custom Tooltip Portal */}
+			{tooltip.visible &&
+				createPortal(
+					<div
+						className={`custom-tooltip ${tooltip.visible ? 'visible' : ''}`}
+						style={{
+							left: `${tooltip.x}px`,
+							top: `${tooltip.y}px`,
+						}}
+					>
+						{tooltip.content}
+					</div>,
+					document.body,
+				)}
+
+			{/* Sample Tooltip Portal */}
+			{sampleTooltip.visible &&
+				createPortal(
+					<div
+						className={`sample-tooltip ${sampleTooltip.visible ? 'visible' : ''}`}
+						style={{
+							left: `${sampleTooltip.x}px`,
+							top: `${sampleTooltip.y}px`,
+						}}
+					>
+						{sampleTooltip.content && (
+							<div className="text-left">
+								<div><strong>Mã mẫu:</strong> {sampleTooltip.content.sample_uid}</div>
+								<div><strong>Tên mẫu:</strong> {sampleTooltip.content.sample_name || 'Không có'}</div>
+								<div><strong>Mô tả:</strong> {sampleTooltip.content.sample_description || 'Không có'}</div>
+							</div>
+						)}
+					</div>,
+					document.body,
+				)}
+
+			{/* Document Preview Modal */}
+			{documentPreview.visible && (
+				<div className="document-preview-modal" onClick={(e) => {
+					if (e.target === e.currentTarget) {
+						closeDocumentPreview();
+					}
+				}}>
+					<div className="document-preview-content" onClick={(e) => e.stopPropagation()}>
+						<div className="document-preview-header">
+							<h3 className="text-lg font-semibold flex-1">
+								Xem tài liệu {documentPreview.docId && `- ${documentPreview.docId}`}
+							</h3>
+							<button 
+								onClick={closeDocumentPreview}
+								className="close-button"
+							>
+								✕ Đóng
+							</button>
+						</div>
+						<div className="document-preview-body">
+							{documentPreview.loading ? (
+								<div className="loading-spinner">
+									<div className="spinner"></div>
+									Đang tải tài liệu...
+								</div>
+							) : (
+								<iframe
+									className="document-preview-iframe"
+									srcDoc={documentPreview.content}
+									title="Document Preview"
+									sandbox="allow-same-origin allow-scripts"
+								/>
+							)}
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };

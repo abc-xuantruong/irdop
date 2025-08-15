@@ -8,8 +8,9 @@ import { FaSearch } from 'react-icons/fa';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import LabBulkUpdate from './LabBulkUpdate';
 
-// Custom CSS for enhanced UI
+// Custom CSS for enhanced UI - optimized with Tailwind
 const customStyles = `
+/* Essential scrollbar styling */
 .custom-scrollbar::-webkit-scrollbar {
 	width: 4px;
 }
@@ -35,48 +36,10 @@ const customStyles = `
 	user-select: none;
 }
 
-.selected-row {
-	background: linear-gradient(135deg, #dbeafe, #bfdbfe) !important;
-}
-
-.selected-row:hover {
-	background: linear-gradient(135deg, #bfdbfe, #93c5fd) !important;
-}
-
-.selected-row td:not(.merged-sample-cell) {
-	border-bottom: 2px solid #3b82f6 !important;
-}
-
-.merged-sample-cell {
-	background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-	border: 1px solid #d1d5db;
-	vertical-align: top;
-	position: relative;
-}
-
-.merged-sample-cell::after {
-	content: '';
-	position: absolute;
-	left: 0;
-	top: 0;
-	bottom: 0;
-	width: 3px;
-	background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-	border-radius: 0 2px 2px 0;
-}
-
-.merged-sample-cell.urgent::after {
-	background: linear-gradient(135deg, #dc2626, #b91c1c);
-}
-
-.merged-sample-cell.no-border {
-	border: none !important;
-	background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-}
-
-/* Enhanced editing styles like ProcessingAnalysis */
+/* Enhanced editing styles like ProcessingAnalysis - optimized for performance */
 .editable-cell {
-	transition: all 0.2s ease-in-out;
+	transition: background-color 0.15s ease;
+	will-change: background-color;
 }
 
 .editable-cell:hover {
@@ -103,7 +66,7 @@ const customStyles = `
 /* Protocol source select styling like ProcessingAnalysis */
 .protocol-source-select {
 	position: relative;
-	z-index: 100;
+	z-index: 1;
 	overflow: visible !important;
 }
 
@@ -115,7 +78,7 @@ const customStyles = `
 	cursor: pointer;
 	background-color: white !important;
 	position: relative;
-	z-index: 999;
+	z-index: 10;
 }
 
 .protocol-source-select select:focus {
@@ -130,11 +93,12 @@ const customStyles = `
 }
 
 .result-cell {
-	transition: all 0.2s ease-in-out;
+	transition: background-color 0.15s ease;
 	min-height: 32px;
 	min-width: 32px;
 	display: flex;
 	align-items: center;
+	will-change: background-color;
 }
 
 .result-cell:hover {
@@ -144,10 +108,13 @@ const customStyles = `
 }
 
 .unit-cell {
-	transition: all 0.2s ease-in-out;
+	transition: background-color 0.15s ease;
 	min-height: 32px;
 	min-width: 32px;
 	display: flex;
+	align-items: center;
+	will-change: background-color;
+}
 	align-items: center;
 }
 
@@ -181,7 +148,8 @@ const customStyles = `
 	border: 1px solid #e2e8f0;
 	border-radius: 12px;
 	box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-	transition: all 0.3s ease;
+	transition: box-shadow 0.2s ease, border-color 0.2s ease;
+	will-change: box-shadow, border-color;
 }
 
 .receipt-card:hover {
@@ -203,7 +171,8 @@ const customStyles = `
 	border-radius: 6px;
 	padding: 4px 8px;
 	font-size: 0.875rem;
-	transition: all 0.2s ease;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	will-change: border-color, box-shadow;
 }
 
 .protocol-select:hover {
@@ -224,8 +193,9 @@ const customStyles = `
 	border-radius: 8px;
 	padding: 8px 16px;
 	font-weight: 600;
-	transition: all 0.2s ease;
+	transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 	box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+	will-change: background, box-shadow, transform;
 }
 
 .btn-primary:hover {
@@ -241,7 +211,8 @@ const customStyles = `
 	border-radius: 8px;
 	padding: 8px 16px;
 	font-weight: 600;
-	transition: all 0.2s ease;
+	transition: background 0.15s ease, transform 0.15s ease;
+	will-change: background, transform;
 }
 
 .btn-secondary:hover {
@@ -254,8 +225,9 @@ const customStyles = `
 	border: 2px solid #e5e7eb;
 	border-radius: 8px;
 	padding: 8px 12px;
-	transition: all 0.2s ease;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 	font-size: 0.875rem;
+	will-change: border-color, box-shadow;
 }
 
 .search-input:focus {
@@ -271,8 +243,10 @@ const customStyles = `
 	padding: 6px 12px;
 	font-size: 0.875rem;
 	font-weight: 600;
-	transition: all 0.2s ease;
+	transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 	cursor: pointer;
+	will-change: background, border-color, transform;
+}
 }
 
 .filter-button:hover {
@@ -284,6 +258,20 @@ const customStyles = `
 	background: linear-gradient(135deg, #dbeafe, #bfdbfe);
 	border-color: #3b82f6;
 	color: #1e40af;
+}
+
+/* Performance optimizations for table */
+.processing-table {
+	table-layout: fixed;
+	width: 100%;
+}
+
+.processing-table td {
+	contain: layout style paint;
+}
+
+.processing-table tr:hover {
+	background-color: #f9fafb;
 }
 
 .bulk-edit-modal {
@@ -328,12 +316,128 @@ const customStyles = `
 	scrollbar-color: #cbd5e1 #f1f5f9;
 }
 
-/* Remove all focus outlines */
-button:focus,
-input:focus,
-select:focus,
-textarea:focus {
-	outline: none !important;
+/* Performance optimized table */
+.processing-table {
+	table-layout: fixed;
+	width: 100%;
+}
+
+.processing-table td {
+	contain: layout style paint;
+}
+
+/* Thin scrollbar for overflow elements */
+.scrollbar-thin::-webkit-scrollbar {
+	height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+	background: #f1f5f9;
+	border-radius: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+	background: #cbd5e1;
+	border-radius: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+	background: #94a3b8;
+}
+
+/* Firefox scrollbar */
+.scrollbar-thin {
+	scrollbar-width: thin;
+	scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+/* Document preview modal styles */
+.document-preview-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 10000;
+}
+
+.document-preview-content {
+	background: white;
+	border-radius: 12px;
+	box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+	max-width: 95vw;
+	max-height: 95vh;
+	width: 1200px;
+	height: 800px;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.document-preview-header {
+	background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+	color: white;
+	padding: 16px 24px;
+	display: flex;
+	align-items: center;
+	justify-content: between;
+	border-radius: 12px 12px 0 0;
+}
+
+.document-preview-body {
+	flex: 1;
+	overflow: auto;
+	padding: 0;
+}
+
+.document-preview-iframe {
+	width: 100%;
+	height: 100%;
+	border: none;
+	background: white;
+}
+
+.close-button {
+	background: rgba(255, 255, 255, 0.2);
+	border: none;
+	color: white;
+	border-radius: 6px;
+	padding: 8px 12px;
+	cursor: pointer;
+	transition: background 0.2s ease;
+	font-weight: 600;
+}
+
+.close-button:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+.loading-spinner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 200px;
+	font-size: 16px;
+	color: #6b7280;
+}
+
+.spinner {
+	width: 24px;
+	height: 24px;
+	border: 3px solid #e5e7eb;
+	border-top: 3px solid #3b82f6;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+	margin-right: 12px;
+}
+
+@keyframes spin {
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
 }
 `;
 
@@ -410,6 +514,14 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 	const [loading, setLoading] = useState(true);
 	const [updating, setUpdating] = useState(false);
 
+	// Document preview states
+	const [documentPreview, setDocumentPreview] = useState({
+		visible: false,
+		content: '',
+		loading: false,
+		docId: null,
+	});
+
 	// Inject custom styles
 	useEffect(() => {
 		const styleElement = document.createElement('style');
@@ -430,12 +542,14 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 	// Function to fetch matrix options from API - removed unused function
 
 	// Fetch sample data with new API endpoint
-	const fetchSampleData = async (preserveScroll = false) => {
+	const fetchSampleData = async (preserveScroll = false, overrideFilters = null) => {
 		if (isApiCallInProgress) return;
 
+		// Reduce rate limiting for pagination and filter changes
 		const currentTime = Date.now();
 		const lastCallTime = window._lastFetchTime || 0;
-		if (currentTime - lastCallTime < 1000) return;
+		// Only apply rate limiting for auto-refresh calls, not for user interactions
+		if (!preserveScroll && !overrideFilters && currentTime - lastCallTime < 500) return;
 		window._lastFetchTime = currentTime;
 
 		setIsApiCallInProgress(true);
@@ -457,102 +571,103 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 			// Read filters from query params to ensure API has latest filter data
 			const queryParams = new URLSearchParams(location.search);
 
+			// Use override filters if provided, otherwise use current filters
+			const currentFilters = overrideFilters || filters;
+
 			// Prepare request body based on new API structure
 			const requestBody = {
-				itemsPerPage: itemsPerPage || 20,
+				itemsPerPage: itemsPerPage || 100,
 				page: currentPage || 1,
-				columnSort: filters.columnSort || queryParams.get('ps_columnSort') || 'sample_uid',
-				sortBy: filters.sortBy || queryParams.get('ps_sortBy') || 'ASC',
+				columnSort: currentFilters.columnSort || queryParams.get('ps_columnSort') || 'sample_uid',
+				sortBy: currentFilters.sortBy || queryParams.get('ps_sortBy') || 'ASC',
 			};
 
-			// Add filters from filters state first
-			if (filters.parameters.length > 0) {
-				requestBody.parameter_name = [...filters.parameters];
+			// Add filters from current filters first
+			if (currentFilters.parameters && currentFilters.parameters.length > 0) {
+				requestBody.parameter_name = [...currentFilters.parameters];
 			}
 
-			if (filters.protocols.length > 0) {
-				requestBody.protocol_code = [...filters.protocols];
+			if (currentFilters.protocols && currentFilters.protocols.length > 0) {
+				requestBody.protocol_code = [...currentFilters.protocols];
 			}
 
-			// Also read directly from query params to ensure we have latest data
-			if (queryParams.has('ps_sample_uid')) {
-				const sampleUids = queryParams
-					.get('ps_sample_uid')
-					.split(',')
-					.filter((s) => s.trim());
-				if (sampleUids.length > 0) {
-					requestBody.sample_uid = sampleUids;
+			// Only read from query params if overrideFilters is not provided
+			if (!overrideFilters) {
+				// Read directly from query params to ensure we have latest data
+				if (queryParams.has('ps_sample_uid')) {
+					const sampleUids = queryParams
+						.get('ps_sample_uid')
+						.split(',')
+						.filter((s) => s.trim());
+					if (sampleUids.length > 0) {
+						requestBody.sample_uid = sampleUids;
+					}
+				}
+
+				if (queryParams.has('ps_parameter_name')) {
+					const paramNames = queryParams
+						.get('ps_parameter_name')
+						.split(',')
+						.filter((s) => s.trim());
+					if (paramNames.length > 0) {
+						requestBody.parameter_name = paramNames;
+					}
+				}
+
+				if (queryParams.has('ps_protocol_source')) {
+					const protocolSources = queryParams
+						.get('ps_protocol_source')
+						.split(',')
+						.filter((s) => s.trim());
+					if (protocolSources.length > 0) {
+						requestBody.protocol_source = protocolSources;
+					}
+				}
+
+				if (queryParams.has('ps_protocol_code')) {
+					const protocolCodes = queryParams
+						.get('ps_protocol_code')
+						.split(',')
+						.filter((s) => s.trim());
+					if (protocolCodes.length > 0) {
+						requestBody.protocol_code = protocolCodes;
+					}
+				}
+
+				if (queryParams.has('ps_matrix')) {
+					const matrices = queryParams
+						.get('ps_matrix')
+						.split(',')
+						.filter((s) => s.trim());
+					if (matrices.length > 0) {
+						requestBody.matrix = matrices;
+					}
+				}
+
+				if (queryParams.has('ps_deadline')) {
+					const deadline = queryParams.get('ps_deadline');
+					if (deadline) {
+						requestBody.deadline = deadline;
+					}
+				}
+
+				if (queryParams.has('ps_technician_uid')) {
+					const technicianUids = queryParams
+						.get('ps_technician_uid')
+						.split(',')
+						.filter((s) => s.trim());
+					if (technicianUids.length > 0) {
+						requestBody.technician_uid = technicianUids;
+					}
 				}
 			}
 
-			if (queryParams.has('ps_parameter_name')) {
-				const paramNames = queryParams
-					.get('ps_parameter_name')
-					.split(',')
-					.filter((s) => s.trim());
-				if (paramNames.length > 0) {
-					requestBody.parameter_name = paramNames;
-				}
-			}
+			// Add header filters from current filters (fallback) - exclude status as it's handled separately
+			Object.keys(currentFilters.headerFilters || {}).forEach((column) => {
+				// Skip status column as it's handled separately
+				if (column === 'status') return;
 
-			if (queryParams.has('ps_protocol_source')) {
-				const protocolSources = queryParams
-					.get('ps_protocol_source')
-					.split(',')
-					.filter((s) => s.trim());
-				if (protocolSources.length > 0) {
-					requestBody.protocol_source = protocolSources;
-				}
-			}
-
-			if (queryParams.has('ps_protocol_code')) {
-				const protocolCodes = queryParams
-					.get('ps_protocol_code')
-					.split(',')
-					.filter((s) => s.trim());
-				if (protocolCodes.length > 0) {
-					requestBody.protocol_code = protocolCodes;
-				}
-			}
-
-			if (queryParams.has('ps_matrix')) {
-				const matrices = queryParams
-					.get('ps_matrix')
-					.split(',')
-					.filter((s) => s.trim());
-				if (matrices.length > 0) {
-					requestBody.matrix = matrices;
-				}
-			}
-
-			if (queryParams.has('ps_deadline')) {
-				const deadline = queryParams.get('ps_deadline');
-				if (deadline) {
-					requestBody.deadline = deadline;
-				}
-			}
-
-			if (queryParams.has('ps_technician_uid')) {
-				const technicianUids = queryParams
-					.get('ps_technician_uid')
-					.split(',')
-					.filter((s) => s.trim());
-				if (technicianUids.length > 0) {
-					requestBody.technician_uid = technicianUids;
-				}
-			}
-
-			// Handle urgent status from query params
-			if (queryParams.has('ps_urgent') || queryParams.has('ps_status')) {
-				const urgentValue = queryParams.get('ps_urgent') || queryParams.get('ps_status');
-				if (urgentValue === '1') {
-					requestBody.status = 1;
-				}
-			}
-
-			// Add header filters from state (fallback)
-			Object.keys(filters.headerFilters).forEach((column) => {
-				const filterValue = filters.headerFilters[column];
+				const filterValue = currentFilters.headerFilters[column];
 
 				if (column === 'sample_uid' && filterValue) {
 					if (!requestBody.sample_uid) requestBody.sample_uid = [];
@@ -632,9 +747,78 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 				}
 			});
 
-			// Handle urgent filter
-			if (filters.headerFilters.status === 1) {
-				requestBody.status = 1; // Urgent status
+			// Handle urgent filter - prioritize override filters when available
+			// This ensures we get the most current filter state and avoid race conditions
+			const hasUrgentFromFilters = currentFilters.headerFilters && currentFilters.headerFilters.status === 1;
+			const hasUrgentFromQuery = queryParams.has('ps_urgent') || queryParams.has('ps_status');
+
+			if (overrideFilters) {
+				// When overrideFilters provided, use ONLY that source (most reliable)
+				if (hasUrgentFromFilters) {
+					requestBody.status = 1;
+					console.log('✅ Setting requestBody.status = 1 (from override filters)');
+				} else {
+					console.log('🔄 No urgent status in override filters, not setting status');
+				}
+			} else {
+				// Fallback to reading from filters + query params (for initial loads)
+				if (hasUrgentFromFilters) {
+					requestBody.status = 1;
+					console.log('✅ Setting requestBody.status = 1 (from current filters)');
+				} else if (hasUrgentFromQuery) {
+					const urgentValue = queryParams.get('ps_urgent') || queryParams.get('ps_status');
+					console.log('🚨 Found urgent status in query params:', urgentValue);
+					if (urgentValue === '1') {
+						requestBody.status = 1;
+						console.log('✅ Setting requestBody.status = 1 (from query params)');
+					}
+				} else {
+					console.log('🔄 No urgent status found, not setting status in request body');
+				}
+			}
+
+			// Handle done filter (đủ kết quả)
+			const hasDoneFromFilters = currentFilters.headerFilters && currentFilters.headerFilters.done === true;
+			const hasDoneFromQuery = queryParams.has('ps_done');
+
+			if (overrideFilters) {
+				if (hasDoneFromFilters) {
+					requestBody.done = true;
+					console.log('✅ Setting requestBody.done = true (from override filters)');
+				}
+			} else {
+				if (hasDoneFromFilters) {
+					requestBody.done = true;
+					console.log('✅ Setting requestBody.done = true (from current filters)');
+				} else if (hasDoneFromQuery) {
+					const doneValue = queryParams.get('ps_done');
+					if (doneValue === 'true') {
+						requestBody.done = true;
+						console.log('✅ Setting requestBody.done = true (from query params)');
+					}
+				}
+			}
+
+			// Handle overdue filter (trong ngày)
+			const hasOverdueFromFilters = currentFilters.headerFilters && currentFilters.headerFilters.overdue === true;
+			const hasOverdueFromQuery = queryParams.has('ps_overdue');
+
+			if (overrideFilters) {
+				if (hasOverdueFromFilters) {
+					requestBody.overdue = true;
+					console.log('✅ Setting requestBody.overdue = true (from override filters)');
+				}
+			} else {
+				if (hasOverdueFromFilters) {
+					requestBody.overdue = true;
+					console.log('✅ Setting requestBody.overdue = true (from current filters)');
+				} else if (hasOverdueFromQuery) {
+					const overdueValue = queryParams.get('ps_overdue');
+					if (overdueValue === 'true') {
+						requestBody.overdue = true;
+						console.log('✅ Setting requestBody.overdue = true (from query params)');
+					}
+				}
 			}
 
 			// Debug log to verify request body
@@ -648,12 +832,23 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 				if (result.result && Array.isArray(result.result)) {
 					setProcessingSample(result.result);
 
-					// Update pagination from API response
+					// Update pagination from API response only if different to avoid loops
 					if (result.pagination) {
-						setCurrentPage(result.pagination.currentPage);
-						setItemsPerPage(result.pagination.itemsPerPage);
-						setTotalItems(result.pagination.totalItems);
-						setTotalPages(result.pagination.totalPages);
+						// Only update totalItems and totalPages, don't override user-set currentPage/itemsPerPage
+						if (result.pagination.totalItems !== totalItems) {
+							setTotalItems(result.pagination.totalItems);
+						}
+						if (result.pagination.totalPages !== totalPages) {
+							setTotalPages(result.pagination.totalPages);
+						}
+						// Only update currentPage if we're on initial load or if API returned a different page
+						if (isInitialLoad && result.pagination.currentPage !== currentPage) {
+							setCurrentPage(result.pagination.currentPage);
+						}
+						// Only update itemsPerPage if we're on initial load or if API returned a different value
+						if (isInitialLoad && result.pagination.itemsPerPage !== itemsPerPage) {
+							setItemsPerPage(result.pagination.itemsPerPage);
+						}
 					}
 				} else {
 					setProcessingSample([]);
@@ -670,7 +865,11 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		} finally {
 			setIsApiCallInProgress(false);
 			setLoading(false);
-			setIsInitialLoad(false);
+
+			// Only set isInitialLoad to false after the first successful load
+			if (isInitialLoad) {
+				setIsInitialLoad(false);
+			}
 
 			// Restore scroll position after data update
 			if (preserveScroll && scrollPosition > 0) {
@@ -756,7 +955,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		return Array.from(sampleGroups.values());
 	};
 
-	// Get grouped data for display
+	// Get grouped data for display - fixed to use all data since API handles pagination
 	const groupedSampleData = getGroupedSampleData();
 
 	// Handle column sorting with ASC → DESC → no sort cycle
@@ -788,60 +987,15 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		};
 
 		setFilters(newFilters);
-		updateQueryParams(newFilters);
 	};
 
-	// Pagination calculations - use receipts count, not analyses
-	const totalReceipts = processingSample ? processingSample.length : 0;
-	const totalReceiptsForPagination = totalItems > 0 ? Math.ceil(totalItems / itemsPerPage) : totalReceipts;
+	// Pagination calculations - API handles pagination, so use API response data directly
+	const totalReceipts = totalItems > 0 ? totalItems : processingSample ? processingSample.length : 0;
 	const startReceiptIndex = (currentPage - 1) * itemsPerPage + 1;
 	const endReceiptIndex = Math.min(currentPage * itemsPerPage, totalReceipts);
 
-	// Get the receipts for current page
-	const receiptsForCurrentPage = processingSample
-		? processingSample.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-		: [];
-
-	// Get grouped data only from receipts on current page
-	const getGroupedSampleDataForPage = () => {
-		if (!receiptsForCurrentPage || !Array.isArray(receiptsForCurrentPage)) return [];
-
-		const sampleGroups = new Map();
-
-		receiptsForCurrentPage.forEach((receipt) => {
-			receipt.samples?.forEach((sample) => {
-				const sampleKey = sample.sample_uid;
-				if (!sampleGroups.has(sampleKey)) {
-					sampleGroups.set(sampleKey, {
-						sample: sample,
-						receipt: receipt,
-						analyses: [],
-					});
-				}
-
-				// Add all analyses for this sample
-				sample.analysis?.forEach((analysis) => {
-					sampleGroups.get(sampleKey).analyses.push({
-						...analysis,
-						sample_uid: sample.sample_uid,
-						sample_name: sample.sample_name,
-						matrix: sample.matrix,
-						sample_description: sample.sample_description,
-						additional_request: sample.additional_request,
-						sample_status: sample.status,
-						handover_info: sample.handover_info,
-						receipt_uid: receipt.receipt_uid,
-						receipt_id: receipt.id,
-					});
-				});
-			});
-		});
-
-		return Array.from(sampleGroups.values());
-	};
-
-	// Get grouped data for current page
-	const groupedSampleDataForPage = getGroupedSampleDataForPage();
+	// Use all data from API response since API already handles pagination
+	const groupedSampleDataForPage = groupedSampleData;
 
 	// Enhanced cell editing like ProcessingAnalysis with auto-save
 	const openEditorWithAutoSave = async (analysisId, column, currentValue) => {
@@ -1250,15 +1404,51 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 	const handleFilterToggle = (filterType) => {
 		if (filterType === 'urgent') {
 			const newFilters = { ...filters };
+			console.log('🔄 Current filters.headerFilters.status:', newFilters.headerFilters.status);
+
 			if (newFilters.headerFilters.status === 1) {
 				// Remove urgent filter
 				delete newFilters.headerFilters.status;
+				console.log('❌ Removing urgent filter from state');
 				toast.info('Đã tắt bộ lọc mẫu khẩn');
 			} else {
 				// Add urgent filter
 				newFilters.headerFilters.status = 1;
+				console.log('✅ Adding urgent filter to state');
 				toast.info('Đã bật bộ lọc mẫu khẩn');
 			}
+
+			console.log('📝 New filters.headerFilters:', newFilters.headerFilters);
+			setFilters(newFilters);
+			updateQueryParams(newFilters);
+		} else if (filterType === 'done') {
+			const newFilters = { ...filters };
+
+			if (newFilters.headerFilters.done === true) {
+				// Remove done filter
+				delete newFilters.headerFilters.done;
+				toast.info('Đã tắt bộ lọc đủ kết quả');
+			} else {
+				// Add done filter
+				newFilters.headerFilters.done = true;
+				toast.info('Đã bật bộ lọc đủ kết quả');
+			}
+
+			setFilters(newFilters);
+			updateQueryParams(newFilters);
+		} else if (filterType === 'today') {
+			const newFilters = { ...filters };
+
+			if (newFilters.headerFilters.overdue === true) {
+				// Remove today filter (overdue=true means today)
+				delete newFilters.headerFilters.overdue;
+				toast.info('Đã tắt bộ lọc trong ngày');
+			} else {
+				// Add today filter
+				newFilters.headerFilters.overdue = true;
+				toast.info('Đã bật bộ lọc trong ngày');
+			}
+
 			setFilters(newFilters);
 			updateQueryParams(newFilters);
 		}
@@ -1270,15 +1460,47 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 			headerFilters: {},
 			parameters: [],
 			protocols: [],
+			columnSort: '',
+			sortBy: '',
 		};
 		setFilters(newFilters);
 		setIsFilterCreationMode(false);
 		setActiveFilterColumn(null);
 		setFilterResults([]);
-		// Update query params after setting filter mode to false
-		setTimeout(() => {
-			updateQueryParams(newFilters);
-		}, 0);
+
+		// Xóa tất cả query params processing sample
+		const queryParams = new URLSearchParams(location.search);
+		[
+			'ps_sample_uid',
+			'ps_parameter_name',
+			'ps_protocol_source',
+			'ps_protocol_code',
+			'ps_matrix',
+			'ps_status',
+			'ps_deadline',
+			'ps_technician_uid',
+			'ps_result_value',
+			'ps_done',
+			'ps_overdue',
+			'ps_columnSort',
+			'ps_sortBy',
+			'ps_filter',
+			'ps_page',
+			'ps_itemsPerPage',
+		].forEach((param) => {
+			queryParams.delete(param);
+		});
+
+		// Update URL without any processing sample params
+		const newUrl = queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname;
+		navigate(newUrl, { replace: true });
+
+		// Reset pagination to first page
+		setCurrentPage(1);
+
+		// Gọi lại API với filters đã được reset
+		fetchSampleData(false, newFilters);
+
 		toast.info('Đã xóa tất cả bộ lọc');
 	};
 
@@ -1293,6 +1515,54 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 
 	// Check if there are selected samples
 	const hasSelectedSamples = selectedAnalysisIds.size > 0;
+
+	// Document preview handler
+	const handleDocumentPreview = async (docId) => {
+		if (!docId) return;
+
+		setDocumentPreview({
+			visible: true,
+			content: '',
+			loading: true,
+			docId: docId,
+		});
+
+		try {
+			const response = await apiPost('https://red.irdop.org/v1/document/preview_doc', {
+				id: docId,
+			});
+
+			if (response?.status < 300 && response?.data) {
+				setDocumentPreview({
+					visible: true,
+					content: response.data,
+					loading: false,
+					docId: docId,
+				});
+			} else {
+				throw new Error('Failed to load document');
+			}
+		} catch (error) {
+			console.error('Error loading document:', error);
+			setDocumentPreview({
+				visible: true,
+				content: '<div class="text-red-600 p-4">Lỗi khi tải tài liệu: ' + error.message + '</div>',
+				loading: false,
+				docId: docId,
+			});
+			showErrorNotification('Lỗi khi tải tài liệu');
+		}
+	};
+
+	// Close document preview
+	const closeDocumentPreview = () => {
+		setDocumentPreview({
+			visible: false,
+			content: '',
+			loading: false,
+			docId: null,
+		});
+	};
 
 	// Column filter handlers
 	const handleColumnFilter = async (columnName) => {
@@ -1440,11 +1710,11 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		}
 	};
 
-	// Update URL query params when filters change - using namespace to avoid conflicts
+	// Update URL query params when filters change - add/replace only processing sample params
 	const updateQueryParams = (newFilters) => {
 		const queryParams = new URLSearchParams(location.search);
 
-		// Remove all existing processing sample filter params
+		// Remove only existing processing sample filter params (to replace them)
 		[
 			'ps_sample_uid',
 			'ps_parameter_name',
@@ -1454,9 +1724,14 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 			'ps_status',
 			'ps_deadline',
 			'ps_technician_uid',
+			'ps_result_value',
+			'ps_done',
+			'ps_overdue',
 			'ps_columnSort',
 			'ps_sortBy',
 			'ps_filter',
+			'ps_page',
+			'ps_itemsPerPage',
 		].forEach((param) => {
 			queryParams.delete(param);
 		});
@@ -1470,7 +1745,14 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		Object.keys(newFilters.headerFilters).forEach((column) => {
 			const value = newFilters.headerFilters[column];
 			if (column === 'status' && value === 1) {
+				console.log('🔗 Setting ps_status=1 in query params');
 				queryParams.set('ps_status', '1');
+			} else if (column === 'done' && value === true) {
+				console.log('🔗 Setting ps_done=true in query params');
+				queryParams.set('ps_done', 'true');
+			} else if (column === 'overdue' && value === true) {
+				console.log('🔗 Setting ps_overdue=true in query params');
+				queryParams.set('ps_overdue', 'true');
 			} else if (Array.isArray(value) && value.length > 0) {
 				queryParams.set(`ps_${column}`, value.join(','));
 			} else if (value && !Array.isArray(value)) {
@@ -1478,12 +1760,25 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 			}
 		});
 
+		// Log if status was NOT found in headerFilters
+		if (!newFilters.headerFilters.hasOwnProperty('status')) {
+			console.log('🗑️ Status not found in headerFilters, ps_status should be removed from URL');
+		}
+
 		// Add sorting parameters
 		if (newFilters.columnSort) {
 			queryParams.set('ps_columnSort', newFilters.columnSort);
 		}
 		if (newFilters.sortBy) {
 			queryParams.set('ps_sortBy', newFilters.sortBy);
+		}
+
+		// Add pagination parameters
+		if (currentPage > 1) {
+			queryParams.set('ps_page', currentPage.toString());
+		}
+		if (itemsPerPage !== 100) {
+			queryParams.set('ps_itemsPerPage', itemsPerPage.toString());
 		}
 
 		// Update URL without causing a page reload
@@ -1572,99 +1867,183 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		closeFilterModal();
 	};
 
-	// Pagination handlers
+	// Pagination handlers - improved to ensure data loads correctly
 	const handleItemsPerPageChange = (newItemsPerPage) => {
 		setItemsPerPage(newItemsPerPage);
 		setCurrentPage(1); // Reset to first page when changing items per page
+		// Force API call after state update
+		setTimeout(() => {
+			fetchSampleData(false, filters);
+		}, 50);
 	};
 
-	// Read query params on component mount to set initial filter state
+	const handlePreviousPage = () => {
+		if (currentPage > 1) {
+			const newPage = currentPage - 1;
+			setCurrentPage(newPage);
+			// Force API call after state update
+			setTimeout(() => {
+				fetchSampleData(false, filters);
+			}, 50);
+		}
+	};
+
+	const handleNextPage = () => {
+		if (currentPage < totalPages) {
+			const newPage = currentPage + 1;
+			setCurrentPage(newPage);
+			// Force API call after state update
+			setTimeout(() => {
+				fetchSampleData(false, filters);
+			}, 50);
+		}
+	};
+
+	// Initial data load on component mount
 	useEffect(() => {
+		setCurrentTitlePage('Mẫu đang xử lý');
+
+		// 1. Check query params first
 		const queryParams = new URLSearchParams(location.search);
 		const newFilters = { ...filters };
-		let hasFilters = false;
+		let hasFilterParams = false;
 
 		// Read filter parameters from URL with namespace prefix 'ps_'
 		if (queryParams.has('ps_sample_uid')) {
-			newFilters.headerFilters.sample_uid = queryParams.get('ps_sample_uid').split(',');
-			hasFilters = true;
+			newFilters.headerFilters.sample_uid = queryParams
+				.get('ps_sample_uid')
+				.split(',')
+				.filter((s) => s.trim());
+			hasFilterParams = true;
 		}
 		if (queryParams.has('ps_parameter_name')) {
-			newFilters.headerFilters.parameter_name = queryParams.get('ps_parameter_name').split(',');
-			hasFilters = true;
+			newFilters.headerFilters.parameter_name = queryParams
+				.get('ps_parameter_name')
+				.split(',')
+				.filter((s) => s.trim());
+			hasFilterParams = true;
 		}
 		if (queryParams.has('ps_protocol_source')) {
-			newFilters.headerFilters.protocol_source = queryParams.get('ps_protocol_source').split(',');
-			hasFilters = true;
+			newFilters.headerFilters.protocol_source = queryParams
+				.get('ps_protocol_source')
+				.split(',')
+				.filter((s) => s.trim());
+			hasFilterParams = true;
 		}
 		if (queryParams.has('ps_protocol_code')) {
-			newFilters.headerFilters.protocol_code = queryParams.get('ps_protocol_code').split(',');
-			hasFilters = true;
+			newFilters.headerFilters.protocol_code = queryParams
+				.get('ps_protocol_code')
+				.split(',')
+				.filter((s) => s.trim());
+			hasFilterParams = true;
 		}
 		if (queryParams.has('ps_matrix')) {
-			newFilters.headerFilters.matrix = queryParams.get('ps_matrix').split(',');
-			hasFilters = true;
+			newFilters.headerFilters.matrix = queryParams
+				.get('ps_matrix')
+				.split(',')
+				.filter((s) => s.trim());
+			hasFilterParams = true;
 		}
 		if (queryParams.has('ps_deadline')) {
 			newFilters.headerFilters.deadline = queryParams.get('ps_deadline');
-			hasFilters = true;
+			hasFilterParams = true;
 		}
 		if (queryParams.has('ps_technician_uid')) {
-			newFilters.headerFilters.technician_uid = queryParams.get('ps_technician_uid').split(',');
-			hasFilters = true;
+			newFilters.headerFilters.technician_uid = queryParams
+				.get('ps_technician_uid')
+				.split(',')
+				.filter((s) => s.trim());
+			hasFilterParams = true;
 		}
 		// Handle both ps_urgent and ps_status for urgent samples
 		if (queryParams.has('ps_urgent') || queryParams.has('ps_status')) {
 			const urgentValue = queryParams.get('ps_urgent') || queryParams.get('ps_status');
 			if (urgentValue === '1') {
 				newFilters.headerFilters.status = 1;
-				hasFilters = true;
+				hasFilterParams = true;
 			}
 		}
-		// Handle custom handover parameters (if implemented)
-		if (queryParams.has('ps_handover_by')) {
-			newFilters.headerFilters.handover_by = queryParams.get('ps_handover_by');
-			hasFilters = true;
+		// Handle result_value filter (đủ kết quả)
+		if (queryParams.has('ps_result_value')) {
+			const resultValue = queryParams.get('ps_result_value');
+			if (resultValue === 'has_result' || resultValue === 'no_result') {
+				newFilters.headerFilters.result_value = resultValue;
+				hasFilterParams = true;
+			}
 		}
-		if (queryParams.has('ps_handover_date')) {
-			newFilters.headerFilters.handover_date = queryParams.get('ps_handover_date');
-			hasFilters = true;
+		// Handle done filter (đủ kết quả)
+		if (queryParams.has('ps_done')) {
+			const doneValue = queryParams.get('ps_done');
+			if (doneValue === 'true') {
+				newFilters.headerFilters.done = true;
+				hasFilterParams = true;
+			}
 		}
-
-		// Read sorting parameters
-		if (queryParams.has('ps_columnSort')) {
-			newFilters.columnSort = queryParams.get('ps_columnSort');
-			hasFilters = true;
+		// Handle overdue filter (trong ngày)
+		if (queryParams.has('ps_overdue')) {
+			const overdueValue = queryParams.get('ps_overdue');
+			if (overdueValue === 'true') {
+				newFilters.headerFilters.overdue = true;
+				hasFilterParams = true;
+			}
 		}
-		if (queryParams.has('ps_sortBy')) {
-			newFilters.sortBy = queryParams.get('ps_sortBy');
-			hasFilters = true;
-		}
-
-		// Read filter creation mode state from URL
-		if (queryParams.has('ps_filter')) {
-			const filterMode = queryParams.get('ps_filter');
-			if (filterMode === 'true') {
-				setIsFilterCreationMode(true);
-				hasFilters = true;
+		// Handle deadline filter (quá hạn, trong ngày, etc.)
+		if (queryParams.has('ps_deadline')) {
+			const deadlineValue = queryParams.get('ps_deadline');
+			if (deadlineValue) {
+				newFilters.headerFilters.deadline = deadlineValue;
+				hasFilterParams = true;
 			}
 		}
 
-		if (hasFilters) {
+		// Read pagination and sorting parameters (but don't count as filter params)
+		const pageParam = queryParams.get('ps_page');
+		const itemsPerPageParam = queryParams.get('ps_itemsPerPage');
+		const columnSortParam = queryParams.get('ps_columnSort');
+		const sortByParam = queryParams.get('ps_sortBy');
+		const filterModeParam = queryParams.get('ps_filter');
+
+		// Update states if query params exist, otherwise keep defaults (don't write defaults to URL)
+		if (hasFilterParams) {
 			setFilters(newFilters);
-			// Enable filter creation mode if any filters are active or ps_filter=true
-			if (!queryParams.has('ps_filter') && hasFilters) {
-				setIsFilterCreationMode(true);
-			}
 		}
-	}, []);
 
-	// Initial load and effects
-	useEffect(() => {
-		setCurrentTitlePage('Mẫu đang xử lý');
-		fetchSampleData();
+		if (pageParam) {
+			setCurrentPage(parseInt(pageParam, 10) || 1);
+		}
+
+		if (itemsPerPageParam) {
+			setItemsPerPage(parseInt(itemsPerPageParam, 10) || 100);
+		}
+
+		if (columnSortParam || sortByParam) {
+			setFilters((prev) => ({
+				...prev,
+				columnSort: columnSortParam || 'sample_uid',
+				sortBy: sortByParam || 'ASC',
+			}));
+		}
+
+		if (filterModeParam) {
+			setIsFilterCreationMode(filterModeParam === 'true');
+		}
+
+		// 2. Send API to load data for table (only once on initial load)
 		setIsFetch(true);
-	}, [location.search, currentPage, itemsPerPage, filters]);
+		fetchSampleData();
+	}, []); // Empty dependency array for initial load only
+
+	// Handle filter changes after initial load - write to query params and reload data
+	useEffect(() => {
+		// Skip on initial load
+		if (isInitialLoad) return;
+
+		// 1. Update query params with current filter state (add/replace, don't remove other params)
+		updateQueryParams(filters);
+
+		// 2. Send API with current filters (don't wait for URL update)
+		fetchSampleData(false, filters);
+	}, [filters, currentPage, itemsPerPage, isInitialLoad]); // Added isInitialLoad to dependency array
 
 	// Auto-refresh every 60 seconds - enhanced like ProcessingAnalysis
 	useEffect(() => {
@@ -1821,6 +2200,28 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 								</button>
 
 								<button
+									onClick={() => handleFilterToggle('done')}
+									className={`px-3 py-1.5 text-sm rounded transition-colors whitespace-nowrap focus:outline-none ${
+										filters.headerFilters.done === true
+											? 'bg-green-600 text-white hover:bg-green-700'
+											: 'border border-green-600 text-green-600 hover:bg-green-50'
+									}`}
+								>
+									Đủ kết quả
+								</button>
+
+								<button
+									onClick={() => handleFilterToggle('today')}
+									className={`px-3 py-1.5 text-sm rounded transition-colors whitespace-nowrap focus:outline-none ${
+										filters.headerFilters.overdue === true
+											? 'bg-blue-600 text-white hover:bg-blue-700'
+											: 'border border-blue-600 text-blue-600 hover:bg-blue-50'
+									}`}
+								>
+									Trong ngày
+								</button>
+
+								<button
 									onClick={handleFilterModeToggle}
 									className={`px-3 py-1.5 text-sm rounded transition-colors whitespace-nowrap focus:outline-none ${
 										isFilterCreationMode
@@ -1852,20 +2253,19 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
 						<span className="ml-2 text-gray-600">Đang tải dữ liệu...</span>
 					</div>
-				) : Array.isArray(groupedSampleDataForPage) && groupedSampleDataForPage.length > 0 ? (
-					<div className="custom-scrollbar overflow-auto max-h-[calc(100vh-120px)]">
-						{/* Table with grouped samples */}
-						<table className="w-full border-collapse" style={{ minWidth: '1000px' }}>
+				) : (
+					<div className="custom-scrollbar overflow-auto max-h-[calc(100vh-100px)]">
+						{/* Table with grouped samples - Always show table */}
+						<table className="w-full border-collapse processing-table min-w-[1000px]">
 							<thead className="sticky top-0 z-20 border-b-2 border-gray-300 bg-sky-400">
 								<tr>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 w-1/6 max-w-[16.666667%] ${
+										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 w-1/6 max-w-[16.666667%] min-w-[140px] ${
 											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : 'cursor-pointer hover:bg-gray-100'
 										} ${isColumnFiltered('sample_uid') ? 'text-blue-600 underline' : ''}`}
 										onClick={() =>
 											isFilterCreationMode ? handleColumnFilter('sample_uid') : handleColumnSort('sample_uid')
 										}
-										style={{ minWidth: '140px' }}
 									>
 										Mẫu thử
 										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
@@ -1874,61 +2274,53 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 										)}
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 ${
+										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[120px] ${
 											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
 										} ${isColumnFiltered('parameter_name') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('parameter_name')}
-										style={{ minWidth: '120px' }}
 									>
 										Chỉ tiêu
 										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 ${
+										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[100px] ${
 											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
 										} ${isColumnFiltered('protocol_source') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('protocol_source')}
-										style={{ minWidth: '100px' }}
 									>
 										Nguồn
 										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 ${
+										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[160px] ${
 											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
 										} ${isColumnFiltered('protocol_code') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('protocol_code')}
-										style={{ minWidth: '160px' }}
 									>
 										Phương pháp
 										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-36 ${
+										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[140px] ${
 											!isFilterCreationMode ? 'cursor-pointer hover:bg-gray-100' : ''
 										}`}
 										onClick={() => !isFilterCreationMode && handleColumnSort('result_value')}
-										style={{ minWidth: '140px' }}
 									>
 										Kết quả
 										{!isFilterCreationMode && filters.columnSort === 'result_value' && (
 											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
 										)}
 									</th>
-									<th
-										className="border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-32"
-										style={{ minWidth: '100px' }}
-									>
+									<th className="border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[100px]">
 										Đơn vị
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 ${
+										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[100px] ${
 											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : 'cursor-pointer hover:bg-gray-100'
 										} ${isColumnFiltered('deadline') ? 'text-blue-600 underline' : ''}`}
 										onClick={() =>
 											isFilterCreationMode ? handleColumnFilter('deadline') : handleColumnSort('deadline')
 										}
-										style={{ minWidth: '100px' }}
 									>
 										Hạn trả
 										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
@@ -1937,249 +2329,295 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 										)}
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 ${
+										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[150px] ${
 											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
 										} ${isColumnFiltered('technician_uid') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('technician_uid')}
-										style={{ minWidth: '150px' }}
 									>
 										Người thực hiện
 										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
 									</th>
+									<th className="border border-b-2 border-gray-300 px-3 py-2 text-center font-bold text-gray-800 w-16">
+										Doc
+									</th>
 								</tr>
 							</thead>
 							<tbody>
-								{groupedSampleDataForPage.map((group, groupIndex) =>
-									group.analyses.map((item, analysisIndex) => (
-										<tr
-											key={`${group.sample.sample_uid}-${item.id}`}
-											className={`
-												${selectedAnalysisIds.has(item.id) ? 'selected-row' : 'hover:bg-gray-50'}
-												${groupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}
-												transition-colors border-b border-gray-200 cursor-pointer user-select-none
-											`}
-											onMouseDown={(e) => handleMouseDown(item.id, e)}
-											onMouseEnter={() => handleMouseEnter(item.id)}
-											style={{ userSelect: 'none' }}
-										>
-											{/* Mẫu thử - Only show for first analysis of each sample */}
-											{analysisIndex === 0 ? (
-												<td
-													className={`border border-gray-300 px-3 py-2 text-left align-top w-1/6 max-w-[16.666667%] merged-sample-cell ${
-														group.sample.status === 1 ? 'urgent' : ''
-													}`}
-													rowSpan={group.analyses.length}
-												>
-													<div className="text-sm">
-														<div className="font-semibold text-blue-800">{item.sample_uid}</div>
-														<div className="text-gray-700">{item.sample_name || 'N/A'}</div>
-														<div className="text-xs text-gray-600">
-															<span className="font-medium">Nền mẫu:</span> {item.matrix || 'N/A'}
-														</div>
-														{item.sample_description && (
+								{Array.isArray(groupedSampleDataForPage) && groupedSampleDataForPage.length > 0 ? (
+									groupedSampleDataForPage.map((group, groupIndex) =>
+										group.analyses.map((item, analysisIndex) => (
+											<tr
+												key={`${group.sample.sample_uid}-${item.id}`}
+												className={`
+													${selectedAnalysisIds.has(item.id) ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-gray-50'}
+													${groupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}
+													border-b border-gray-200 cursor-pointer user-select-none
+												`}
+												onMouseDown={(e) => handleMouseDown(item.id, e)}
+												onMouseEnter={() => handleMouseEnter(item.id)}
+											>
+												{/* Mẫu thử - Only show for first analysis of each sample */}
+												{analysisIndex === 0 ? (
+													<td
+														className={`
+															border border-gray-300 px-3 py-2 text-left align-top w-1/6 max-w-[16.666667%]
+															bg-gradient-to-br from-slate-50 to-slate-100 relative
+															${group.sample.status === 1 ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-blue-500'}
+														`}
+														rowSpan={group.analyses.length}
+													>
+														<div className="text-sm">
+															<div className="font-semibold text-blue-800">{item.sample_uid}</div>
+															<div className="text-gray-700">{item.sample_name || 'N/A'}</div>
 															<div className="text-xs text-gray-600">
-																<span className="font-medium">Mô tả:</span> {item.sample_description}
+																<span className="font-medium">Nền mẫu:</span> {item.matrix || 'N/A'}
 															</div>
-														)}
-														{/* Handover information */}
-														{group.sample.handover_info && group.sample.handover_info.length > 0 && (
-															<div className="text-xs text-gray-600 mt-2 border-t border-gray-200 pt-2">
-																<div className="font-medium mb-1">Bàn giao:</div>
-																{group.sample.handover_info.map((info, index) => (
-																	<p key={index} className="mb-1 last:mb-0">
-																		- <span className="font-semibold">{info.handover_by_name}</span> nhận bàn giao
-																		{info.volume && info.volume !== '' && (
-																			<span className="font-semibold"> {info.volume} mẫu</span>
-																		)}{' '}
-																		vào lúc{' '}
-																		<span className="font-semibold">
-																			{new Date(
-																				new Date(info.handover_at).getTime() + 7 * 60 * 60 * 1000,
-																			).toLocaleString('vi-VN', {
-																				day: '2-digit',
-																				month: '2-digit',
-																				year: 'numeric',
-																				hour: '2-digit',
-																				minute: '2-digit',
-																			})}
-																		</span>
-																	</p>
-																))}
-															</div>
-														)}
-													</div>
+															{item.sample_description && (
+																<div className="text-xs text-gray-600">
+																	<span className="font-medium">Mô tả:</span> {item.sample_description}
+																</div>
+															)}
+															{/* Handover information */}
+															{group.sample.handover_info && group.sample.handover_info.length > 0 && (
+																<div className="text-xs text-gray-600 mt-2 border-t border-gray-200 pt-2">
+																	<div className="font-medium mb-1">Bàn giao:</div>
+																	{group.sample.handover_info.map((info, index) => (
+																		<p key={index} className="mb-1 last:mb-0">
+																			- <span className="font-semibold">{info.handover_by_name}</span> nhận bàn giao
+																			{info.volume && info.volume !== '' && (
+																				<span className="font-semibold"> {info.volume} mẫu</span>
+																			)}{' '}
+																			vào lúc{' '}
+																			<span className="font-semibold">
+																				{new Date(
+																					new Date(info.handover_at).getTime() + 7 * 60 * 60 * 1000,
+																				).toLocaleString('vi-VN', {
+																					day: '2-digit',
+																					month: '2-digit',
+																					year: 'numeric',
+																					hour: '2-digit',
+																					minute: '2-digit',
+																				})}
+																			</span>
+																		</p>
+																	))}
+																</div>
+															)}
+														</div>
+													</td>
+												) : null}
+
+												{/* Chỉ tiêu */}
+												<td className="border border-gray-300 px-3 py-2 text-left">
+													<span className="text-sm font-medium">{item.parameter_name || 'N/A'}</span>
 												</td>
-											) : null}
 
-											{/* Chỉ tiêu */}
-											<td className="border border-gray-300 px-3 py-2 text-left">
-												<span className="text-sm font-medium">{item.parameter_name || 'N/A'}</span>
-											</td>
+												{/* Nguồn - enhanced styling like ProcessingAnalysis */}
+												<td className="border border-gray-300 px-3 py-2 text-left protocol-source-select">
+													{editingProtocolSource === item.id ? (
+														<select
+															className="w-full text-sm font-semibold border border-blue-500 rounded p-1 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
+															value={inputValue}
+															onChange={(e) => setInputValue(e.target.value)}
+															onBlur={(e) => handleProtocolSourceBlur(item.id, e.target.value, item.protocol_source)}
+															autoFocus
+														>
+															<option value="">--</option>
+															<option value="IRDOP">IRDOP</option>
+															<option value="IRDOP VS">IRDOP VS</option>
+															<option value="EX">EX</option>
+														</select>
+													) : (
+														<div
+															className="text-sm font-medium cursor-pointer hover:bg-blue-50 p-1 rounded editable-cell"
+															onClick={() => handleProtocolSourceClick(item.id, item.protocol_source)}
+														>
+															{item.protocol_source || '--'}
+														</div>
+													)}
+												</td>
 
-											{/* Nguồn - enhanced styling like ProcessingAnalysis */}
-											<td className="border border-gray-300 px-3 py-2 text-left protocol-source-select">
-												{editingProtocolSource === item.id ? (
-													<select
-														className="w-full text-sm font-semibold border border-blue-500 rounded p-1 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
-														value={inputValue}
-														onChange={(e) => setInputValue(e.target.value)}
-														onBlur={(e) => handleProtocolSourceBlur(item.id, e.target.value, item.protocol_source)}
-														autoFocus
-													>
-														<option value="">--</option>
-														<option value="IRDOP">IRDOP</option>
-														<option value="IRDOP VS">IRDOP VS</option>
-														<option value="EX">EX</option>
-													</select>
-												) : (
-													<div
-														className="text-sm font-medium cursor-pointer hover:bg-blue-50 p-1 rounded editable-cell"
-														onClick={() => handleProtocolSourceClick(item.id, item.protocol_source)}
-													>
-														{item.protocol_source || '--'}
-													</div>
-												)}
-											</td>
+												{/* Phương pháp - enhanced styling like ProcessingAnalysis */}
+												<td className="border border-gray-300 px-3 py-2 text-left">
+													{editingProtocolCode === item.id ? (
+														<input
+															type="text"
+															className="w-full text-sm border border-blue-500 rounded p-1 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
+															value={inputValue}
+															onChange={(e) => setInputValue(e.target.value)}
+															onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value, item.protocol_code)}
+															onKeyDown={(e) => {
+																if (e.key === 'Enter') {
+																	e.target.blur();
+																}
+															}}
+															autoFocus
+														/>
+													) : (
+														<div
+															className="text-sm cursor-pointer hover:bg-blue-50 p-1 rounded editable-cell"
+															onClick={() => handleProtocolCodeClick(item.id, item.protocol_code)}
+														>
+															{item.protocol_code || '--'}
+														</div>
+													)}
+												</td>
 
-											{/* Phương pháp - enhanced styling like ProcessingAnalysis */}
-											<td className="border border-gray-300 px-3 py-2 text-left">
-												{editingProtocolCode === item.id ? (
-													<input
-														type="text"
-														className="w-full text-sm border border-blue-500 rounded p-1 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
-														value={inputValue}
-														onChange={(e) => setInputValue(e.target.value)}
-														onBlur={(e) => handleProtocolCodeBlur(item.id, e.target.value, item.protocol_code)}
-														onKeyDown={(e) => {
-															if (e.key === 'Enter') {
-																e.target.blur();
-															}
-														}}
-														autoFocus
-													/>
-												) : (
-													<div
-														className="text-sm cursor-pointer hover:bg-blue-50 p-1 rounded editable-cell"
-														onClick={() => handleProtocolCodeClick(item.id, item.protocol_code)}
-													>
-														{item.protocol_code || '--'}
-													</div>
-												)}
-											</td>
+												{/* Kết quả - enhanced styling like ProcessingAnalysis */}
+												<td
+													className={`border border-gray-300 px-3 py-2 text-left cursor-pointer editable-cell min-w-[32px] ${
+														editableCell.analysisId === item.id && editableCell.column === 'result_value'
+															? 'editing-active'
+															: 'hover:bg-blue-50'
+													}`}
+													onClick={() => handleCellClickV3(item.id, 'result_value', item.result_value)}
+												>
+													{editableCell.analysisId === item.id && editableCell.column === 'result_value' ? (
+														<TinyMceInput
+															value={inputValue}
+															onUpdate={(content) => handleSaveContentV3(content, 'result_value', item.id)}
+															onKey={handleKeyDownV3}
+														/>
+													) : (
+														<div className={`text-sm ${!item.result_value ? 'result-cell-placeholder' : ''}`}>
+															{item.result_value ? parse(item.result_value) : 'Nhập kết quả...'}
+														</div>
+													)}
+												</td>
 
-											{/* Kết quả - enhanced styling like ProcessingAnalysis */}
-											<td
-												className={`border border-gray-300 px-3 py-2 text-left cursor-pointer editable-cell ${
-													editableCell.analysisId === item.id && editableCell.column === 'result_value'
-														? 'editing-active'
-														: 'hover:bg-blue-50'
-												}`}
-												style={{ minWidth: '32px' }}
-												onClick={() => handleCellClickV3(item.id, 'result_value', item.result_value)}
-											>
-												{editableCell.analysisId === item.id && editableCell.column === 'result_value' ? (
-													<TinyMceInput
-														value={inputValue}
-														onUpdate={(content) => handleSaveContentV3(content, 'result_value', item.id)}
-														onKey={handleKeyDownV3}
-													/>
-												) : (
-													<div className={`text-sm ${!item.result_value ? 'result-cell-placeholder' : ''}`}>
-														{item.result_value ? parse(item.result_value) : 'Nhập kết quả...'}
-													</div>
-												)}
-											</td>
+												{/* Đơn vị - enhanced styling like ProcessingAnalysis */}
+												<td
+													className={`border border-gray-300 px-3 py-2 text-left cursor-pointer editable-cell min-w-[32px] ${
+														editableCell.analysisId === item.id && editableCell.column === 'result_unit'
+															? 'editing-active'
+															: 'hover:bg-blue-50'
+													}`}
+													onClick={() => handleCellClickV3(item.id, 'result_unit', item.result_unit)}
+												>
+													{editableCell.analysisId === item.id && editableCell.column === 'result_unit' ? (
+														<TinyMceInput
+															value={inputValue}
+															onUpdate={(content) => handleSaveContentV3(content, 'result_unit', item.id)}
+															onKey={handleKeyDownV3}
+														/>
+													) : (
+														<div className={`text-sm ${!item.result_unit ? 'result-cell-placeholder' : ''}`}>
+															{item.result_unit ? parse(item.result_unit) : 'Nhập đơn vị...'}
+														</div>
+													)}
+												</td>
 
-											{/* Đơn vị - enhanced styling like ProcessingAnalysis */}
-											<td
-												className={`border border-gray-300 px-3 py-2 text-left cursor-pointer editable-cell ${
-													editableCell.analysisId === item.id && editableCell.column === 'result_unit'
-														? 'editing-active'
-														: 'hover:bg-blue-50'
-												}`}
-												style={{ minWidth: '32px' }}
-												onClick={() => handleCellClickV3(item.id, 'result_unit', item.result_unit)}
-											>
-												{editableCell.analysisId === item.id && editableCell.column === 'result_unit' ? (
-													<TinyMceInput
-														value={inputValue}
-														onUpdate={(content) => handleSaveContentV3(content, 'result_unit', item.id)}
-														onKey={handleKeyDownV3}
-													/>
-												) : (
-													<div className={`text-sm ${!item.result_unit ? 'result-cell-placeholder' : ''}`}>
-														{item.result_unit ? parse(item.result_unit) : 'Nhập đơn vị...'}
-													</div>
-												)}
-											</td>
+												{/* Hạn trả */}
+												<td className="border border-gray-300 px-3 py-2 text-left">
+													<span className={`text-sm ${getDeadlineColor(item.deadline)}`}>
+														{item.deadline ? formatDate(item.deadline) : 'N/A'}
+													</span>
+												</td>
 
-											{/* Hạn trả */}
-											<td className="border border-gray-300 px-3 py-2 text-left">
-												<span className={`text-sm ${getDeadlineColor(item.deadline)}`}>
-													{item.deadline ? formatDate(item.deadline) : 'N/A'}
-												</span>
-											</td>
+												{/* Người thực hiện */}
+												<td className="border border-gray-300 px-3 py-2 text-left">
+													<div className="text-sm">{getTechnicianName(item.technician_uid)}</div>
+												</td>
 
-											{/* Người thực hiện */}
-											<td className="border border-gray-300 px-3 py-2 text-left">
-												<div className="text-sm">{getTechnicianName(item.technician_uid)}</div>
-											</td>
-										</tr>
-									)),
+												{/* Biên bản */}
+												<td className="border border-gray-300 px-3 py-2 text-center">
+													{item.doc_id ? (
+														<div className="flex justify-center">
+															<button
+																onClick={() => handleDocumentPreview(item.doc_id)}
+																className={`
+																	w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer
+																	transition-all duration-200 hover:scale-110
+																	${
+																		item.doc_id.includes('edit')
+																			? 'border-yellow-500 bg-yellow-50 hover:bg-yellow-100'
+																			: item.doc_id.includes('Doc')
+																			? 'border-blue-500 bg-blue-50 hover:bg-blue-100'
+																			: 'border-gray-300 bg-gray-50 hover:bg-gray-100'
+																	}
+																`}
+																title={`Xem tài liệu: ${item.doc_id}`}
+															>
+																<svg
+																	className={`
+																		w-4 h-4 
+																		${item.doc_id.includes('edit') ? 'text-yellow-600' : item.doc_id.includes('Doc') ? 'text-blue-600' : 'text-gray-600'}
+																	`}
+																	fill="currentColor"
+																	viewBox="0 0 20 20"
+																>
+																	<path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" />
+																	<path d="M9 12a1 1 0 102 0V8a1 1 0 10-2 0v4z" />
+																	<path d="M10 15a1 1 0 100-2 1 1 0 000 2z" />
+																</svg>
+															</button>
+														</div>
+													) : (
+														<span className="text-gray-400">--</span>
+													)}
+												</td>
+											</tr>
+										)),
+									)
+								) : (
+									<tr>
+										<td colSpan="9" className="border border-gray-300 px-3 py-12 text-center">
+											<div className="flex flex-col items-center justify-center">
+												<FaSearch size={32} className="mb-2 opacity-50 text-gray-400" />
+												<p className="text-base text-gray-500">Không có dữ liệu mẫu thử</p>
+											</div>
+										</td>
+									</tr>
 								)}
 							</tbody>
 						</table>
 
-						{/* Pagination */}
-						<div className="p-4 pt-2 bg-white border-t border-gray-200">
-							<div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
-								<div className="flex items-center space-x-2">
-									<label className="text-sm text-gray-700 font-medium">Số biên bản bàn giao mỗi trang:</label>
-									<select
-										value={itemsPerPage}
-										onChange={(e) => {
-											const newItemsPerPage = Number(e.target.value);
-											setItemsPerPage(newItemsPerPage);
-											setCurrentPage(1); // Reset to first page when changing items per page
-										}}
-										className="border border-gray-300 rounded-md p-2 bg-white text-black focus:border-blue-500"
-									>
-										<option value={20}>20</option>
-										<option value={50}>50</option>
-										<option value={100}>100</option>
-										<option value={200}>200</option>
-									</select>
-									<span className="text-sm text-gray-600 ml-4">
-										Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, totalReceipts)} -{' '}
-										{Math.min(currentPage * itemsPerPage, totalReceipts)} trong tổng số {totalItems} biên bản bàn giao
-									</span>
-								</div>
-								<div className="flex items-center space-x-2">
-									<button
-										onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-										disabled={currentPage === 1}
-										className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:opacity-50 disabled:bg-gray-300 hover:bg-blue-600 transition-colors"
-									>
-										Trước
-									</button>
-									<span className="px-4 py-2 text-sm text-gray-700 font-medium cursor-pointer hover:bg-blue-100 rounded">
-										Trang {currentPage} / {totalPages}
-									</span>
-									<button
-										onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-										disabled={currentPage === totalPages}
-										className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:opacity-50 disabled:bg-gray-300 hover:bg-blue-600 transition-colors"
-									>
-										Sau
-									</button>
+						{/* Pagination - Always show */}
+						{Array.isArray(groupedSampleDataForPage) && groupedSampleDataForPage.length > 0 && (
+							<div className="p-4 pt-2 bg-white border-t border-gray-200">
+								<div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
+									<div className="flex items-center space-x-2">
+										<label className="text-sm text-gray-700 font-medium">Số biên bản bàn giao mỗi trang:</label>
+										<select
+											value={itemsPerPage}
+											onChange={(e) => {
+												const newItemsPerPage = Number(e.target.value);
+												handleItemsPerPageChange(newItemsPerPage);
+											}}
+											className="border border-gray-300 rounded-md p-2 bg-white text-black focus:border-blue-500"
+										>
+											<option value={10}>10</option>
+											<option value={20}>20</option>
+											<option value={50}>50</option>
+											<option value={100}>100</option>
+										</select>
+										<span className="text-sm text-gray-600 ml-4">
+											Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, totalReceipts)} -{' '}
+											{Math.min(currentPage * itemsPerPage, totalReceipts)} trong tổng số {totalItems} biên bản bàn giao
+										</span>
+									</div>
+									<div className="flex items-center space-x-2">
+										<button
+											onClick={handlePreviousPage}
+											disabled={currentPage === 1}
+											className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:opacity-50 disabled:bg-gray-300 hover:bg-blue-600 transition-colors"
+										>
+											Trước
+										</button>
+										<span className="px-4 py-2 text-sm text-gray-700 font-medium cursor-pointer hover:bg-blue-100 rounded">
+											Trang {currentPage} / {totalPages}
+										</span>
+										<button
+											onClick={handleNextPage}
+											disabled={currentPage === totalPages}
+											className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:opacity-50 disabled:bg-gray-300 hover:bg-blue-600 transition-colors"
+										>
+											Sau
+										</button>
+									</div>
 								</div>
 							</div>
-						</div>
-					</div>
-				) : (
-					<div className="flex items-center justify-center py-12">
-						<FaSearch size={32} className="mx-auto mb-2 opacity-50" />
-						<p className="text-base text-gray-500">Không có dữ liệu mẫu thử</p>
+						)}
 					</div>
 				)}
 			</div>
@@ -2215,7 +2653,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 
 			{/* Filter Modal */}
 			{activeFilterColumn && (
-				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
 					<div data-filter-modal className="bg-white rounded-lg p-6 w-[500px] h-[600px] overflow-hidden flex flex-col">
 						<div className="flex justify-between items-center mb-4">
 							<h3 className="text-lg font-semibold">
@@ -2353,6 +2791,75 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 								</div>
 							</>
 						)}
+					</div>
+				</div>
+			)}
+
+			{/* Technician Dropdown */}
+			{technicianDropdownVisible !== null && (
+				<div
+					className="fixed bg-white border border-gray-300 rounded-lg shadow-lg z-[70] max-h-60 overflow-y-auto"
+					style={{
+						top: dropdownPosition.top,
+						left: dropdownPosition.left,
+						minWidth: '200px',
+					}}
+				>
+					<div className="p-2">
+						<div className="text-xs text-gray-500 mb-2">Chọn người thực hiện:</div>
+						{technicians?.map((tech) => (
+							<button
+								key={tech.identity_uid}
+								onClick={() => handleTechnicianChange(technicianDropdownVisible, tech.identity_uid)}
+								className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+							>
+								{tech.identity_name} {tech.alias && `(${tech.alias})`}
+							</button>
+						))}
+						<button
+							onClick={() => handleTechnicianChange(technicianDropdownVisible, null)}
+							className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm text-gray-500"
+						>
+							-- Không chỉ định --
+						</button>
+					</div>
+				</div>
+			)}
+
+			{/* Document Preview Modal */}
+			{documentPreview.visible && (
+				<div className="document-preview-modal" onClick={(e) => {
+					if (e.target === e.currentTarget) {
+						closeDocumentPreview();
+					}
+				}}>
+					<div className="document-preview-content" onClick={(e) => e.stopPropagation()}>
+						<div className="document-preview-header">
+							<h3 className="text-lg font-semibold flex-1">
+								Xem tài liệu {documentPreview.docId && `- ${documentPreview.docId}`}
+							</h3>
+							<button 
+								onClick={closeDocumentPreview}
+								className="close-button"
+							>
+								✕ Đóng
+							</button>
+						</div>
+						<div className="document-preview-body">
+							{documentPreview.loading ? (
+								<div className="loading-spinner">
+									<div className="spinner"></div>
+									Đang tải tài liệu...
+								</div>
+							) : (
+								<iframe
+									className="document-preview-iframe"
+									srcDoc={documentPreview.content}
+									title="Document Preview"
+									sandbox="allow-same-origin allow-scripts"
+								/>
+							)}
+						</div>
 					</div>
 				</div>
 			)}

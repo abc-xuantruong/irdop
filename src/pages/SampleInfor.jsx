@@ -3131,6 +3131,7 @@ const SampleInfor = () => {
 								protocol_code: matchedAnalysis.protocol_code || analyte.protocol_code,
 								protocol_source: matchedAnalysis.protocol_source || analyte.protocol_source,
 								field: matchedAnalysis.field || analyte.field,
+								display_style: matchedAnalysis.display_style || analyte.display_style,
 							};
 						}
 					}
@@ -3146,7 +3147,7 @@ const SampleInfor = () => {
 				for (const analyte of updatedAnalytes.filter((a) => selectedAnalytes.includes(a.id))) {
 					try {
 						if (analyte.parameter_uid || analyte.parameter_id) {
-							// Create minimal update object with only required fields
+							// Create minimal update object with only required fields, including display_style from matched analyte API
 							const updateData = {
 								id: analyte.id,
 								sample_id: analyte.sample_id,
@@ -3159,6 +3160,17 @@ const SampleInfor = () => {
 								field: analyte.field || '',
 								matrix: analyte.matrix || '',
 								modified_by_uid: currentUser.identity_uid,
+								// Ensure display_style from analyte API match is properly included
+								display_style: analyte.display_style || [
+									{
+										label: 'default',
+										value: '',
+									},
+									{
+										label: 'eng',
+										value: '',
+									},
+								],
 							};
 
 							// Update the analysis in the database

@@ -1,8 +1,22 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FaFlask, FaClipboardList, FaBook, FaFolder, FaUser, FaChevronDown, FaEdit } from 'react-icons/fa';
+import {
+	FaFlask,
+	FaClipboardList,
+	FaBook,
+	FaFolder,
+	FaUser,
+	FaChevronDown,
+	FaEdit,
+	FaFileAlt,
+	FaVial,
+} from 'react-icons/fa';
+import {MdEditDocument} from 'react-icons/md';
+import { FaBoxesPacking } from 'react-icons/fa6';
 import ProcessingAnalysis from '../components/lab/ProcessingAnalysis';
+import ProcessingSample from '../components/lab/ProcessingSample';
 import DocumentEditor from '../components/lab/DocumentEditor';
+import LabDocument from '../components/lab/LabDocument';
 import { GlobalContext } from '../contexts/GlobalContext';
 import Cookies from 'js-cookie';
 
@@ -83,20 +97,44 @@ const LabDashboardTemporary = () => {
 
 	// Handle view navigation
 	const handleViewChange = (view) => {
-		const searchParams = new URLSearchParams(location.search);
-		searchParams.set('view', view);
-		navigate(`${location.pathname}?${searchParams.toString()}`);
+		// Clear all query params and only set the view
+		navigate(`${location.pathname}?view=${view}`);
 	};
 
 	// Navigation items
 	const navigationItems = [
 		{
 			action: () => handleViewChange('analysis'),
-			icon: FaFlask,
+			icon: FaVial,
 			label: 'Lab',
 			isActive: currentView === 'analysis',
 			isAction: true,
 		},
+		{
+			action: () => handleViewChange('sample'),
+			icon: FaBoxesPacking,
+			label: 'Mẫu xử lý',
+			isActive: currentView === 'sample',
+			isAction: true,
+		},
+		{
+			action: () => handleViewChange('editor'),
+			icon: MdEditDocument,
+			label: 'Soạn thảo',
+			isActive: currentView === 'editor',
+			isAction: true,
+		},
+		{
+			action: () => handleViewChange('document'),
+			icon: FaFileAlt,
+			label: 'Tài liệu',
+			isActive: currentView === 'document',
+			isAction: true,
+		},
+	];
+
+	// Bottom navigation items
+	const bottomNavigationItems = [
 		{
 			to: '/dashboard',
 			icon: FaClipboardList,
@@ -105,13 +143,6 @@ const LabDashboardTemporary = () => {
 		},
 		{ to: '/library', icon: FaBook, label: 'Thư viện', isActive: currentPath.includes('/library') },
 		{ to: '/files', icon: FaFolder, label: 'Files', isActive: currentPath.includes('/files') },
-		{
-			action: () => handleViewChange('editor'),
-			icon: FaEdit,
-			label: 'Soạn thảo',
-			isActive: currentView === 'editor',
-			isAction: true,
-		},
 	];
 
 	// Truncate name for display
@@ -124,7 +155,7 @@ const LabDashboardTemporary = () => {
 	return (
 		<div className="h-screen w-screen bg-gray-100 flex overflow-hidden">
 			{/* Sidebar */}
-			<div className="w-16 bg-gray-200 flex flex-col h-full">
+			<div className="w-20 bg-gray-200 flex flex-col h-full">
 				{/* Top Section - Logo and Navigation */}
 				<div className="flex-1 flex flex-col">
 					{/* Logo Section */}
@@ -145,7 +176,7 @@ const LabDashboardTemporary = () => {
 									<button
 										key={index}
 										onClick={item.action}
-										className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+										className={`w-14 h-14 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
 											item.isActive ? 'bg-sky-400 text-white' : 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
 										}`}
 										onMouseEnter={(e) => showTooltip(item.label, e)}
@@ -157,7 +188,7 @@ const LabDashboardTemporary = () => {
 									<Link
 										key={item.to}
 										to={item.to}
-										className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors relative ${
+										className={`w-14 h-14 flex items-center justify-center rounded-lg text-sm font-medium transition-colors relative ${
 											item.isActive ? 'bg-sky-400 text-white' : 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
 										}`}
 										onMouseEnter={(e) => showTooltip(item.label, e)}
@@ -171,6 +202,28 @@ const LabDashboardTemporary = () => {
 					</div>
 				</div>
 
+				{/* Middle Section - Bottom Navigation */}
+				<div className="p-2 border-t border-gray-200">
+					<nav className="space-y-2">
+						{bottomNavigationItems.map((item, index) => {
+							const IconComponent = item.icon;
+							return (
+								<Link
+									key={item.to}
+									to={item.to}
+									className={`w-14 h-14 flex items-center justify-center rounded-lg text-sm font-medium transition-colors relative ${
+										item.isActive ? 'bg-sky-400 text-white' : 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+									}`}
+									onMouseEnter={(e) => showTooltip(item.label, e)}
+									onMouseLeave={hideTooltip}
+								>
+									<IconComponent className="w-5 h-5" />
+								</Link>
+							);
+						})}
+					</nav>
+				</div>
+
 				{/* Bottom Section - User Info */}
 				<div className="p-2 border-t border-gray-200">
 					<div className="relative">
@@ -179,7 +232,7 @@ const LabDashboardTemporary = () => {
 								<button
 									ref={dropdownButtonRef}
 									onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-									className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-200 transition-colors"
+									className="w-14 h-14 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-200 transition-colors"
 									onMouseEnter={(e) => showTooltip(displayName, e)}
 									onMouseLeave={hideTooltip}
 								>
@@ -238,7 +291,7 @@ const LabDashboardTemporary = () => {
 						) : (
 							<Link
 								to="/login"
-								className="w-12 h-12 bg-gray-200 text-gray-600 rounded-lg flex items-center justify-center hover:bg-gray-300 hover:text-blue-600 transition-colors"
+								className="w-14 h-14 bg-gray-200 text-gray-600 rounded-lg flex items-center justify-center hover:bg-gray-300 hover:text-blue-600 transition-colors"
 								onMouseEnter={(e) => showTooltip('Đăng nhập', e)}
 								onMouseLeave={hideTooltip}
 							>
@@ -257,6 +310,14 @@ const LabDashboardTemporary = () => {
 							<DocumentEditor />
 						</div>
 					</div>
+				) : currentView === 'document' ? (
+					<div className="h-full flex flex-col">
+						<div className="flex-1 overflow-hidden p-4">
+							<LabDocument />
+						</div>
+					</div>
+				) : currentView === 'sample' ? (
+					<ProcessingSample />
 				) : (
 					<ProcessingAnalysis />
 				)}

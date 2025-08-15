@@ -14,7 +14,6 @@ import {
 	FaTimes,
 	FaSave,
 	FaEraser,
-	FaSync,
 	FaSquare,
 	FaExternalLinkAlt,
 } from 'react-icons/fa';
@@ -25,8 +24,8 @@ const DocumentEditor = () => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [templateSearchTerm, setTemplateSearchTerm] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
-	const [documentStatus, setDocumentStatus] = useState('draft'); // 'draft' or 'published'
-	const [isDraft, setIsDraft] = useState(true); // Toggle state for draft/published
+	const [documentStatus, setDocumentStatus] = useState('draft'); // 'draft' or 'submitted'
+	const [isDraft, setIsDraft] = useState(true); // Toggle state for draft/submitted
 
 	// Data states from EditorTemplate.html
 	const [recentDocuments, setRecentDocuments] = useState([]);
@@ -79,7 +78,6 @@ const DocumentEditor = () => {
 	const API_ENDPOINT = 'https://black.irdop.org/v1/analysis/processing/list';
 	const TEMPLATE_API_ENDPOINT = 'https://black.irdop.org/v1/lab/test_report/get_template';
 	const RECENT_DOCS_API_ENDPOINT = 'https://red.irdop.org/v1/editor/lab_result_report/get_editor';
-	const PUBLISHED_DOCS_API_ENDPOINT = 'https://red.irdop.org/v1/document/get_doc';
 
 	// API helper functions
 	const getCookie = (name) => {
@@ -187,12 +185,11 @@ const DocumentEditor = () => {
 		try {
 			setIsLoading(true);
 
-			// Choose API endpoint based on status
-			const apiEndpoint = status === 'published' ? PUBLISHED_DOCS_API_ENDPOINT : RECENT_DOCS_API_ENDPOINT;
-
-			const response = await apiPost(apiEndpoint, {
+			// Always use the same API endpoint but with different status
+			const response = await apiPost(RECENT_DOCS_API_ENDPOINT, {
 				searchTerm: searchTerm,
 				page: page,
+				status: status, // Use status parameter instead of sended
 			});
 
 			if (response.status === 200 && response.data) {
@@ -308,21 +305,6 @@ const DocumentEditor = () => {
 		setIsDraft(documentStatus === 'draft');
 	}, [documentStatus]);
 
-	// Refresh all data
-	const refreshData = async () => {
-		setIsLoading(true);
-		try {
-			await Promise.all([
-				loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus),
-				loadTemplates(templateSearchTerm, templatesPage),
-			]);
-		} catch (error) {
-			console.error('Error refreshing data:', error);
-		} finally {
-			setIsLoading(false);
-		}
-	};
-
 	// Handle document status change
 	const handleDocumentStatusChange = async (newStatus) => {
 		if (newStatus === documentStatus) return; // No change needed
@@ -339,7 +321,7 @@ const DocumentEditor = () => {
 	const handleToggleChange = () => {
 		const newIsDraft = !isDraft;
 		setIsDraft(newIsDraft);
-		const newStatus = newIsDraft ? 'draft' : 'published';
+		const newStatus = newIsDraft ? 'draft' : 'submitted';
 		handleDocumentStatusChange(newStatus);
 	};
 
@@ -680,6 +662,167 @@ const DocumentEditor = () => {
 		window.open(editorUrl, '_blank');
 	};
 
+	// Handle print document functionality (like LabDocument)
+	const handlePrintDocument = async (doc) => {
+		if (!doc) {
+			alert('Không có tài liệu để in');
+			return;
+		}
+
+		try {
+			const metadata = doc.metadata || {};
+			const header = metadata.header || {};
+			const content = metadata.content || '';
+			const analysisIds = metadata.analysisIds || [];
+			const sampleUIDs = metadata.sampleUIDs || [];
+
+			// Prepare report data
+			const reportData = {
+				header: header,
+				content: content,
+				footer: doc.id,
+				analysisIds: analysisIds,
+				sampleUIDs: sampleUIDs,
+			};
+
+			// Call the API endpoint
+			const response = await apiPost('https://black.irdop.org/khsi19me/convert/lab_result_report_html', reportData);
+
+			if (response.status === 200 && response.data) {
+				// Create a new window/tab for printing
+				const printWindow = window.open('', '_blank');
+				const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+
+				printWindow.document.write(`
+					<!DOCTYPE html>
+					<html>
+						<head>
+							<title>Print Report - ${doc.id}</title>
+							<style>
+								body { 
+									font-family: 'Times New Roman', serif; 
+									margin: 0; 
+									padding: 20px; 
+									background: white; 
+								}
+								@media print {
+									body { margin: 0; padding: 10mm; }
+									.no-print { display: none; }
+								}
+							</style>
+						</head>
+						<body>
+							${htmlResponse}
+							<script>
+								window.onload = function() {
+									setTimeout(function() {
+										window.print();
+									}, 1000);
+								};
+							</script>
+						</body>
+					</html>
+				`);
+				printWindow.document.close();
+			} else {
+				throw new Error('Failed to generate print report');
+			}
+		} catch (error) {
+			console.error('Error printing document:', error);
+			alert('Lỗi khi in tài liệu: ' + error.message);
+		}
+	};
+
+	// Handle print template functionality
+	const handlePrintTemplate = async (template) => {
+		if (!template) {
+			alert('Không có mẫu để in');
+			return;
+		}
+
+		try {
+			const header = template.header || {};
+			const content = template.content || '';
+
+			// Prepare template print data - templates don't have analysis data
+			const templateData = {
+				header: header,
+				content: content,
+				footer: template.id,
+				analysisIds: [],
+				sampleUIDs: [],
+			};
+
+			// Create a new window/tab for printing template
+			const printWindow = window.open('', '_blank');
+
+			printWindow.document.write(`
+				<!DOCTYPE html>
+				<html>
+					<head>
+						<title>Print Template - ${template.templateName || template.name}</title>
+						<style>
+							body { 
+								font-family: 'Times New Roman', serif; 
+								margin: 0; 
+								padding: 20px; 
+								background: white; 
+								line-height: 1.6;
+							}
+							@media print {
+								body { margin: 0; padding: 10mm; }
+								.no-print { display: none; }
+							}
+							h1, h2, h3, h4 {
+								color: #1e40af;
+								margin-top: 20px;
+								margin-bottom: 10px;
+							}
+							table {
+								width: 100%;
+								border-collapse: collapse;
+								margin: 10px 0;
+							}
+							table, th, td {
+								border: 1px solid #ccc;
+							}
+							th, td {
+								padding: 8px;
+								text-align: left;
+							}
+							th {
+								background-color: #f9f9f9;
+								font-weight: bold;
+							}
+						</style>
+					</head>
+					<body>
+						<div style="text-align: center; margin-bottom: 30px;">
+							${header.title ? `<h1>${header.title}</h1>` : `<h1>${template.templateName || template.name}</h1>`}
+							${header.code ? `<p><strong>Mã hiệu:</strong> ${header.code}</p>` : ''}
+							${header.publishNo ? `<p><strong>Lần phát hành:</strong> ${header.publishNo}</p>` : ''}
+							${header.publishDate ? `<p><strong>Ngày phát hành:</strong> ${header.publishDate}</p>` : ''}
+						</div>
+						<div>
+							${content}
+						</div>
+						<script>
+							window.onload = function() {
+								setTimeout(function() {
+									window.print();
+								}, 1000);
+							};
+						</script>
+					</body>
+				</html>
+			`);
+			printWindow.document.close();
+		} catch (error) {
+			console.error('Error printing template:', error);
+			alert('Lỗi khi in mẫu: ' + error.message);
+		}
+	};
+
 	const handleContinueEdit = () => {
 		if (selectedDocument) {
 			console.log('Continue editing document:', selectedDocument.id);
@@ -689,12 +832,8 @@ const DocumentEditor = () => {
 			// Build query parameters based on document status
 			const params = new URLSearchParams();
 
-			// Use editId for draft documents, docId for published documents
-			if (selectedDocument.status === 'published') {
-				params.set('docId', selectedDocument.id);
-			} else {
-				params.set('editId', selectedDocument.id);
-			}
+			// Use editId for both draft and submitted documents
+			params.set('editId', selectedDocument.id);
 
 			// Add template ID if available and not null/empty
 			if (
@@ -749,141 +888,158 @@ const DocumentEditor = () => {
 	const handleDocumentClick = (doc) => {
 		setSelectedDocument(doc);
 
-		// Create preview content from document metadata
+		// Create simplified preview content - only show sample UIDs and API report
 		const metadata = doc.metadata || {};
-		const header = metadata.header || {};
-		const content = metadata.content || '<p>Không có nội dung</p>';
 		const sampleUIDs = metadata.sampleUIDs || [];
 		const analysisIds = metadata.analysisIds || [];
 
-		// Generate document preview content
-		const documentPreviewContent = `
-			<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
-				<!-- HEADER SECTION -->
-				<div style="text-align: start; margin-bottom: 30px; border-bottom: 2px solid #1e40af; padding-bottom: 15px; ">
+		// Function to load and display report via API
+		const loadReportContent = async () => {
+			try {
+				const header = metadata.header || {};
+				const content = metadata.content || '';
+
+				// Prepare report data
+				const reportData = {
+					header: header,
+					content: content,
+					footer: doc.id,
+					analysisIds: analysisIds,
+					sampleUIDs: sampleUIDs,
+				};
+
+				console.log('Calling API with data:', reportData);
+
+				// Call the API endpoint directly
+				const response = await apiPost('https://black.irdop.org/khsi19me/convert/lab_result_report_html', reportData);
+
+				if (response.status === 200 && response.data) {
+					const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+					return htmlResponse;
+				} else {
+					console.error('API response error:', response);
+					return (
+						'<div style="text-align: center; color: red; padding: 50px;">Lỗi khi tải báo cáo: ' +
+						response.status +
+						'</div>'
+					);
+				}
+			} catch (error) {
+				console.error('Error loading report content:', error);
+				return (
+					'<div style="text-align: center; color: red; padding: 50px;">Lỗi khi tải báo cáo: ' + error.message + '</div>'
+				);
+			}
+		};
+
+		// Generate simplified preview content
+		const generatePreviewContent = async () => {
+			// First show loading state
+			const loadingContent = `
+				<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
+					<!-- SAMPLE UIDs SECTION -->
 					${
-						header.title
-							? `<h3 style="margin: 10px 0; color: #1e40af; text-transform: uppercase; font-weight: bold;">Tiêu đề: ${header.title}</h3>`
-							: ''
+						sampleUIDs.length > 0
+							? `
+					<div style="margin-bottom: 20px;">
+						<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DANH SÁCH MÃ MẪU THỬ</h4>
+						<div style="padding: 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px;">
+							<strong>Số lượng mẫu:</strong> ${sampleUIDs.length} mẫu<br/>
+							<strong>Mã mẫu:</strong> ${sampleUIDs.join(', ')}
+						</div>
+					</div>
+					`
+							: '<div style="padding: 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; color: #666; text-align: center;">Không có dữ liệu mẫu thử</div>'
 					}
-					${header.code ? `<p style="margin: 5px 0;"><strong>Mã hiệu:</strong> ${header.code}</p>` : ''}
-					${header.publishNo ? `<p style="margin: 5px 0;"><strong>Lần phát hành:</strong> ${header.publishNo}</p>` : ''}
-					${header.publishDate ? `<p style="margin: 5px 0;"><strong>Ngày phát hành:</strong> ${header.publishDate}</p>` : ''}
-					<p style="margin: 5px 0;"><strong>Mã tài liệu:</strong> ${doc.id}</p>
-					<p style="margin: 5px 0;"><strong>Ngày tạo:</strong> ${new Date(doc.createdAt).toLocaleDateString('vi-VN')}</p>
-					<p style="margin: 5px 0;"><strong>Cập nhật lần cuối:</strong> ${new Date(doc.modifiedAt).toLocaleDateString(
-						'vi-VN',
-					)}</p>
-				</div>
-				
-				<!-- CONTENT SECTION -->
-				<div style="margin-bottom: 30px;">
-					<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">NỘI DUNG TÀI LIỆU</h4>
-					<div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: white; min-height: 200px; text-align: initial;">
-						${content}
+
+					<!-- API REPORT SECTION -->
+					<div style="margin-top: 20px;">
+						<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">BÁO CÁO CHI TIẾT</h4>
+						<div style="margin-top: 10px; padding: 50px; text-align: center; color: #666; border: 1px solid #ddd; border-radius: 4px;">
+							<div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px;"></div>
+							Đang tải báo cáo chi tiết...
+						</div>
 					</div>
 				</div>
-				
-				<!-- DOCUMENT INFO SECTION -->
-				<div style="margin-top: 30px;">
-					<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">THÔNG TIN TÀI LIỆU</h4>
-					<table style="width: 100%; border-collapse: collapse; border: 1px solid #ccc; margin-top: 10px; text-align: left;">
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold; width: 25%;">Mã tài liệu:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${doc.id}</td>
-						</tr>
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Mẫu được sử dụng:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${metadata.templateName || 'Không sử dụng mẫu'}</td>
-						</tr>
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Mã mẫu:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${metadata.templateId || 'N/A'}</td>
-						</tr>
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Trạng thái:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">
-								${getStatusText(doc.status)}
-								${
-									doc.status === 'published' && doc.fileId
-										? ` - <button onclick="window.parent.handleFilePreviewFromDocument('${doc.fileId}')" style="background: #10b981; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 8px;">📎 XEM</button>`
-										: ''
-								}
-							</td>
-						</tr>
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Người tạo:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${doc.authorName || doc.author || 'N/A'}</td>
-						</tr>
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Ngày tạo:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${new Date(doc.createdAt).toLocaleDateString('vi-VN')} ${new Date(
-			doc.createdAt,
-		).toLocaleTimeString('vi-VN')}</td>
-						</tr>
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Lần cập nhật cuối:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${new Date(doc.modifiedAt).toLocaleDateString('vi-VN')} ${new Date(
-			doc.modifiedAt,
-		).toLocaleTimeString('vi-VN')}</td>
-						</tr>
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Người cập nhật:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${doc.modifiedBy || doc.author || 'N/A'}</td>
-						</tr>
-						${
-							doc.status === 'published' && doc.fileId
-								? `
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">File đính kèm:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${doc.fileId} (có file đính kèm)</td>
-						</tr>
-						`
-								: ''
-						}
-					</table>
-				</div>
-				
-				<!-- ANALYSIS DATA SECTION -->
-				${
-					sampleUIDs.length > 0 || analysisIds.length > 0
-						? `
-				<div style="margin-top: 30px;">
-					<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DỮ LIỆU PHÉP THỬ</h4>
-					<table style="width: 100%; border-collapse: collapse; border: 1px solid #ccc; margin-top: 10px; text-align: left;">
+				<style>
+					@keyframes spin {
+						0% { transform: rotate(0deg); }
+						100% { transform: rotate(360deg); }
+					}
+				</style>
+			`;
+
+			// Set loading content first
+			setPreviewContent(loadingContent);
+
+			// Then load actual report content
+			try {
+				const reportHTML = await loadReportContent();
+
+				const finalContent = `
+					<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
+						<!-- SAMPLE UIDs SECTION -->
 						${
 							sampleUIDs.length > 0
 								? `
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold; width: 25%;">Mã mẫu:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${sampleUIDs.join(', ')}</td>
-						</tr>
+						<div style="margin-bottom: 20px;">
+							<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DANH SÁCH MÃ MẪU THỬ</h4>
+							<div style="padding: 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px;">
+								<strong>Số lượng mẫu:</strong> ${sampleUIDs.length} mẫu<br/>
+								<strong>Mã mẫu:</strong> ${sampleUIDs.join(', ')}
+							</div>
+						</div>
 						`
-								: ''
+								: '<div style="padding: 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; color: #666; text-align: center;">Không có dữ liệu mẫu thử</div>'
 						}
-						${
-							analysisIds.length > 0
-								? `
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">ID phép thử:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${analysisIds.join(', ')}</td>
-						</tr>
-						<tr>
-							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Số chỉ tiêu:</td>
-							<td style="border: 1px solid #ccc; padding: 8px;">${analysisIds.length} chỉ tiêu</td>
-						</tr>
-						`
-								: ''
-						}
-					</table>
-				</div>
-				`
-						: ''
-				}
-			</div>
-		`;
 
-		setPreviewContent(documentPreviewContent);
+						<!-- API REPORT SECTION -->
+						<div style="margin-top: 20px;">
+							<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">BÁO CÁO CHI TIẾT</h4>
+							<div style="margin-top: 10px; border: 1px solid #ddd; border-radius: 4px; background: white; min-height: 400px; overflow: auto;">
+								${reportHTML}
+							</div>
+						</div>
+					</div>
+				`;
+
+				// Update with final content
+				setPreviewContent(finalContent);
+			} catch (error) {
+				console.error('Error generating final content:', error);
+				const errorContent = `
+					<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
+						<!-- SAMPLE UIDs SECTION -->
+						${
+							sampleUIDs.length > 0
+								? `
+						<div style="margin-bottom: 20px;">
+							<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DANH SÁCH MÃ MẪU THỬ</h4>
+							<div style="padding: 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px;">
+								<strong>Số lượng mẫu:</strong> ${sampleUIDs.length} mẫu<br/>
+								<strong>Mã mẫu:</strong> ${sampleUIDs.join(', ')}
+							</div>
+						</div>
+						`
+								: '<div style="padding: 10px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; color: #666; text-align: center;">Không có dữ liệu mẫu thử</div>'
+						}
+
+						<!-- API REPORT SECTION -->
+						<div style="margin-top: 20px;">
+							<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">BÁO CÁO CHI TIẾT</h4>
+							<div style="margin-top: 10px; padding: 50px; text-align: center; color: red; border: 1px solid #ddd; border-radius: 4px;">
+								Lỗi khi tải báo cáo: ${error.message}
+							</div>
+						</div>
+					</div>
+				`;
+				setPreviewContent(errorContent);
+			}
+		};
+
+		// Generate and set preview content
+		generatePreviewContent();
+
 		setCurrentPreviewedTemplate(null); // Clear previewed template when document is selected
 
 		// Expose file preview function to window for use in HTML content
@@ -969,8 +1125,7 @@ const DocumentEditor = () => {
 				<div style="margin-top: 30px;">
 					<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">HƯỚNG DẪN SỬ DỤNG</h4>
 					<ol style="padding-left: 20px; margin-top: 10px;">
-						<li style="margin: 8px 0;">Click vào nút "Tiếp tục" để tạo tài liệu mới từ mẫu này</li>
-						<li style="margin: 8px 0;">Hoặc click vào nút "Soạn thảo mới" để tạo tài liệu từ mẫu này</li>
+						<li style="margin: 8px 0;">Click vào nút "Chỉnh sửa" để tạo tài liệu mới từ mẫu này</li>
 						<li style="margin: 8px 0;">Điền các thông tin cụ thể vào các trường tương ứng</li>
 						<li style="margin: 8px 0;">Chỉnh sửa nội dung theo yêu cầu thực tế</li>
 						<li style="margin: 8px 0;">Lưu tài liệu sau khi hoàn thành</li>
@@ -1106,7 +1261,7 @@ const DocumentEditor = () => {
 
 	const getStatusColor = (status) => {
 		switch (status) {
-			case 'published':
+			case 'submitted':
 				return 'bg-green-100 text-green-800';
 			case 'draft':
 				return 'bg-yellow-100 text-yellow-800';
@@ -1119,8 +1274,8 @@ const DocumentEditor = () => {
 
 	const getStatusText = (status) => {
 		switch (status) {
-			case 'published':
-				return 'Đã xuất bản';
+			case 'submitted':
+				return 'Đã nộp';
 			case 'draft':
 				return 'Bản nháp';
 			case 'review':
@@ -1381,15 +1536,15 @@ const DocumentEditor = () => {
 						<FaFileAlt className="text-blue-600" />
 						Soạn thảo tài liệu
 					</h1>
-					<button
-						onClick={refreshData}
-						disabled={isLoading}
-						className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-						title="Làm mới dữ liệu"
-					>
-						<FaSync className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-						Làm mới
-					</button>
+					<div className="flex gap-3">
+						<button
+							onClick={handleNewDocument}
+							className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+						>
+							<FaPlus className="w-4 h-4" />
+							Soạn thảo mới
+						</button>
+					</div>
 				</div>
 			</div>
 			<div
@@ -1418,9 +1573,13 @@ const DocumentEditor = () => {
 					{/* Hoạt động gần đây */}
 					<div className="bg-white rounded-xl shadow-sm border p-6 flex-1 flex flex-col min-h-0">
 						<div className="flex items-center justify-between mb-4 flex-shrink-0">
-							<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+							<h3
+								className="text-lg font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors"
+								onClick={() => loadRecentDocuments(searchTerm, 1, documentStatus)}
+								title="Click để làm mới danh sách"
+							>
 								<FaClock className="text-blue-600" />
-								{documentStatus === 'published' ? 'Tài liệu đã phát hành' : 'Hoạt động gần đây'}
+								{documentStatus === 'submitted' ? 'Tài liệu đã nộp' : 'Hoạt động gần đây'}
 								{isLoading && (
 									<div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
 								)}
@@ -1434,7 +1593,7 @@ const DocumentEditor = () => {
 									className="sr-only"
 									disabled={isLoading}
 								/>
-								<div className="w-40 h-10 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
+								<div className="w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
 									{/* Sliding background */}
 									<div
 										className={`absolute top-0 w-1/2 h-full bg-blue-500 rounded-full transition-all duration-300 ease-in-out transform
@@ -1451,13 +1610,13 @@ const DocumentEditor = () => {
 										</span>
 									</div>
 
-									{/* PUBLISHED text */}
+									{/* SUBMITTED text */}
 									<div className="absolute right-0 w-1/2 h-full flex items-center justify-center">
 										<span
 											className={`text-xs font-medium transition-all duration-300 ease-in-out
 												${!isDraft ? 'text-white' : 'text-gray-600'}`}
 										>
-											PUBLISHED
+											SUBMITTED
 										</span>
 									</div>
 								</div>
@@ -1482,7 +1641,7 @@ const DocumentEditor = () => {
 										<button
 											onClick={() => handleRecentDocumentsPageChange(recentDocumentsData.pagination.currentPage - 1)}
 											disabled={recentDocumentsData.pagination.currentPage === 1}
-											className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+											className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
 										>
 											Trước
 										</button>
@@ -1496,7 +1655,7 @@ const DocumentEditor = () => {
 												) : (
 													<button
 														onClick={() => handleRecentDocumentsPageChange(page)}
-														className={`px-2 py-1 text-xs border rounded ${
+														className={`px-2 py-1 text-xs border rounded-lg ${
 															page === recentDocumentsData.pagination.currentPage
 																? 'bg-blue-500 text-white border-blue-500'
 																: 'border-gray-300 hover:bg-gray-50'
@@ -1512,7 +1671,7 @@ const DocumentEditor = () => {
 											disabled={
 												recentDocumentsData.pagination.currentPage === recentDocumentsData.pagination.totalPages
 											}
-											className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+											className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
 										>
 											Sau
 										</button>
@@ -1530,7 +1689,7 @@ const DocumentEditor = () => {
 								<div className="flex flex-col items-center justify-center h-32 text-gray-500">
 									<FaFileAlt className="w-8 h-8 mb-2 text-gray-300" />
 									<div className="text-sm">
-										{documentStatus === 'published' ? 'Không có tài liệu đã phát hành' : 'Không có bản nháp nào'}
+										{documentStatus === 'submitted' ? 'Không có tài liệu đã nộp' : 'Không có bản nháp nào'}
 									</div>
 									{searchTerm && <div className="text-xs mt-1">Thử tìm kiếm với từ khóa khác</div>}
 								</div>
@@ -1555,7 +1714,7 @@ const DocumentEditor = () => {
 											</div>
 											<div className="text-xs text-gray-500 text-start">
 												<span className="font-mono">
-													{doc.status === 'published'
+													{doc.status === 'submitted'
 														? `Document Fingerprint: ${doc.metadata?.footer || doc.id}`
 														: `Mã tài liệu sửa đổi: ${doc.metadata?.footer || doc.id}`}
 												</span>
@@ -1570,7 +1729,11 @@ const DocumentEditor = () => {
 					{/* Mẫu tài liệu */}
 					<div className="bg-white rounded-xl shadow-sm border p-6 flex-1 flex flex-col min-h-0">
 						<div className="flex items-center justify-between mb-4 flex-shrink-0">
-							<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+							<h3
+								className="text-lg font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-green-600 transition-colors"
+								onClick={() => loadTemplates(templateSearchTerm, 1)}
+								title="Click để làm mới danh sách"
+							>
 								<FaEdit className="text-green-600" />
 								Mẫu tài liệu
 							</h3>
@@ -1602,7 +1765,7 @@ const DocumentEditor = () => {
 										<button
 											onClick={() => handleTemplatesPageChange(documentTemplatesData.pagination.currentPage - 1)}
 											disabled={documentTemplatesData.pagination.currentPage === 1}
-											className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+											className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
 										>
 											Trước
 										</button>
@@ -1616,7 +1779,7 @@ const DocumentEditor = () => {
 												) : (
 													<button
 														onClick={() => handleTemplatesPageChange(page)}
-														className={`px-2 py-1 text-xs border rounded ${
+														className={`px-2 py-1 text-xs border rounded-lg ${
 															page === documentTemplatesData.pagination.currentPage
 																? 'bg-blue-500 text-white border-blue-500'
 																: 'border-gray-300 hover:bg-gray-50'
@@ -1632,7 +1795,7 @@ const DocumentEditor = () => {
 											disabled={
 												documentTemplatesData.pagination.currentPage === documentTemplatesData.pagination.totalPages
 											}
-											className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+											className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
 										>
 											Sau
 										</button>
@@ -1694,8 +1857,8 @@ const DocumentEditor = () => {
 								Xem trước
 							</h3>
 							<div className="flex gap-3">
-								{/* View File Button for published documents with fileId */}
-								{selectedDocument?.status === 'published' && selectedDocument?.fileId && (
+								{/* View File Button for submitted documents with fileId */}
+								{selectedDocument?.status === 'submitted' && selectedDocument?.fileId && (
 									<button
 										onClick={() => handleFilePreview(selectedDocument.fileId)}
 										className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
@@ -1705,6 +1868,31 @@ const DocumentEditor = () => {
 										Xem file
 									</button>
 								)}
+								<button
+									onClick={() =>
+										selectedDocument
+											? handlePrintDocument(selectedDocument)
+											: currentPreviewedTemplate
+											? handlePrintTemplate(currentPreviewedTemplate)
+											: null
+									}
+									disabled={!selectedDocument && !currentPreviewedTemplate}
+									className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+										selectedDocument || currentPreviewedTemplate
+											? 'bg-purple-600 text-white hover:bg-purple-700'
+											: 'bg-gray-300 text-gray-500 cursor-not-allowed'
+									}`}
+									title={
+										selectedDocument
+											? 'In báo cáo tài liệu'
+											: currentPreviewedTemplate
+											? 'In báo cáo từ mẫu này'
+											: 'Chọn tài liệu hoặc mẫu để in'
+									}
+								>
+									<FaFileAlt className="w-4 h-4" />
+									Print
+								</button>
 								<button
 									onClick={selectedDocument ? handleContinueEdit : handleContinueFromTemplate}
 									disabled={!selectedDocument && !currentPreviewedTemplate}
@@ -1722,14 +1910,7 @@ const DocumentEditor = () => {
 									}
 								>
 									<FaEdit className="w-4 h-4" />
-									Tiếp tục
-								</button>
-								<button
-									onClick={handleNewDocument}
-									className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-								>
-									<FaPlus className="w-4 h-4" />
-									Soạn thảo mới
+									Chỉnh sửa
 								</button>
 							</div>
 						</div>

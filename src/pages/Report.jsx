@@ -731,6 +731,7 @@ export default function MultiPageEditor() {
 
 		// Get the sample_information array from data and filter out items with empty fvalue
 		const sampleInfo = data.sample_information;
+
 		// Map each sample information item to a row in the sample info section
 		const infoRows = sampleInfo
 			.map((item) => {
@@ -750,12 +751,31 @@ export default function MultiPageEditor() {
 					displayMainLabel = mainLabel.replace('HSD', 'Hạn sử dụng');
 				}
 
-				return `
-			<div style="display: flex; ${fieldName.includes('Ngày tiếp nhận') && 'margin-top: 8px;'}">
-				<div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: top;">
+				// Check if this is "Ngày tiếp nhận" field to add storage time info
+				if (fieldName.includes('Ngày tiếp nhận')) {
+					return `
+			<div style="display: flex; margin-top: 8px;">
+				<div style="width: 27%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: top;">
 					<p style="font-weight:bold; margin-right: 4px;">${displayMainLabel}</p> ${engLabel}:
 				</div>
-				<div style="width: 70%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;" >
+				<div style="width: 23%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;" >
+					<p style="margin: 0;">${fieldValue}</p>
+				</div>
+				<div style="width: 28%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: top;">
+					<p style="font-weight:bold; margin-right: 4px;">Thời gian lưu mẫu</p> / Storage time:
+				</div>
+				<div style="width: 19%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;" >
+					<p style="margin: 0;">Không có mẫu lưu</p>
+				</div>
+			</div>`;
+				}
+
+				return `
+			<div style="display: flex;">
+				<div style="width: 27%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: top;">
+					<p style="font-weight:bold; margin-right: 4px;">${displayMainLabel}</p> ${engLabel}:
+				</div>
+				<div style="width: 73%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;" >
 					<p style="margin: 0; ${mainLabel.toLowerCase().includes('tên mẫu') ? 'font-weight: bold;' : ''}">${fieldValue}</p>
 				</div>
 			</div>`;
@@ -1221,7 +1241,7 @@ export default function MultiPageEditor() {
         <div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
             <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
                 <strong style="font-size:12px; line-height:1.2; margin:0;">PHÒNG PHÂN TÍCH KIỂM NGHIỆM/<br>KIỂM SOÁT CHẤT LƯỢNG / Laboratory Manager</strong>
-                <p style="font-size:12px; margin:0; line-height:1.4;">Trần Thị Lan</p>
+                <p style="font-size:12px; margin:0; line-height:1.4;">Nguyễn Công Phúc</p>
             </div>
             <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
                 <strong style="font-size:12px; line-height:1.2; margin:0;">KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President</strong>
