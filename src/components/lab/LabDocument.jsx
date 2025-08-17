@@ -14,6 +14,7 @@ import {
 } from 'react-icons/fa';
 import { apiPost } from '../../contexts/helperFunctionCallAPI';
 import { GlobalContext } from '../../contexts/GlobalContext';
+import AnalysesExtract from './AnalysesExtract';
 
 const LabDocument = () => {
 	const { currentUser, setCurrentUser, fetchUser } = useContext(GlobalContext);
@@ -611,864 +612,388 @@ const LabDocument = () => {
 		);
 	};
 
-	// Show Analysis Data Popup
-	const showAnalysisDataPopup = (doc) => {
+	// Show Analysis Extract Popup - using AnalysesExtract component logic
+	const showAnalysisExtractPopup = async (doc) => {
 		if (!doc || !doc.metadata || !doc.metadata.extractData || !doc.metadata.extractData.analyses) {
 			showAutoHideMessage('Không có dữ liệu chỉ tiêu để hiển thị', 'warning');
 			return;
 		}
 
-		const analyses = doc.metadata.extractData.analyses;
-		const content = doc.metadata.content || '<p>Không có nội dung</p>';
+		// 1. Lấy dữ liệu trích xuất
+		const extractedAnalyses = doc.metadata.extractData.analyses;
+		const analysisIds = extractedAnalyses.map(a => a.id).filter(id => id);
 
-		// State for editing mode and comparison mode
-		let isEditMode = false;
-		let isComparisonMode = false;
-		let editedAnalyses = [...analyses]; // Copy of analyses for editing
-		let analysisMatchData = null; // Data for analysis match table
-
-		// Remove existing popup if any
-		const existingPopup = document.getElementById('analysisDataPopupOverlay');
-		if (existingPopup) {
-			existingPopup.remove();
+		// 2. Gọi API lấy matchAnalysis
+		let matchAnalysis = [];
+		try {
+			showAutoHideMessage('Đang tải dữ liệu đối chiếu...', 'info');
+			const res = await apiPost('https://red.irdop.org/v1/lab/analysis/match/by_id', { ids: analysisIds });
+			if (res.status === 200 && res.data) {
+				if (Array.isArray(res.data)) {
+					matchAnalysis = res.data;
+				} else if (res.data.result && Array.isArray(res.data.result)) {
+					matchAnalysis = res.data.result;
+					console.log('Match analysis loaded:', matchAnalysis);
+				}
+			}
+			showAutoHideMessage('Tải dữ liệu đối chiếu thành công!', 'success');
+		} catch (err) {
+			console.error('Error loading match analysis:', err);
+			showAutoHideMessage('Lỗi khi tải dữ liệu đối chiếu: ' + err.message, 'error');
 		}
 
-		// Create popup overlay
+		// 3. Hàm xác định khác biệt, gán các key ...Diff
+		function getAnalysisDifferences(extracted, matched) {
+			if (!matched) return extracted;
+			const diffObj = { ...extracted };
+			
+			// Chỉ so sánh parameterName và protocolCode
+			const fieldsToCompare = ['parameterName', 'protocolCode'];
+			fieldsToCompare.forEach(field => {
+				if (extracted[field] !== matched[field]) {
+					diffObj[field + 'Diff'] = matched[field];
+				}
+			});
+			
+			return diffObj;
+		}
+
+		// 4. Gộp dữ liệu trích xuất với các trường ...Diff nếu có
+		const mergedAnalyses = extractedAnalyses.map(extract => {
+			const matched = matchAnalysis.find(m => m.id === parseInt(extract.id));
+			console.log('matched:', matched);
+			console.log('extract:', extract);
+			return getAnalysisDifferences(extract, matched);
+		});
+
+		// 5. State hiển thị khác biệt
+		let showDifferences = false;
+
+		// 6. Tạo popup
+		const existingPopup = document.getElementById('analysisDataPopupOverlay');
+		if (existingPopup) existingPopup.remove();
+
 		const overlay = document.createElement('div');
 		overlay.id = 'analysisDataPopupOverlay';
 		overlay.className = 'fixed inset-0 bg-black bg-opacity-80 z-[10000] flex items-center justify-center';
 
-		// Create popup container
 		const popup = document.createElement('div');
-		popup.className = 'bg-white rounded-lg w-[95vw] h-[90vh] flex flex-col shadow-2xl overflow-hidden';
+		popup.className = 'bg-white rounded-lg w-[80vw] h-[90vh] flex flex-col shadow-2xl overflow-hidden';
 
-		// Create header with title and close button
+		// Header
 		const header = document.createElement('div');
 		header.className = 'p-2 border-b border-gray-200 flex justify-between items-center bg-gray-50';
 
 		const title = document.createElement('h3');
-		title.textContent = 'Dữ liệu chỉ tiêu - ' + (doc.metadata.header?.title || doc.title);
+		title.textContent = 'Dữ liệu trích xuất từ báo cáo';
 		title.className = 'm-0 text-lg font-semibold text-gray-700';
 
 		const closeBtn = document.createElement('button');
 		closeBtn.textContent = '✕';
 		closeBtn.className =
 			'px-3 py-2 bg-red-500 hover:bg-red-600 text-white border-0 rounded-md cursor-pointer font-bold text-base transition-colors duration-200';
+		closeBtn.onclick = () => overlay.remove();
 
-		// Function to cleanup and close popup
-		const closePopup = () => {
-			// Destroy TinyMCE editors if they exist
-			try {
-				const contentEditorInstance = tinymce.get('content-editor');
-				if (contentEditorInstance) {
-					contentEditorInstance.destroy();
-				}
+		// Nút hiển thị khác biệt
+		const showDiffBtn = document.createElement('button');
+		showDiffBtn.textContent = 'Hiển thị dữ liệu khác biệt';
+		showDiffBtn.className = 'px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200';
 
-				// Also destroy any table cell editors
-				const tableEditors = tinymce.editors.filter((editor) => editor.id && editor.id.startsWith('editor_'));
-				tableEditors.forEach((editor) => {
-					try {
-						editor.destroy();
-					} catch (error) {
-						console.warn('Error destroying table editor:', error);
-					}
-				});
-			} catch (error) {
-				console.warn('Error during TinyMCE cleanup:', error);
+		// CSS cho difference indicators
+		const style = document.createElement('style');
+		style.textContent = `
+			.difference-indicator {
+				color: #ff6b6b;
+				font-weight: bold;
+				cursor: pointer;
+				margin-right: 6px;
+				background-color: #fff3cd;
+				border: 1px solid #ffc107;
+				padding: 2px 4px;
+				border-radius: 3px;
+				display: inline-block;
+				position: relative;
 			}
-
-			// Remove the overlay
-			overlay.remove();
-		};
-
-		closeBtn.onclick = closePopup;
-
-		// Create edit/confirm button
-		const editBtn = document.createElement('button');
-		editBtn.textContent = 'Chỉnh sửa';
-		editBtn.className =
-			'px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-
-		// Create comparison button
-		const comparisonBtn = document.createElement('button');
-		comparisonBtn.textContent = 'Đối chiếu';
-		comparisonBtn.className =
-			'px-4 py-2 bg-green-500 hover:bg-green-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-
-		// Button group container
-		const buttonGroup = document.createElement('div');
-		buttonGroup.className = 'flex items-center';
-		buttonGroup.appendChild(comparisonBtn);
-		buttonGroup.appendChild(editBtn);
-		buttonGroup.appendChild(closeBtn);
-
-		// Function to load analysis match data
-		const loadAnalysisMatchData = async () => {
-			try {
-				const metadata = doc.metadata;
-				const analysisIds = metadata.analysisIds || [];
-
-				if (analysisIds.length > 0) {
-					showAutoHideMessage('Đang tải dữ liệu đối chiếu...', 'info');
-
-					const analysisResponse = await apiPostLocal('https://red.irdop.org/v1/lab/analysis/match/by_id', {
-						ids: analysisIds,
-					});
-
-					if (analysisResponse.status === 200 && analysisResponse.data) {
-						const resultData = Array.isArray(analysisResponse.data)
-							? analysisResponse.data
-							: analysisResponse.data.result || analysisResponse.data;
-
-						analysisMatchData = resultData;
-						showAutoHideMessage('Tải dữ liệu đối chiếu thành công!', 'success');
-						return resultData;
-					} else {
-						throw new Error('Không thể tải kết quả phân tích khớp');
-					}
-				} else {
-					analysisMatchData = [];
-					return [];
-				}
-			} catch (error) {
-				console.error('Error loading analysis match data:', error);
-				showAutoHideMessage('Lỗi khi tải dữ liệu đối chiếu: ' + error.message, 'error');
-				analysisMatchData = [];
-				return [];
+			
+			.difference-indicator:hover {
+				background-color: #ffecb3;
+				border-color: #ff9800;
 			}
-		};
-
-		// Preload analysis match data when popup opens
-		const preloadAnalysisData = async () => {
-			const metadata = doc.metadata;
-			const analysisIds = metadata.analysisIds || [];
-
-			if (analysisIds.length > 0) {
-				try {
-					await loadAnalysisMatchData();
-				} catch (error) {
-					console.error('Error preloading analysis data:', error);
-				}
-			} else {
-				analysisMatchData = [];
+			
+			.difference-indicator .tooltip {
+				visibility: hidden;
+				background-color: #fff3cd;
+				border: 2px solid #ffc107;
+				color: #856404;
+				text-align: left;
+				border-radius: 6px;
+				padding: 8px 12px;
+				position: absolute;
+				z-index: 10001;
+				bottom: 125%;
+				left: 50%;
+				margin-left: -100px;
+				width: 200px;
+				box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+				font-size: 11px;
+				line-height: 1.3;
 			}
-		};
+			
+			.difference-indicator .tooltip::after {
+				content: "";
+				position: absolute;
+				top: 100%;
+				left: 50%;
+				margin-left: -5px;
+				border-width: 5px;
+				border-style: solid;
+				border-color: #ffc107 transparent transparent transparent;
+			}
+			
+			.difference-indicator:hover .tooltip {
+				visibility: visible;
+			}
+			
+			.difference-tag {
+				background-color: #fff3cd;
+				border: 2px solid #ffc107;
+				border-radius: 4px;
+				padding: 4px 8px;
+				margin-top: 4px;
+				font-size: 0.75rem;
+				color: #856404;
+				display: block;
+				width: 100%;
+				box-sizing: border-box;
+				word-wrap: break-word;
+				white-space: normal;
+				overflow-wrap: break-word;
+				hyphens: auto;
+			}
+		`;
+		document.head.appendChild(style);
 
-		// Function to render edit form
-		const renderEditForm = () => {
-			const metadata = doc.metadata;
-			const header = metadata.header || {};
-			const content = metadata.content || '';
+		// Main content
+		const mainContent = document.createElement('div');
+		mainContent.className = 'flex-1 overflow-auto p-4';
 
-			contentContainer.innerHTML = `
-				<div class="flex flex-col h-full gap-4">
-					<!-- Header Section -->
-					<div class="flex-shrink-0">
-						<h4 class="m-0 mb-3 text-gray-700 text-sm font-semibold">TIÊU ĐỀ VĂN BẢN</h4>
-						<div class="grid grid-cols-4 gap-2">
-							<div>
-								<input 
-									type="text" 
-									id="edit-title"
-									placeholder="Nhập tiêu đề..."
-									value="${header.title || ''}"
-									class="w-full px-2 py-1.5 text-xs border-2 border-gray-400 rounded outline-none font-semibold bg-white focus:border-gray-700"
-								/>
-							</div>
-							<div>
-								<input 
-									type="text" 
-									id="edit-code"
-									placeholder="Nhập mã hiệu..."
-									value="${header.code || ''}"
-									class="w-full px-2 py-1.5 text-xs border-2 border-gray-400 rounded outline-none font-semibold bg-white focus:border-gray-700"
-								/>
-							</div>
-							<div>
-								<input 
-									type="text" 
-									id="edit-publishNo"
-									placeholder="Lần ban hành..."
-									value="${header.publishNo || ''}"
-									class="w-full px-2 py-1.5 text-xs border-2 border-gray-400 rounded outline-none font-semibold bg-white focus:border-gray-700"
-								/>
-							</div>
-							<div>
-								<input 
-									type="text" 
-									id="edit-publishDate"
-									placeholder="Ngày ban hành..."
-									value="${header.publishDate || ''}"
-									class="w-full px-2 py-1.5 text-xs border-2 border-gray-400 rounded outline-none font-semibold bg-white focus:border-gray-700"
-								/>
-							</div>
-						</div>
-					</div>
-
-					<!-- Editor Section -->
-					<div class="flex-1 flex flex-col min-h-0">
-						<div class="flex justify-between items-center mb-2">
-							<h4 class="m-0 text-gray-700 text-sm font-semibold">NỘI DUNG</h4>
-							<div class="flex gap-2">
-								<button 
-									onclick="clearEditorContent()"
-									class="px-2 py-1 text-xs bg-white text-black border-2 border-gray-400 rounded cursor-pointer font-semibold hover:border-gray-700 hover:bg-gray-50"
-								>
-									Clear
-								</button>
-							</div>
-						</div>
-						<div 
-							id="content-editor"
-							class="flex-1 border-2 border-gray-400 rounded-md p-3 bg-white min-h-[200px] overflow-y-auto text-xs leading-6 outline-none focus:border-gray-700"
-						>${content}</div>
-					</div>
+		// Hàm render bảng
+		function renderTable() {
+			mainContent.innerHTML = `
+				<div class="overflow-auto">
+					<table class="w-full border-collapse border border-gray-300 text-xs">
+						<thead>
+							<tr class="bg-gray-100">
+								<th class="border border-gray-300 p-2">ID</th>
+								<th class="border border-gray-300 p-2">Mã mẫu</th>
+								<th class="border border-gray-300 p-2">Tên mẫu</th>
+								<th class="border border-gray-300 p-2">Chỉ tiêu</th>
+								<th class="border border-gray-300 p-2">Mã phương pháp</th>
+								<th class="border border-gray-300 p-2">Kết quả</th>
+								<th class="border border-gray-300 p-2">Đơn vị</th>
+							</tr>
+						</thead>
+						<tbody>
+							${mergedAnalyses.map(a => `
+								<tr>
+									<td class="border border-gray-300 p-2">${a.id || ''}</td>
+									<td class="border border-gray-300 p-2">${a.sampleUID || ''}</td>
+									<td class="border border-gray-300 p-2">${a.sampleName || ''}</td>
+									<td class="border border-gray-300 p-2">
+										${a.parameterNameDiff !== undefined ? (!showDifferences
+											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.parameterNameDiff || 'Không có'}</div></span></span>${a.parameterName || ''}</div>`
+											: `<div style="width: 100%;">${a.parameterName || ''}<div class="difference-tag">Giá trị gốc: ${a.parameterNameDiff || 'Không có'}</div></div>`
+										) : `<div>${a.parameterName || ''}</div>`}
+									</td>
+									<td class="border border-gray-300 p-2">
+										${a.protocolCodeDiff !== undefined ? (!showDifferences
+											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.protocolCodeDiff || 'Không có'}</div></span></span>${a.protocolCode || ''}</div>`
+											: `<div style="width: 100%;">${a.protocolCode || ''}<div class="difference-tag">Giá trị gốc: ${a.protocolCodeDiff || 'Không có'}</div></div>`
+										) : `<div>${a.protocolCode || ''}</div>`}
+									</td>
+									<td class="border border-gray-300 p-2">
+										<div style="width: 100%;">${a.resultValue || ''}</div>
+									</td>
+									<td class="border border-gray-300 p-2">
+										<div style="width: 100%;">${a.resultUnit || ''}</div>
+									</td>
+								</tr>
+							`).join('')}
+						</tbody>
+					</table>
 				</div>
 			`;
+		}
 
-			// Initialize TinyMCE for content editor after DOM is ready
-			setTimeout(() => {
-				const contentEditor = document.getElementById('content-editor');
-				if (contentEditor && !tinymce.get('content-editor')) {
-					tinymce.init({
-						target: contentEditor,
-						inline: true,
-						menubar: false,
-						toolbar: false,
-						setup: function (editor) {
-							editor.on('init', function () {
-								editor.setContent(content);
-
-								// Add z-index to editor container
-								const editorContainer = editor.getContainer();
-								if (editorContainer) {
-									editorContainer.style.zIndex = '1000';
-								}
-							});
-
-							editor.on('keydown', function (e) {
-								// Replace '*' with multiplication sign
-								if (e.key === '*') {
-									e.preventDefault();
-									editor.execCommand('mceInsertContent', false, '×');
-									return;
-								}
-								// '^' toggles superscript
-								if (e.key === '^') {
-									e.preventDefault();
-									editor.execCommand('Superscript');
-									return;
-								}
-								// '_' toggles subscript
-								if (e.key === '_') {
-									e.preventDefault();
-									editor.execCommand('Subscript');
-									return;
-								}
-							});
-						},
-						license_key: 'gpl',
-					});
-				}
-			}, 100);
-
-			// Add global clear function
-			window.clearEditorContent = () => {
-				const editorInstance = tinymce.get('content-editor');
-				if (editorInstance) {
-					editorInstance.setContent('');
-					editorInstance.focus();
-				} else {
-					const editor = document.getElementById('content-editor');
-					if (editor) {
-						editor.innerHTML = '';
-						editor.focus();
-					}
-				}
-			};
+		// Sự kiện click nút hiển thị khác biệt
+		showDiffBtn.onclick = () => {
+			showDifferences = !showDifferences;
+			showDiffBtn.textContent = showDifferences ? 'Ẩn dữ liệu khác biệt' : 'Hiển thị dữ liệu khác biệt';
+			showDiffBtn.className = showDifferences
+				? 'px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200'
+				: 'px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200';
+			renderTable();
+			showAutoHideMessage(showDifferences ? 'Đang hiển thị dữ liệu khác biệt' : 'Đã ẩn dữ liệu khác biệt', 'info');
 		};
 
-		// Function to load and display content via API
-		const loadContentViaAPI = async () => {
+		// Assemble header
+		const headerLeft = document.createElement('div');
+		headerLeft.className = 'flex items-center gap-3';
+		headerLeft.appendChild(title);
+		headerLeft.appendChild(showDiffBtn);
+
+		header.appendChild(headerLeft);
+		header.appendChild(closeBtn);
+
+		// Footer với nút xác nhận cập nhật
+		const footer = document.createElement('div');
+		footer.className = 'border-t border-gray-200 p-4 bg-gray-50 flex justify-center';
+
+		const confirmBtn = document.createElement('button');
+		confirmBtn.textContent = 'Xác nhận cập nhật';
+		confirmBtn.className = 'px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
+
+		// Hàm xử lý xác nhận cập nhật
+		confirmBtn.onclick = async () => {
 			try {
-				// Show loading
-				contentContainer.innerHTML = '<div class="text-center p-5 text-gray-500">Đang tải nội dung...</div>';
-
-				const metadata = doc.metadata;
-				const header = metadata.header || {};
-				const content = metadata.content || '';
-				const analysisIds = metadata.analysisIds || [];
-				const sampleUIDs = metadata.sampleUIDs || [];
-
-				// Prepare report data with exact structure similar to previewDocumentReport
-				const reportData = {
-					header: header,
-					content: content,
-					footer: doc.id,
-					analysisIds: analysisIds,
-					sampleUIDs: sampleUIDs,
-				};
-
-				// Call the same API endpoint as in previewDocumentReport
-				const response = await apiPostLocal(
-					'https://black.irdop.org/khsi19me/convert/lab_result_report_html',
-					reportData,
-				);
-
-				if (response.status === 200 && response.data) {
-					// Display the HTML response
-					const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-					contentContainer.innerHTML = htmlResponse;
-				} else {
-					throw new Error('Failed to load content via API');
+				// Kiểm tra xem có dữ liệu để cập nhật không
+				if (!mergedAnalyses || mergedAnalyses.length === 0) {
+					showAutoHideMessage('Không có dữ liệu để cập nhật', 'warning');
+					return;
 				}
-			} catch (error) {
-				console.error('Error loading content via API:', error);
-				// Fallback to original content
-				contentContainer.innerHTML =
-					content ||
-					'<p class="text-red-500">Lỗi khi tải nội dung. Hiển thị nội dung gốc:</p>' +
-						(content || '<p>Không có nội dung</p>');
-			}
-		};
 
-		// Function to render content based on edit mode and comparison mode
-		const renderContent = () => {
-			if (isComparisonMode) {
-				// Show comparison table
-				if (analysisMatchData !== null) {
-					// Create React component container
-					const comparisonContainer = document.createElement('div');
-					comparisonContainer.id = 'comparison-container';
-					comparisonContainer.className = 'h-full';
-					contentContainer.innerHTML = '';
-					contentContainer.appendChild(comparisonContainer);
+				// Kiểm tra xem có khác biệt về protocolCode không
+				const hasProtocolDifference = mergedAnalyses.some(a => a.protocolCodeDiff !== undefined);
 
-					// Render React component using the AnalysisMatchTable
-					const tableHTML = `
-						<div class="h-full flex flex-col">
-							<!-- Title for comparison table -->
-							<h4 class="text-lg font-semibold text-gray-900 border-b mb-4 border-gray-200 pb-2">Dữ liệu chỉ tiêu trong app</h4>
-							<!-- Table Container -->
-							<div class="flex-1 overflow-auto">
-								<div class="bg-white border border-gray-300 shadow-sm overflow-hidden">
-									<table class="w-full border-collapse">
-										<thead>
-											<tr class="bg-gray-100 border-b border-gray-300">
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">ID</th>
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">Mã mẫu</th>
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">Tên chỉ tiêu</th>
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">Mã phương pháp</th>
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">Kết quả</th>
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">Đơn vị</th>
-												<th class="p-3 text-left font-semibold text-gray-700 text-sm">Tham chiếu</th>
-											</tr>
-										</thead>
-										<tbody>
-											${
-												analysisMatchData.length === 0
-													? `<tr><td colspan="7" class="text-center p-8 text-gray-500">Không có dữ liệu</td></tr>`
-													: analysisMatchData
-															.map(
-																(item, index) => `
-													<tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900">${item.id || '--'}</td>
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900">${item.sampleUID || '--'}</td>
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900">${item.parameterName || '--'}</td>
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900">${item.protocolCode || '--'}</td>
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900 font-medium">${item.resultValue || '--'}</td>
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900">${item.resultUnit || '--'}</td>
-														<td class="p-3 text-sm text-gray-900">${item.reference || '--'}</td>
-													</tr>
-												`,
-															)
-															.join('')
-											}
-										</tbody>
-									</table>
-								</div>
-							</div>
+				if (hasProtocolDifference) {
+					// Hiển thị dialog xác nhận với select option
+					const confirmDialog = document.createElement('div');
+					confirmDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
+					
+					const dialogContent = document.createElement('div');
+					dialogContent.className = 'bg-yellow-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-yellow-200';
+					
+					dialogContent.innerHTML = `
+						<div class="flex items-center mb-4">
+							<span class="text-2xl mr-3">⚠️</span>
+							<h3 class="text-lg font-semibold text-gray-900">Cảnh báo: Phát hiện khác biệt về phương pháp</h3>
+						</div>
+						<p class="text-gray-700 mb-4">Một số chỉ tiêu có phương pháp khác với dữ liệu trong app. Bạn muốn áp dụng phương pháp nào?</p>
+						
+						<div class="mb-6">
+							<label class="block text-sm font-medium text-gray-700 mb-2">
+								Chọn phương pháp áp dụng:
+							</label>
+							<select id="methodChoice" class="w-full p-3 bg-white border-2 border-yellow-400 rounded-md focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-gray-900 font-medium shadow-sm">
+								<option value="delivered">Áp dụng phương pháp được bàn giao (mặc định)</option>
+								<option value="report">Áp dụng phương pháp trong biên bản</option>
+							</select>
+						</div>
+						
+						<div class="flex justify-end gap-3">
+							<button id="cancelConfirm" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors">Hủy bỏ</button>
+							<button id="proceedConfirm" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">Xác nhận</button>
 						</div>
 					`;
-
-					comparisonContainer.innerHTML = tableHTML;
-				} else {
-					contentContainer.innerHTML = '<div class="text-center p-5 text-gray-500">Đang tải dữ liệu đối chiếu...</div>';
-				}
-			} else if (isEditMode) {
-				// Show edit form
-				renderEditForm();
-			} else {
-				// Show normal content via API
-				loadContentViaAPI();
-			}
-		};
-
-		header.appendChild(title);
-		header.appendChild(buttonGroup);
-
-		// Create main content area with two columns
-		const mainContent = document.createElement('div');
-		mainContent.className = 'flex flex-1 overflow-hidden';
-
-		// Left column - Analysis table
-		const leftColumn = document.createElement('div');
-		leftColumn.className = 'w-1/2 border-r border-gray-200 flex flex-col overflow-hidden';
-
-		const tableContainer = document.createElement('div');
-		tableContainer.className = 'flex-1 overflow-auto p-4';
-
-		// Create title for analysis table
-		const analysisTableTitle = document.createElement('h4');
-		analysisTableTitle.textContent = 'Dữ liệu chỉ tiêu xuất từ báo cáo';
-		analysisTableTitle.className = 'text-lg font-semibold text-gray-900 mb-4 border-b border-gray-200 pb-2';
-
-		// Create analysis table
-		const table = document.createElement('table');
-		table.className = 'w-full border-collapse border border-gray-300 text-xs';
-
-		// Function to render table content
-		const renderTable = () => {
-			// Clear existing content
-			table.innerHTML = '';
-
-			// Table header
-			const thead = document.createElement('thead');
-			thead.innerHTML = `
-				<tr class="bg-gray-100">
-					<th class="border border-gray-300 p-2 text-left font-semibold">ID</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Mã mẫu</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Tên mẫu</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Chỉ tiêu</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Mã phương pháp</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Kết quả</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Đơn vị</th>
-				</tr>
-			`;
-			table.appendChild(thead);
-
-			// Table body
-			const tbody = document.createElement('tbody');
-			editedAnalyses.forEach((analysis, index) => {
-				const row = document.createElement('tr');
-				row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-
-				row.innerHTML = `
-					<td class="border border-gray-300 p-2">${analysis.id || '--'}</td>
-					<td class="border border-gray-300 p-2">${analysis.sampleUID || '--'}</td>
-					<td class="border border-gray-300 p-2">${analysis.sampleName || '--'}</td>
-					<td class="border border-gray-300 p-2">${analysis.parameterName || '--'}</td>
-					<td class="border border-gray-300 p-2 ${isEditMode ? 'relative' : ''}" 
-						data-field="protocolCode" data-index="${index}">
-						${
-							isEditMode
-								? `<div class="editable-cell min-h-[20px] cursor-pointer p-0.5">${analysis.protocolCode || '--'}</div>`
-								: analysis.protocolCode || '--'
-						}
-					</td>
-					<td class="border border-gray-300 p-2 ${isEditMode ? 'relative' : ''}" 
-						data-field="resultValue" data-index="${index}">
-						${
-							isEditMode
-								? `<div class="editable-cell min-h-[20px] cursor-pointer p-0.5">${analysis.resultValue || '--'}</div>`
-								: analysis.resultValue || '--'
-						}
-					</td>
-					<td class="border border-gray-300 p-2 ${isEditMode ? 'relative' : ''}" 
-						data-field="resultUnit" data-index="${index}">
-						${
-							isEditMode
-								? `<div class="editable-cell min-h-[20px] cursor-pointer p-0.5">${analysis.resultUnit || '--'}</div>`
-								: analysis.resultUnit || '--'
-						}
-					</td>
-				`;
-				tbody.appendChild(row);
-			});
-			table.appendChild(tbody);
-
-			// Add click handlers for editable cells if in edit mode
-			if (isEditMode) {
-				const editableCells = table.querySelectorAll('.editable-cell');
-				editableCells.forEach((cell) => {
-					cell.addEventListener('click', (e) => {
-						e.stopPropagation();
-						const td = cell.closest('td');
-						const field = td.dataset.field;
-						const index = parseInt(td.dataset.index);
-
-						// Check if already in edit mode for this cell
-						if (td.querySelector('textarea') || td.querySelector('[id^="editor_"]')) {
-							return; // Already editing this cell
-						}
-
-						// Use different editor types based on field
-						if (field === 'protocolCode') {
-							openTextareaEditor(cell, field, index);
-						} else {
-							openTinyMCEEditor(cell, field, index);
-						}
-					});
-				});
-			}
-		};
-
-		// Function to open simple textarea editor for protocol code
-		const openTextareaEditor = (cellElement, field, index) => {
-			const currentValue = editedAnalyses[index][field] || '';
-
-			// Get the td element
-			const td = cellElement.closest('td');
-
-			// Clear cell content and replace with textarea directly
-			td.innerHTML = '';
-			td.className += ' border-2 border-blue-500 bg-white p-0.5';
-
-			// Create textarea directly in td
-			const textarea = document.createElement('textarea');
-			textarea.value = currentValue;
-			textarea.rows = 2;
-			textarea.className =
-				'w-full border-0 outline-none resize-none text-xs leading-normal font-inherit bg-white p-0.5 box-border';
-
-			td.appendChild(textarea);
-			textarea.focus();
-
-			// Prevent blur when clicking inside the textarea
-			textarea.addEventListener('mousedown', (e) => {
-				e.stopPropagation();
-			});
-
-			textarea.addEventListener('click', (e) => {
-				e.stopPropagation();
-			});
-
-			// Handle blur (click outside)
-			textarea.addEventListener('blur', (e) => {
-				// Check if the blur is caused by clicking outside the cell
-				setTimeout(() => {
-					if (!td.contains(document.activeElement)) {
-						saveTextareaAndClose(textarea.value);
-					}
-				}, 0);
-			});
-
-			// Handle Enter key
-			textarea.addEventListener('keydown', (e) => {
-				if (e.key === 'Enter' && !e.shiftKey) {
-					e.preventDefault();
-					saveTextareaAndClose(textarea.value);
-				}
-
-				if (e.key === 'Escape') {
-					e.preventDefault();
-					cancelTextareaAndClose();
-				}
-			});
-
-			const saveTextareaAndClose = (newValue) => {
-				// Update the data
-				editedAnalyses[index][field] = newValue;
-
-				// Re-render table
-				renderTable();
-			};
-
-			const cancelTextareaAndClose = () => {
-				// Re-render table without changes
-				renderTable();
-			};
-		};
-
-		// Function to open TinyMCE editor for a cell
-		const openTinyMCEEditor = (cellElement, field, index) => {
-			const currentValue = editedAnalyses[index][field] || '';
-
-			// Clear cell content and make it editable
-			cellElement.innerHTML = '';
-			cellElement.className += ' border-2 border-blue-500 bg-white min-h-[20px] p-1';
-
-			// Create inline editor div
-			const editorDiv = document.createElement('div');
-			editorDiv.id = `editor_${field}_${index}_${Date.now()}`;
-			editorDiv.innerHTML = currentValue;
-			editorDiv.className = 'w-full min-h-[20px] border-0 outline-none text-xs leading-normal bg-white';
-
-			cellElement.appendChild(editorDiv);
-
-			// Prevent blur when clicking inside the editor
-			cellElement.addEventListener('mousedown', (e) => {
-				e.stopPropagation();
-			});
-
-			cellElement.addEventListener('click', (e) => {
-				e.stopPropagation();
-			});
-
-			// Initialize TinyMCE inline editor (similar to Input.jsx)
-			tinymce.init({
-				target: editorDiv,
-				inline: true,
-				menubar: false,
-				toolbar: false, // No toolbar like Input.jsx
-				setup: function (editor) {
-					editor.on('init', function () {
-						editor.setContent(currentValue);
-						editor.focus();
-
-						// Add z-index to editor container
-						const editorContainer = editor.getContainer();
-						if (editorContainer) {
-							editorContainer.style.zIndex = '1000';
-						}
-					});
-
-					editor.on('blur', function () {
-						// Add delay to check if focus moved outside the cell
-						setTimeout(() => {
-							const activeElement = document.activeElement;
-							if (!cellElement.contains(activeElement)) {
-								const content = editor.getContent(); // Lưu HTML content, không phải text
-								saveAndCloseEditor(content);
-							}
-						}, 0);
-					});
-
-					editor.on('keydown', function (e) {
-						// Replace '*' with multiplication sign
-						if (e.key === '*') {
-							e.preventDefault();
-							editor.execCommand('mceInsertContent', false, '×');
-							return;
-						}
-						// '^' toggles superscript
-						if (e.key === '^') {
-							e.preventDefault();
-							editor.execCommand('Superscript');
-							return;
-						}
-						// '_' toggles subscript
-						if (e.key === '_') {
-							e.preventDefault();
-							editor.execCommand('Subscript');
-							return;
-						}
-
-						// Save on Enter
-						if (e.key === 'Enter' && !e.shiftKey) {
-							e.preventDefault();
-							const content = editor.getContent(); // Lưu HTML content
-							saveAndCloseEditor(content);
-							return;
-						}
-
-						// Cancel on Escape
-						if (e.key === 'Escape') {
-							e.preventDefault();
-							cancelAndCloseEditor();
-							return;
-						}
-					});
-				},
-				license_key: 'gpl',
-			});
-
-			const saveAndCloseEditor = (newValue) => {
-				try {
-					const editorInstance = tinymce.get(editorDiv.id);
-					if (editorInstance) {
-						editorInstance.destroy();
-					}
-				} catch (error) {
-					console.warn('Error destroying TinyMCE editor:', error);
-				}
-
-				// Update the data
-				editedAnalyses[index][field] = newValue || currentValue;
-
-				// Re-render table
-				renderTable();
-			};
-
-			const cancelAndCloseEditor = () => {
-				try {
-					const editorInstance = tinymce.get(editorDiv.id);
-					if (editorInstance) {
-						editorInstance.destroy();
-					}
-				} catch (error) {
-					console.warn('Error destroying TinyMCE editor:', error);
-				}
-
-				// Re-render table without changes
-				renderTable();
-			};
-		};
-
-		// Comparison button click handler
-		comparisonBtn.onclick = async () => {
-			if (!isComparisonMode) {
-				// Enter comparison mode
-				isComparisonMode = true;
-				comparisonBtn.textContent = 'Thoát đối chiếu';
-				comparisonBtn.className =
-					'px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-
-				// Disable edit mode when entering comparison mode
-				if (isEditMode) {
-					isEditMode = false;
-					editBtn.textContent = 'Chỉnh sửa';
-					editBtn.className =
-						'px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-				}
-
-				// Load analysis match data if not already loaded
-				if (analysisMatchData === null) {
-					await loadAnalysisMatchData();
-				}
-
-				renderContent();
-			} else {
-				// Exit comparison mode
-				isComparisonMode = false;
-				comparisonBtn.textContent = 'Đối chiếu';
-				comparisonBtn.className =
-					'px-4 py-2 bg-green-500 hover:bg-green-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-
-				renderContent();
-			}
-		};
-
-		// Edit button click handler
-		editBtn.onclick = () => {
-			if (!isEditMode) {
-				// Enter edit mode
-				isEditMode = true;
-				editBtn.textContent = 'Xác nhận';
-				editBtn.className =
-					'px-4 py-2 bg-green-500 hover:bg-green-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-
-				// Disable comparison mode when entering edit mode
-				if (isComparisonMode) {
-					isComparisonMode = false;
-					comparisonBtn.textContent = 'Đối chiếu';
-					comparisonBtn.className =
-						'px-4 py-2 bg-green-500 hover:bg-green-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-				}
-			} else {
-				// Exit edit mode - collect data from edit form and apply changes
-				const titleInput = document.getElementById('edit-title');
-				const codeInput = document.getElementById('edit-code');
-				const publishNoInput = document.getElementById('edit-publishNo');
-				const publishDateInput = document.getElementById('edit-publishDate');
-				const contentEditor = document.getElementById('content-editor');
-
-				if (titleInput && codeInput && publishNoInput && publishDateInput && contentEditor) {
-					// Get content from TinyMCE editor if available, otherwise fallback to innerHTML
-					const editorInstance = tinymce.get('content-editor');
-					const contentValue = editorInstance ? editorInstance.getContent() : contentEditor.innerHTML;
-
-					// Update metadata with new values
-					const newHeader = {
-						title: titleInput.value,
-						code: codeInput.value,
-						publishNo: publishNoInput.value,
-						publishDate: publishDateInput.value,
+					
+					confirmDialog.appendChild(dialogContent);
+					document.body.appendChild(confirmDialog);
+					
+					// Xử lý sự kiện dialog
+					const cancelBtn = dialogContent.querySelector('#cancelConfirm');
+					const proceedBtn = dialogContent.querySelector('#proceedConfirm');
+					const methodSelect = dialogContent.querySelector('#methodChoice');
+					
+					cancelBtn.onclick = () => {
+						confirmDialog.remove();
 					};
-
-					doc.metadata.header = newHeader;
-					doc.metadata.content = contentValue;
-
-					// Log current values when exiting edit mode
-					console.log('=== THOÁT CHỈNH SỬA ===');
-					console.log('Header hiện tại:', newHeader);
-					console.log('Content hiện tại:', contentValue);
+					
+					proceedBtn.onclick = async () => {
+						const methodChoice = methodSelect.value;
+						confirmDialog.remove();
+						await performUpdate(methodChoice);
+					};
+					
+					// Đóng dialog khi click outside
+					confirmDialog.addEventListener('click', (e) => {
+						if (e.target === confirmDialog) {
+							confirmDialog.remove();
+						}
+					});
+				} else {
+					// Không có khác biệt về protocol, thực hiện update trực tiếp
+					await performUpdate('delivered');
 				}
-
-				isEditMode = false;
-				editBtn.textContent = 'Chỉnh sửa';
-				editBtn.className =
-					'px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-			}
-
-			// Re-render both table and content
-			renderTable();
-			renderContent();
-		};
-
-		// Initial render
-		renderTable();
-
-		// Preload analysis match data in background
-		preloadAnalysisData();
-
-		tableContainer.appendChild(analysisTableTitle);
-		tableContainer.appendChild(table);
-
-		// Create approval button container
-		const approvalButtonContainer = document.createElement('div');
-		approvalButtonContainer.className = 'mt-4 px-4 pb-4';
-
-		// Create approval button
-		const approvalBtn = document.createElement('button');
-		approvalBtn.textContent = 'Duyệt biên bản';
-		approvalBtn.className =
-			'w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
-
-		// Approval button click handler
-		approvalBtn.onclick = () => {
-			// Show confirmation dialog
-			const confirmed = confirm('Bạn có chắc chắn muốn duyệt biên bản này không?');
-			if (confirmed) {
-				showAutoHideMessage('Đang xử lý duyệt biên bản...', 'info');
-
-				// Log current analysis data
-				console.log('=== DUYỆT BIÊN BẢN ===');
-				console.log('Dữ liệu các hàng hiện tại:', editedAnalyses);
-
-				// Here you can add the API call to approve the document
-				// For now, just show a success message
-				setTimeout(() => {
-					showAutoHideMessage('Duyệt biên bản thành công!', 'success');
-				}, 1000);
+			} catch (error) {
+				console.error('Error in confirm update:', error);
+				showAutoHideMessage('Lỗi khi xử lý cập nhật: ' + error.message, 'error');
 			}
 		};
 
-		approvalButtonContainer.appendChild(approvalBtn);
-		tableContainer.appendChild(approvalButtonContainer);
-		leftColumn.appendChild(tableContainer);
+		// Hàm thực hiện cập nhật
+		const performUpdate = async (methodChoice) => {
+			try {
+				showAutoHideMessage('Đang xử lý cập nhật...', 'info');
+				
+				// Chuẩn bị dữ liệu analyses
+				const analysesData = mergedAnalyses.map(a => {
+					const baseData = {
+						id: parseInt(a.id),
+						resultValue: a.resultValue,
+						resultUnit: a.resultUnit
+					};
+					
+					// Nếu chọn áp dụng phương pháp trong biên bản
+					if (methodChoice === 'report') {
+						// Sử dụng protocolCode từ extractData.analyses (giá trị hiện tại trong biên bản)
+						baseData.protocolCode = a.protocolCode;
+					}
+					// Nếu chọn mặc định (delivered) thì không thêm protocolCode
+					
+					return baseData;
+				}).filter(a => a.id); // Chỉ lấy những item có ID
 
-		// Right column - Content
-		const rightColumn = document.createElement('div');
-		rightColumn.className = 'w-1/2 flex flex-col overflow-hidden';
+				console.log('Sending update request:', { analyses: analysesData });
 
-		const contentContainer = document.createElement('div');
-		contentContainer.className = 'flex-1 overflow-auto p-4 bg-white';
+				const response = await apiPost('https://red.irdop.org/v1/analysis/update_bulk', {
+					analyses: analysesData
+				});
 
-		// Initial render
-		renderContent();
+				if (response.status === 200) {
+					showAutoHideMessage('Cập nhật thành công!', 'success');
+					overlay.remove(); // Đóng popup sau khi cập nhật thành công
+				} else {
+					showAutoHideMessage('Lỗi khi cập nhật: ' + (response.message || 'Unknown error'), 'error');
+				}
+			} catch (error) {
+				console.error('Error in performUpdate:', error);
+				showAutoHideMessage('Lỗi khi cập nhật: ' + error.message, 'error');
+			}
+		};
 
-		rightColumn.appendChild(contentContainer);
+		footer.appendChild(confirmBtn);
 
 		// Assemble popup
-		mainContent.appendChild(leftColumn);
-		mainContent.appendChild(rightColumn);
 		popup.appendChild(header);
 		popup.appendChild(mainContent);
+		popup.appendChild(footer);
 		overlay.appendChild(popup);
 		document.body.appendChild(overlay);
+
+		// Render bảng ban đầu
+		renderTable();
 
 		// Close on overlay click
 		overlay.addEventListener('click', function (e) {
 			if (e.target === overlay) {
-				closePopup();
+				overlay.remove();
 			}
 		});
 
 		// Close on Escape key
 		const handleEscape = (e) => {
 			if (e.key === 'Escape') {
-				closePopup();
+				overlay.remove();
 				document.removeEventListener('keydown', handleEscape);
 			}
 		};
@@ -1967,10 +1492,17 @@ const LabDocument = () => {
 											}`}
 										>
 											<div className="relative">
+												{/* Header info section with code, identity, date */}
+												<div className="flex items-center justify-between text-xs text-start mb-2">
+													<div className="text-gray-600 px-2 py-1 rounded">Mã tài liệu: {doc.id}</div>
+													<div className="text-gray-500">{doc.metadata?.submittedByUID}</div>
+													<div className="text-gray-500">{doc.lastModified}</div>
+												</div>
+
 												{/* Title Section */}
 												<div className="flex items-center gap-2 mb-2">
 													<FaFileAlt className="text-gray-500 flex-shrink-0" />
-													<span className="font-medium text-gray-900 text-sm leading-tight">
+													<span className="font-medium text-gray-900 text-sm leading-tight text-start">
 														{doc.metadata?.header?.title || doc.title}
 													</span>
 													{doc.metadata?.extractData?.analyses && (
@@ -1978,15 +1510,9 @@ const LabDocument = () => {
 													)}
 												</div>
 
-												{/* ID and Date Section */}
-												<div className="flex items-center justify-between mb-3 text-xs">
-													<div className="bg-blue-600 text-white px-2 py-1 rounded font-bold">ID: {doc.id}</div>
-													<div className="text-gray-500">{doc.lastModified}</div>
-												</div>
-
 												{/* Sample UIDs Section - Display up to 5 */}
 												{doc.metadata?.sampleUIDs && doc.metadata.sampleUIDs.length > 0 && (
-													<div className="mb-2">
+													<div className="mb-0">
 														<div className="flex flex-wrap gap-1">
 															{doc.metadata.sampleUIDs.slice(0, 5).map((uid, index) => (
 																<span
@@ -2004,12 +1530,6 @@ const LabDocument = () => {
 														</div>
 													</div>
 												)}
-
-												<div className="text-xs text-gray-500 text-start">
-													{doc.metadata?.extractData?.analyses && (
-														<span className="text-blue-600">• {doc.metadata.extractData.analyses.length} chỉ tiêu</span>
-													)}
-												</div>
 											</div>
 										</div>
 									))}
@@ -2031,7 +1551,7 @@ const LabDocument = () => {
 							<div className="flex gap-3">
 								{selectedDocument && selectedDocument.metadata?.extractData?.analyses && (
 									<button
-										onClick={() => showAnalysisDataPopup(selectedDocument)}
+										onClick={() => showAnalysisExtractPopup(selectedDocument)}
 										className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
 										title="Xem dữ liệu chỉ tiêu"
 									>
@@ -2057,23 +1577,23 @@ const LabDocument = () => {
 						<div className="flex-1 p-4 overflow-auto custom-scrollbar min-h-0">
 							{selectedDocument || previewContent ? (
 								<div className="bg-gray-50 rounded-lg p-4 h-full">
-									<div className="bg-white rounded-lg shadow-sm h-full overflow-auto custom-scrollbar">
+									<div className="bg-white rounded-lg shadow-sm h-full overflow-auto custom-scrollbar space-y-6">
 										{/* Hiển thị preview mã mẫu thử */}
 										<div dangerouslySetInnerHTML={{ __html: previewContent }} />
 
 										{/* Frame hiển thị báo cáo từ API */}
 										{selectedDocument && (
-											<div className="mt-6 border-t border-gray-200 pt-6">
+											<div className="border-t border-gray-200 pt-6">
 												<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
 													<FaPlay className="text-green-600" />
 													Báo cáo chi tiết
 												</h4>
-												<div className="border border-gray-300 rounded-lg overflow-hidden" style={{ height: '600px' }}>
+												<div className="border border-gray-300 rounded-lg overflow-hidden h-fit">
 													<iframe
 														src={`data:text/html;charset=utf-8,${encodeURIComponent(
 															generateReportFrame(selectedDocument),
 														)}`}
-														className="w-full h-full border-0"
+														className="w-full h-[794px] border-0"
 														title="Lab Result Report"
 													/>
 												</div>

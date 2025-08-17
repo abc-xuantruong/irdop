@@ -462,6 +462,7 @@ const Editor = () => {
 
 			if (document && document.metadata) {
 				const metadata = document.metadata;
+				setDocumentMetadata(metadata);
 
 				// Gán header data
 				if (metadata.header) {
@@ -970,7 +971,7 @@ const Editor = () => {
 
 			if (response.status === 200 && response.data) {
 				showAutoHideMessage('Đã tạo preview thành công!', 'success');
-
+				console.log(documentMetadata)
 				// Show popup instead of new tab
 				const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
 				showPreviewPopup(htmlResponse, {
@@ -1170,6 +1171,119 @@ const Editor = () => {
 					loadTableInfo();
 				}
 			}, 200);
+		}
+	};
+
+	const handleScanData = async () => {
+		try {
+			// Kiểm tra xem có editId không
+			if (!currentEditId) {
+				showAutoHideMessage('Không có editId để quét dữ liệu', 'warning');
+				return;
+			}
+
+			showAutoHideMessage('Đang quét dữ liệu...', 'info');
+
+			// Chuẩn bị metadata hiện tại
+			const currentMetadata = {
+				templateId: currentTemplate?.id || null,
+				templateName: currentTemplate?.templateName || currentTemplate?.name || null,
+				header: headerData,
+				content: editorContent,
+				footer: documentFooter || currentEditId,
+				analysisIds: analysisIds || [],
+				sampleUIDs: sampleUIDs || [],
+				classifierCode: classifierCode || null,
+			};
+
+			// Gửi API request
+			const response = await apiPost('https://red.irdop.org/v1/edit/scan', {
+				id: currentEditId,
+				metadata: currentMetadata
+			});
+
+			if (response.status === 200 && response.data) {
+				const editData = response.data;
+				console.log('Scan response data:', editData);
+
+				// Cập nhật các giá trị từ dữ liệu quét được
+				if (editData.metadata) {
+					const metadata = editData.metadata;
+
+					// Cập nhật header data
+					if (metadata.header) {
+						setHeaderData({
+							title: metadata.header.title || headerData.title,
+							code: metadata.header.code || headerData.code,
+							publishNo: metadata.header.publishNo || headerData.publishNo,
+							publishDate: metadata.header.publishDate || headerData.publishDate,
+						});
+					}
+
+					// Cập nhật content vào editor
+					if (metadata.content) {
+						setEditorContent(metadata.content);
+						const setContentWhenReady = () => {
+							if (editorRef.current && editorRef.current.initialized) {
+								editorRef.current.setContent(metadata.content);
+							} else {
+								setTimeout(setContentWhenReady, 200);
+							}
+						};
+						setTimeout(setContentWhenReady, 500);
+					}
+
+					// Cập nhật template info
+					if (metadata.templateId) {
+						setCurrentTemplate({
+							id: metadata.templateId,
+							templateName: metadata.templateName || '',
+							name: metadata.templateName || '',
+						});
+					}
+
+					// Cập nhật classifier code
+					if (metadata.classifierCode) {
+						setClassifierCode(metadata.classifierCode);
+					}
+
+					// Cập nhật analysisIds
+					if (metadata.analysisIds && metadata.analysisIds.length > 0) {
+						setAnalysisIds(metadata.analysisIds);
+						if (typeof window !== 'undefined') {
+							window.analysisIds = metadata.analysisIds;
+						}
+					}
+
+					// Cập nhật sample UIDs
+					if (metadata.sampleUIDs) {
+						setSampleUIDs(metadata.sampleUIDs);
+					}
+
+					// Cập nhật document footer
+					if (metadata.footer) {
+						setDocumentFooter(metadata.footer);
+					}
+				}
+
+				// Cập nhật document info nếu có
+				if (editData.id || editData.createdAt || editData.modifiedAt) {
+					updateDocumentInfo(
+						editData.id || currentEditId,
+						editData.createdAt,
+						editData.modifiedAt,
+						editData.authorName,
+						editData.modifiedBy,
+					);
+				}
+
+				showAutoHideMessage('Quét dữ liệu thành công!', 'success');
+			} else {
+				throw new Error('Lỗi khi quét dữ liệu: ' + (response.message || 'Unknown error'));
+			}
+		} catch (error) {
+			console.error('Error in handleScanData:', error);
+			showAutoHideMessage('Lỗi khi quét dữ liệu: ' + error.message, 'error');
 		}
 	};
 
@@ -1815,704 +1929,388 @@ const Editor = () => {
 		}
 	};
 
-	// Show analysis data popup with editing capability (based on LabDocument.jsx)
-	const showAnalysisDataPopupFromEditor = (doc) => {
+	// Show analysis data popup with simplified logic for extracted data comparison
+	const showAnalysisDataPopupFromEditor = async (doc) => {
 		if (!doc || !doc.metadata || !doc.metadata.extractData || !doc.metadata.extractData.analyses) {
 			showAutoHideMessage('Không có dữ liệu chỉ tiêu để hiển thị', 'warning');
 			return;
 		}
 
-		const analyses = doc.metadata.extractData.analyses;
-		const content = doc.metadata.content || '<p>Không có nội dung</p>';
+		// 1. Lấy dữ liệu trích xuất
+		const extractedAnalyses = doc.metadata.extractData.analyses;
+		const analysisIds = extractedAnalyses.map(a => a.id).filter(id => id);
 
-		// State for editing mode and comparison mode
-		let isEditMode = false;
-		let isComparisonMode = false;
-		let editedAnalyses = [...analyses]; // Copy of analyses for editing
-		let analysisMatchData = null; // Data for analysis match table
-
-		// Remove existing popup if any
-		const existingPopup = document.getElementById('analysisDataPopupOverlay');
-		if (existingPopup) {
-			existingPopup.remove();
+		// 2. Gọi API lấy matchAnalysis
+		let matchAnalysis = [];
+		try {
+			showAutoHideMessage('Đang tải dữ liệu đối chiếu...', 'info');
+			const res = await apiPost('https://red.irdop.org/v1/lab/analysis/match/by_id', { ids: analysisIds });
+			if (res.status === 200 && res.data) {
+				if (Array.isArray(res.data)) {
+					matchAnalysis = res.data;
+				} else if (res.data.result && Array.isArray(res.data.result)) {
+					matchAnalysis = res.data.result;
+					console.log('Match analysis loaded:', matchAnalysis);
+				}
+			}
+			showAutoHideMessage('Tải dữ liệu đối chiếu thành công!', 'success');
+		} catch (err) {
+			console.error('Error loading match analysis:', err);
+			showAutoHideMessage('Lỗi khi tải dữ liệu đối chiếu: ' + err.message, 'error');
 		}
 
-		// Create popup overlay
+		// 3. Hàm xác định khác biệt, gán các key ...Diff
+		function getAnalysisDifferences(extracted, matched) {
+			if (!matched) return extracted;
+			const diffObj = { ...extracted };
+			
+			// Chỉ so sánh parameterName và protocolCode
+			const fieldsToCompare = ['parameterName', 'protocolCode'];
+			fieldsToCompare.forEach(field => {
+				if (extracted[field] !== matched[field]) {
+					diffObj[field + 'Diff'] = matched[field];
+				}
+			});
+			
+			return diffObj;
+		}
+
+		// 4. Gộp dữ liệu trích xuất với các trường ...Diff nếu có
+		const mergedAnalyses = extractedAnalyses.map(extract => {
+			const matched = matchAnalysis.find(m => m.id === parseInt(extract.id));
+			console.log('matched:', matched);
+			console.log('extract:', extract);
+			return getAnalysisDifferences(extract, matched);
+		});
+
+		// 5. State hiển thị khác biệt
+		let showDifferences = false;
+
+		// 6. Tạo popup
+		const existingPopup = document.getElementById('analysisDataPopupOverlay');
+		if (existingPopup) existingPopup.remove();
+
 		const overlay = document.createElement('div');
 		overlay.id = 'analysisDataPopupOverlay';
 		overlay.className = 'fixed inset-0 bg-black bg-opacity-80 z-[10000] flex items-center justify-center';
 
-		// Create popup container
 		const popup = document.createElement('div');
-		popup.className = 'bg-white rounded-lg w-[95vw] h-[90vh] flex flex-col shadow-2xl overflow-hidden';
+		popup.className = 'bg-white rounded-lg w-[80vw] h-[90vh] flex flex-col shadow-2xl overflow-hidden';
 
-		// Create header with title and close button
+		// Header
 		const header = document.createElement('div');
 		header.className = 'p-2 border-b border-gray-200 flex justify-between items-center bg-gray-50';
 
 		const title = document.createElement('h3');
-		title.textContent = 'Kết quả nộp biên bản - ' + (doc.metadata.header?.title || 'Lab Result Report');
+		title.textContent = 'Dữ liệu trích xuất từ báo cáo';
 		title.className = 'm-0 text-lg font-semibold text-gray-700';
 
 		const closeBtn = document.createElement('button');
 		closeBtn.textContent = '✕';
 		closeBtn.className =
 			'px-3 py-2 bg-red-500 hover:bg-red-600 text-white border-0 rounded-md cursor-pointer font-bold text-base transition-colors duration-200';
+		closeBtn.onclick = () => overlay.remove();
 
-		// Function to cleanup and close popup
-		const closePopup = () => {
-			// Destroy TinyMCE editors if they exist
-			try {
-				const contentEditorInstance = window.tinymce && window.tinymce.get('content-editor');
-				if (contentEditorInstance) {
-					contentEditorInstance.destroy();
-				}
+		// Nút hiển thị khác biệt
+		const showDiffBtn = document.createElement('button');
+		showDiffBtn.textContent = 'Hiển thị dữ liệu khác biệt';
+		showDiffBtn.className = 'px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200';
 
-				// Also destroy any table cell editors
-				if (window.tinymce && window.tinymce.editors) {
-					const tableEditors = window.tinymce.editors.filter((editor) => editor.id && editor.id.startsWith('editor_'));
-					tableEditors.forEach((editor) => {
-						try {
-							editor.destroy();
-						} catch (error) {
-							console.warn('Error destroying table editor:', error);
-						}
-					});
-				}
-			} catch (error) {
-				console.warn('Error during TinyMCE cleanup:', error);
+		// CSS cho difference indicators
+		const style = document.createElement('style');
+		style.textContent = `
+			.difference-indicator {
+				color: #ff6b6b;
+				font-weight: bold;
+				cursor: pointer;
+				margin-right: 6px;
+				background-color: #fff3cd;
+				border: 1px solid #ffc107;
+				padding: 2px 4px;
+				border-radius: 3px;
+				display: inline-block;
+				position: relative;
 			}
+			
+			.difference-indicator:hover {
+				background-color: #ffecb3;
+				border-color: #ff9800;
+			}
+			
+			.difference-indicator .tooltip {
+				visibility: hidden;
+				background-color: #fff3cd;
+				border: 2px solid #ffc107;
+				color: #856404;
+				text-align: left;
+				border-radius: 6px;
+				padding: 8px 12px;
+				position: absolute;
+				z-index: 10001;
+				bottom: 125%;
+				left: 50%;
+				margin-left: -100px;
+				width: 200px;
+				box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+				font-size: 11px;
+				line-height: 1.3;
+			}
+			
+			.difference-indicator .tooltip::after {
+				content: "";
+				position: absolute;
+				top: 100%;
+				left: 50%;
+				margin-left: -5px;
+				border-width: 5px;
+				border-style: solid;
+				border-color: #ffc107 transparent transparent transparent;
+			}
+			
+			.difference-indicator:hover .tooltip {
+				visibility: visible;
+			}
+			
+			.difference-tag {
+				background-color: #fff3cd;
+				border: 2px solid #ffc107;
+				border-radius: 4px;
+				padding: 4px 8px;
+				margin-top: 4px;
+				font-size: 0.75rem;
+				color: #856404;
+				display: block;
+				width: 100%;
+				box-sizing: border-box;
+				word-wrap: break-word;
+				white-space: normal;
+				overflow-wrap: break-word;
+				hyphens: auto;
+			}
+		`;
+		document.head.appendChild(style);
 
-			// Remove the overlay
-			overlay.remove();
+		// Main content
+		const mainContent = document.createElement('div');
+		mainContent.className = 'flex-1 overflow-auto p-4';
+
+		// Hàm render bảng
+		function renderTable() {
+			mainContent.innerHTML = `
+				<div class="overflow-auto">
+					<table class="w-full border-collapse border border-gray-300 text-xs">
+						<thead>
+							<tr class="bg-gray-100">
+								<th class="border border-gray-300 p-2">ID</th>
+								<th class="border border-gray-300 p-2">Mã mẫu</th>
+								<th class="border border-gray-300 p-2">Tên mẫu</th>
+								<th class="border border-gray-300 p-2">Chỉ tiêu</th>
+								<th class="border border-gray-300 p-2">Mã phương pháp</th>
+								<th class="border border-gray-300 p-2">Kết quả</th>
+								<th class="border border-gray-300 p-2">Đơn vị</th>
+							</tr>
+						</thead>
+						<tbody>
+							${mergedAnalyses.map(a => `
+								<tr>
+									<td class="border border-gray-300 p-2">${a.id || ''}</td>
+									<td class="border border-gray-300 p-2">${a.sampleUID || ''}</td>
+									<td class="border border-gray-300 p-2">${a.sampleName || ''}</td>
+									<td class="border border-gray-300 p-2">
+										${a.parameterNameDiff !== undefined ? (!showDifferences
+											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.parameterNameDiff || 'Không có'}</div></span></span>${a.parameterName || ''}</div>`
+											: `<div style="width: 100%;">${a.parameterName || ''}<div class="difference-tag">Giá trị gốc: ${a.parameterNameDiff || 'Không có'}</div></div>`
+										) : `<div>${a.parameterName || ''}</div>`}
+									</td>
+									<td class="border border-gray-300 p-2">
+										${a.protocolCodeDiff !== undefined ? (!showDifferences
+											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.protocolCodeDiff || 'Không có'}</div></span></span>${a.protocolCode || ''}</div>`
+											: `<div style="width: 100%;">${a.protocolCode || ''}<div class="difference-tag">Giá trị gốc: ${a.protocolCodeDiff || 'Không có'}</div></div>`
+										) : `<div>${a.protocolCode || ''}</div>`}
+									</td>
+									<td class="border border-gray-300 p-2">
+										<div style="width: 100%;">${a.resultValue || ''}</div>
+									</td>
+									<td class="border border-gray-300 p-2">
+										<div style="width: 100%;">${a.resultUnit || ''}</div>
+									</td>
+								</tr>
+							`).join('')}
+						</tbody>
+					</table>
+				</div>
+			`;
+		}
+
+		// Sự kiện click nút hiển thị khác biệt
+		showDiffBtn.onclick = () => {
+			showDifferences = !showDifferences;
+			showDiffBtn.textContent = showDifferences ? 'Ẩn dữ liệu khác biệt' : 'Hiển thị dữ liệu khác biệt';
+			showDiffBtn.className = showDifferences
+				? 'px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200'
+				: 'px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200';
+			renderTable();
+			showAutoHideMessage(showDifferences ? 'Đang hiển thị dữ liệu khác biệt' : 'Đã ẩn dữ liệu khác biệt', 'info');
 		};
 
-		closeBtn.onclick = closePopup;
+		// Assemble header
+		const headerLeft = document.createElement('div');
+		headerLeft.className = 'flex items-center gap-3';
+		headerLeft.appendChild(title);
+		headerLeft.appendChild(showDiffBtn);
 
-		// Create edit/confirm button
-		const editBtn = document.createElement('button');
-		editBtn.textContent = 'Chỉnh sửa';
-		editBtn.className =
-			'px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
+		header.appendChild(headerLeft);
+		header.appendChild(closeBtn);
 
-		// Create comparison button
-		const comparisonBtn = document.createElement('button');
-		comparisonBtn.textContent = 'Đối chiếu';
-		comparisonBtn.className =
-			'px-4 py-2 bg-green-500 hover:bg-green-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
+		// Footer với nút xác nhận cập nhật
+		const footer = document.createElement('div');
+		footer.className = 'border-t border-gray-200 p-4 bg-gray-50 flex justify-center';
 
-		// Button group container
-		const buttonGroup = document.createElement('div');
-		buttonGroup.className = 'flex items-center';
-		buttonGroup.appendChild(comparisonBtn);
-		buttonGroup.appendChild(editBtn);
-		buttonGroup.appendChild(closeBtn);
+		const confirmBtn = document.createElement('button');
+		confirmBtn.textContent = 'Xác nhận cập nhật';
+		confirmBtn.className = 'px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
 
-		// Function to load analysis match data
-		const loadAnalysisMatchData = async () => {
+		// Hàm xử lý xác nhận cập nhật
+		confirmBtn.onclick = async () => {
 			try {
-				const metadata = doc.metadata;
-				const analysisIds = metadata.analysisIds || [];
-
-				if (analysisIds.length > 0) {
-					showAutoHideMessage('Đang tải dữ liệu đối chiếu...', 'info');
-
-					const analysisResponse = await apiPost('https://red.irdop.org/v1/lab/analysis/match/by_id', {
-						ids: analysisIds,
-					});
-
-					if (analysisResponse.status === 200 && analysisResponse.data) {
-						const resultData = Array.isArray(analysisResponse.data)
-							? analysisResponse.data
-							: analysisResponse.data.result || analysisResponse.data;
-
-						analysisMatchData = resultData;
-						showAutoHideMessage('Tải dữ liệu đối chiếu thành công!', 'success');
-						return resultData;
-					} else {
-						throw new Error('Không thể tải kết quả phân tích khớp');
-					}
-				} else {
-					analysisMatchData = [];
-					return [];
+				// Kiểm tra xem có dữ liệu để cập nhật không
+				if (!mergedAnalyses || mergedAnalyses.length === 0) {
+					showAutoHideMessage('Không có dữ liệu để cập nhật', 'warning');
+					return;
 				}
-			} catch (error) {
-				console.error('Error loading analysis match data:', error);
-				showAutoHideMessage('Lỗi khi tải dữ liệu đối chiếu: ' + error.message, 'error');
-				analysisMatchData = [];
-				return [];
-			}
-		};
 
-		// Function to render content based on edit mode and comparison mode
-		const renderContent = () => {
-			if (isComparisonMode) {
-				// Show comparison table
-				if (analysisMatchData !== null) {
-					const tableHTML = `
-						<div class="h-full flex flex-col">
-							<h4 class="text-lg font-semibold text-gray-900 border-b mb-4 border-gray-200 pb-2">Dữ liệu chỉ tiêu trong app</h4>
-							<div class="flex-1 overflow-auto">
-								<div class="bg-white border border-gray-300 shadow-sm overflow-hidden">
-									<table class="w-full border-collapse">
-										<thead>
-											<tr class="bg-gray-100 border-b border-gray-300">
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">ID</th>
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">Mã mẫu</th>
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">Tên chỉ tiêu</th>
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">Mã phương pháp</th>
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">Kết quả</th>
-												<th class="border-r border-gray-300 p-3 text-left font-semibold text-gray-700 text-sm">Đơn vị</th>
-												<th class="p-3 text-left font-semibold text-gray-700 text-sm">Tham chiếu</th>
-											</tr>
-										</thead>
-										<tbody>
-											${
-												analysisMatchData.length === 0
-													? `<tr><td colspan="7" class="text-center p-8 text-gray-500">Không có dữ liệu</td></tr>`
-													: analysisMatchData
-															.map(
-																(item, index) => `
-													<tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900">${item.id || '--'}</td>
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900">${item.sampleUID || '--'}</td>
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900">${item.parameterName || '--'}</td>
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900">${item.protocolCode || '--'}</td>
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900 font-medium">${item.resultValue || '--'}</td>
-														<td class="border-r border-gray-200 p-3 text-sm text-gray-900">${item.resultUnit || '--'}</td>
-														<td class="p-3 text-sm text-gray-900">${item.reference || '--'}</td>
-													</tr>
-												`,
-															)
-															.join('')
-											}
-										</tbody>
-									</table>
-								</div>
-							</div>
+				// Kiểm tra xem có khác biệt về protocolCode không
+				const hasProtocolDifference = mergedAnalyses.some(a => a.protocolCodeDiff !== undefined);
+
+				if (hasProtocolDifference) {
+					// Hiển thị dialog xác nhận với select option
+					const confirmDialog = document.createElement('div');
+					confirmDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
+					
+					const dialogContent = document.createElement('div');
+					dialogContent.className = 'bg-yellow-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-yellow-200';
+					
+					dialogContent.innerHTML = `
+						<div class="flex items-center mb-4">
+							<span class="text-2xl mr-3">⚠️</span>
+							<h3 class="text-lg font-semibold text-gray-900">Cảnh báo: Phát hiện khác biệt về phương pháp</h3>
+						</div>
+						<p class="text-gray-700 mb-4">Một số chỉ tiêu có phương pháp khác với dữ liệu trong app. Bạn muốn áp dụng phương pháp nào?</p>
+						
+						<div class="mb-6">
+							<label class="block text-sm font-medium text-gray-700 mb-2">
+								Chọn phương pháp áp dụng:
+							</label>
+							<select id="methodChoice" class="w-full p-3 bg-white border-2 border-yellow-400 rounded-md focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-gray-900 font-medium shadow-sm">
+								<option value="delivered">Áp dụng phương pháp được bàn giao (mặc định)</option>
+								<option value="report">Áp dụng phương pháp trong biên bản</option>
+							</select>
+						</div>
+						
+						<div class="flex justify-end gap-3">
+							<button id="cancelConfirm" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors">Hủy bỏ</button>
+							<button id="proceedConfirm" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">Xác nhận</button>
 						</div>
 					`;
-
-					contentContainer.innerHTML = tableHTML;
+					
+					confirmDialog.appendChild(dialogContent);
+					document.body.appendChild(confirmDialog);
+					
+					// Xử lý sự kiện dialog
+					const cancelBtn = dialogContent.querySelector('#cancelConfirm');
+					const proceedBtn = dialogContent.querySelector('#proceedConfirm');
+					const methodSelect = dialogContent.querySelector('#methodChoice');
+					
+					cancelBtn.onclick = () => {
+						confirmDialog.remove();
+					};
+					
+					proceedBtn.onclick = async () => {
+						const methodChoice = methodSelect.value;
+						confirmDialog.remove();
+						await performUpdate(methodChoice);
+					};
+					
+					// Đóng dialog khi click outside
+					confirmDialog.addEventListener('click', (e) => {
+						if (e.target === confirmDialog) {
+							confirmDialog.remove();
+						}
+					});
 				} else {
-					contentContainer.innerHTML = '<div class="text-center p-5 text-gray-500">Đang tải dữ liệu đối chiếu...</div>';
-				}
-			} else {
-				// Show normal content via API
-				loadContentViaAPI();
-			}
-		};
-
-		// Function to load and display content via API
-		const loadContentViaAPI = async () => {
-			try {
-				// Show loading
-				contentContainer.innerHTML = '<div class="text-center p-5 text-gray-500">Đang tải nội dung...</div>';
-
-				const metadata = doc.metadata;
-				const header = metadata.header || {};
-				const content = metadata.content || '';
-				const analysisIds = metadata.analysisIds || [];
-				const sampleUIDs = metadata.sampleUIDs || [];
-
-				// Prepare report data
-				const reportData = {
-					header: header,
-					content: content,
-					footer: doc.id,
-					analysisIds: analysisIds,
-					sampleUIDs: sampleUIDs,
-				};
-
-				// Call the API endpoint
-				const response = await apiPost('https://black.irdop.org/khsi19me/convert/lab_result_report_html', reportData);
-
-				if (response.status === 200 && response.data) {
-					// Display the HTML response
-					const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-					contentContainer.innerHTML = htmlResponse;
-				} else {
-					throw new Error('Failed to load content via API');
+					// Không có khác biệt về protocol, thực hiện update trực tiếp
+					await performUpdate('delivered');
 				}
 			} catch (error) {
-				console.error('Error loading content via API:', error);
-				// Fallback to original content
-				contentContainer.innerHTML =
-					content ||
-					'<p class="text-red-500">Lỗi khi tải nội dung. Hiển thị nội dung gốc:</p>' +
-						(content || '<p>Không có nội dung</p>');
+				console.error('Error in confirm update:', error);
+				showAutoHideMessage('Lỗi khi xử lý cập nhật: ' + error.message, 'error');
 			}
 		};
 
-		header.appendChild(title);
-		header.appendChild(buttonGroup);
+		// Hàm thực hiện cập nhật
+		const performUpdate = async (methodChoice) => {
+			try {
+				showAutoHideMessage('Đang xử lý cập nhật...', 'info');
+				
+				// Chuẩn bị dữ liệu analyses
+				const analysesData = mergedAnalyses.map(a => {
+					const baseData = {
+						id: parseInt(a.id),
+						resultValue: a.resultValue,
+						resultUnit: a.resultUnit
+					};
+					
+					// Nếu chọn áp dụng phương pháp trong biên bản
+					if (methodChoice === 'report') {
+						// Sử dụng protocolCode từ extractData.analyses (giá trị hiện tại trong biên bản)
+						baseData.protocolCode = a.protocolCode;
+					}
+					// Nếu chọn mặc định (delivered) thì không thêm protocolCode
+					
+					return baseData;
+				}).filter(a => a.id); // Chỉ lấy những item có ID
 
-		// Create main content area with two columns
-		const mainContent = document.createElement('div');
-		mainContent.className = 'flex flex-1 overflow-hidden';
+				console.log('Sending update request:', { analyses: analysesData });
 
-		// Left column - Analysis table
-		const leftColumn = document.createElement('div');
-		leftColumn.className = 'w-1/2 border-r border-gray-200 flex flex-col overflow-hidden';
-
-		const tableContainer = document.createElement('div');
-		tableContainer.className = 'flex-1 overflow-auto p-4';
-
-		// Create title for analysis table
-		const analysisTableTitle = document.createElement('h4');
-		analysisTableTitle.textContent = 'Dữ liệu chỉ tiêu xuất từ báo cáo';
-		analysisTableTitle.className = 'text-lg font-semibold text-gray-900 mb-4 border-b border-gray-200 pb-2';
-
-		// Create analysis table
-		const table = document.createElement('table');
-		table.className = 'w-full border-collapse border border-gray-300 text-xs';
-
-		// Function to render table content
-		const renderTable = () => {
-			// Clear existing content
-			table.innerHTML = '';
-
-			// Table header
-			const thead = document.createElement('thead');
-			thead.innerHTML = `
-				<tr class="bg-gray-100">
-					<th class="border border-gray-300 p-2 text-left font-semibold">ID</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Mã mẫu</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Tên mẫu</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Chỉ tiêu</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Mã phương pháp</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Kết quả</th>
-					<th class="border border-gray-300 p-2 text-left font-semibold">Đơn vị</th>
-				</tr>
-			`;
-			table.appendChild(thead);
-
-			// Table body
-			const tbody = document.createElement('tbody');
-			editedAnalyses.forEach((analysis, index) => {
-				const row = document.createElement('tr');
-				row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-
-				row.innerHTML = `
-					<td class="border border-gray-300 p-2">${analysis.id || '--'}</td>
-					<td class="border border-gray-300 p-2">${analysis.sampleUID || '--'}</td>
-					<td class="border border-gray-300 p-2">${analysis.sampleName || '--'}</td>
-					<td class="border border-gray-300 p-2">${analysis.parameterName || '--'}</td>
-					<td class="border border-gray-300 p-2 ${isEditMode ? 'relative' : ''}" 
-						data-field="protocolCode" data-index="${index}">
-						${
-							isEditMode
-								? `<div class="editable-cell min-h-[20px] cursor-pointer p-0.5">${analysis.protocolCode || '--'}</div>`
-								: analysis.protocolCode || '--'
-						}
-					</td>
-					<td class="border border-gray-300 p-2 ${isEditMode ? 'relative' : ''}" 
-						data-field="resultValue" data-index="${index}">
-						${
-							isEditMode
-								? `<div class="editable-cell min-h-[20px] cursor-pointer p-0.5">${analysis.resultValue || '--'}</div>`
-								: analysis.resultValue || '--'
-						}
-					</td>
-					<td class="border border-gray-300 p-2 ${isEditMode ? 'relative' : ''}" 
-						data-field="resultUnit" data-index="${index}">
-						${
-							isEditMode
-								? `<div class="editable-cell min-h-[20px] cursor-pointer p-0.5">${analysis.resultUnit || '--'}</div>`
-								: analysis.resultUnit || '--'
-						}
-					</td>
-				`;
-				tbody.appendChild(row);
-			});
-			table.appendChild(tbody);
-
-			// Add click handlers for editable cells if in edit mode
-			if (isEditMode) {
-				const editableCells = table.querySelectorAll('.editable-cell');
-				editableCells.forEach((cell) => {
-					cell.addEventListener('click', (e) => {
-						e.stopPropagation();
-						const td = cell.closest('td');
-						const field = td.dataset.field;
-						const index = parseInt(td.dataset.index);
-
-						// Check if already in edit mode for this cell
-						if (td.querySelector('textarea') || td.querySelector('[id^="editor_"]')) {
-							return; // Already editing this cell
-						}
-
-						// Use different editor types based on field
-						if (field === 'protocolCode') {
-							openTextareaEditor(cell, field, index);
-						} else {
-							openTinyMCEEditor(cell, field, index);
-						}
-					});
+				const response = await apiPost('https://red.irdop.org/v1/analysis/update_bulk', {
+					analyses: analysesData
 				});
+
+				if (response.status === 200) {
+					showAutoHideMessage('Cập nhật thành công!', 'success');
+					overlay.remove(); // Đóng popup sau khi cập nhật thành công
+				} else {
+					showAutoHideMessage('Lỗi khi cập nhật: ' + (response.message || 'Unknown error'), 'error');
+				}
+			} catch (error) {
+				console.error('Error in performUpdate:', error);
+				showAutoHideMessage('Lỗi khi cập nhật: ' + error.message, 'error');
 			}
 		};
 
-		// Function to open simple textarea editor for protocol code
-		const openTextareaEditor = (cellElement, field, index) => {
-			const currentValue = editedAnalyses[index][field] || '';
-
-			// Get the td element
-			const td = cellElement.closest('td');
-
-			// Clear cell content and replace with textarea directly
-			td.innerHTML = '';
-			td.className += ' border-2 border-blue-500 bg-white p-0.5';
-
-			// Create textarea directly in td
-			const textarea = document.createElement('textarea');
-			textarea.value = currentValue;
-			textarea.rows = 2;
-			textarea.className =
-				'w-full border-0 outline-none resize-none text-xs leading-normal font-inherit bg-white p-0.5 box-border';
-
-			td.appendChild(textarea);
-			textarea.focus();
-
-			// Prevent blur when clicking inside the textarea
-			textarea.addEventListener('mousedown', (e) => {
-				e.stopPropagation();
-			});
-
-			textarea.addEventListener('click', (e) => {
-				e.stopPropagation();
-			});
-
-			// Handle blur (click outside)
-			textarea.addEventListener('blur', (e) => {
-				// Check if the blur is caused by clicking outside the cell
-				setTimeout(() => {
-					if (!td.contains(document.activeElement)) {
-						saveTextareaAndClose(textarea.value);
-					}
-				}, 0);
-			});
-
-			// Handle Enter key
-			textarea.addEventListener('keydown', (e) => {
-				if (e.key === 'Enter' && !e.shiftKey) {
-					e.preventDefault();
-					saveTextareaAndClose(textarea.value);
-				}
-
-				if (e.key === 'Escape') {
-					e.preventDefault();
-					cancelTextareaAndClose();
-				}
-			});
-
-			const saveTextareaAndClose = (newValue) => {
-				// Update the data
-				editedAnalyses[index][field] = newValue;
-
-				// Re-render table
-				renderTable();
-			};
-
-			const cancelTextareaAndClose = () => {
-				// Re-render table without changes
-				renderTable();
-			};
-		};
-
-		// Function to open TinyMCE editor for a cell
-		const openTinyMCEEditor = (cellElement, field, index) => {
-			const currentValue = editedAnalyses[index][field] || '';
-
-			// Clear cell content and make it editable
-			cellElement.innerHTML = '';
-			cellElement.className += ' border-2 border-blue-500 bg-white min-h-[20px] p-1';
-
-			// Create inline editor div
-			const editorDiv = document.createElement('div');
-			editorDiv.id = `editor_${field}_${index}_${Date.now()}`;
-			editorDiv.innerHTML = currentValue;
-			editorDiv.className = 'w-full min-h-[20px] border-0 outline-none text-xs leading-normal bg-white';
-
-			cellElement.appendChild(editorDiv);
-
-			// Prevent blur when clicking inside the editor
-			cellElement.addEventListener('mousedown', (e) => {
-				e.stopPropagation();
-			});
-
-			cellElement.addEventListener('click', (e) => {
-				e.stopPropagation();
-			});
-
-			// Initialize TinyMCE inline editor
-			if (window.tinymce) {
-				window.tinymce.init({
-					target: editorDiv,
-					inline: true,
-					menubar: false,
-					toolbar: false,
-					setup: function (editor) {
-						editor.on('init', function () {
-							editor.setContent(currentValue);
-							editor.focus();
-
-							// Add z-index to editor container
-							const editorContainer = editor.getContainer();
-							if (editorContainer) {
-								editorContainer.style.zIndex = '1000';
-							}
-						});
-
-						editor.on('blur', function () {
-							// Add delay to check if focus moved outside the cell
-							setTimeout(() => {
-								const activeElement = document.activeElement;
-								if (!cellElement.contains(activeElement)) {
-									const content = editor.getContent();
-									saveAndCloseEditor(content);
-								}
-							}, 0);
-						});
-
-						editor.on('keydown', function (e) {
-							// Replace '*' with multiplication sign
-							if (e.key === '*') {
-								e.preventDefault();
-								editor.execCommand('mceInsertContent', false, '×');
-								return;
-							}
-							// '^' toggles superscript
-							if (e.key === '^') {
-								e.preventDefault();
-								editor.execCommand('Superscript');
-								return;
-							}
-							// '_' toggles subscript
-							if (e.key === '_') {
-								e.preventDefault();
-								editor.execCommand('Subscript');
-								return;
-							}
-
-							// Save on Enter
-							if (e.key === 'Enter' && !e.shiftKey) {
-								e.preventDefault();
-								const content = editor.getContent();
-								saveAndCloseEditor(content);
-								return;
-							}
-
-							// Cancel on Escape
-							if (e.key === 'Escape') {
-								e.preventDefault();
-								cancelAndCloseEditor();
-								return;
-							}
-						});
-					},
-					license_key: 'gpl',
-				});
-			}
-
-			const saveAndCloseEditor = (newValue) => {
-				try {
-					const editorInstance = window.tinymce && window.tinymce.get(editorDiv.id);
-					if (editorInstance) {
-						editorInstance.destroy();
-					}
-				} catch (error) {
-					console.warn('Error destroying TinyMCE editor:', error);
-				}
-
-				// Update the data
-				editedAnalyses[index][field] = newValue || currentValue;
-
-				// Re-render table
-				renderTable();
-			};
-
-			const cancelAndCloseEditor = () => {
-				try {
-					const editorInstance = window.tinymce && window.tinymce.get(editorDiv.id);
-					if (editorInstance) {
-						editorInstance.destroy();
-					}
-				} catch (error) {
-					console.warn('Error destroying TinyMCE editor:', error);
-				}
-
-				// Re-render table without changes
-				renderTable();
-			};
-		};
-
-		// Comparison button click handler
-		comparisonBtn.onclick = async () => {
-			if (!isComparisonMode) {
-				// Enter comparison mode
-				isComparisonMode = true;
-				comparisonBtn.textContent = 'Thoát đối chiếu';
-				comparisonBtn.className =
-					'px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-
-				// Disable edit mode when entering comparison mode
-				if (isEditMode) {
-					isEditMode = false;
-					editBtn.textContent = 'Chỉnh sửa';
-					editBtn.className =
-						'px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-				}
-
-				// Load analysis match data if not already loaded
-				if (analysisMatchData === null) {
-					await loadAnalysisMatchData();
-				}
-
-				renderContent();
-			} else {
-				// Exit comparison mode
-				isComparisonMode = false;
-				comparisonBtn.textContent = 'Đối chiếu';
-				comparisonBtn.className =
-					'px-4 py-2 bg-green-500 hover:bg-green-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-
-				renderContent();
-			}
-		};
-
-		// Edit button click handler
-		editBtn.onclick = () => {
-			if (!isEditMode) {
-				// Enter edit mode
-				isEditMode = true;
-				editBtn.textContent = 'Xác nhận';
-				editBtn.className =
-					'px-4 py-2 bg-green-500 hover:bg-green-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-
-				// Disable comparison mode when entering edit mode
-				if (isComparisonMode) {
-					isComparisonMode = false;
-					comparisonBtn.textContent = 'Đối chiếu';
-					comparisonBtn.className =
-						'px-4 py-2 bg-green-500 hover:bg-green-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-				}
-			} else {
-				// Exit edit mode and save changes
-				isEditMode = false;
-				editBtn.textContent = 'Chỉnh sửa';
-				editBtn.className =
-					'px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white border-0 rounded-md cursor-pointer font-bold text-sm transition-colors duration-200 mr-2';
-
-				// Log current values when exiting edit mode
-				console.log('=== THOÁT CHỈNH SỬA ===');
-				console.log('Edited analyses:', editedAnalyses);
-			}
-
-			// Re-render both table and content
-			renderTable();
-			renderContent();
-		};
-
-		// Initial render
-		renderTable();
-
-		// Preload analysis match data in background
-		const preloadAnalysisData = async () => {
-			const metadata = doc.metadata;
-			const analysisIds = metadata.analysisIds || [];
-
-			if (analysisIds.length > 0) {
-				try {
-					await loadAnalysisMatchData();
-				} catch (error) {
-					console.error('Error preloading analysis data:', error);
-				}
-			} else {
-				analysisMatchData = [];
-			}
-		};
-
-		preloadAnalysisData();
-
-		tableContainer.appendChild(analysisTableTitle);
-		tableContainer.appendChild(table);
-
-		// Create approval button container
-		const approvalButtonContainer = document.createElement('div');
-		approvalButtonContainer.className = 'mt-4 px-4 pb-4';
-
-		// Create approval button
-		const approvalBtn = document.createElement('button');
-		approvalBtn.textContent = 'Xác nhận cập nhật';
-		approvalBtn.className =
-			'w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
-
-		// Approval button click handler
-		approvalBtn.onclick = async () => {
-			// Show confirmation dialog
-			const confirmed = confirm('Bạn có chắc chắn muốn cập nhật dữ liệu chỉ tiêu này không?');
-			if (confirmed) {
-				showAutoHideMessage('Đang xử lý cập nhật dữ liệu...', 'info');
-
-				// Log current analysis data
-				console.log('=== XÁC NHẬN CẬP NHẬT ===');
-				console.log('Dữ liệu các hàng hiện tại:', editedAnalyses);
-
-				try {
-					// Call bulk update API
-					const response = await apiPost('https://red.irdop.org/v1/analysis/update_bulk', {
-						analyses: editedAnalyses,
-					});
-
-					if (response.status === 200) {
-						showAutoHideMessage('Cập nhật dữ liệu thành công!', 'success');
-						closePopup();
-					} else {
-						showAutoHideMessage('Lỗi khi cập nhật dữ liệu: ' + (response.message || 'Unknown error'), 'error');
-					}
-				} catch (error) {
-					console.error('Error in bulk update:', error);
-					showAutoHideMessage('Lỗi khi cập nhật dữ liệu: ' + error.message, 'error');
-				}
-			}
-		};
-
-		approvalButtonContainer.appendChild(approvalBtn);
-		tableContainer.appendChild(approvalButtonContainer);
-		leftColumn.appendChild(tableContainer);
-
-		// Right column - Content
-		const rightColumn = document.createElement('div');
-		rightColumn.className = 'w-1/2 flex flex-col overflow-hidden';
-
-		const contentContainer = document.createElement('div');
-		contentContainer.className = 'flex-1 overflow-auto p-4 bg-white';
-
-		// Initial render
-		renderContent();
-
-		rightColumn.appendChild(contentContainer);
+		footer.appendChild(confirmBtn);
 
 		// Assemble popup
-		mainContent.appendChild(leftColumn);
-		mainContent.appendChild(rightColumn);
 		popup.appendChild(header);
 		popup.appendChild(mainContent);
+		popup.appendChild(footer);
 		overlay.appendChild(popup);
 		document.body.appendChild(overlay);
+
+		// Render bảng ban đầu
+		renderTable();
 
 		// Close on overlay click
 		overlay.addEventListener('click', function (e) {
 			if (e.target === overlay) {
-				closePopup();
+				overlay.remove();
 			}
 		});
 
 		// Close on Escape key
 		const handleEscape = (e) => {
 			if (e.key === 'Escape') {
-				closePopup();
+				overlay.remove();
 				document.removeEventListener('keydown', handleEscape);
 			}
 		};
@@ -3131,6 +2929,76 @@ const Editor = () => {
         .bg-red-25 {
           background-color: #fef2f2;
         }
+
+        /* Comparison indicator styling */
+        .comparison-indicator {
+          display: inline-block;
+          margin-left: 4px;
+          font-size: 14px;
+          cursor: help;
+          position: relative;
+          color: #ef4444;
+          animation: pulse 2s infinite;
+        }
+
+        .comparison-indicator:hover::after {
+          content: attr(title);
+          position: absolute;
+          bottom: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #1f2937;
+          color: white;
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-size: 12px;
+          white-space: nowrap;
+          z-index: 1000;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          border: 1px solid #374151;
+        }
+
+        .comparison-indicator:hover::before {
+          content: '';
+          position: absolute;
+          bottom: 92%;
+          left: 50%;
+          transform: translateX(-50%);
+          border: 6px solid transparent;
+          border-top-color: #1f2937;
+          z-index: 1000;
+        }
+
+        /* Difference indicator styling for left table */
+        .difference-indicator {
+          display: inline-block;
+          margin-left: 4px;
+          font-size: 14px;
+          cursor: help;
+          position: relative;
+          color: #ef4444;
+          animation: pulse 2s infinite;
+        }
+
+
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.6;
+          }
+        }
+
+        /* Enhanced table cell styling for comparison mode */
+        .comparison-cell {
+          position: relative;
+        }
+
+        .comparison-cell.has-difference {
+          background-color: #fef3c7 !important;
+          border-left: 3px solid #f59e0b !important;
+        }
         `}
 			</style>
 			<div
@@ -3591,8 +3459,15 @@ const Editor = () => {
 
 						{/* Box 3: Thông tin liên quan */}
 						<div className="bg-white rounded-box border-2 border-gray-500 shadow-sm hover:border-gray-700 hover:shadow-md transition-all flex-1 min-h-fit">
-							<div className="bg-white text-gray-800 px-4 py-3 border-b-2 border-gray-500 font-semibold text-sm text-left rounded-box-header">
-								Thông tin liên quan
+							<div className="bg-white text-gray-800 px-4 py-3 border-b-2 border-gray-500 font-semibold text-sm text-left rounded-box-header flex items-center justify-between">
+								<span>Thông tin liên quan</span>
+								<button
+									className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold border-0 transition-all duration-200 shadow-sm"
+									title="Quét dữ liệu"
+									onClick={handleScanData}
+								>
+									Quét
+								</button>
 							</div>
 							<div className="p-4 bg-white rounded-box-content min-h-fit">
 								{/* Chỉ tiêu đã chọn (chỉ hiện khi là biên bản kiểm nghiệm) */}
