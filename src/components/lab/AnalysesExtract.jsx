@@ -85,7 +85,6 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 					matchAnalysis = res.data;
 				} else if (res.data.result && Array.isArray(res.data.result)) {
 					matchAnalysis = res.data.result;
-					console.log('Match analysis loaded:', matchAnalysis);
 				}
 			}
 			showAutoHideMessage('Tải dữ liệu đối chiếu thành công!', 'success');
@@ -113,8 +112,6 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 		// 4. Gộp dữ liệu trích xuất với các trường ...Diff nếu có
 		const mergedAnalyses = extractedAnalyses.map(extract => {
 			const matched = matchAnalysis.find(m => m.id === parseInt(extract.id));
-			console.log('matched:', matched);
-			console.log('extract:', extract);
 			return getAnalysisDifferences(extract, matched);
 		});
 
@@ -431,7 +428,6 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 					return baseData;
 				}).filter(a => a.id); // Chỉ lấy những item có ID
 
-				console.log('Sending update request:', { analyses: analysesData });
 
 				const requestBody = {
 					analyses: analysesData

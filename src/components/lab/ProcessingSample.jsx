@@ -778,24 +778,18 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 				// When overrideFilters provided, use ONLY that source (most reliable)
 				if (hasUrgentFromFilters) {
 					requestBody.status = 1;
-					console.log('✅ Setting requestBody.status = 1 (from override filters)');
 				} else {
-					console.log('🔄 No urgent status in override filters, not setting status');
 				}
 			} else {
 				// Fallback to reading from filters + query params (for initial loads)
 				if (hasUrgentFromFilters) {
 					requestBody.status = 1;
-					console.log('✅ Setting requestBody.status = 1 (from current filters)');
 				} else if (hasUrgentFromQuery) {
 					const urgentValue = queryParams.get('ps_urgent') || queryParams.get('ps_status');
-					console.log('🚨 Found urgent status in query params:', urgentValue);
 					if (urgentValue === '1') {
 						requestBody.status = 1;
-						console.log('✅ Setting requestBody.status = 1 (from query params)');
 					}
 				} else {
-					console.log('🔄 No urgent status found, not setting status in request body');
 				}
 			}
 
@@ -806,17 +800,14 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 			if (overrideFilters) {
 				if (hasDoneFromFilters) {
 					requestBody.done = true;
-					console.log('✅ Setting requestBody.done = true (from override filters)');
 				}
 			} else {
 				if (hasDoneFromFilters) {
 					requestBody.done = true;
-					console.log('✅ Setting requestBody.done = true (from current filters)');
 				} else if (hasDoneFromQuery) {
 					const doneValue = queryParams.get('ps_done');
 					if (doneValue === 'true') {
 						requestBody.done = true;
-						console.log('✅ Setting requestBody.done = true (from query params)');
 					}
 				}
 			}
@@ -828,23 +819,19 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 			if (overrideFilters) {
 				if (hasOverdueFromFilters) {
 					requestBody.overdue = true;
-					console.log('✅ Setting requestBody.overdue = true (from override filters)');
 				}
 			} else {
 				if (hasOverdueFromFilters) {
 					requestBody.overdue = true;
-					console.log('✅ Setting requestBody.overdue = true (from current filters)');
 				} else if (hasOverdueFromQuery) {
 					const overdueValue = queryParams.get('ps_overdue');
 					if (overdueValue === 'true') {
 						requestBody.overdue = true;
-						console.log('✅ Setting requestBody.overdue = true (from query params)');
 					}
 				}
 			}
 
 			// Debug log to verify request body
-			console.log('🔍 API Request Body:', requestBody);
 
 			const response = await apiPost('https://black.irdop.org/v1/sample/processing/list', requestBody);
 
@@ -1426,21 +1413,17 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 	const handleFilterToggle = (filterType) => {
 		if (filterType === 'urgent') {
 			const newFilters = { ...filters };
-			console.log('🔄 Current filters.headerFilters.status:', newFilters.headerFilters.status);
 
 			if (newFilters.headerFilters.status === 1) {
 				// Remove urgent filter
 				delete newFilters.headerFilters.status;
-				console.log('❌ Removing urgent filter from state');
 				toast.info('Đã tắt bộ lọc mẫu khẩn');
 			} else {
 				// Add urgent filter
 				newFilters.headerFilters.status = 1;
-				console.log('✅ Adding urgent filter to state');
 				toast.info('Đã bật bộ lọc mẫu khẩn');
 			}
 
-			console.log('📝 New filters.headerFilters:', newFilters.headerFilters);
 			setFilters(newFilters);
 			updateQueryParams(newFilters);
 		} else if (filterType === 'done') {
@@ -2013,13 +1996,10 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		Object.keys(newFilters.headerFilters).forEach((column) => {
 			const value = newFilters.headerFilters[column];
 			if (column === 'status' && value === 1) {
-				console.log('🔗 Setting ps_status=1 in query params');
 				queryParams.set('ps_status', '1');
 			} else if (column === 'done' && value === true) {
-				console.log('🔗 Setting ps_done=true in query params');
 				queryParams.set('ps_done', 'true');
 			} else if (column === 'overdue' && value === true) {
-				console.log('🔗 Setting ps_overdue=true in query params');
 				queryParams.set('ps_overdue', 'true');
 			} else if (Array.isArray(value) && value.length > 0) {
 				queryParams.set(`ps_${column}`, value.join(','));
@@ -2030,7 +2010,6 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 
 		// Log if status was NOT found in headerFilters
 		if (!newFilters.headerFilters.hasOwnProperty('status')) {
-			console.log('🗑️ Status not found in headerFilters, ps_status should be removed from URL');
 		}
 
 		// Add sorting parameters

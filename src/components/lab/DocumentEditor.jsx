@@ -79,7 +79,12 @@ const DocumentEditor = () => {
 	const [isTemplatesExpanded, setIsTemplatesExpanded] = useState(false); // Default collapsed
 	
 	// Force refresh states
-	const [refreshTrigger, setRefreshTrigger] = useState(0);
+	const [refreshDocumentsTrigger, setRefreshDocumentsTrigger] = useState(0);
+	const [refreshTemplatesTrigger, setRefreshTemplatesTrigger] = useState(0);
+
+	// Track if useEffects have run for the first time
+	const hasDocumentsUseEffectRun = useRef(false);
+	const hasTemplatesUseEffectRun = useRef(false);
 
 	// API constants and helper functions from EditorTemplate.html
 	const API_ENDPOINT = 'https://black.irdop.org/v1/analysis/processing/list';
@@ -189,8 +194,12 @@ const DocumentEditor = () => {
 
 	// Load recent documents from API
 	const loadRecentDocuments = async (searchTerm = '', page = 1, status = 'draft') => {
+		// Prevent duplicate API calls if already loading
+		if (isLoading) {
+			return;
+		}
+
 		try {
-			console.log('[DEBUG] loadRecentDocuments called with:', { searchTerm, page, status });
 			setIsLoading(true);
 
 			// Always use the same API endpoint but with different status
@@ -242,6 +251,11 @@ const DocumentEditor = () => {
 
 	// Load templates from API
 	const loadTemplates = async (searchTerm = '', page = 1) => {
+		// Prevent duplicate API calls if already loading
+		if (isLoading) {
+			return;
+		}
+
 		try {
 			setIsLoading(true);
 			const response = await apiPost(TEMPLATE_API_ENDPOINT, {
@@ -296,7 +310,6 @@ const DocumentEditor = () => {
 
 	// Load data on component mount (only once)
 	useEffect(() => {
-		console.log('[DEBUG] Initial mount useEffect');
 		// Load initial data only once when component mounts
 		loadRecentDocuments('', 1, documentStatus);
 		loadTemplates('', 1);
@@ -312,54 +325,88 @@ const DocumentEditor = () => {
 
 	// Keep isDraft in sync with documentStatus
 	useEffect(() => {
-		console.log('[DEBUG] documentStatus sync useEffect:', documentStatus);
 		setIsDraft(documentStatus === 'draft');
 	}, [documentStatus]);
 
 	// Handle documentStatus changes separately to avoid duplicate API calls
 	useEffect(() => {
-		console.log('[DEBUG] documentStatus change useEffect:', { isInitialLoad, documentStatus });
 		// Skip initial load (handled in mount useEffect)
 		if (isInitialLoad) {
 			setIsInitialLoad(false);
 			return;
 		}
 		
+		// Skip if already loading to prevent duplicate API calls
+		if (isLoading) {
+			return;
+		}
+		
 		// Load documents when status changes (not on initial load)
-		loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
+		// Use page 1 directly but don't update state to avoid triggering other useEffect
+		loadRecentDocuments(searchTerm, 1, documentStatus);
 	}, [documentStatus]); // Only depend on documentStatus
 
 	// Auto-search when search terms or pagination change (debounced) - exclude status changes
 	useEffect(() => {
-		console.log('[DEBUG] search/pagination useEffect:', { searchTerm, recentDocumentsPage, refreshTrigger });
-		// Skip on initial mount - data is already loaded in the mount useEffect
-		if (searchTerm === '' && recentDocumentsPage === 1 && refreshTrigger === 0) {
+		
+		// Skip if already loading to prevent duplicate API calls
+		if (isLoading) {
 			return;
 		}
 
-		const timeoutId = setTimeout(() => {
-			loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
-		}, 500); // 500ms debounce
+		// Skip ONLY on the very first run when it's default state - this case is handled by documentStatus useEffect
+		if (!hasDocumentsUseEffectRun.current && recentDocumentsPage === 1 && searchTerm === '' && refreshDocumentsTrigger === 0) {
+			hasDocumentsUseEffectRun.current = true;
+			return;
+		}
 
-		return () => clearTimeout(timeoutId);
-	}, [searchTerm, recentDocumentsPage, refreshTrigger]); // documentStatus excluded to prevent duplicate API calls
+		// Mark that this useEffect has run
+		hasDocumentsUseEffectRun.current = true;
+
+		// Check if this is a search operation (has search term) - use debounce
+		if (searchTerm !== '') {
+			// Search term change - use debounce
+			const timeoutId = setTimeout(() => {
+				loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
+			}, 500);
+			return () => clearTimeout(timeoutId);
+		} else {
+			// Page change or refresh trigger - call immediately
+			loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
+		}
+	}, [searchTerm, recentDocumentsPage, refreshDocumentsTrigger]); // documentStatus excluded to prevent duplicate API calls
 
 	useEffect(() => {
-		// Skip on initial mount - data is already loaded in the mount useEffect
-		if (templateSearchTerm === '' && templatesPage === 1 && refreshTrigger === 0) {
+		
+		// Skip if already loading to prevent duplicate API calls
+		if (isLoading) {
 			return;
 		}
 
-		const timeoutId = setTimeout(() => {
-			loadTemplates(templateSearchTerm, templatesPage);
-		}, 500); // 500ms debounce
+		// Skip ONLY on the very first run when it's default state
+		if (!hasTemplatesUseEffectRun.current && templateSearchTerm === '' && templatesPage === 1 && refreshTemplatesTrigger === 0) {
+			hasTemplatesUseEffectRun.current = true;
+			return;
+		}
 
-		return () => clearTimeout(timeoutId);
-	}, [templateSearchTerm, templatesPage, refreshTrigger]);
+		// Mark that this useEffect has run
+		hasTemplatesUseEffectRun.current = true;
+
+		// Check if this is a search operation (has search term) - use debounce
+		if (templateSearchTerm !== '') {
+			// Search term change - use debounce
+			const timeoutId = setTimeout(() => {
+				loadTemplates(templateSearchTerm, templatesPage);
+			}, 500);
+			return () => clearTimeout(timeoutId);
+		} else {
+			// Page change or refresh trigger - call immediately
+			loadTemplates(templateSearchTerm, templatesPage);
+		}
+	}, [templateSearchTerm, templatesPage, refreshTemplatesTrigger]);
 
 	// Handle document status change
 	const handleDocumentStatusChange = async (newStatus) => {
-		console.log('[DEBUG] handleDocumentStatusChange called:', { current: documentStatus, new: newStatus });
 		if (newStatus === documentStatus) return; // No change needed
 
 		// Clear current data before switching
@@ -367,15 +414,22 @@ const DocumentEditor = () => {
 		setPreviewContent(''); // Clear preview content
 		setCurrentPreviewedTemplate(null); // Clear previewed template
 		
-		// Reset pagination and search
-		setRecentDocumentsPage(1); // Reset to first page
-		
-		// Change status - this will trigger the useEffect for loading new data
+		// Change status first - this will trigger the useEffect for loading new data
 		setDocumentStatus(newStatus);
+		
+		// Reset pagination after status change to avoid triggering search useEffect
+		setTimeout(() => {
+			setRecentDocumentsPage(1);
+		}, 0);
 	};
 
 	// Handle toggle switch change
 	const handleToggleChange = () => {
+		// Prevent toggle if already loading
+		if (isLoading) {
+			return;
+		}
+		
 		const newIsDraft = !isDraft;
 		setIsDraft(newIsDraft);
 		const newStatus = newIsDraft ? 'draft' : 'submitted';
@@ -411,8 +465,11 @@ const DocumentEditor = () => {
 				setIsRecentDocumentsExpanded(true);
 				setIsTemplatesExpanded(false);
 			} else {
-				// If already expanded, refresh data by incrementing trigger
-				setRefreshTrigger(prev => prev + 1);
+				// If already expanded, refresh data without API duplication
+				// Only trigger refresh if not currently loading
+				if (!isLoading) {
+					setRefreshDocumentsTrigger(prev => prev + 1);
+				}
 			}
 		} else if (section === 'templates') {
 			if (!isTemplatesExpanded) {
@@ -420,8 +477,11 @@ const DocumentEditor = () => {
 				setIsTemplatesExpanded(true);
 				setIsRecentDocumentsExpanded(false);
 			} else {
-				// If already expanded, refresh data by incrementing trigger
-				setRefreshTrigger(prev => prev + 1);
+				// If already expanded, refresh data without API duplication
+				// Only trigger refresh if not currently loading
+				if (!isLoading) {
+					setRefreshTemplatesTrigger(prev => prev + 1);
+				}
 			}
 		}
 	};
@@ -719,7 +779,6 @@ const DocumentEditor = () => {
 	`;
 
 	const handleNewDocument = () => {
-		console.log('Creating new document...');
 		// Navigate to Editor for new document
 		const baseUrl = window.location.origin;
 		const editorUrl = `${baseUrl}/editor`;
@@ -891,7 +950,6 @@ const DocumentEditor = () => {
 
 	const handleContinueEdit = () => {
 		if (selectedDocument) {
-			console.log('Continue editing document:', selectedDocument.id);
 			// Navigate to Editor with the selected document ID
 			const baseUrl = window.location.origin;
 
@@ -933,7 +991,6 @@ const DocumentEditor = () => {
 
 	const handleContinueFromTemplate = () => {
 		if (currentPreviewedTemplate) {
-			console.log('Creating new document from template:', currentPreviewedTemplate.id);
 			// Navigate to Editor for new document from template
 			const baseUrl = window.location.origin;
 
@@ -974,7 +1031,6 @@ const DocumentEditor = () => {
 					sampleUIDs: sampleUIDs,
 				};
 
-				console.log('Calling API with data:', reportData);
 
 				// Call the API endpoint directly
 				const response = await apiPost('https://black.irdop.org/khsi19me/convert/lab_result_report_html', reportData);
@@ -1115,7 +1171,6 @@ const DocumentEditor = () => {
 	};
 
 	const handleTemplateClick = (template) => {
-		console.log('Template selected:', template);
 
 		// Extract header information
 		const headerInfo = template.header || {};
@@ -1217,7 +1272,6 @@ const DocumentEditor = () => {
 	};
 
 	const handleCreateNewTemplate = () => {
-		console.log('Creating new template...');
 		// Reset form for new template
 		setEditingTemplate(null);
 		setTemplateForm({
@@ -1314,13 +1368,9 @@ const DocumentEditor = () => {
 				alert('Tạo mẫu thành công!');
 			}
 
-			// Refresh templates list by resetting page (triggers useEffect)
+			// Refresh templates list by calling API directly
+			loadTemplates(templateSearchTerm, 1); // Always go to page 1 after save
 			setTemplatesPage(1);
-			if (templatesPage === 1) {
-				// If already on page 1, force refresh by toggling the state
-				setTemplatesPage(0);
-				setTimeout(() => setTemplatesPage(1), 10);
-			}
 			handleCloseTemplatePopup();
 		} catch (error) {
 			console.error('Error saving template:', error);
@@ -1671,7 +1721,7 @@ const DocumentEditor = () => {
 								<div className="flex items-center gap-2">
 									{/* Document Status Toggle - only show when expanded */}
 									{isRecentDocumentsExpanded && (
-										<label className="relative inline-flex items-center cursor-pointer">
+										<label className={`relative inline-flex items-center ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
 											<input
 												type="checkbox"
 												checked={isDraft}
@@ -1679,7 +1729,7 @@ const DocumentEditor = () => {
 												className="sr-only"
 												disabled={isLoading}
 											/>
-											<div className="w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
+											<div className={`w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden ${isLoading ? 'opacity-75' : ''}`}>
 												{/* Sliding background */}
 												<div
 													className={`absolute top-0 w-1/2 h-full bg-blue-500 rounded-full transition-all duration-300 ease-in-out transform

@@ -562,7 +562,6 @@ const DiagramEditor = ({ showMathPopup, closeMathPopup, showDiagramPopup, closeD
 					`;
 				} else {
 					// Always use enhanced fallback - không throw error
-					console.log('Using enhanced Unicode fallback for math rendering');
 					const basicRendered = renderBasicMath(latexValue);
 					const safeLatexValue = String(latexValue || '').replace(/[&<>"']/g, (match) => {
 						const escapeMap = {
@@ -751,7 +750,6 @@ const DiagramEditor = ({ showMathPopup, closeMathPopup, showDiagramPopup, closeD
 				if (html) {
 					// Chèn chỉ HTML của công thức, không có container styling
 					editorRef.current.insertContent(html);
-					console.log('Math equation HTML inserted');
 				} else {
 					// Enhanced fallback với HTML đơn giản
 					const basicRendered = renderBasicMath(latexValue);

@@ -110,7 +110,7 @@ const applyFormatToHTML = (htmlContent) => {
 
 const Editor = () => {
 	const { currentUser, getIdenByUid } = useContext(GlobalContext);
-
+	
 	const [headerData, setHeaderData] = useState({
 		title: '',
 		code: '',
@@ -141,7 +141,7 @@ const Editor = () => {
 	const [lastSubmitResponse, setLastSubmitResponse] = useState(null); // Store full API response
 	const [documentMetadata, setDocumentMetadata] = useState({}); // Store document metadata
 	const [documentStatus, setDocumentStatus] = useState('draft'); // 'draft' | 'submitted' - from query params
-
+	
 	// AnalysesExtract component state
 	const [showAnalysesExtract, setShowAnalysesExtract] = useState(false);
 	const [analysesExtractDocument, setAnalysesExtractDocument] = useState(null);
@@ -169,36 +169,34 @@ const Editor = () => {
 	const loadTableInfoTimeoutRef = useRef(null);
 	const isLoadingTableInfo = useRef(false);
 	const lastAnalysisIdsRef = useRef(null);
+	const lastAutoSaveMetadataRef = useRef(null); // Store last auto-saved metadata for comparison
 
 	// New unified auto-save system
 	const startAutoSave = () => {
 		// Only start if not already started and document is in draft status
 		if (!autoSaveStarted && documentStatus !== 'submitted') {
-			console.log('Starting auto-save system');
 			setAutoSaveStarted(true);
-
+			
 			// Immediate auto-save
 			autoSaveLabResultReport();
-
+			
 			// Start 10-second interval
 			autoSaveIntervalRef.current = setInterval(() => {
 				// Stop auto-save if document becomes submitted
 				if (documentStatus === 'submitted') {
-					console.log('Document submitted - stopping auto-save');
 					clearInterval(autoSaveIntervalRef.current);
 					autoSaveIntervalRef.current = null;
 					setAutoSaveStarted(false);
 					return;
 				}
-
-				console.log('Auto-save interval triggered');
+				
 				autoSaveLabResultReport();
 			}, 10000); // Every 10 seconds
 		}
 	};
 	const getUserName = async (uid) => {
 		if (!uid) return '';
-
+		
 		try {
 			const idenRecord = await getIdenByUid(uid);
 			return idenRecord?.identity_name || uid; // Fallback to UID if name not found
@@ -236,11 +234,9 @@ const Editor = () => {
 			// Check if analysisIds actually changed to prevent unnecessary calls
 			const analysisIdsString = JSON.stringify(analysisIds.sort());
 			if (lastAnalysisIdsRef.current === analysisIdsString) {
-				console.log('analysisIds unchanged, skipping loadTableInfo');
 				return;
 			}
 
-			console.log('analysisIds changed from', lastAnalysisIdsRef.current, 'to', analysisIdsString);
 			lastAnalysisIdsRef.current = analysisIdsString;
 
 			// Clear any existing timeout
@@ -258,7 +254,6 @@ const Editor = () => {
 				if (!popupExists) {
 					loadTableInfo();
 				} else {
-					console.log('Popup is open, deferring loadTableInfo');
 					// Schedule another check after popup might be closed
 					setTimeout(() => {
 						const popupStillExists = document.getElementById('parameterSelectionOverlay');
@@ -282,16 +277,8 @@ const Editor = () => {
 
 	// Auto-save useEffect - cleanup when status changes
 	useEffect(() => {
-		console.log('Auto-save useEffect triggered:', {
-			documentStatus,
-			autoSaveStarted,
-			isPreviewMode,
-			timestamp: new Date().toISOString(),
-		});
-
 		// Stop auto-save if document becomes submitted or in preview mode
 		if (documentStatus === 'submitted' || isPreviewMode) {
-			console.log('Stopping auto-save due to status change or preview mode');
 			if (autoSaveIntervalRef.current) {
 				clearInterval(autoSaveIntervalRef.current);
 				autoSaveIntervalRef.current = null;
@@ -310,7 +297,6 @@ const Editor = () => {
 
 	// Update document status and query params
 	const updateDocumentStatus = (status) => {
-		console.log('Updating document status to:', status);
 		setDocumentStatus(status);
 
 		// Update URL query params
@@ -327,11 +313,9 @@ const Editor = () => {
 
 	// Hàm xử lý dữ liệu khi load trang lần đầu
 	const handleInitialPageLoad = async () => {
-		console.log('=== handleInitialPageLoad started ===');
-
 		// Reset template state at the beginning
 		setCurrentTemplate(null);
-
+		
 		const urlParams = new URLSearchParams(window.location.search);
 		const docId = urlParams.get('docId');
 		const editId = urlParams.get('editId');
@@ -339,12 +323,9 @@ const Editor = () => {
 		const analysisIdsParam = urlParams.get('analysisIds');
 		const classifierCodeParam = urlParams.get('classifierCode');
 
-		console.log('URL params:', { docId, editId, templateId, analysisIdsParam, classifierCodeParam });
-
 		// Initialize status from URL or default to 'draft'
 		const initialStatus = getStatusFromURL();
 		setDocumentStatus(initialStatus);
-		console.log('Initial document status:', initialStatus);
 
 		try {
 			// Parse analysisIds if available
@@ -379,14 +360,10 @@ const Editor = () => {
 			console.error('Error in handleInitialPageLoad:', error);
 			showAutoHideMessage('Lỗi khi tải dữ liệu trang: ' + error.message, 'error');
 		}
-
-		console.log('=== handleInitialPageLoad completed ===');
 	};
 
 	// Xử lý khi có docId
 	const handleDocIdLoad = async (docId) => {
-		console.log('Loading published document by docId:', docId);
-
 		// Reset states when loading new document
 		setFileId('');
 
@@ -396,12 +373,6 @@ const Editor = () => {
 
 		if (response.status === 200 && response.data && response.data.metadata) {
 			const metadata = response.data.metadata;
-
-			console.log('handleDocIdLoad response.data:', response.data);
-			console.log('Available fileId locations:', {
-				'response.data.fileId': response.data.fileId,
-				'metadata.fileId': metadata.fileId,
-			});
 
 			// Gán header data
 			if (metadata.header) {
@@ -434,23 +405,18 @@ const Editor = () => {
 			}
 			if (metadata.submittedByUID) {
 				// Get user name from UID
-				getUserName(metadata.submittedByUID)
-					.then((name) => {
-						setSubmittedBy(name);
-					})
-					.catch((error) => {
-						console.error('Error getting submitted by name:', error);
-						setSubmittedBy(metadata.submittedByUID); // Fallback to UID
-					});
+				getUserName(metadata.submittedByUID).then(name => {
+					setSubmittedBy(name);
+				}).catch(error => {
+					console.error('Error getting submitted by name:', error);
+					setSubmittedBy(metadata.submittedByUID); // Fallback to UID
+				});
 			}
 
 			// Gán fileId từ docrecord (for file preview) - chỉ lấy fileId thực sự
 			const docFileId = response.data.fileId || metadata.fileId;
 			if (docFileId) {
-				console.log('Setting fileId to:', docFileId);
 				setFileId(docFileId);
-			} else {
-				console.log('No fileId found in response');
 			}
 
 			// Gán template info - chỉ set khi có đầy đủ thông tin template
@@ -499,8 +465,6 @@ const Editor = () => {
 
 	// Xử lý khi có editId
 	const handleEditIdLoad = async (editId) => {
-		console.log('Loading draft document by editId:', editId);
-
 		// Reset states when loading new document
 		setFileId('');
 
@@ -576,13 +540,6 @@ const Editor = () => {
 				}
 
 				// Update document info
-				console.log('Document data for updateDocumentInfo:', {
-					id: document.id,
-					createdAt: document.createdAt,
-					modifiedAt: document.modifiedAt,
-					identityUID: document.identityUID,
-					modifiedByUID: document.modifiedByUID,
-				});
 				updateDocumentInfo(
 					document.id,
 					document.createdAt,
@@ -596,14 +553,12 @@ const Editor = () => {
 				if (document.lockedByUID) {
 					setLockedByUID(document.lockedByUID);
 					// Get locked by user name
-					getUserName(document.lockedByUID)
-						.then((name) => {
-							setLockedByName(name);
-						})
-						.catch((error) => {
-							console.error('Error getting locked by name:', error);
-							setLockedByName(document.lockedByUID); // Fallback to UID
-						});
+					getUserName(document.lockedByUID).then(name => {
+						setLockedByName(name);
+					}).catch(error => {
+						console.error('Error getting locked by name:', error);
+						setLockedByName(document.lockedByUID); // Fallback to UID
+					});
 					setIsDocumentLocked(true);
 					updateDocumentStatus('submitted');
 					documentStatus = 'submitted';
@@ -631,8 +586,6 @@ const Editor = () => {
 
 	// Xử lý khi có templateId
 	const handleTemplateIdLoad = async (templateId, analysisIds, classifierCodeParam) => {
-		console.log('Loading template by templateId:', templateId);
-
 		// Reset fileId state trước khi load mới (templates thường không có fileId)
 		setFileId('');
 
@@ -704,8 +657,6 @@ const Editor = () => {
 
 	// Xử lý khi chỉ có analysisIds + classifierCode
 	const handleAnalysisIdsAndClassifierCode = async (analysisIds, classifierCodeParam) => {
-		console.log('Loading with analysisIds and classifierCode:', { analysisIds, classifierCodeParam });
-
 		// Reset fileId state trước khi load mới (không có document nào được load)
 		setFileId('');
 
@@ -728,8 +679,6 @@ const Editor = () => {
 
 	// Thực hiện auto_save và clean URL
 	const performAutoSaveAndCleanURL = async (documentStatus = 'draft') => {
-		console.log('Performing auto save and cleaning URL with status:', documentStatus);
-
 		try {
 			// Gọi auto_save
 			const urlParams = new URLSearchParams(window.location.search);
@@ -739,10 +688,7 @@ const Editor = () => {
 			// Chỉ auto save nếu không có docId (vì docId là published document)
 			// VÀ document status là 'draft' (không auto-save cho submitted documents)
 			if (!docId && documentStatus === 'draft') {
-				console.log('Auto-saving for draft document...');
 				await autoSaveLabResultReport();
-			} else {
-				console.log('Skipping auto-save:', { docId: !!docId, documentStatus });
 			}
 
 			// Lấy editId hiện tại (có thể được tạo mới từ autoSave)
@@ -755,7 +701,6 @@ const Editor = () => {
 			// Thêm editId nếu có
 			if (finalEditId) {
 				newUrl.searchParams.set('editId', finalEditId);
-				console.log('Document ID set to:', finalEditId);
 
 				// Đảm bảo currentEditId được set
 				if (!currentEditId && originalEditId) {
@@ -767,7 +712,6 @@ const Editor = () => {
 			newUrl.searchParams.set('status', documentStatus);
 
 			window.history.replaceState({}, '', newUrl);
-			console.log('URL cleaned, editId and status updated');
 		} catch (error) {
 			console.error('Error in performAutoSaveAndCleanURL:', error);
 		}
@@ -777,7 +721,6 @@ const Editor = () => {
 		try {
 			// Prevent multiple simultaneous calls
 			if (isLoadingTableInfo.current) {
-				console.log('loadTableInfo already running, skipping...');
 				return;
 			}
 
@@ -789,13 +732,11 @@ const Editor = () => {
 			// Check if popup is open, if so, defer the call
 			const popupExists = document.getElementById('parameterSelectionOverlay');
 			if (popupExists) {
-				console.log('Popup is open, deferring loadTableInfo call');
 				return;
 			}
 
 			isLoadingTableInfo.current = true;
 			const analysisIdsString = JSON.stringify(analysisIds.sort());
-			console.log('Loading table info for analysisIds:', analysisIds, 'cache key:', analysisIdsString);
 
 			// Show loading state in the UI
 			setTableInfoContent('<div style="color: #6b7280;">Đang tải thông tin...</div>');
@@ -852,7 +793,6 @@ const Editor = () => {
 			}
 
 			setTableInfoContent(tableInfoHtml);
-			console.log('loadTableInfo completed successfully');
 		} catch (error) {
 			console.error('Error loading table info:', error);
 			setTableInfoContent(`<div style="color: #ef4444;">Lỗi khi tải thông tin bảng: ${error.message}</div>`);
@@ -946,24 +886,39 @@ const Editor = () => {
 
 	const autoSaveLabResultReport = async () => {
 		try {
-			console.log('Auto-save executing...');
-
 			const content =
 				editorRef.current && editorRef.current.getContent ? editorRef.current.getContent() : editorContent;
 
-			// // Validation: Don't auto-save if critical data is missing
-			// if (!content || content.trim() === '' || content === '<p><br></p>') {
-			// 	console.log('Auto-save skipped: No meaningful content');
-			// 	return;
-			// }
+			// Prepare current metadata for comparison
+			const currentMetadata = {
+				templateId: currentTemplate?.id || null,
+				templateName: currentTemplate?.templateName || currentTemplate?.name || null,
+				header: headerData,
+				content: content,
+				footer: documentFooter || currentEditId,
+				analysisIds: analysisIds || [],
+				sampleUIDs: sampleUIDs || [],
+				classifierCode: classifierCode || null,
+			};
 
-			// Bỏ kiểm tra headerData và template để auto-save luôn hoạt động khi có content
-			// Đã comment out để auto-save hoạt động ngay cả khi không có template hoặc header data
-			// const hasHeaderData = headerData && (headerData.title || headerData.code || headerData.publishNo);
-			// if (!hasHeaderData && (!currentTemplate || !currentTemplate.id)) {
-			// 	console.log('Auto-save skipped: No header data or template');
-			// 	return;
-			// }
+			// Compare with last saved metadata to check for changes
+			const lastMetadata = lastAutoSaveMetadataRef.current;
+			if (lastMetadata) {
+				const hasChanges = (
+					JSON.stringify(currentMetadata.templateId) !== JSON.stringify(lastMetadata.templateId) ||
+					JSON.stringify(currentMetadata.templateName) !== JSON.stringify(lastMetadata.templateName) ||
+					JSON.stringify(currentMetadata.header) !== JSON.stringify(lastMetadata.header) ||
+					JSON.stringify(currentMetadata.content) !== JSON.stringify(lastMetadata.content) ||
+					JSON.stringify(currentMetadata.footer) !== JSON.stringify(lastMetadata.footer) ||
+					JSON.stringify(currentMetadata.analysisIds) !== JSON.stringify(lastMetadata.analysisIds) ||
+					JSON.stringify(currentMetadata.sampleUIDs) !== JSON.stringify(lastMetadata.sampleUIDs) ||
+					JSON.stringify(currentMetadata.classifierCode) !== JSON.stringify(lastMetadata.classifierCode)
+				);
+
+				if (!hasChanges) {
+					return;
+				}
+			}
 
 			// Check if we have editId from URL, but only if we're not loading from docId
 			const urlParams = new URLSearchParams(window.location.search);
@@ -971,16 +926,7 @@ const Editor = () => {
 			const urlDocId = urlParams.get('docId');
 
 			const requestBody = {
-				metadata: {
-					templateId: currentTemplate?.id || null,
-					templateName: currentTemplate?.templateName || currentTemplate?.name || null,
-					header: headerData, // Now this is a JSONB object
-					content: content,
-					footer: documentFooter || currentEditId,
-					analysisIds: analysisIds || [],
-					sampleUIDs: sampleUIDs || [],
-					classifierCode: classifierCode || null,
-				},
+				metadata: currentMetadata,
 			};
 
 			// Add editorId only if we have a valid editId AND we're not loading from docId
@@ -994,28 +940,26 @@ const Editor = () => {
 
 			if (editId) {
 				requestBody.editorId = editId;
-				console.log('Auto-save with existing editId:', editId);
-			} else {
-				console.log('Auto-save creating new document (no editId)');
 			}
 
-			console.log('Auto-save request body:', requestBody);
 			const response = await apiPost('https://red.irdop.org/v1/editor/auto_save/lab_result_report', requestBody);
 
 			if (response.status === 200 && response.data && response.data.id) {
 				const responseEditId = response.data.id;
-
+				
+				// Store current metadata as last saved metadata
+				lastAutoSaveMetadataRef.current = { ...currentMetadata };
+				
 				// Always update URL with editId from response
 				const newUrl = new URL(window.location);
 				newUrl.searchParams.set('editId', responseEditId);
 				window.history.replaceState({}, '', newUrl);
-				console.log('Updated URL with editId:', responseEditId);
 
 				// If this is the first save (no editId in request), update state and show message
 				if (!editId) {
 					// This was a new document creation (no editId in request body)
 					setCurrentEditId(responseEditId);
-
+					
 					// Show success message ONLY for new document creation
 					showAutoHideMessage(`Đã tạo mã tài liệu: ${responseEditId}`, 'success');
 				} else {
@@ -1031,8 +975,6 @@ const Editor = () => {
 					response.data.identityUID, // Author UID
 					response.data.modifiedByUID, // Modified by UID
 				);
-			} else {
-				console.warn('Auto-save response did not contain expected data:', response);
 			}
 		} catch (error) {
 			console.error('Auto-save error:', error);
@@ -1055,7 +997,7 @@ const Editor = () => {
 
 			if (response.status === 200 && response.data) {
 				showAutoHideMessage('Đã tạo preview thành công!', 'success');
-				console.log(documentMetadata);
+				console.log(documentMetadata)
 				// Show popup instead of new tab
 				const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
 				showPreviewPopup(htmlResponse, {
@@ -1088,6 +1030,7 @@ const Editor = () => {
 		identityUID = null, // Author UID (for createdAt)
 		modifiedByUID = null, // Modified by UID (for modifiedAt)
 	) => {
+
 		if (!modifiedByUID && identityUID) {
 			modifiedByUID = identityUID; // Use identityUID as modifiedByUID if not provided
 		}
@@ -1237,7 +1180,7 @@ const Editor = () => {
 						newUrl.searchParams.set('analysisIds', newAnalysisIds.join(','));
 					}
 					window.history.replaceState({}, '', newUrl);
-
+					
 					// Trigger auto-save when analysis selection changes
 					startAutoSave();
 				} else {
@@ -1309,7 +1252,7 @@ const Editor = () => {
 			// Gửi API request
 			const response = await apiPost('https://red.irdop.org/v1/edit/scan', {
 				id: currentEditId,
-				metadata: currentMetadata,
+				metadata: currentMetadata
 			});
 
 			if (response.status === 200 && response.data) {
@@ -1511,18 +1454,32 @@ const Editor = () => {
 				`;
 			}
 
+			// Thêm div chia 2 phần như yêu cầu - đặt sau bảng cuối
+			const dividerHTML = `
+				<div style="width: 100%; display: flex; justify-content: space-between; align-items: flex-start; margin-top: 16px; font-size: 11px; font-family: 'Times New Roman', serif;">
+					<div style="flex: 1; text-align: center; font-weight: bold; height: 80px; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding-top: 8px;">
+						Ngày kiểm tra:<br>
+						NGƯỜI KIỂM TRA
+					</div>
+					<div style="flex: 1; text-align: center; font-weight: bold; height: 80px; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding-top: 8px;">
+						Ngày thực hiện:<br>
+						NGƯỜI THỰC HIỆN
+					</div>
+				</div>
+			`;
+
 			if (table1HTML || table2HTML) {
 				// Get current editor content
 				const currentContent = editor.getContent();
 
-				// Combine: Table 1 + Current Content + Table 2
-				const newContent = table1HTML + currentContent + table2HTML;
+				// Combine: Table 1 + Current Content + Table 2 + Divider (divider after last table)
+				const newContent = table1HTML + currentContent + table2HTML + dividerHTML;
 
-				// Set the new content (Table 1 at beginning, current content in middle, Table 2 at end)
+				// Set the new content (Table 1 at beginning, current content in middle, Table 2, then divider at end)
 				editor.setContent(newContent);
 				setEditorContent(newContent);
 
-				showAutoHideMessage('Đã chèn bảng thông tin (Bảng 1 ở đầu, Bảng 2 ở cuối) thành công', 'success');
+				showAutoHideMessage('Đã chèn bảng thông tin và phần chia 2 cột thành công', 'success');
 			} else {
 				showAutoHideMessage('Không có dữ liệu để tạo bảng', 'warning');
 			}
@@ -1593,7 +1550,7 @@ const Editor = () => {
 
 			setShowTemplateSearchForm(false);
 			showAutoHideMessage(`Đã chọn mẫu: ${template.templateName || template.name}`, 'success');
-
+			
 			// Trigger auto-save when template is selected
 			startAutoSave();
 		} catch (error) {
@@ -1722,7 +1679,7 @@ const Editor = () => {
 					(documentData.metadata && documentData.metadata.extractData) ||
 					(documentMetadata && documentMetadata.extractData);
 				const { analyses = [] } = extractData || {};
-
+				
 				// Tạo document object cho AnalysesExtract
 				const documentForExtract = {
 					id: currentEditId,
@@ -1902,14 +1859,12 @@ const Editor = () => {
 				const lockUID = responseData.lockedByUID || currentUserUID;
 				setLockedByUID(lockUID);
 				// Get locked by user name
-				getUserName(lockUID)
-					.then((name) => {
-						setLockedByName(name);
-					})
-					.catch((error) => {
-						console.error('Error getting locked by name:', error);
-						setLockedByName(lockUID); // Fallback to UID
-					});
+				getUserName(lockUID).then(name => {
+					setLockedByName(name);
+				}).catch(error => {
+					console.error('Error getting locked by name:', error);
+					setLockedByName(lockUID); // Fallback to UID
+				});
 				setIsDocumentLocked(true);
 				setDocumentFooter(metadata.footer || '');
 
@@ -1922,26 +1877,22 @@ const Editor = () => {
 
 				if (metadata && metadata.submittedByUID) {
 					// Get user name from UID
-					getUserName(metadata.submittedByUID)
-						.then((name) => {
-							setSubmittedBy(name);
-						})
-						.catch((error) => {
-							console.error('Error getting submitted by name:', error);
-							setSubmittedBy(metadata.submittedByUID); // Fallback to UID
-						});
+					getUserName(metadata.submittedByUID).then(name => {
+						setSubmittedBy(name);
+					}).catch(error => {
+						console.error('Error getting submitted by name:', error);
+						setSubmittedBy(metadata.submittedByUID); // Fallback to UID
+					});
 				} else {
 					// Get current user name
 					const currentUserUID = Cookies.get('identityUID') || '';
 					if (currentUserUID) {
-						getUserName(currentUserUID)
-							.then((name) => {
-								setSubmittedBy(name);
-							})
-							.catch((error) => {
-								console.error('Error getting current user name:', error);
-								setSubmittedBy('Current User'); // Fallback
-							});
+						getUserName(currentUserUID).then(name => {
+							setSubmittedBy(name);
+						}).catch(error => {
+							console.error('Error getting current user name:', error);
+							setSubmittedBy('Current User'); // Fallback
+						});
 					} else {
 						setSubmittedBy('Current User');
 					}
@@ -1991,14 +1942,12 @@ const Editor = () => {
 				if (document.lockedByUID) {
 					setLockedByUID(document.lockedByUID);
 					// Get locked by user name
-					getUserName(document.lockedByUID)
-						.then((name) => {
-							setLockedByName(name);
-						})
-						.catch((error) => {
-							console.error('Error getting locked by name:', error);
-							setLockedByName(document.lockedByUID); // Fallback to UID
-						});
+					getUserName(document.lockedByUID).then(name => {
+						setLockedByName(name);
+					}).catch(error => {
+						console.error('Error getting locked by name:', error);
+						setLockedByName(document.lockedByUID); // Fallback to UID
+					});
 					setIsDocumentLocked(true);
 					setDocumentStatus('SENDED');
 
@@ -2338,7 +2287,7 @@ const Editor = () => {
 	// Handle editor content changes - trigger auto-save on any change
 	const handleEditorChange = (content) => {
 		setEditorContent(content);
-
+		
 		// Start auto-save on any content change (only once)
 		startAutoSave();
 	};
@@ -2412,7 +2361,7 @@ const Editor = () => {
 		const url = new URL(window.location);
 		url.searchParams.set('classifierCode', newClassifierCode);
 		window.history.replaceState({}, '', url);
-
+		
 		// Trigger auto-save when classifier code changes
 		startAutoSave();
 	};
@@ -2520,8 +2469,8 @@ const Editor = () => {
 	// Handle header data changes - trigger auto-save on any change
 	const handleHeaderDataChange = (field, value) => {
 		// Update header data state
-		setHeaderData((prev) => ({ ...prev, [field]: value }));
-
+		setHeaderData(prev => ({ ...prev, [field]: value }));
+		
 		// Start auto-save on any header change (only once)
 		startAutoSave();
 	};
@@ -3227,7 +3176,7 @@ const Editor = () => {
 												classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' ? 'text-blue-600' : 'text-gray-700'
 											}`}
 										>
-											Biên bản kiểm nghiệm
+											Biên bản thử nghiệm
 										</label>
 									</div>
 
@@ -3274,7 +3223,9 @@ const Editor = () => {
 
 								{/* Thông tin mẫu văn bản (hiển thị cho tất cả loại văn bản) */}
 								<div className="mt-4">
-									<div className="text-sm font-semibold text-gray-700 mb-2 text-left ml-2">Thông tin mẫu văn bản</div>
+									<div className="text-sm font-semibold text-gray-700 mb-2 text-left ml-2">
+										Thông tin mẫu văn bản
+									</div>
 									<div className="">
 										{currentTemplate ? (
 											<div className="space-y-2">
@@ -3313,7 +3264,7 @@ const Editor = () => {
 						<div className="bg-white rounded-box border-2 border-gray-500 shadow-sm hover:border-gray-700 hover:shadow-md transition-all flex-1 min-h-fit">
 							<div className="bg-white text-gray-800 px-4 py-3 border-b-2 border-gray-500 font-semibold text-sm text-left rounded-box-header flex items-center justify-between">
 								<span>Thông tin liên quan</span>
-								{/* Nút quét chỉ hiện khi chọn biên bản kiểm nghiệm */}
+								{/* Nút quét chỉ hiện khi chọn Biên bản thử nghiệm */}
 								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
 									<button
 										className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold border-0 transition-all duration-200 shadow-md"
@@ -3325,8 +3276,8 @@ const Editor = () => {
 								)}
 							</div>
 							<div className="p-4 bg-white rounded-box-content min-h-fit">
-								{/* Chỉ tiêu đã chọn (chỉ hiện khi chọn biên bản kiểm nghiệm) */}
-								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
+								{/* Chỉ tiêu đã chọn (hiện khi chọn Biên bản thử nghiệm HOẶC Nhật ký thử nghiệm) */}
+								{(classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' || classifierCode === 'NHAT_KY_THU_NGHIEM') && (
 									<div>
 										<div className="flex items-center justify-between mb-3">
 											<p className="text-sm font-semibold text-gray-700 text-left">
@@ -3355,10 +3306,10 @@ const Editor = () => {
 										</div>
 									</div>
 								)}
-								{/* Thông báo khi không phải biên bản kiểm nghiệm */}
-								{classifierCode !== 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
+								{/* Thông báo khi không phải Biên bản thử nghiệm hoặc Nhật ký thử nghiệm */}
+								{(classifierCode !== 'BIEN_BAN_KET_QUA_THU_NGHIEM' && classifierCode !== 'NHAT_KY_THU_NGHIEM') && (
 									<div className="text-center py-8 text-gray-500">
-										<p className="text-sm">Thông tin liên quan chỉ hiển thị cho Biên bản kiểm nghiệm</p>
+										<p className="text-sm">Thông tin liên quan chỉ hiển thị cho Biên bán thử nghiệm và Nhật ký thử nghiệm</p>
 									</div>
 								)}
 							</div>
@@ -3373,8 +3324,8 @@ const Editor = () => {
 					<div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-auto">
 						<div className="flex justify-between items-center mb-4">
 							<h3 className="text-lg font-semibold text-gray-800">
-								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM'
-									? 'Tìm kiếm mẫu biên bản'
+								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' 
+									? 'Tìm kiếm mẫu biên bản' 
 									: classifierCode === 'NHAT_KY_THU_NGHIEM'
 									? 'Tìm kiếm mẫu nhật ký thử nghiệm'
 									: 'Tìm kiếm mẫu tài liệu'}
@@ -3592,7 +3543,7 @@ const Editor = () => {
 					</div>
 				</div>
 			)}
-
+			
 			{/* AnalysesExtract Component */}
 			{showAnalysesExtract && analysesExtractDocument && (
 				<AnalysesExtract

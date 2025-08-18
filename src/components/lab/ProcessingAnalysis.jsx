@@ -815,7 +815,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 			// Debug log to check if sources filter is added
 			if (requestBody.sources) {
-				console.log('Protocol source filter applied:', requestBody.sources);
 			}
 
 			const response = await apiPost(API_ENDPOINT, requestBody);
@@ -1321,7 +1320,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const updateAnalysisField = async (rowId, column, value) => {
 		// Check if content has actually changed
 		if (!hasContentChanged(value, data, parseInt(rowId), column)) {
-			console.log(`No changes detected for ${column}, skipping API call`);
 			// Still clear editing state
 			setEditingCell(null);
 			setEditValue('');
@@ -1372,7 +1370,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 		// Check if content has actually changed
 		if (!hasContentChanged(editValue, data, parseInt(rowId), column)) {
-			console.log(`No changes detected for ${column}, skipping API call`);
 			// Still clear editing state
 			setEditingCell(null);
 			setEditValue('');
@@ -1415,7 +1412,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 		// Check if content has actually changed
 		if (!hasContentChanged(content, data, analysisId, column)) {
-			console.log(`No changes detected for ${column}, skipping API call`);
 			// Chỉ reset nếu ô hiện tại vẫn là ô này
 			setEditableCell((prev) => {
 				if (prev.analysisId === analysisId && prev.column === column) {
@@ -1557,7 +1553,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const handleProtocolSourceChange = async (value, analysisId) => {
 		// Check if value has actually changed
 		if (!hasContentChanged(value, data, analysisId, 'protocol_source')) {
-			console.log(`No changes detected for protocol_source, skipping API call`);
 			// Still close editing state without showing notification
 			setEditingProtocolSource(null);
 			return;
