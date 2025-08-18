@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { apiPost } from '../../contexts/helperFunctionCallAPI';
 
-const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
+const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId = null, onClose = null }) => {
 	// Show auto-hide message function
 	const showAutoHideMessage = (message, type = 'info') => {
 		// Remove existing message if any
-		const existingMessage = document.getElementById('autoHideMessage');
+		const existingMessage = globalThis.document.getElementById('autoHideMessage');
 		if (existingMessage) {
 			existingMessage.remove();
 		}
 
 		// Create message element
-		const messageDiv = document.createElement('div');
+		const messageDiv = globalThis.document.createElement('div');
 		messageDiv.id = 'autoHideMessage';
 		messageDiv.style.cssText = `
 			position: fixed;
@@ -44,7 +44,7 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 		}
 
 		messageDiv.textContent = message;
-		document.body.appendChild(messageDiv);
+		globalThis.document.body.appendChild(messageDiv);
 
 		// Animate in
 		setTimeout(() => {
@@ -122,37 +122,44 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 		let showDifferences = false;
 
 		// 6. Tạo popup
-		const existingPopup = document.getElementById('analysisDataPopupOverlay');
+		const existingPopup = globalThis.document.getElementById('analysisDataPopupOverlay');
 		if (existingPopup) existingPopup.remove();
 
-		const overlay = document.createElement('div');
+		const overlay = globalThis.document.createElement('div');
 		overlay.id = 'analysisDataPopupOverlay';
 		overlay.className = 'fixed inset-0 bg-black bg-opacity-80 z-[10000] flex items-center justify-center';
 
-		const popup = document.createElement('div');
+		const popup = globalThis.document.createElement('div');
 		popup.className = 'bg-white rounded-lg w-[80vw] h-[90vh] flex flex-col shadow-2xl overflow-hidden';
 
 		// Header
-		const header = document.createElement('div');
+		const header = globalThis.document.createElement('div');
 		header.className = 'p-2 border-b border-gray-200 flex justify-between items-center bg-gray-50';
 
-		const title = document.createElement('h3');
-		title.textContent = 'Dữ liệu trích xuất từ báo cáo';
+		const title = globalThis.document.createElement('h3');
+		title.textContent = 'Nhập kết quả thử nghiệm';
 		title.className = 'm-0 text-lg font-semibold text-gray-700';
 
-		const closeBtn = document.createElement('button');
+		const closeBtn = globalThis.document.createElement('button');
 		closeBtn.textContent = '✕';
 		closeBtn.className =
 			'px-3 py-2 bg-red-500 hover:bg-red-600 text-white border-0 rounded-md cursor-pointer font-bold text-base transition-colors duration-200';
-		closeBtn.onclick = () => overlay.remove();
+		closeBtn.onclick = () => {
+			overlay.remove();
+			// Remove any remaining popup overlays
+			const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
+			remainingPopups.forEach(popup => popup.remove());
+			// Call onClose callback if provided
+			if (onClose) onClose();
+		};
 
 		// Nút hiển thị khác biệt
-		const showDiffBtn = document.createElement('button');
+		const showDiffBtn = globalThis.document.createElement('button');
 		showDiffBtn.textContent = 'Hiển thị dữ liệu khác biệt';
 		showDiffBtn.className = 'px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200';
 
 		// CSS cho difference indicators
-		const style = document.createElement('style');
+		const style = globalThis.document.createElement('style');
 		style.textContent = `
 			.difference-indicator {
 				color: #ff6b6b;
@@ -223,10 +230,10 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 				hyphens: auto;
 			}
 		`;
-		document.head.appendChild(style);
+		globalThis.document.head.appendChild(style);
 
 		// Main content
-		const mainContent = document.createElement('div');
+		const mainContent = globalThis.document.createElement('div');
 		mainContent.className = 'flex-1 overflow-auto p-4';
 
 		// Hàm render bảng
@@ -289,7 +296,7 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 		};
 
 		// Assemble header
-		const headerLeft = document.createElement('div');
+		const headerLeft = globalThis.document.createElement('div');
 		headerLeft.className = 'flex items-center gap-3';
 		headerLeft.appendChild(title);
 		headerLeft.appendChild(showDiffBtn);
@@ -297,12 +304,25 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 		header.appendChild(headerLeft);
 		header.appendChild(closeBtn);
 
-		// Footer với nút xác nhận cập nhật
-		const footer = document.createElement('div');
-		footer.className = 'border-t border-gray-200 p-4 bg-gray-50 flex justify-center';
+		// Footer với nút nhập kết quả và cancel
+		const footer = globalThis.document.createElement('div');
+		footer.className = 'border-t border-gray-200 p-4 bg-gray-50 flex justify-end gap-3';
 
-		const confirmBtn = document.createElement('button');
-		confirmBtn.textContent = 'Xác nhận cập nhật';
+		// Cancel button
+		const cancelBtn = globalThis.document.createElement('button');
+		cancelBtn.textContent = 'Hủy bỏ';
+		cancelBtn.className = 'px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
+		cancelBtn.onclick = () => {
+			overlay.remove();
+			// Remove any remaining popup overlays
+			const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
+			remainingPopups.forEach(popup => popup.remove());
+			// Call onClose callback if provided
+			if (onClose) onClose();
+		};
+
+		const confirmBtn = globalThis.document.createElement('button');
+		confirmBtn.textContent = 'Nhập kết quả';
 		confirmBtn.className = 'px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
 
 		// Hàm xử lý xác nhận cập nhật
@@ -319,10 +339,10 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 
 				if (hasProtocolDifference) {
 					// Hiển thị dialog xác nhận với select option
-					const confirmDialog = document.createElement('div');
+					const confirmDialog = globalThis.document.createElement('div');
 					confirmDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
 					
-					const dialogContent = document.createElement('div');
+					const dialogContent = globalThis.document.createElement('div');
 					dialogContent.className = 'bg-yellow-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-yellow-200';
 					
 					dialogContent.innerHTML = `
@@ -349,7 +369,7 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 					`;
 					
 					confirmDialog.appendChild(dialogContent);
-					document.body.appendChild(confirmDialog);
+					globalThis.document.body.appendChild(confirmDialog);
 					
 					// Xử lý sự kiện dialog
 					const cancelBtn = dialogContent.querySelector('#cancelConfirm');
@@ -358,6 +378,9 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 					
 					cancelBtn.onclick = () => {
 						confirmDialog.remove();
+						// Remove any remaining confirmation dialogs
+						const remainingDialogs = globalThis.document.querySelectorAll('.fixed.inset-0.bg-black.bg-opacity-50');
+						remainingDialogs.forEach(dialog => dialog.remove());
 					};
 					
 					proceedBtn.onclick = async () => {
@@ -370,6 +393,9 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 					confirmDialog.addEventListener('click', (e) => {
 						if (e.target === confirmDialog) {
 							confirmDialog.remove();
+							// Remove any remaining confirmation dialogs
+							const remainingDialogs = globalThis.document.querySelectorAll('.fixed.inset-0.bg-black.bg-opacity-50');
+							remainingDialogs.forEach(dialog => dialog.remove());
 						}
 					});
 				} else {
@@ -407,13 +433,35 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 
 				console.log('Sending update request:', { analyses: analysesData });
 
-				const response = await apiPost('https://red.irdop.org/v1/analysis/update_bulk', {
+				const requestBody = {
 					analyses: analysesData
-				});
+				};
+
+				// Thêm editId vào request body nếu có
+				if (editId) {
+					requestBody.editId = editId;
+				}
+
+				const response = await apiPost('https://red.irdop.org/v1/analysis/update_bulk', requestBody);
 
 				if (response.status === 200) {
 					showAutoHideMessage('Cập nhật thành công!', 'success');
 					overlay.remove(); // Đóng popup sau khi cập nhật thành công
+					// Remove any remaining popup overlays
+					const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
+					remainingPopups.forEach(popup => popup.remove());
+					// Call onClose callback if provided
+					if (onClose) onClose();
+
+					// Chuyển hướng đến trang processing nếu có sampleUIDs
+					if (response.data && response.data.docRecord && response.data.docRecord.metadata && response.data.docRecord.metadata.sampleUIDs) {
+						const sampleUIDs = response.data.docRecord.metadata.sampleUIDs;
+						if (Array.isArray(sampleUIDs) && sampleUIDs.length > 0) {
+							const sampleUIDsString = sampleUIDs.join(',');
+							const url = `/processing?view=sample&ps_filter=true&ps_sample_uid=${sampleUIDsString}`;
+							window.location.href = url;
+						}
+					}
 				} else {
 					showAutoHideMessage('Lỗi khi cập nhật: ' + (response.message || 'Unknown error'), 'error');
 				}
@@ -423,6 +471,7 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 			}
 		};
 
+		footer.appendChild(cancelBtn);
 		footer.appendChild(confirmBtn);
 
 		// Assemble popup
@@ -430,7 +479,7 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 		popup.appendChild(mainContent);
 		popup.appendChild(footer);
 		overlay.appendChild(popup);
-		document.body.appendChild(overlay);
+		globalThis.document.body.appendChild(overlay);
 
 		// Render bảng ban đầu
 		renderTable();
@@ -439,6 +488,11 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 		overlay.addEventListener('click', function (e) {
 			if (e.target === overlay) {
 				overlay.remove();
+				// Remove any remaining popup overlays
+				const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
+				remainingPopups.forEach(popup => popup.remove());
+				// Call onClose callback if provided
+				if (onClose) onClose();
 			}
 		});
 
@@ -446,10 +500,15 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false }) => {
 		const handleEscape = (e) => {
 			if (e.key === 'Escape') {
 				overlay.remove();
-				document.removeEventListener('keydown', handleEscape);
+				// Remove any remaining popup overlays
+				const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
+				remainingPopups.forEach(popup => popup.remove());
+				globalThis.document.removeEventListener('keydown', handleEscape);
+				// Call onClose callback if provided
+				if (onClose) onClose();
 			}
 		};
-		document.addEventListener('keydown', handleEscape);
+		globalThis.document.addEventListener('keydown', handleEscape);
 	};
 
 	// Render component

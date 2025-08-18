@@ -17,11 +17,33 @@ import { GlobalContext } from '../../contexts/GlobalContext';
 import AnalysesExtract from './AnalysesExtract';
 
 const LabDocument = () => {
-	const { currentUser, setCurrentUser, fetchUser } = useContext(GlobalContext);
+	const { currentUser, setCurrentUser, fetchUser, getIdenByUid } = useContext(GlobalContext);
 
 	// Utility functions
 	const isAdmin = () => {
 		return currentUser?.role?.staff_admin === true;
+	};
+
+	// Fetch identity name by UID
+	const fetchIdentityName = async (identityUID) => {
+		if (!identityUID || identityNames[identityUID]) {
+			return identityNames[identityUID] || identityUID;
+		}
+
+		try {
+			const identity = await getIdenByUid(identityUID);
+			if (identity && identity.identity_name) {
+				setIdentityNames(prev => ({
+					...prev,
+					[identityUID]: identity.identity_name
+				}));
+				return identity.identity_name;
+			}
+		} catch (error) {
+			console.error('Error fetching identity:', error);
+		}
+
+		return identityUID; // Fallback to UID if failed
 	};
 
 	const [selectedDocument, setSelectedDocument] = useState(null);
@@ -29,6 +51,8 @@ const LabDocument = () => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
 	const [mode, setMode] = useState('personal'); // 'personal' or 'all'
+	const [showAnalysisExtract, setShowAnalysisExtract] = useState(false);
+	const [identityNames, setIdentityNames] = useState({}); // Cache for identity names
 
 	// Load TinyMCE if not already loaded
 	useEffect(() => {
@@ -209,6 +233,17 @@ const LabDocument = () => {
 				}));
 
 				setDocuments(transformedDocuments);
+
+				// Fetch identity names for all submittedByUID
+				const uniqueUIDs = [...new Set(transformedDocuments
+					.map(doc => doc.metadata?.submittedByUID)
+					.filter(uid => uid && !identityNames[uid])
+				)];
+
+				// Fetch identity names asynchronously
+				uniqueUIDs.forEach(async (uid) => {
+					await fetchIdentityName(uid);
+				});
 				setPagination({
 					currentPage: page,
 					itemsPerPage: result.pagination?.itemsPerPage || 10,
@@ -428,24 +463,26 @@ const LabDocument = () => {
 		header.appendChild(title);
 		header.appendChild(buttonGroup);
 
-		// Create iframe for content
-		const iframe = document.createElement('iframe');
-		iframe.style.cssText = `
+		// Create content container for HTML
+		const contentContainer = document.createElement('div');
+		contentContainer.style.cssText = `
 			width: 100%;
 			height: 100%;
 			border: none;
 			flex: 1;
+			overflow: auto;
+			padding: 20px;
+			font-family: 'Times New Roman', serif;
+			font-size: 11px;
+			line-height: 1.4;
+			background: white;
 		`;
 
-		// Set iframe content
-		iframe.onload = function () {
-			iframe.contentDocument.open();
-			iframe.contentDocument.write(htmlContent);
-			iframe.contentDocument.close();
-		};
+		// Set content directly
+		contentContainer.innerHTML = htmlContent;
 
 		popup.appendChild(header);
-		popup.appendChild(iframe);
+		popup.appendChild(contentContainer);
 		overlay.appendChild(popup);
 		document.body.appendChild(overlay);
 
@@ -612,392 +649,14 @@ const LabDocument = () => {
 		);
 	};
 
-	// Show Analysis Extract Popup - using AnalysesExtract component logic
-	const showAnalysisExtractPopup = async (doc) => {
+	// Handle showing analysis extract component
+	const handleShowAnalysisExtract = (doc) => {
 		if (!doc || !doc.metadata || !doc.metadata.extractData || !doc.metadata.extractData.analyses) {
 			showAutoHideMessage('Không có dữ liệu chỉ tiêu để hiển thị', 'warning');
 			return;
 		}
-
-		// 1. Lấy dữ liệu trích xuất
-		const extractedAnalyses = doc.metadata.extractData.analyses;
-		const analysisIds = extractedAnalyses.map(a => a.id).filter(id => id);
-
-		// 2. Gọi API lấy matchAnalysis
-		let matchAnalysis = [];
-		try {
-			showAutoHideMessage('Đang tải dữ liệu đối chiếu...', 'info');
-			const res = await apiPost('https://red.irdop.org/v1/lab/analysis/match/by_id', { ids: analysisIds });
-			if (res.status === 200 && res.data) {
-				if (Array.isArray(res.data)) {
-					matchAnalysis = res.data;
-				} else if (res.data.result && Array.isArray(res.data.result)) {
-					matchAnalysis = res.data.result;
-					console.log('Match analysis loaded:', matchAnalysis);
-				}
-			}
-			showAutoHideMessage('Tải dữ liệu đối chiếu thành công!', 'success');
-		} catch (err) {
-			console.error('Error loading match analysis:', err);
-			showAutoHideMessage('Lỗi khi tải dữ liệu đối chiếu: ' + err.message, 'error');
-		}
-
-		// 3. Hàm xác định khác biệt, gán các key ...Diff
-		function getAnalysisDifferences(extracted, matched) {
-			if (!matched) return extracted;
-			const diffObj = { ...extracted };
-			
-			// Chỉ so sánh parameterName và protocolCode
-			const fieldsToCompare = ['parameterName', 'protocolCode'];
-			fieldsToCompare.forEach(field => {
-				if (extracted[field] !== matched[field]) {
-					diffObj[field + 'Diff'] = matched[field];
-				}
-			});
-			
-			return diffObj;
-		}
-
-		// 4. Gộp dữ liệu trích xuất với các trường ...Diff nếu có
-		const mergedAnalyses = extractedAnalyses.map(extract => {
-			const matched = matchAnalysis.find(m => m.id === parseInt(extract.id));
-			console.log('matched:', matched);
-			console.log('extract:', extract);
-			return getAnalysisDifferences(extract, matched);
-		});
-
-		// 5. State hiển thị khác biệt
-		let showDifferences = false;
-
-		// 6. Tạo popup
-		const existingPopup = document.getElementById('analysisDataPopupOverlay');
-		if (existingPopup) existingPopup.remove();
-
-		const overlay = document.createElement('div');
-		overlay.id = 'analysisDataPopupOverlay';
-		overlay.className = 'fixed inset-0 bg-black bg-opacity-80 z-[10000] flex items-center justify-center';
-
-		const popup = document.createElement('div');
-		popup.className = 'bg-white rounded-lg w-[80vw] h-[90vh] flex flex-col shadow-2xl overflow-hidden';
-
-		// Header
-		const header = document.createElement('div');
-		header.className = 'p-2 border-b border-gray-200 flex justify-between items-center bg-gray-50';
-
-		const title = document.createElement('h3');
-		title.textContent = 'Dữ liệu trích xuất từ báo cáo';
-		title.className = 'm-0 text-lg font-semibold text-gray-700';
-
-		const closeBtn = document.createElement('button');
-		closeBtn.textContent = '✕';
-		closeBtn.className =
-			'px-3 py-2 bg-red-500 hover:bg-red-600 text-white border-0 rounded-md cursor-pointer font-bold text-base transition-colors duration-200';
-		closeBtn.onclick = () => overlay.remove();
-
-		// Nút hiển thị khác biệt
-		const showDiffBtn = document.createElement('button');
-		showDiffBtn.textContent = 'Hiển thị dữ liệu khác biệt';
-		showDiffBtn.className = 'px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200';
-
-		// CSS cho difference indicators
-		const style = document.createElement('style');
-		style.textContent = `
-			.difference-indicator {
-				color: #ff6b6b;
-				font-weight: bold;
-				cursor: pointer;
-				margin-right: 6px;
-				background-color: #fff3cd;
-				border: 1px solid #ffc107;
-				padding: 2px 4px;
-				border-radius: 3px;
-				display: inline-block;
-				position: relative;
-			}
-			
-			.difference-indicator:hover {
-				background-color: #ffecb3;
-				border-color: #ff9800;
-			}
-			
-			.difference-indicator .tooltip {
-				visibility: hidden;
-				background-color: #fff3cd;
-				border: 2px solid #ffc107;
-				color: #856404;
-				text-align: left;
-				border-radius: 6px;
-				padding: 8px 12px;
-				position: absolute;
-				z-index: 10001;
-				bottom: 125%;
-				left: 50%;
-				margin-left: -100px;
-				width: 200px;
-				box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-				font-size: 11px;
-				line-height: 1.3;
-			}
-			
-			.difference-indicator .tooltip::after {
-				content: "";
-				position: absolute;
-				top: 100%;
-				left: 50%;
-				margin-left: -5px;
-				border-width: 5px;
-				border-style: solid;
-				border-color: #ffc107 transparent transparent transparent;
-			}
-			
-			.difference-indicator:hover .tooltip {
-				visibility: visible;
-			}
-			
-			.difference-tag {
-				background-color: #fff3cd;
-				border: 2px solid #ffc107;
-				border-radius: 4px;
-				padding: 4px 8px;
-				margin-top: 4px;
-				font-size: 0.75rem;
-				color: #856404;
-				display: block;
-				width: 100%;
-				box-sizing: border-box;
-				word-wrap: break-word;
-				white-space: normal;
-				overflow-wrap: break-word;
-				hyphens: auto;
-			}
-		`;
-		document.head.appendChild(style);
-
-		// Main content
-		const mainContent = document.createElement('div');
-		mainContent.className = 'flex-1 overflow-auto p-4';
-
-		// Hàm render bảng
-		function renderTable() {
-			mainContent.innerHTML = `
-				<div class="overflow-auto">
-					<table class="w-full border-collapse border border-gray-300 text-xs">
-						<thead>
-							<tr class="bg-gray-100">
-								<th class="border border-gray-300 p-2">ID</th>
-								<th class="border border-gray-300 p-2">Mã mẫu</th>
-								<th class="border border-gray-300 p-2">Tên mẫu</th>
-								<th class="border border-gray-300 p-2">Chỉ tiêu</th>
-								<th class="border border-gray-300 p-2">Mã phương pháp</th>
-								<th class="border border-gray-300 p-2">Kết quả</th>
-								<th class="border border-gray-300 p-2">Đơn vị</th>
-							</tr>
-						</thead>
-						<tbody>
-							${mergedAnalyses.map(a => `
-								<tr>
-									<td class="border border-gray-300 p-2">${a.id || ''}</td>
-									<td class="border border-gray-300 p-2">${a.sampleUID || ''}</td>
-									<td class="border border-gray-300 p-2">${a.sampleName || ''}</td>
-									<td class="border border-gray-300 p-2">
-										${a.parameterNameDiff !== undefined ? (!showDifferences
-											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.parameterNameDiff || 'Không có'}</div></span></span>${a.parameterName || ''}</div>`
-											: `<div style="width: 100%;">${a.parameterName || ''}<div class="difference-tag">Giá trị gốc: ${a.parameterNameDiff || 'Không có'}</div></div>`
-										) : `<div>${a.parameterName || ''}</div>`}
-									</td>
-									<td class="border border-gray-300 p-2">
-										${a.protocolCodeDiff !== undefined ? (!showDifferences
-											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.protocolCodeDiff || 'Không có'}</div></span></span>${a.protocolCode || ''}</div>`
-											: `<div style="width: 100%;">${a.protocolCode || ''}<div class="difference-tag">Giá trị gốc: ${a.protocolCodeDiff || 'Không có'}</div></div>`
-										) : `<div>${a.protocolCode || ''}</div>`}
-									</td>
-									<td class="border border-gray-300 p-2">
-										<div style="width: 100%;">${a.resultValue || ''}</div>
-									</td>
-									<td class="border border-gray-300 p-2">
-										<div style="width: 100%;">${a.resultUnit || ''}</div>
-									</td>
-								</tr>
-							`).join('')}
-						</tbody>
-					</table>
-				</div>
-			`;
-		}
-
-		// Sự kiện click nút hiển thị khác biệt
-		showDiffBtn.onclick = () => {
-			showDifferences = !showDifferences;
-			showDiffBtn.textContent = showDifferences ? 'Ẩn dữ liệu khác biệt' : 'Hiển thị dữ liệu khác biệt';
-			showDiffBtn.className = showDifferences
-				? 'px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200'
-				: 'px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200';
-			renderTable();
-			showAutoHideMessage(showDifferences ? 'Đang hiển thị dữ liệu khác biệt' : 'Đã ẩn dữ liệu khác biệt', 'info');
-		};
-
-		// Assemble header
-		const headerLeft = document.createElement('div');
-		headerLeft.className = 'flex items-center gap-3';
-		headerLeft.appendChild(title);
-		headerLeft.appendChild(showDiffBtn);
-
-		header.appendChild(headerLeft);
-		header.appendChild(closeBtn);
-
-		// Footer với nút xác nhận cập nhật
-		const footer = document.createElement('div');
-		footer.className = 'border-t border-gray-200 p-4 bg-gray-50 flex justify-center';
-
-		const confirmBtn = document.createElement('button');
-		confirmBtn.textContent = 'Xác nhận cập nhật';
-		confirmBtn.className = 'px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
-
-		// Hàm xử lý xác nhận cập nhật
-		confirmBtn.onclick = async () => {
-			try {
-				// Kiểm tra xem có dữ liệu để cập nhật không
-				if (!mergedAnalyses || mergedAnalyses.length === 0) {
-					showAutoHideMessage('Không có dữ liệu để cập nhật', 'warning');
-					return;
-				}
-
-				// Kiểm tra xem có khác biệt về protocolCode không
-				const hasProtocolDifference = mergedAnalyses.some(a => a.protocolCodeDiff !== undefined);
-
-				if (hasProtocolDifference) {
-					// Hiển thị dialog xác nhận với select option
-					const confirmDialog = document.createElement('div');
-					confirmDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
-					
-					const dialogContent = document.createElement('div');
-					dialogContent.className = 'bg-yellow-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-yellow-200';
-					
-					dialogContent.innerHTML = `
-						<div class="flex items-center mb-4">
-							<span class="text-2xl mr-3">⚠️</span>
-							<h3 class="text-lg font-semibold text-gray-900">Cảnh báo: Phát hiện khác biệt về phương pháp</h3>
-						</div>
-						<p class="text-gray-700 mb-4">Một số chỉ tiêu có phương pháp khác với dữ liệu trong app. Bạn muốn áp dụng phương pháp nào?</p>
-						
-						<div class="mb-6">
-							<label class="block text-sm font-medium text-gray-700 mb-2">
-								Chọn phương pháp áp dụng:
-							</label>
-							<select id="methodChoice" class="w-full p-3 bg-white border-2 border-yellow-400 rounded-md focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-gray-900 font-medium shadow-sm">
-								<option value="delivered">Áp dụng phương pháp được bàn giao (mặc định)</option>
-								<option value="report">Áp dụng phương pháp trong biên bản</option>
-							</select>
-						</div>
-						
-						<div class="flex justify-end gap-3">
-							<button id="cancelConfirm" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors">Hủy bỏ</button>
-							<button id="proceedConfirm" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">Xác nhận</button>
-						</div>
-					`;
-					
-					confirmDialog.appendChild(dialogContent);
-					document.body.appendChild(confirmDialog);
-					
-					// Xử lý sự kiện dialog
-					const cancelBtn = dialogContent.querySelector('#cancelConfirm');
-					const proceedBtn = dialogContent.querySelector('#proceedConfirm');
-					const methodSelect = dialogContent.querySelector('#methodChoice');
-					
-					cancelBtn.onclick = () => {
-						confirmDialog.remove();
-					};
-					
-					proceedBtn.onclick = async () => {
-						const methodChoice = methodSelect.value;
-						confirmDialog.remove();
-						await performUpdate(methodChoice);
-					};
-					
-					// Đóng dialog khi click outside
-					confirmDialog.addEventListener('click', (e) => {
-						if (e.target === confirmDialog) {
-							confirmDialog.remove();
-						}
-					});
-				} else {
-					// Không có khác biệt về protocol, thực hiện update trực tiếp
-					await performUpdate('delivered');
-				}
-			} catch (error) {
-				console.error('Error in confirm update:', error);
-				showAutoHideMessage('Lỗi khi xử lý cập nhật: ' + error.message, 'error');
-			}
-		};
-
-		// Hàm thực hiện cập nhật
-		const performUpdate = async (methodChoice) => {
-			try {
-				showAutoHideMessage('Đang xử lý cập nhật...', 'info');
-				
-				// Chuẩn bị dữ liệu analyses
-				const analysesData = mergedAnalyses.map(a => {
-					const baseData = {
-						id: parseInt(a.id),
-						resultValue: a.resultValue,
-						resultUnit: a.resultUnit
-					};
-					
-					// Nếu chọn áp dụng phương pháp trong biên bản
-					if (methodChoice === 'report') {
-						// Sử dụng protocolCode từ extractData.analyses (giá trị hiện tại trong biên bản)
-						baseData.protocolCode = a.protocolCode;
-					}
-					// Nếu chọn mặc định (delivered) thì không thêm protocolCode
-					
-					return baseData;
-				}).filter(a => a.id); // Chỉ lấy những item có ID
-
-				console.log('Sending update request:', { analyses: analysesData });
-
-				const response = await apiPost('https://red.irdop.org/v1/analysis/update_bulk', {
-					analyses: analysesData
-				});
-
-				if (response.status === 200) {
-					showAutoHideMessage('Cập nhật thành công!', 'success');
-					overlay.remove(); // Đóng popup sau khi cập nhật thành công
-				} else {
-					showAutoHideMessage('Lỗi khi cập nhật: ' + (response.message || 'Unknown error'), 'error');
-				}
-			} catch (error) {
-				console.error('Error in performUpdate:', error);
-				showAutoHideMessage('Lỗi khi cập nhật: ' + error.message, 'error');
-			}
-		};
-
-		footer.appendChild(confirmBtn);
-
-		// Assemble popup
-		popup.appendChild(header);
-		popup.appendChild(mainContent);
-		popup.appendChild(footer);
-		overlay.appendChild(popup);
-		document.body.appendChild(overlay);
-
-		// Render bảng ban đầu
-		renderTable();
-
-		// Close on overlay click
-		overlay.addEventListener('click', function (e) {
-			if (e.target === overlay) {
-				overlay.remove();
-			}
-		});
-
-		// Close on Escape key
-		const handleEscape = (e) => {
-			if (e.key === 'Escape') {
-				overlay.remove();
-				document.removeEventListener('keydown', handleEscape);
-			}
-		};
-		document.addEventListener('keydown', handleEscape);
+		setSelectedDocument(doc);
+		setShowAnalysisExtract(true);
 	};
 
 	// Load data on component mount
@@ -1139,108 +798,114 @@ const LabDocument = () => {
 		};
 	};
 
-	// Generate report frame HTML with API call
-	const generateReportFrame = (document) => {
-		const metadata = document.metadata;
-		const header = metadata.header || {};
-		const content = metadata.content || '';
-		const analysisIds = metadata.analysisIds || [];
-		const sampleUIDs = metadata.sampleUIDs || [];
+	// Component ReportDetail để thay thế iframe
+	const ReportDetail = ({ document }) => {
+		const [reportHtml, setReportHtml] = useState('');
+		const [isLoading, setIsLoading] = useState(false);
+		const [error, setError] = useState(null);
 
-		// Prepare report data
-		const reportData = {
-			header: header,
-			content: content,
-			footer: document.id,
-			analysisIds: analysisIds,
-			sampleUIDs: sampleUIDs,
-		};
+		const loadReport = async () => {
+			if (!document || !document.metadata) {
+				setError('Không có dữ liệu tài liệu');
+				return;
+			}
 
-		return `
-<!DOCTYPE html>
-<html>
-<head>
-	<meta charset="UTF-8">
-	<title>Lab Result Report</title>
-	<style>
-		body {
-			margin: 0;
-			padding: 20px;
-			font-family: 'Times New Roman', serif;
-			line-height: 1.6;
-		}
-		.loading {
-			text-align: center;
-			padding: 50px;
-			color: #666;
-		}
-		.error {
-			text-align: center;
-			padding: 50px;
-			color: #dc2626;
-			background: #fee2e2;
-			border-radius: 6px;
-			margin: 20px;
-		}
-		.spinner {
-			display: inline-block;
-			width: 20px;
-			height: 20px;
-			border: 3px solid #f3f3f3;
-			border-top: 3px solid #3498db;
-			border-radius: 50%;
-			animation: spin 1s linear infinite;
-		}
-		@keyframes spin {
-			0% { transform: rotate(0deg); }
-			100% { transform: rotate(360deg); }
-		}
-	</style>
-</head>
-<body>
-	<div id="content">
-		<div class="loading">
-			<div class="spinner"></div>
-			<p>Đang tải báo cáo...</p>
-		</div>
-	</div>
+			setIsLoading(true);
+			setError(null);
 
-	<script>
-		async function loadReport() {
 			try {
-				const reportData = ${JSON.stringify(reportData)};
-				
-				const response = await fetch('https://black.irdop.org/khsi19me/convert/lab_result_report_html', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(reportData)
-				});
+				const metadata = document.metadata;
+				const header = metadata.header || {};
+				const content = metadata.content || '';
+				const analysisIds = metadata.analysisIds || [];
+				const sampleUIDs = metadata.sampleUIDs || [];
 
-				if (!response.ok) {
-					throw new Error('Network response was not ok: ' + response.statusText);
+				// Prepare report data
+				const reportData = {
+					header: header,
+					content: content,
+					footer: document.id,
+					analysisIds: analysisIds,
+					sampleUIDs: sampleUIDs,
+				};
+
+				const response = await apiPostLocal(
+					'https://black.irdop.org/khsi19me/convert/lab_result_report_html',
+					reportData,
+				);
+
+				if (response.status === 200 && response.data) {
+					const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+					setReportHtml(htmlResponse);
+				} else {
+					throw new Error('Không thể tải báo cáo từ server');
 				}
-
-				const result = await response.text();
-				document.getElementById('content').innerHTML = result;
 			} catch (error) {
 				console.error('Error loading report:', error);
-				document.getElementById('content').innerHTML = 
-					'<div class="error">' +
-					'<h3>Lỗi khi tải báo cáo</h3>' +
-					'<p>Không thể tải nội dung báo cáo từ server.</p>' +
-					'<p><strong>Chi tiết lỗi:</strong> ' + error.message + '</p>' +
-					'</div>';
+				setError('Lỗi khi tải báo cáo: ' + error.message);
+			} finally {
+				setIsLoading(false);
 			}
+		};
+
+		useEffect(() => {
+			loadReport();
+		}, [document]);
+
+		if (isLoading) {
+			return (
+				<div className="border-t border-gray-200 pt-6">
+					<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+						<FaPlay className="text-green-600" />
+						Báo cáo chi tiết
+					</h4>
+					<div className="border border-gray-300 rounded-lg p-8 text-center">
+						<div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+						<p className="text-gray-600">Đang tải báo cáo...</p>
+					</div>
+				</div>
+			);
 		}
 
-		// Load report when page loads
-		loadReport();
-	</script>
-</body>
-</html>
-		`;
+		if (error) {
+			return (
+				<div className="border-t border-gray-200 pt-6">
+					<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+						<FaPlay className="text-green-600" />
+						Báo cáo chi tiết
+					</h4>
+					<div className="border border-red-300 rounded-lg p-8 text-center bg-red-50">
+						<p className="text-red-600 mb-2">❌ {error}</p>
+						<button
+							onClick={loadReport}
+							className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+						>
+							Thử lại
+						</button>
+					</div>
+				</div>
+			);
+		}
+
+		return (
+			<div className="border-t border-gray-200 pt-6">
+				<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+					<FaPlay className="text-green-600" />
+					Báo cáo chi tiết
+				</h4>
+				<div className="border border-gray-300 rounded-lg overflow-hidden">
+					<div
+						className="w-full min-h-[500px] p-4 bg-white overflow-auto custom-scrollbar"
+						style={{
+							fontFamily: "'Times New Roman', serif",
+							fontSize: '11px',
+							lineHeight: '1.4',
+						}}
+						dangerouslySetInnerHTML={{ __html: reportHtml }}
+					/>
+				</div>
+			</div>
+		);
 	};
 
 	// Generate smart pagination numbers
@@ -1282,7 +947,8 @@ const LabDocument = () => {
 		await loadDocuments(searchTerm, newPage, mode, documentStatus);
 	};
 
-	const filteredDocuments = documents.filter((doc) => doc.title.toLowerCase().includes(searchTerm.toLowerCase()));
+	// Remove client-side filtering since we now search via API
+	// const filteredDocuments = documents;
 
 	return (
 		<>
@@ -1347,7 +1013,7 @@ const LabDocument = () => {
 									className="sr-only"
 									disabled={isLoading}
 								/>
-								<div className="w-40 h-10 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
+								<div className="w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
 									{/* Sliding background */}
 									<div
 										className={`absolute top-0 h-full w-1/2 bg-blue-500 rounded-full transition-all duration-300 ease-in-out
@@ -1360,7 +1026,7 @@ const LabDocument = () => {
 											className={`text-xs font-medium transition-all duration-300 ease-in-out
 												${isDraft ? 'text-white' : 'text-gray-600'}`}
 										>
-											DRAFT
+											PENDING
 										</span>
 									</div>
 
@@ -1413,7 +1079,7 @@ const LabDocument = () => {
 								<FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
 								<input
 									type="text"
-									placeholder="Tìm tài liệu..."
+									placeholder="Tìm tài liệu... (Nhấn Enter để tìm kiếm)"
 									value={searchTerm}
 									onChange={(e) => setSearchTerm(e.target.value)}
 									onKeyPress={handleSearchKeyPress}
@@ -1467,7 +1133,7 @@ const LabDocument = () => {
 								<div className="flex justify-center items-center h-32">
 									<div className="text-gray-500">Đang tải...</div>
 								</div>
-							) : filteredDocuments.length === 0 ? (
+							) : documents.length === 0 ? (
 								<div className="flex flex-col items-center justify-center h-32 text-gray-500">
 									<FaFileAlt className="w-8 h-8 mb-2 text-gray-300" />
 									<div className="text-sm">
@@ -1479,11 +1145,11 @@ const LabDocument = () => {
 											? 'Không có tài liệu nháp cá nhân nào'
 											: 'Không có tài liệu nháp nào'}
 									</div>
-									{searchTerm && <div className="text-xs mt-1">Thử tìm kiếm với từ khóa khác</div>}
+									<div className="text-xs mt-1">Nhấn Enter để tìm kiếm với từ khóa mới</div>
 								</div>
 							) : (
 								<div className="space-y-3">
-									{filteredDocuments.map((doc) => (
+									{documents.map((doc) => (
 										<div
 											key={doc.id}
 											onClick={() => handleDocumentClick(doc)}
@@ -1492,14 +1158,14 @@ const LabDocument = () => {
 											}`}
 										>
 											<div className="relative">
-												{/* Header info section with code, identity, date */}
-												<div className="flex items-center justify-between text-xs text-start mb-2">
-													<div className="text-gray-600 px-2 py-1 rounded">Mã tài liệu: {doc.id}</div>
-													<div className="text-gray-500">{doc.metadata?.submittedByUID}</div>
-													<div className="text-gray-500">{doc.lastModified}</div>
+											{/* Header info section with code, identity, date */}
+											<div className="flex items-center justify-between text-xs text-start mb-2">
+												<div className="text-gray-600 px-2 py-1 rounded">Mã tài liệu: {doc.id}</div>
+												<div className="text-gray-500">
+													{identityNames[doc.metadata?.submittedByUID] || doc.metadata?.submittedByUID || 'N/A'}
 												</div>
-
-												{/* Title Section */}
+												<div className="text-gray-500">{doc.lastModified}</div>
+											</div>												{/* Title Section */}
 												<div className="flex items-center gap-2 mb-2">
 													<FaFileAlt className="text-gray-500 flex-shrink-0" />
 													<span className="font-medium text-gray-900 text-sm leading-tight text-start">
@@ -1551,12 +1217,12 @@ const LabDocument = () => {
 							<div className="flex gap-3">
 								{selectedDocument && selectedDocument.metadata?.extractData?.analyses && (
 									<button
-										onClick={() => showAnalysisExtractPopup(selectedDocument)}
+										onClick={() => handleShowAnalysisExtract(selectedDocument)}
 										className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
 										title="Xem dữ liệu chỉ tiêu"
 									>
 										<FaTable className="w-3 h-3" />
-										Dữ liệu chỉ tiêu
+										Duyệt kết quả
 									</button>
 								)}
 								{selectedDocument && (
@@ -1581,24 +1247,8 @@ const LabDocument = () => {
 										{/* Hiển thị preview mã mẫu thử */}
 										<div dangerouslySetInnerHTML={{ __html: previewContent }} />
 
-										{/* Frame hiển thị báo cáo từ API */}
-										{selectedDocument && (
-											<div className="border-t border-gray-200 pt-6">
-												<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-													<FaPlay className="text-green-600" />
-													Báo cáo chi tiết
-												</h4>
-												<div className="border border-gray-300 rounded-lg overflow-hidden h-fit">
-													<iframe
-														src={`data:text/html;charset=utf-8,${encodeURIComponent(
-															generateReportFrame(selectedDocument),
-														)}`}
-														className="w-full h-[794px] border-0"
-														title="Lab Result Report"
-													/>
-												</div>
-											</div>
-										)}
+										{/* Hiển thị báo cáo chi tiết từ API */}
+										{selectedDocument && <ReportDetail document={selectedDocument} />}
 									</div>
 								</div>
 							) : (
@@ -1623,6 +1273,16 @@ const LabDocument = () => {
 					</div>
 				</div>
 			</div>
+
+			{/* Analysis Extract Modal */}
+			{showAnalysisExtract && selectedDocument && (
+				<AnalysesExtract
+					document={selectedDocument}
+					showAnalysisExtractInstead={true}
+					editId={selectedDocument.id}
+					onClose={() => setShowAnalysisExtract(false)}
+				/>
+			)}
 		</>
 	);
 };

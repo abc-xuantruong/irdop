@@ -987,8 +987,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			// Update URL parameters
 			updateUrlParams(filters, currentPage, itemsPerPage);
 
-			// Fetch both sidebar and table data
-			fetchParameters();
+			// Fetch both sidebar and table data - keep current search term for sidebar
+			fetchParameters(parameterSearchTerm);
 			fetchAnalysisData();
 		}
 	}, [
@@ -1003,8 +1003,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// Search parameters with debounce (only for search box, doesn't update URL)
 	useEffect(() => {
-		// Don't fetch during initial load or when search term is empty
-		if (!isInitialLoad && parameterSearchTerm) {
+		// Don't fetch during initial load, but allow empty search to fetch default data
+		if (!isInitialLoad) {
 			const timeoutId = setTimeout(() => {
 				fetchParameters(parameterSearchTerm);
 			}, 300);
@@ -2006,6 +2006,12 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white text-black text-left"
 								value={parameterSearchTerm}
 								onChange={(e) => setParameterSearchTerm(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter') {
+										// Immediately fetch parameters when Enter is pressed, even with empty value
+										fetchParameters(parameterSearchTerm);
+									}
+								}}
 							/>
 						</div>
 						{/* Summary text */}

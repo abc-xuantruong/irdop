@@ -24,8 +24,8 @@ const DocumentEditor = () => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [templateSearchTerm, setTemplateSearchTerm] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
-	const [documentStatus, setDocumentStatus] = useState('draft'); // 'draft' or 'submitted'
-	const [isDraft, setIsDraft] = useState(true); // Toggle state for draft/submitted
+	const [documentStatus, setDocumentStatus] = useState('draft'); // 'draft', 'submitted', or 'published'
+	const [isDraft, setIsDraft] = useState(true); // Toggle state for draft/submitted/published
 
 	// Data states from EditorTemplate.html
 	const [recentDocuments, setRecentDocuments] = useState([]);
@@ -73,6 +73,13 @@ const DocumentEditor = () => {
 	const [previewFile, setPreviewFile] = useState(null);
 	const [previewUrl, setPreviewUrl] = useState('');
 	const [showFilePreview, setShowFilePreview] = useState(false);
+
+	// Expand/Collapse states for sections
+	const [isRecentDocumentsExpanded, setIsRecentDocumentsExpanded] = useState(true); // Default expanded
+	const [isTemplatesExpanded, setIsTemplatesExpanded] = useState(false); // Default collapsed
+	
+	// Force refresh states
+	const [refreshTrigger, setRefreshTrigger] = useState(0);
 
 	// API constants and helper functions from EditorTemplate.html
 	const API_ENDPOINT = 'https://black.irdop.org/v1/analysis/processing/list';
@@ -288,9 +295,6 @@ const DocumentEditor = () => {
 
 	// Load data on component mount (only once)
 	useEffect(() => {
-		loadRecentDocuments('', 1, 'draft'); // Use hardcoded initial status
-		loadTemplates();
-
 		// Cleanup function
 		return () => {
 			// Clean up global function
@@ -305,6 +309,23 @@ const DocumentEditor = () => {
 		setIsDraft(documentStatus === 'draft');
 	}, [documentStatus]);
 
+	// Auto-search when search terms change (debounced)
+	useEffect(() => {
+		const timeoutId = setTimeout(() => {
+			loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
+		}, 500); // 500ms debounce
+
+		return () => clearTimeout(timeoutId);
+	}, [searchTerm, documentStatus, recentDocumentsPage, refreshTrigger]);
+
+	useEffect(() => {
+		const timeoutId = setTimeout(() => {
+			loadTemplates(templateSearchTerm, templatesPage);
+		}, 500); // 500ms debounce
+
+		return () => clearTimeout(timeoutId);
+	}, [templateSearchTerm, templatesPage, refreshTrigger]);
+
 	// Handle document status change
 	const handleDocumentStatusChange = async (newStatus) => {
 		if (newStatus === documentStatus) return; // No change needed
@@ -314,7 +335,7 @@ const DocumentEditor = () => {
 		setSelectedDocument(null); // Clear selection when switching tabs
 		setPreviewContent(''); // Clear preview content
 		setCurrentPreviewedTemplate(null); // Clear previewed template
-		await loadRecentDocuments(searchTerm, 1, newStatus);
+		// Note: loadRecentDocuments will be called automatically by useEffect when documentStatus changes
 	};
 
 	// Handle toggle switch change
@@ -325,16 +346,16 @@ const DocumentEditor = () => {
 		handleDocumentStatusChange(newStatus);
 	};
 
-	// Search handlers
+	// Search handlers - now use server-side search directly
 	const handleSearchRecentDocuments = () => {
-		loadRecentDocuments(searchTerm, 1, documentStatus);
+		setRecentDocumentsPage(1); // Reset to first page, useEffect will handle the search
 	};
 
 	const handleSearchTemplates = () => {
-		loadTemplates(templateSearchTerm, 1);
+		setTemplatesPage(1); // Reset to first page, useEffect will handle the search
 	};
 
-	// Search on Enter key
+	// Search on Enter key - manual search trigger
 	const handleSearchKeyPress = (e, isTemplate = false) => {
 		if (e.key === 'Enter') {
 			e.preventDefault();
@@ -342,6 +363,29 @@ const DocumentEditor = () => {
 				handleSearchTemplates();
 			} else {
 				handleSearchRecentDocuments();
+			}
+		}
+	};
+
+	// Handle expand/collapse section toggle
+	const handleSectionToggle = (section) => {
+		if (section === 'recent') {
+			if (!isRecentDocumentsExpanded) {
+				// Expanding recent documents, collapse templates
+				setIsRecentDocumentsExpanded(true);
+				setIsTemplatesExpanded(false);
+			} else {
+				// If already expanded, refresh data by incrementing trigger
+				setRefreshTrigger(prev => prev + 1);
+			}
+		} else if (section === 'templates') {
+			if (!isTemplatesExpanded) {
+				// Expanding templates, collapse recent documents
+				setIsTemplatesExpanded(true);
+				setIsRecentDocumentsExpanded(false);
+			} else {
+				// If already expanded, refresh data by incrementing trigger
+				setRefreshTrigger(prev => prev + 1);
 			}
 		}
 	};
@@ -680,7 +724,7 @@ const DocumentEditor = () => {
 			const reportData = {
 				header: header,
 				content: content,
-				footer: doc.id,
+				footer: metadata.footer,
 				analysisIds: analysisIds,
 				sampleUIDs: sampleUIDs,
 			};
@@ -903,7 +947,7 @@ const DocumentEditor = () => {
 				const reportData = {
 					header: header,
 					content: content,
-					footer: doc.id,
+					footer: metadata.footer,
 					analysisIds: analysisIds,
 					sampleUIDs: sampleUIDs,
 				};
@@ -996,7 +1040,7 @@ const DocumentEditor = () => {
 						<!-- API REPORT SECTION -->
 						<div style="margin-top: 20px;">
 							<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">BÁO CÁO CHI TIẾT</h4>
-							<div style="margin-top: 10px; border: 1px solid #ddd; border-radius: 4px; background: white; min-height: 400px; overflow: auto;">
+							<div style="margin-top: 10px; border: 1px solid #ddd; border-radius: 4px; background: white; min-height: 400px; overflow: auto; text-align: left;">
 								${reportHTML}
 							</div>
 						</div>
@@ -1248,8 +1292,13 @@ const DocumentEditor = () => {
 				alert('Tạo mẫu thành công!');
 			}
 
-			// Refresh templates list
-			await loadTemplates(templateSearchTerm, templatesPage);
+			// Refresh templates list by resetting page (triggers useEffect)
+			setTemplatesPage(1);
+			if (templatesPage === 1) {
+				// If already on page 1, force refresh by toggling the state
+				setTemplatesPage(0);
+				setTimeout(() => setTemplatesPage(1), 10);
+			}
 			handleCloseTemplatePopup();
 		} catch (error) {
 			console.error('Error saving template:', error);
@@ -1263,10 +1312,12 @@ const DocumentEditor = () => {
 		switch (status) {
 			case 'submitted':
 				return 'bg-green-100 text-green-800';
+			case 'published':
+				return 'bg-blue-100 text-blue-800';
 			case 'draft':
 				return 'bg-yellow-100 text-yellow-800';
 			case 'review':
-				return 'bg-blue-100 text-blue-800';
+				return 'bg-purple-100 text-purple-800';
 			default:
 				return 'bg-gray-100 text-gray-800';
 		}
@@ -1276,6 +1327,8 @@ const DocumentEditor = () => {
 		switch (status) {
 			case 'submitted':
 				return 'Đã nộp';
+			case 'published':
+				return 'Đã xuất bản';
 			case 'draft':
 				return 'Bản nháp';
 			case 'review':
@@ -1302,10 +1355,22 @@ const DocumentEditor = () => {
 			pages.push('...');
 		}
 
-		// Show pages around current page
-		const start = Math.max(2, currentPage - 1);
-		const end = Math.min(totalPages - 1, currentPage + 1);
+		// Calculate start and end pages around current page
+		let start = Math.max(2, currentPage - 1);
+		let end = Math.min(totalPages - 1, currentPage + 1);
 
+		// Adjust start and end to avoid gaps
+		if (currentPage <= 4) {
+			// If we're near the beginning, show more pages at the start
+			start = 2;
+			end = Math.min(5, totalPages - 1);
+		} else if (currentPage >= totalPages - 3) {
+			// If we're near the end, show more pages at the end
+			start = Math.max(totalPages - 4, 2);
+			end = totalPages - 1;
+		}
+
+		// Add pages around current page
 		for (let i = start; i <= end; i++) {
 			if (!pages.includes(i)) {
 				pages.push(i);
@@ -1328,12 +1393,12 @@ const DocumentEditor = () => {
 	// Page change handlers with API integration
 	const handleRecentDocumentsPageChange = async (newPage) => {
 		setRecentDocumentsPage(newPage);
-		await loadRecentDocuments(searchTerm, newPage, documentStatus);
+		// Note: loadRecentDocuments will be called automatically by useEffect when recentDocumentsPage changes
 	};
 
 	const handleTemplatesPageChange = async (newPage) => {
 		setTemplatesPage(newPage);
-		await loadTemplates(templateSearchTerm, newPage);
+		// Note: loadTemplates will be called automatically by useEffect when templatesPage changes
 	};
 
 	// Icon insertion functionality
@@ -1408,19 +1473,7 @@ const DocumentEditor = () => {
 	const recentDocumentsData = getRecentDocumentsData();
 	const documentTemplatesData = getDocumentTemplatesData();
 
-	const filteredDocuments = recentDocumentsData.result.filter((doc) =>
-		doc.title.toLowerCase().includes(searchTerm.toLowerCase()),
-	);
-
-	const filteredTemplates = documentTemplatesData.result.filter((template) => {
-		const searchTerm = templateSearchTerm.toLowerCase();
-		const matchesSearch =
-			(template.templateName || template.name || '').toLowerCase().includes(searchTerm) ||
-			(template.templateDescription || template.description || '').toLowerCase().includes(searchTerm) ||
-			(template.header?.title || '').toLowerCase().includes(searchTerm);
-
-		return matchesSearch;
-	});
+	// Remove client-side filtering - search is now handled server-side via API calls
 
 	return (
 		<>
@@ -1568,279 +1621,342 @@ const DocumentEditor = () => {
 					}
 				`}</style>
 
-				{/* Cột 1: Hoạt động gần đây và Mẫu tài liệu */}
-				<div className="w-1/3 flex flex-col gap-4 h-full min-w-[400px] document-editor-sidebar">
-					{/* Hoạt động gần đây */}
-					<div className="bg-white rounded-xl shadow-sm border p-6 flex-1 flex flex-col min-h-0">
-						<div className="flex items-center justify-between mb-4 flex-shrink-0">
-							<h3
-								className="text-lg font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors"
-								onClick={() => loadRecentDocuments(searchTerm, 1, documentStatus)}
-								title="Click để làm mới danh sách"
+				{/* Cột 1: Hoạt động gần đây và Mẫu tài liệu với Expand/Collapse */}
+				<div className="w-1/3 h-full min-w-[400px] document-editor-sidebar">
+					{/* Container cho Expand/Collapse sections */}
+					<div className="h-full flex flex-col bg-white rounded-xl shadow-sm border">
+						{/* Hoạt động gần đây */}
+						<div 
+							className={`flex flex-col transition-all duration-500 ease-in-out overflow-hidden ${
+								isRecentDocumentsExpanded ? 'flex-shrink-0' : 'flex-shrink-0'
+							}`}
+							style={{
+								height: isRecentDocumentsExpanded ? 'calc(100% - 60px)' : '60px'
+							}}
+						>
+							{/* Header - Always visible */}
+							<div 
+								className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-200"
+								onClick={() => handleSectionToggle('recent')}
 							>
-								<FaClock className="text-blue-600" />
-								{documentStatus === 'submitted' ? 'Tài liệu đã nộp' : 'Hoạt động gần đây'}
-								{isLoading && (
-									<div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-								)}
-							</h3>
-							{/* Document Status Toggle */}
-							<label className="relative inline-flex items-center cursor-pointer">
-								<input
-									type="checkbox"
-									checked={isDraft}
-									onChange={handleToggleChange}
-									className="sr-only"
-									disabled={isLoading}
-								/>
-								<div className="w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
-									{/* Sliding background */}
-									<div
-										className={`absolute top-0 w-1/2 h-full bg-blue-500 rounded-full transition-all duration-300 ease-in-out transform
-											${isDraft ? 'translate-x-0' : 'translate-x-full'}`}
-									></div>
+								<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+									<FaClock className="text-blue-600" />
+									{documentStatus === 'submitted' ? 'Tài liệu đã nộp' : 'Hoạt động gần đây'}
+									{isLoading && (
+										<div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+									)}
+								</h3>
+								<div className="flex items-center gap-2">
+									{/* Document Status Toggle - only show when expanded */}
+									{isRecentDocumentsExpanded && (
+										<label className="relative inline-flex items-center cursor-pointer">
+											<input
+												type="checkbox"
+												checked={isDraft}
+												onChange={handleToggleChange}
+												className="sr-only"
+												disabled={isLoading}
+											/>
+											<div className="w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
+												{/* Sliding background */}
+												<div
+													className={`absolute top-0 w-1/2 h-full bg-blue-500 rounded-full transition-all duration-300 ease-in-out transform
+														${isDraft ? 'translate-x-0' : 'translate-x-full'}`}
+												></div>
 
-									{/* DRAFT text */}
-									<div className="absolute left-0 w-1/2 h-full flex items-center justify-center">
-										<span
-											className={`text-xs font-medium transition-all duration-300 ease-in-out
-												${isDraft ? 'text-white' : 'text-gray-600'}`}
-										>
-											DRAFT
-										</span>
-									</div>
-
-									{/* SUBMITTED text */}
-									<div className="absolute right-0 w-1/2 h-full flex items-center justify-center">
-										<span
-											className={`text-xs font-medium transition-all duration-300 ease-in-out
-												${!isDraft ? 'text-white' : 'text-gray-600'}`}
-										>
-											SUBMITTED
-										</span>
-									</div>
-								</div>
-							</label>
-						</div>
-						<div className="flex-shrink-0">
-							<div className="relative mb-3">
-								<FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-								<input
-									type="text"
-									placeholder="Tìm tài liệu..."
-									value={searchTerm}
-									onChange={(e) => setSearchTerm(e.target.value)}
-									onKeyPress={(e) => handleSearchKeyPress(e, false)}
-									className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-								/>
-							</div>
-							{/* Pagination for Recent Documents */}
-							{recentDocumentsData.pagination.totalPages > 1 && (
-								<div className="flex items-center justify-center pb-2">
-									<div className="flex items-center gap-1 flex-wrap justify-center">
-										<button
-											onClick={() => handleRecentDocumentsPageChange(recentDocumentsData.pagination.currentPage - 1)}
-											disabled={recentDocumentsData.pagination.currentPage === 1}
-											className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-										>
-											Trước
-										</button>
-										{getSmartPaginationNumbers(
-											recentDocumentsData.pagination.currentPage,
-											recentDocumentsData.pagination.totalPages,
-										).map((page, index) => (
-											<span key={index}>
-												{page === '...' ? (
-													<span className="px-2 py-1 text-xs text-gray-500">...</span>
-												) : (
-													<button
-														onClick={() => handleRecentDocumentsPageChange(page)}
-														className={`px-2 py-1 text-xs border rounded-lg ${
-															page === recentDocumentsData.pagination.currentPage
-																? 'bg-blue-500 text-white border-blue-500'
-																: 'border-gray-300 hover:bg-gray-50'
-														}`}
+												{/* DRAFT text */}
+												<div className="absolute left-0 w-1/2 h-full flex items-center justify-center">
+													<span
+														className={`text-xs font-medium transition-all duration-300 ease-in-out
+															${isDraft ? 'text-white' : 'text-gray-600'}`}
 													>
-														{page}
-													</button>
-												)}
-											</span>
-										))}
-										<button
-											onClick={() => handleRecentDocumentsPageChange(recentDocumentsData.pagination.currentPage + 1)}
-											disabled={
-												recentDocumentsData.pagination.currentPage === recentDocumentsData.pagination.totalPages
-											}
-											className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-										>
-											Sau
-										</button>
-									</div>
-								</div>
-							)}
-						</div>
-
-						<div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
-							{isLoading ? (
-								<div className="flex justify-center items-center h-32">
-									<div className="text-gray-500">Đang tải...</div>
-								</div>
-							) : filteredDocuments.length === 0 ? (
-								<div className="flex flex-col items-center justify-center h-32 text-gray-500">
-									<FaFileAlt className="w-8 h-8 mb-2 text-gray-300" />
-									<div className="text-sm">
-										{documentStatus === 'submitted' ? 'Không có tài liệu đã nộp' : 'Không có bản nháp nào'}
-									</div>
-									{searchTerm && <div className="text-xs mt-1">Thử tìm kiếm với từ khóa khác</div>}
-								</div>
-							) : (
-								<div className="space-y-3">
-									{filteredDocuments.map((doc) => (
-										<div
-											key={doc.id}
-											onClick={() => handleDocumentClick(doc)}
-											className={`p-4 border rounded-lg cursor-pointer transition-all hover:shadow-md hover:border-blue-300 ${
-												selectedDocument?.id === doc.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-											}`}
-										>
-											<div className="flex items-start justify-between mb-2">
-												<div className="flex items-center gap-2">
-													<FaFileAlt className="text-gray-500 flex-shrink-0" />
-													<span className="font-medium text-gray-900 text-sm leading-tight">
-														{doc.metadata?.header?.title || doc.title}
+														DRAFT
 													</span>
 												</div>
-												<span className="text-xs text-gray-500">{doc.lastModified}</span>
-											</div>
-											<div className="text-xs text-gray-500 text-start">
-												<span className="font-mono">
-													{doc.status === 'submitted'
-														? `Document Fingerprint: ${doc.metadata?.footer || doc.id}`
-														: `Mã tài liệu sửa đổi: ${doc.metadata?.footer || doc.id}`}
-												</span>
-											</div>
-										</div>
-									))}
-								</div>
-							)}
-						</div>
-					</div>
 
-					{/* Mẫu tài liệu */}
-					<div className="bg-white rounded-xl shadow-sm border p-6 flex-1 flex flex-col min-h-0">
-						<div className="flex items-center justify-between mb-4 flex-shrink-0">
-							<h3
-								className="text-lg font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-green-600 transition-colors"
-								onClick={() => loadTemplates(templateSearchTerm, 1)}
-								title="Click để làm mới danh sách"
-							>
-								<FaEdit className="text-green-600" />
-								Mẫu tài liệu
-							</h3>
-							<button
-								onClick={handleCreateNewTemplate}
-								disabled={isLoading}
-								className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								<FaPlus className="w-3 h-3" />
-								{isLoading ? 'Đang tải...' : 'Tạo mẫu mới'}
-							</button>
-						</div>
-						<div className="flex-shrink-0">
-							<div className="relative mb-3">
-								<FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-								<input
-									type="text"
-									placeholder="Tìm mẫu tài liệu..."
-									value={templateSearchTerm}
-									onChange={(e) => setTemplateSearchTerm(e.target.value)}
-									onKeyPress={(e) => handleSearchKeyPress(e, true)}
-									className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
-								/>
+												{/* SUBMITTED text */}
+												<div className="absolute right-0 w-1/2 h-full flex items-center justify-center">
+													<span
+														className={`text-xs font-medium transition-all duration-300 ease-in-out
+															${!isDraft ? 'text-white' : 'text-gray-600'}`}
+													>
+														SUBMITTED
+													</span>
+												</div>
+											</div>
+										</label>
+									)}
+									<FaChevronDown 
+										className={`text-gray-400 transition-transform duration-300 ${
+											isRecentDocumentsExpanded ? 'rotate-180' : ''
+										}`}
+									/>
+								</div>
 							</div>
-							{/* Pagination for Templates */}
-							{documentTemplatesData.pagination.totalPages > 1 && (
-								<div className="flex items-center justify-center pb-2">
-									<div className="flex items-center gap-1 flex-wrap justify-center">
-										<button
-											onClick={() => handleTemplatesPageChange(documentTemplatesData.pagination.currentPage - 1)}
-											disabled={documentTemplatesData.pagination.currentPage === 1}
-											className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-										>
-											Trước
-										</button>
-										{getSmartPaginationNumbers(
-											documentTemplatesData.pagination.currentPage,
-											documentTemplatesData.pagination.totalPages,
-										).map((page, index) => (
-											<span key={index}>
-												{page === '...' ? (
-													<span className="px-2 py-1 text-xs text-gray-500">...</span>
-												) : (
+
+							{/* Content - Collapsible */}
+							{isRecentDocumentsExpanded && (
+								<div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+									<div className="flex-shrink-0 pt-4">
+										<div className="relative mb-3">
+											<FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+											<input
+												type="text"
+												placeholder="Tìm tài liệu..."
+												value={searchTerm}
+												onChange={(e) => setSearchTerm(e.target.value)}
+												onKeyPress={(e) => handleSearchKeyPress(e, false)}
+												className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+												title="Tìm kiếm tự động sau 0.5 giây hoặc nhấn Enter"
+											/>
+											{isLoading && (
+												<div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+													<div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+												</div>
+											)}
+										</div>
+										{/* Pagination for Recent Documents */}
+										{recentDocumentsData.pagination.totalPages > 1 && (
+											<div className="flex items-center justify-center pb-2">
+												<div className="flex items-center gap-1 flex-wrap justify-center">
 													<button
-														onClick={() => handleTemplatesPageChange(page)}
-														className={`px-2 py-1 text-xs border rounded-lg ${
-															page === documentTemplatesData.pagination.currentPage
-																? 'bg-blue-500 text-white border-blue-500'
-																: 'border-gray-300 hover:bg-gray-50'
+														onClick={() => handleRecentDocumentsPageChange(recentDocumentsData.pagination.currentPage - 1)}
+														disabled={recentDocumentsData.pagination.currentPage === 1}
+														className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+													>
+														Trước
+													</button>
+													{getSmartPaginationNumbers(
+														recentDocumentsData.pagination.currentPage,
+														recentDocumentsData.pagination.totalPages,
+													).map((page, index) => (
+														<span key={index}>
+															{page === '...' ? (
+																<span className="px-2 py-1 text-xs text-gray-500">...</span>
+															) : (
+																<button
+																	onClick={() => handleRecentDocumentsPageChange(page)}
+																	className={`px-2 py-1 text-xs border rounded-lg ${
+																		page === recentDocumentsData.pagination.currentPage
+																			? 'bg-blue-500 text-white border-blue-500'
+																			: 'border-gray-300 hover:bg-gray-50'
+																	}`}
+																>
+																	{page}
+																</button>
+															)}
+														</span>
+													))}
+													<button
+														onClick={() => handleRecentDocumentsPageChange(recentDocumentsData.pagination.currentPage + 1)}
+														disabled={
+															recentDocumentsData.pagination.currentPage === recentDocumentsData.pagination.totalPages
+														}
+														className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+													>
+														Sau
+													</button>
+												</div>
+											</div>
+										)}
+									</div>
+
+									<div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+										{isLoading ? (
+											<div className="flex justify-center items-center h-32">
+												<div className="text-gray-500">Đang tải...</div>
+											</div>
+										) : recentDocumentsData.result.length === 0 ? (
+											<div className="flex flex-col items-center justify-center h-32 text-gray-500">
+												<FaFileAlt className="w-8 h-8 mb-2 text-gray-300" />
+												<div className="text-sm">
+													{documentStatus === 'submitted' ? 'Không có tài liệu đã nộp' : 'Không có bản nháp nào'}
+												</div>
+												{searchTerm && <div className="text-xs mt-1">Thử tìm kiếm với từ khóa khác</div>}
+											</div>
+										) : (
+											<div className="space-y-3">
+												{recentDocumentsData.result.map((doc) => (
+													<div
+														key={doc.id}
+														onClick={() => handleDocumentClick(doc)}
+														className={`p-4 border rounded-lg cursor-pointer transition-all hover:shadow-md hover:border-blue-300 ${
+															selectedDocument?.id === doc.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
 														}`}
 													>
-														{page}
-													</button>
-												)}
-											</span>
-										))}
-										<button
-											onClick={() => handleTemplatesPageChange(documentTemplatesData.pagination.currentPage + 1)}
-											disabled={
-												documentTemplatesData.pagination.currentPage === documentTemplatesData.pagination.totalPages
-											}
-											className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-										>
-											Sau
-										</button>
+														<div className="flex items-start justify-between mb-2">
+															<div className="flex items-center gap-2">
+																<FaFileAlt className="text-gray-500 flex-shrink-0" />
+																<span className="font-medium text-gray-900 text-sm leading-tight">
+																	{doc.metadata?.header?.title || doc.title}
+																</span>
+															</div>
+															<span className="text-xs text-gray-500">{doc.lastModified}</span>
+														</div>
+														<div className="text-xs text-gray-500 text-start">
+															<span className="font-mono">
+																{doc.status === 'submitted'
+																	? `Document Fingerprint: ${doc.metadata?.footer || doc.id}`
+																	: `Mã tài liệu sửa đổi: ${doc.metadata?.footer || doc.id}`}
+															</span>
+														</div>
+													</div>
+												))}
+											</div>
+										)}
 									</div>
 								</div>
 							)}
 						</div>
 
-						<div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
-							{isLoading ? (
-								<div className="flex justify-center items-center h-32">
-									<div className="text-gray-500">Đang tải...</div>
-								</div>
-							) : (
-								<div className="space-y-3">
-									{filteredTemplates.map((template) => (
-										<div
-											key={template.id}
-											onClick={() => handleTemplateClick(template)}
-											className="p-4 border border-gray-200 rounded-lg cursor-pointer transition-all hover:shadow-md hover:border-green-300 group relative"
+						{/* Mẫu tài liệu */}
+						<div 
+							className={`flex flex-col transition-all duration-500 ease-in-out overflow-hidden ${
+								isTemplatesExpanded ? 'flex-shrink-0' : 'flex-shrink-0'
+							}`}
+							style={{
+								height: isTemplatesExpanded ? 'calc(100% - 60px)' : '60px'
+							}}
+						>
+							{/* Header - Always visible */}
+							<div 
+								className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors border-t border-gray-200"
+								onClick={() => handleSectionToggle('templates')}
+							>
+								<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+									<FaEdit className="text-green-600" />
+									Mẫu tài liệu
+								</h3>
+								<div className="flex items-center gap-2">
+									{/* Create Template Button - only show when expanded */}
+									{isTemplatesExpanded && (
+										<button
+											onClick={(e) => {
+												e.stopPropagation();
+												handleCreateNewTemplate();
+											}}
+											disabled={isLoading}
+											className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
 										>
-											<div className="flex items-start justify-between mb-2">
-												<h4 className="font-medium text-gray-900 text-sm leading-tight text-left pr-20">
-													{template.templateName || template.name}
-												</h4>
-												<div className="absolute top-2 right-2 flex items-center gap-2">
+											<FaPlus className="w-3 h-3" />
+											{isLoading ? 'Đang tải...' : 'Tạo mẫu mới'}
+										</button>
+									)}
+									<FaChevronDown 
+										className={`text-gray-400 transition-transform duration-300 ${
+											isTemplatesExpanded ? 'rotate-180' : ''
+										}`}
+									/>
+								</div>
+							</div>
+
+							{/* Content - Collapsible */}
+							{isTemplatesExpanded && (
+								<div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+									<div className="flex-shrink-0 pt-4">
+										<div className="relative mb-3">
+											<FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+											<input
+												type="text"
+												placeholder="Tìm mẫu tài liệu..."
+												value={templateSearchTerm}
+												onChange={(e) => setTemplateSearchTerm(e.target.value)}
+												onKeyPress={(e) => handleSearchKeyPress(e, true)}
+												className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
+												title="Tìm kiếm tự động sau 0.5 giây hoặc nhấn Enter"
+											/>
+											{isLoading && (
+												<div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+													<div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+												</div>
+											)}
+										</div>
+										{/* Pagination for Templates */}
+										{documentTemplatesData.pagination.totalPages > 1 && (
+											<div className="flex items-center justify-center pb-2">
+												<div className="flex items-center gap-1 flex-wrap justify-center">
 													<button
-														onClick={(e) => {
-															e.stopPropagation();
-															handleEditTemplate(template);
-														}}
-														className="text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all p-1"
-														title="Chỉnh sửa mẫu"
+														onClick={() => handleTemplatesPageChange(documentTemplatesData.pagination.currentPage - 1)}
+														disabled={documentTemplatesData.pagination.currentPage === 1}
+														className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
 													>
-														<FaEdit className="w-4 h-4" />
+														Trước
 													</button>
-													<FaEye className="text-green-500 flex-shrink-0" />
+													{getSmartPaginationNumbers(
+														documentTemplatesData.pagination.currentPage,
+														documentTemplatesData.pagination.totalPages,
+													).map((page, index) => (
+														<span key={index}>
+															{page === '...' ? (
+																<span className="px-2 py-1 text-xs text-gray-500">...</span>
+															) : (
+																<button
+																	onClick={() => handleTemplatesPageChange(page)}
+																	className={`px-2 py-1 text-xs border rounded-lg ${
+																		page === documentTemplatesData.pagination.currentPage
+																			? 'bg-blue-500 text-white border-blue-500'
+																			: 'border-gray-300 hover:bg-gray-50'
+																	}`}
+																>
+																	{page}
+																</button>
+															)}
+														</span>
+													))}
+													<button
+														onClick={() => handleTemplatesPageChange(documentTemplatesData.pagination.currentPage + 1)}
+														disabled={
+															documentTemplatesData.pagination.currentPage === documentTemplatesData.pagination.totalPages
+														}
+														className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+													>
+														Sau
+													</button>
 												</div>
 											</div>
-											<div className="text-xs text-gray-500 space-y-1 text-left">
-												<div>Tiêu đề: {template.header?.title || template.templateName || template.name}</div>
-												<div>Mô tả: {template.templateDescription || template.description}</div>
+										)}
+									</div>
+
+									<div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+										{isLoading ? (
+											<div className="flex justify-center items-center h-32">
+												<div className="text-gray-500">Đang tải...</div>
 											</div>
-										</div>
-									))}
+										) : (
+											<div className="space-y-3">
+												{documentTemplatesData.result.map((template) => (
+													<div
+														key={template.id}
+														onClick={() => handleTemplateClick(template)}
+														className="p-4 border border-gray-200 rounded-lg cursor-pointer transition-all hover:shadow-md hover:border-green-300 group relative"
+													>
+														<div className="flex items-start justify-between mb-2">
+															<h4 className="font-medium text-gray-900 text-sm leading-tight text-left pr-20">
+																{template.templateName || template.name}
+															</h4>
+															<div className="absolute top-2 right-2 flex items-center gap-2">
+																<button
+																	onClick={(e) => {
+																		e.stopPropagation();
+																		handleEditTemplate(template);
+																	}}
+																	className="text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all p-1"
+																	title="Chỉnh sửa mẫu"
+																>
+																	<FaEdit className="w-4 h-4" />
+																</button>
+																<FaEye className="text-green-500 flex-shrink-0" />
+															</div>
+														</div>
+														<div className="text-xs text-gray-500 space-y-1 text-left">
+															<div>Tiêu đề: {template.header?.title || template.templateName || template.name}</div>
+															<div>Mô tả: {template.templateDescription || template.description}</div>
+														</div>
+													</div>
+												))}
+											</div>
+										)}
+									</div>
 								</div>
 							)}
 						</div>
