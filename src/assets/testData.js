@@ -364,6 +364,11 @@ const { cError, handleError } = global.get('utilities.js');
         get id() { return this.info.id; }
         get lockedByUID() { return this.info.lockedByUID; }
         get metadata() { return this.info.metadata; }
+        get modifiedAt() { return this.info.modifiedAt; }
+        get modifiedByUID() { return this.info.modifiedByUID; }
+        get createdAt() { return this.info.createdAt; }
+        get identityUID() { return this.info.identityUID; }
+
 
         get documentId() { return this.info.documentId; }
         get userId() { return this.info.userId; }
@@ -398,7 +403,8 @@ const { cError, handleError } = global.get('utilities.js');
 
                 editRecord.modifiedAt = new Date().toISOString();
                 editRecord.appUID = session.appUID;
-                editRecord.identityUID = session.identityUID;
+                editRecord.identityUID = session.appUID;
+                editRecord.modifiedByUID = session.identityUID;
 
                 // insert or update edit record
                 const { quotedColumns, values } = await db.getColumnsAndValues('document.edit', editRecord);
@@ -415,9 +421,7 @@ const { cError, handleError } = global.get('utilities.js');
     					   RETURNING *`,
                     params: values,
                     intent: 'Auto-saving changes'
-                };
-                node.warn({query});
-                
+                };                
 
                 const result = await db.query(query.text, query.params);
                 return result.rows[0];

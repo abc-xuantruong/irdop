@@ -660,6 +660,16 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 						requestBody.technician_uid = technicianUids;
 					}
 				}
+
+				if (queryParams.has('ps_doc_id')) {
+					const docIds = queryParams
+						.get('ps_doc_id')
+						.split(',')
+						.filter((s) => s.trim());
+					if (docIds.length > 0) {
+						requestBody.doc_id = docIds;
+					}
+				}
 			}
 
 			// Add header filters from current filters (fallback) - exclude status as it's handled separately
@@ -744,6 +754,18 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 				} else if (column === 'handover_date' && filterValue) {
 					// Handle handover date filter
 					requestBody.handover_date = filterValue;
+				} else if (column === 'doc_id' && filterValue) {
+					// Handle doc_id filter
+					if (!requestBody.doc_id) {
+						requestBody.doc_id = [];
+						const values = Array.isArray(filterValue)
+							? filterValue
+							: filterValue
+									.split(',')
+									.map((s) => s.trim())
+									.filter((s) => s);
+						requestBody.doc_id = values;
+					}
 				}
 			});
 
@@ -1487,6 +1509,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 			'ps_filter',
 			'ps_page',
 			'ps_itemsPerPage',
+			'ps_doc_id',
 		].forEach((param) => {
 			queryParams.delete(param);
 		});
@@ -1573,17 +1596,139 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		setFilterSearchTerm('');
 
 		try {
-			const response = await apiPost('https://black.irdop.org/v1/processing/search_filter_column', {
+			// Prepare request body with current filters
+			const requestBody = {
 				filterColumn: columnName,
 				searchTerm: '',
 				itemsPerPage: 50,
 				page: 1,
-			});
+			};
+
+			// Add current filters to request body
+			const queryParams = new URLSearchParams(location.search);
+
+			// Add sample_uid filter if exists
+			if (queryParams.has('ps_sample_uid')) {
+				const sampleUids = queryParams
+					.get('ps_sample_uid')
+					.split(',')
+					.filter((s) => s.trim());
+				if (sampleUids.length > 0) {
+					requestBody.sample_uid = sampleUids;
+				}
+			}
+
+			// Add parameter_name filter if exists
+			if (queryParams.has('ps_parameter_name')) {
+				const paramNames = queryParams
+					.get('ps_parameter_name')
+					.split(',')
+					.filter((s) => s.trim());
+				if (paramNames.length > 0) {
+					requestBody.parameter_name = paramNames;
+				}
+			}
+
+			// Add protocol_source filter if exists
+			if (queryParams.has('ps_protocol_source')) {
+				const protocolSources = queryParams
+					.get('ps_protocol_source')
+					.split(',')
+					.filter((s) => s.trim());
+				if (protocolSources.length > 0) {
+					requestBody.protocol_source = protocolSources;
+				}
+			}
+
+			// Add protocol_code filter if exists
+			if (queryParams.has('ps_protocol_code')) {
+				const protocolCodes = queryParams
+					.get('ps_protocol_code')
+					.split(',')
+					.filter((s) => s.trim());
+				if (protocolCodes.length > 0) {
+					requestBody.protocol_code = protocolCodes;
+				}
+			}
+
+			// Add matrix filter if exists
+			if (queryParams.has('ps_matrix')) {
+				const matrices = queryParams
+					.get('ps_matrix')
+					.split(',')
+					.filter((s) => s.trim());
+				if (matrices.length > 0) {
+					requestBody.matrix = matrices;
+				}
+			}
+
+			// Add technician_uid filter if exists
+			if (queryParams.has('ps_technician_uid')) {
+				const technicianUids = queryParams
+					.get('ps_technician_uid')
+					.split(',')
+					.filter((s) => s.trim());
+				if (technicianUids.length > 0) {
+					requestBody.technician_uid = technicianUids;
+				}
+			}
+
+			// Add status filter if exists
+			if (queryParams.has('ps_status')) {
+				const status = queryParams.get('ps_status');
+				if (status === '1') {
+					requestBody.status = 1;
+				}
+			}
+
+			// Add done filter if exists
+			if (queryParams.has('ps_done')) {
+				const doneValue = queryParams.get('ps_done');
+				if (doneValue === 'true') {
+					requestBody.done = true;
+				}
+			}
+
+			// Add overdue filter if exists
+			if (queryParams.has('ps_overdue')) {
+				const overdueValue = queryParams.get('ps_overdue');
+				if (overdueValue === 'true') {
+					requestBody.overdue = true;
+				}
+			}
+
+			// Add deadline filter if exists
+			if (queryParams.has('ps_deadline')) {
+				const deadline = queryParams.get('ps_deadline');
+				if (deadline) {
+					requestBody.deadline = deadline;
+				}
+			}
+
+			// Add doc_id filter if exists
+			if (queryParams.has('ps_doc_id')) {
+				const docIds = queryParams
+					.get('ps_doc_id')
+					.split(',')
+					.filter((s) => s.trim());
+				if (docIds.length > 0) {
+					requestBody.doc_id = docIds;
+				}
+			}
+
+			const response = await apiPost('https://black.irdop.org/v1/processing/search_filter_column', requestBody);
 
 			if (response?.status < 300 && response?.data?.result) {
 				let formattedResults = [];
 
-				if (columnName === 'technician_uid') {
+				if (columnName === 'doc_id') {
+					// Special handling for doc_id column - predefined options
+					formattedResults = [
+						{ value: 'none', count: 0, label: 'none' },
+						{ value: 'pending', count: 0, label: 'pending' },
+						{ value: 'published', count: 0, label: 'published' }
+					];
+				} else if (columnName === 'technician_uid') {
 					// For technician filter, convert identity_uid to display name with alias
 					formattedResults = response.data.result.map((item) => {
 						// API returns technician_uid field, not value
@@ -1651,17 +1796,139 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		if (!activeFilterColumn) return;
 
 		try {
-			const response = await apiPost('https://black.irdop.org/v1/processing/search_filter_column', {
+			// Prepare request body with current filters
+			const requestBody = {
 				filterColumn: activeFilterColumn,
 				searchTerm: searchTerm,
 				itemsPerPage: 50,
 				page: 1,
-			});
+			};
+
+			// Add current filters to request body
+			const queryParams = new URLSearchParams(location.search);
+
+			// Add sample_uid filter if exists
+			if (queryParams.has('ps_sample_uid')) {
+				const sampleUids = queryParams
+					.get('ps_sample_uid')
+					.split(',')
+					.filter((s) => s.trim());
+				if (sampleUids.length > 0) {
+					requestBody.sample_uid = sampleUids;
+				}
+			}
+
+			// Add parameter_name filter if exists
+			if (queryParams.has('ps_parameter_name')) {
+				const paramNames = queryParams
+					.get('ps_parameter_name')
+					.split(',')
+					.filter((s) => s.trim());
+				if (paramNames.length > 0) {
+					requestBody.parameter_name = paramNames;
+				}
+			}
+
+			// Add protocol_source filter if exists
+			if (queryParams.has('ps_protocol_source')) {
+				const protocolSources = queryParams
+					.get('ps_protocol_source')
+					.split(',')
+					.filter((s) => s.trim());
+				if (protocolSources.length > 0) {
+					requestBody.protocol_source = protocolSources;
+				}
+			}
+
+			// Add protocol_code filter if exists
+			if (queryParams.has('ps_protocol_code')) {
+				const protocolCodes = queryParams
+					.get('ps_protocol_code')
+					.split(',')
+					.filter((s) => s.trim());
+				if (protocolCodes.length > 0) {
+					requestBody.protocol_code = protocolCodes;
+				}
+			}
+
+			// Add matrix filter if exists
+			if (queryParams.has('ps_matrix')) {
+				const matrices = queryParams
+					.get('ps_matrix')
+					.split(',')
+					.filter((s) => s.trim());
+				if (matrices.length > 0) {
+					requestBody.matrix = matrices;
+				}
+			}
+
+			// Add technician_uid filter if exists
+			if (queryParams.has('ps_technician_uid')) {
+				const technicianUids = queryParams
+					.get('ps_technician_uid')
+					.split(',')
+					.filter((s) => s.trim());
+				if (technicianUids.length > 0) {
+					requestBody.technician_uid = technicianUids;
+				}
+			}
+
+			// Add status filter if exists
+			if (queryParams.has('ps_status')) {
+				const status = queryParams.get('ps_status');
+				if (status === '1') {
+					requestBody.status = 1;
+				}
+			}
+
+			// Add done filter if exists
+			if (queryParams.has('ps_done')) {
+				const doneValue = queryParams.get('ps_done');
+				if (doneValue === 'true') {
+					requestBody.done = true;
+				}
+			}
+
+			// Add overdue filter if exists
+			if (queryParams.has('ps_overdue')) {
+				const overdueValue = queryParams.get('ps_overdue');
+				if (overdueValue === 'true') {
+					requestBody.overdue = true;
+				}
+			}
+
+			// Add deadline filter if exists
+			if (queryParams.has('ps_deadline')) {
+				const deadline = queryParams.get('ps_deadline');
+				if (deadline) {
+					requestBody.deadline = deadline;
+				}
+			}
+
+			// Add doc_id filter if exists
+			if (queryParams.has('ps_doc_id')) {
+				const docIds = queryParams
+					.get('ps_doc_id')
+					.split(',')
+					.filter((s) => s.trim());
+				if (docIds.length > 0) {
+					requestBody.doc_id = docIds;
+				}
+			}
+
+			const response = await apiPost('https://black.irdop.org/v1/processing/search_filter_column', requestBody);
 
 			if (response?.status < 300 && response?.data?.result) {
 				let formattedResults = [];
 
-				if (activeFilterColumn === 'technician_uid') {
+				if (activeFilterColumn === 'doc_id') {
+					// Special handling for doc_id column - predefined options, no search needed
+					formattedResults = [
+						{ value: 'none', count: 0, label: 'none' },
+						{ value: 'pending', count: 0, label: 'pending' },
+						{ value: 'published', count: 0, label: 'published' }
+					];
+				} else if (activeFilterColumn === 'technician_uid') {
 					// For technician filter, convert identity_uid to display name with alias
 					formattedResults = response.data.result.map((item) => {
 						// API returns technician_uid field, not value
@@ -1732,6 +1999,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 			'ps_filter',
 			'ps_page',
 			'ps_itemsPerPage',
+			'ps_doc_id',
 		].forEach((param) => {
 			queryParams.delete(param);
 		});
@@ -1851,6 +2119,8 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 						? 'Hạn trả'
 						: activeFilterColumn === 'technician_uid'
 						? 'Người thực hiện'
+						: activeFilterColumn === 'doc_id'
+						? 'Doc'
 						: activeFilterColumn
 				}`,
 			);
@@ -1951,6 +2221,13 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		if (queryParams.has('ps_technician_uid')) {
 			newFilters.headerFilters.technician_uid = queryParams
 				.get('ps_technician_uid')
+				.split(',')
+				.filter((s) => s.trim());
+			hasFilterParams = true;
+		}
+		if (queryParams.has('ps_doc_id')) {
+			newFilters.headerFilters.doc_id = queryParams
+				.get('ps_doc_id')
 				.split(',')
 				.filter((s) => s.trim());
 			hasFilterParams = true;
@@ -2260,48 +2537,112 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 							<thead className="sticky top-0 z-20 border-b-2 border-gray-300 bg-sky-400">
 								<tr>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 w-1/6 max-w-[16.666667%] min-w-[140px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : 'cursor-pointer hover:bg-gray-100'
+										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold w-1/6 max-w-[16.666667%] min-w-[140px] ${
+											isFilterCreationMode ? 'cursor-pointer hover:bg-sky-100 text-blue-600 underline' : 'cursor-pointer hover:bg-gray-100 text-gray-800'
 										} ${isColumnFiltered('sample_uid') ? 'text-blue-600 underline' : ''}`}
 										onClick={() =>
 											isFilterCreationMode ? handleColumnFilter('sample_uid') : handleColumnSort('sample_uid')
 										}
 									>
-										Mẫu thử
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
+										<div className="flex items-center justify-between overflow-hidden">
+											<span className="truncate">Mẫu thử</span>
+											{isColumnFiltered('sample_uid') && (
+												<button
+													onClick={(e) => {
+														e.stopPropagation();
+														const newFilters = { ...filters };
+														delete newFilters.headerFilters.sample_uid;
+														setFilters(newFilters);
+														updateQueryParams(newFilters);
+													}}
+													className="ml-1 text-red-500 hover:text-red-700 text-xs w-3 h-3 flex items-center justify-center flex-shrink-0"
+													title="Xóa bộ lọc"
+												>
+													✕
+												</button>
+											)}
 										{!isFilterCreationMode && filters.columnSort === 'sample_uid' && (
 											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
 										)}
+										</div>
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[120px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
+										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold min-w-[120px] ${
+											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'text-gray-800'
 										} ${isColumnFiltered('parameter_name') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('parameter_name')}
 									>
-										Chỉ tiêu
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
+										<div className="flex items-center justify-between overflow-hidden">
+											<span className="truncate">Chỉ tiêu</span>
+											{isColumnFiltered('parameter_name') && (
+												<button
+													onClick={(e) => {
+														e.stopPropagation();
+														const newFilters = { ...filters };
+														delete newFilters.headerFilters.parameter_name;
+														setFilters(newFilters);
+														updateQueryParams(newFilters);
+													}}
+													className="ml-1 text-red-500 hover:text-red-700 text-xs w-3 h-3 flex items-center justify-center flex-shrink-0"
+													title="Xóa bộ lọc"
+												>
+													✕
+												</button>
+											)}
+										</div>
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[100px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
+										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold min-w-[100px] ${
+											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'text-gray-800'
 										} ${isColumnFiltered('protocol_source') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('protocol_source')}
 									>
-										Nguồn
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
+										<div className="flex items-center justify-between overflow-hidden">
+											<span className="truncate">Nguồn</span>
+											{isColumnFiltered('protocol_source') && (
+												<button
+													onClick={(e) => {
+														e.stopPropagation();
+														const newFilters = { ...filters };
+														delete newFilters.headerFilters.protocol_source;
+														setFilters(newFilters);
+														updateQueryParams(newFilters);
+													}}
+													className="ml-1 text-red-500 hover:text-red-700 text-xs w-3 h-3 flex items-center justify-center flex-shrink-0"
+													title="Xóa bộ lọc"
+												>
+													✕
+												</button>
+											)}
+										</div>
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[160px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
+										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold min-w-[160px] ${
+											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'text-gray-800'
 										} ${isColumnFiltered('protocol_code') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('protocol_code')}
 									>
-										Phương pháp
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
+										<div className="flex items-center justify-between overflow-hidden">
+											<span className="truncate">Phương pháp</span>
+											{isColumnFiltered('protocol_code') && (
+												<button
+													onClick={(e) => {
+														e.stopPropagation();
+														const newFilters = { ...filters };
+														delete newFilters.headerFilters.protocol_code;
+														setFilters(newFilters);
+														updateQueryParams(newFilters);
+													}}
+													className="ml-1 text-red-500 hover:text-red-700 text-xs w-3 h-3 flex items-center justify-center flex-shrink-0"
+													title="Xóa bộ lọc"
+												>
+													✕
+												</button>
+											)}
+										</div>
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[140px] ${
+										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[140px] ${
 											!isFilterCreationMode ? 'cursor-pointer hover:bg-gray-100' : ''
 										}`}
 										onClick={() => !isFilterCreationMode && handleColumnSort('result_value')}
@@ -2311,34 +2652,93 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
 										)}
 									</th>
-									<th className="border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[100px]">
+									<th className="bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[100px]">
 										Đơn vị
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[100px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : 'cursor-pointer hover:bg-gray-100'
+										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold min-w-[100px] ${
+											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'cursor-pointer hover:bg-gray-100 text-gray-800'
 										} ${isColumnFiltered('deadline') ? 'text-blue-600 underline' : ''}`}
 										onClick={() =>
 											isFilterCreationMode ? handleColumnFilter('deadline') : handleColumnSort('deadline')
 										}
 									>
-										Hạn trả
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
+										<div className="flex items-center justify-between overflow-hidden">
+											<span className="truncate">Hạn trả</span>
+											{isColumnFiltered('deadline') && (
+												<button
+													onClick={(e) => {
+														e.stopPropagation();
+														const newFilters = { ...filters };
+														delete newFilters.headerFilters.deadline;
+														setFilters(newFilters);
+														updateQueryParams(newFilters);
+													}}
+													className="ml-1 text-red-500 hover:text-red-700 text-xs w-3 h-3 flex items-center justify-center flex-shrink-0"
+													title="Xóa bộ lọc"
+												>
+													✕
+												</button>
+											)}
 										{!isFilterCreationMode && filters.columnSort === 'deadline' && (
 											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
 										)}
+										</div>
 									</th>
 									<th
-										className={`border border-b-2 border-gray-300 px-3 py-2 text-left font-bold text-gray-800 min-w-[150px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100' : ''
+										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold min-w-[150px] ${
+											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'text-gray-800'
 										} ${isColumnFiltered('technician_uid') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('technician_uid')}
 									>
-										Người thực hiện
-										{isFilterCreationMode && <span className="ml-2 text-blue-600 text-xs">→ Click để lọc</span>}
+										<div className="flex items-center justify-between overflow-hidden">
+											<span className="truncate">Người thực hiện</span>
+											{isColumnFiltered('technician_uid') && (
+												<button
+													onClick={(e) => {
+														e.stopPropagation();
+														const newFilters = { ...filters };
+														delete newFilters.headerFilters.technician_uid;
+														setFilters(newFilters);
+														updateQueryParams(newFilters);
+													}}
+													className="ml-1 text-red-500 hover:text-red-700 text-xs w-3 h-3 flex items-center justify-center flex-shrink-0"
+													title="Xóa bộ lọc"
+												>
+													✕
+												</button>
+											)}
+										</div>
 									</th>
-									<th className="border border-b-2 border-gray-300 px-3 py-2 text-center font-bold text-gray-800 w-16">
-										Doc
+									<th
+										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-center font-bold w-16 ${
+											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'cursor-pointer hover:bg-gray-100 text-gray-800'
+										} ${isColumnFiltered('doc_id') ? 'text-blue-600 underline' : ''}`}
+										onClick={() =>
+											isFilterCreationMode ? handleColumnFilter('doc_id') : handleColumnSort('doc_id')
+										}
+									>
+										<div className="flex items-center justify-center overflow-hidden">
+											<span className="truncate">Doc</span>
+											{isColumnFiltered('doc_id') && (
+												<button
+													onClick={(e) => {
+														e.stopPropagation();
+														const newFilters = { ...filters };
+														delete newFilters.headerFilters.doc_id;
+														setFilters(newFilters);
+														updateQueryParams(newFilters);
+													}}
+													className="ml-1 text-red-500 hover:text-red-700 text-xs w-3 h-3 flex items-center justify-center flex-shrink-0"
+													title="Xóa bộ lọc"
+												>
+													✕
+												</button>
+											)}
+										{!isFilterCreationMode && filters.columnSort === 'doc_id' && (
+											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
+										)}
+										</div>
 									</th>
 								</tr>
 							</thead>
@@ -2519,7 +2919,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 													<div className="text-sm">{getTechnicianName(item.technician_uid)}</div>
 												</td>
 
-												{/* Biên bản */}
+												{/* Doc - Combined filter and view functionality */}
 												<td className="border border-gray-300 px-3 py-2 text-center">
 													{item.doc_id ? (
 														<div className="flex justify-center">
@@ -2668,6 +3068,10 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 									? 'Phương pháp'
 									: activeFilterColumn === 'deadline'
 									? 'Hạn trả'
+									: activeFilterColumn === 'technician_uid'
+									? 'Người thực hiện'
+									: activeFilterColumn === 'doc_id'
+									? 'Doc'
 									: activeFilterColumn}
 							</h3>
 							<button onClick={closeFilterModal} className="text-gray-500 hover:text-gray-700">
@@ -2682,38 +3086,40 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 							</div>
 						) : (
 							<>
-								{/* Search input */}
-								<div className="flex items-center space-x-2 mb-3">
-									<input
-										type="text"
-										placeholder={`Tìm kiếm trong ${
-											activeFilterColumn === 'sample_uid'
-												? 'Mẫu thử'
-												: activeFilterColumn === 'parameter_name'
-												? 'Chỉ tiêu'
-												: activeFilterColumn === 'protocol_source'
-												? 'Nguồn'
-												: activeFilterColumn === 'protocol_code'
-												? 'Phương pháp'
-												: activeFilterColumn === 'deadline'
-												? 'Hạn trả'
-												: activeFilterColumn === 'technician_uid'
-												? 'Người thực hiện'
-												: activeFilterColumn
-										}...`}
-										value={filterSearchTerm}
-										onChange={(e) => setFilterSearchTerm(e.target.value)}
-										onKeyDown={(e) => {
-											// Handle backspace and delete keys to trigger search
-											if (e.key === 'Backspace' || e.key === 'Delete') {
-												// The onChange will handle the value change
-												// The useEffect will trigger the API call with delay
-											}
-										}}
-										className="flex-1 p-2 border border-gray-300 rounded text-sm focus:border-blue-500 bg-white text-black"
-										autoFocus
-									/>
-								</div>
+								{/* Search input - hide for doc_id column */}
+								{activeFilterColumn !== 'doc_id' && (
+									<div className="flex items-center space-x-2 mb-3">
+										<input
+											type="text"
+											placeholder={`Tìm kiếm trong ${
+												activeFilterColumn === 'sample_uid'
+													? 'Mẫu thử'
+													: activeFilterColumn === 'parameter_name'
+													? 'Chỉ tiêu'
+													: activeFilterColumn === 'protocol_source'
+													? 'Nguồn'
+													: activeFilterColumn === 'protocol_code'
+													? 'Phương pháp'
+													: activeFilterColumn === 'deadline'
+													? 'Hạn trả'
+													: activeFilterColumn === 'technician_uid'
+													? 'Người thực hiện'
+													: activeFilterColumn
+											}...`}
+											value={filterSearchTerm}
+											onChange={(e) => setFilterSearchTerm(e.target.value)}
+											onKeyDown={(e) => {
+												// Handle backspace and delete keys to trigger search
+												if (e.key === 'Backspace' || e.key === 'Delete') {
+													// The onChange will handle the value change
+													// The useEffect will trigger the API call with delay
+												}
+											}}
+											className="flex-1 p-2 border border-gray-300 rounded text-sm focus:border-blue-500 bg-white text-black"
+											autoFocus
+										/>
+									</div>
+								)}
 
 								{/* Select/Unselect all buttons */}
 								{filterResults.length > 0 && (
@@ -2746,7 +3152,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 												{filterResults.map((result, index) => (
 													<label
 														key={index}
-														className="flex items-center space-x-2 p-1 rounded cursor-pointer transition-colors hover:bg-gray-100"
+														className="flex items-center space-x-2 p-1 rounded cursor-pointer transition-colors"
 													>
 														<input
 															type="checkbox"

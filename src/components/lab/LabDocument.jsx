@@ -895,7 +895,7 @@ const LabDocument = () => {
 				</h4>
 				<div className="border border-gray-300 rounded-lg overflow-hidden">
 					<div
-						className="w-full min-h-[500px] p-4 bg-white overflow-auto custom-scrollbar"
+						className="w-full min-h-[500px] p-4 bg-white overflow-auto custom-scrollbar text-start"
 						style={{
 							fontFamily: "'Times New Roman', serif",
 							fontSize: '11px',

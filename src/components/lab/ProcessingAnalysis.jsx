@@ -887,10 +887,88 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const fetchFilterValues = async (column, searchTerm = '') => {
 		setFilterLoading(true);
 		try {
-			const response = await apiPost('https://black.irdop.org/v1/analysis/search_filter_column', {
+			const requestBody = {
 				filterColumn: column,
 				searchTerm: searchTerm,
-			});
+				itemsPerPage: 50,
+				page: 1,
+			};
+
+			// Add current filters to request body
+			const queryParams = new URLSearchParams(location.search);
+
+			// Add sample_uid filter if exists
+			if (queryParams.has('sample_uid')) {
+				const sampleUids = queryParams
+					.get('sample_uid')
+					.split(',')
+					.filter((s) => s.trim());
+				if (sampleUids.length > 0) {
+					requestBody.sample_uid = sampleUids;
+				}
+			}
+
+			// Add parameter_name filter if exists
+			if (queryParams.has('parameter_name')) {
+				const paramNames = queryParams
+					.get('parameter_name')
+					.split(',')
+					.filter((s) => s.trim());
+				if (paramNames.length > 0) {
+					requestBody.parameter_name = paramNames;
+				}
+			}
+
+			// Add protocol_code filter if exists
+			if (queryParams.has('protocol_code')) {
+				const protocolCodes = queryParams
+					.get('protocol_code')
+					.split(',')
+					.filter((s) => s.trim());
+				if (protocolCodes.length > 0) {
+					requestBody.protocol_code = protocolCodes;
+				}
+			}
+
+			// Add matrix filter if exists
+			if (queryParams.has('matrix')) {
+				const matrices = queryParams
+					.get('matrix')
+					.split(',')
+					.filter((s) => s.trim());
+				if (matrices.length > 0) {
+					requestBody.matrix = matrices;
+				}
+			}
+
+			// Add deadline filter if exists
+			if (queryParams.has('deadline')) {
+				const deadline = queryParams.get('deadline');
+				if (deadline) {
+					requestBody.deadline = deadline;
+				}
+			}
+
+			// Add doc_id filter if exists
+			if (queryParams.has('doc_id')) {
+				const docIds = queryParams
+					.get('doc_id')
+					.split(',')
+					.filter((s) => s.trim());
+				if (docIds.length > 0) {
+					requestBody.doc_id = docIds;
+				}
+			}
+
+			// Add result_value filter if exists
+			if (queryParams.has('result_value')) {
+				const resultValue = queryParams.get('result_value');
+				if (resultValue) {
+					requestBody.result_value = resultValue;
+				}
+			}
+
+			const response = await apiPost('https://black.irdop.org/v1/analysis/search_filter_column', requestBody);
 
 			if (response.status < 300 && response.data) {
 				if (response.data.result && Array.isArray(response.data.result)) {
@@ -1703,9 +1781,24 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			// Calculate filter position from the clicked header
 			const headerElement = event.currentTarget;
 			const rect = headerElement.getBoundingClientRect();
+			
+			// For doc_id column, position dropdown to the left to prevent cutoff
+			const dropdownWidth = 320; // Approximate width of filter dropdown
+			let leftPosition = rect.left + window.scrollX;
+			
+			if (column === 'doc_id') {
+				// Position dropdown to the left of the column
+				leftPosition = rect.right + window.scrollX - dropdownWidth;
+				
+				// Ensure it doesn't go off the left side of the screen
+				if (leftPosition < 10) {
+					leftPosition = 10;
+				}
+			}
+			
 			setFilterPosition({
 				top: rect.bottom + window.scrollY,
-				left: rect.left + window.scrollX,
+				left: leftPosition,
 			});
 
 			setActiveFilterColumn(column);

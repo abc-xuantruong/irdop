@@ -155,7 +155,7 @@ const LabDashboardTemporary = () => {
 	return (
 		<div className="h-screen w-screen bg-gray-100 flex overflow-hidden">
 			{/* Sidebar */}
-			<div className="w-20 bg-gray-200 flex flex-col h-full">
+			<div className="w-16 bg-gray-200 flex flex-col h-full">
 				{/* Top Section - Logo and Navigation */}
 				<div className="flex-1 flex flex-col">
 					{/* Logo Section */}
@@ -176,7 +176,7 @@ const LabDashboardTemporary = () => {
 									<button
 										key={index}
 										onClick={item.action}
-										className={`w-14 h-14 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+										className={`w-12 h-12 p-1 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
 											item.isActive ? 'bg-sky-400 text-white' : 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
 										}`}
 										onMouseEnter={(e) => showTooltip(item.label, e)}
@@ -188,7 +188,7 @@ const LabDashboardTemporary = () => {
 									<Link
 										key={item.to}
 										to={item.to}
-										className={`w-14 h-14 flex items-center justify-center rounded-lg text-sm font-medium transition-colors relative ${
+										className={`w-12 h-12 p-1 flex items-center justify-center rounded-lg text-sm font-medium transition-colors relative ${
 											item.isActive ? 'bg-sky-400 text-white' : 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
 										}`}
 										onMouseEnter={(e) => showTooltip(item.label, e)}
@@ -211,8 +211,8 @@ const LabDashboardTemporary = () => {
 								<Link
 									key={item.to}
 									to={item.to}
-									className={`w-14 h-14 flex items-center justify-center rounded-lg text-sm font-medium transition-colors relative ${
-										item.isActive ? 'bg-sky-400 text-white' : 'text-gray-600 hover:bg-gray-200 hover:text-blue-600'
+									className={`w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors relative bg-gray-100 ${
+										item.isActive ? 'bg-sky-400 text-white' : 'text-gray-600 hover:bg-gray-300 hover:text-blue-600'
 									}`}
 									onMouseEnter={(e) => showTooltip(item.label, e)}
 									onMouseLeave={hideTooltip}
@@ -232,7 +232,7 @@ const LabDashboardTemporary = () => {
 								<button
 									ref={dropdownButtonRef}
 									onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-									className="w-14 h-14 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-200 transition-colors"
+									className="w-12 h-12 p-1 bg-blue-200 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-200 transition-colors"
 									onMouseEnter={(e) => showTooltip(displayName, e)}
 									onMouseLeave={hideTooltip}
 								>
@@ -291,7 +291,7 @@ const LabDashboardTemporary = () => {
 						) : (
 							<Link
 								to="/login"
-								className="w-14 h-14 bg-gray-200 text-gray-600 rounded-lg flex items-center justify-center hover:bg-gray-300 hover:text-blue-600 transition-colors"
+								className="w-12 h-12 bg-gray-200 text-gray-600 rounded-lg flex items-center justify-center hover:bg-gray-300 hover:text-blue-600 transition-colors"
 								onMouseEnter={(e) => showTooltip('Đăng nhập', e)}
 								onMouseLeave={hideTooltip}
 							>

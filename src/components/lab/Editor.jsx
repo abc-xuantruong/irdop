@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { Editor as TinyMCEEditor } from '@tinymce/tinymce-react';
 import { apiPost } from '../../contexts/helperFunctionCallAPI';
+import { GlobalContext } from '../../contexts/GlobalContext';
 import Cookies from 'js-cookie';
 import AnalysesExtract from './AnalysesExtract';
 
@@ -108,6 +109,8 @@ const applyFormatToHTML = (htmlContent) => {
 };
 
 const Editor = () => {
+	const { currentUser, getIdenByUid } = useContext(GlobalContext);
+	
 	const [headerData, setHeaderData] = useState({
 		title: '',
 		code: '',
@@ -153,10 +156,12 @@ const Editor = () => {
 	const [classifierCode, setClassifierCode] = useState('BIEN_BAN_KET_QUA_THU_NGHIEM'); // Default to test result report
 	const [fileId, setFileId] = useState(''); // Store fileId from published document metadata
 	const [lockedByUID, setLockedByUID] = useState(''); // Store lockedByUID when document is submitted
+	const [lockedByName, setLockedByName] = useState(''); // Store locked by user name
 	const [isDocumentLocked, setIsDocumentLocked] = useState(false); // Track if document is locked
 	const [documentFooter, setDocumentFooter] = useState(''); // Store document footer from metadata
 
 	const [editorContent, setEditorContent] = useState('');
+	const [hasContentChanged, setHasContentChanged] = useState(false); // Track if editor has been modified
 
 	// Refs
 	const editorRef = useRef(null);
@@ -164,6 +169,21 @@ const Editor = () => {
 	const loadTableInfoTimeoutRef = useRef(null);
 	const isLoadingTableInfo = useRef(false);
 	const lastAnalysisIdsRef = useRef(null);
+	const initialContentRef = useRef(''); // Track initial content to detect first change
+	const firstAutoSaveTimeoutRef = useRef(null); // For immediate auto-save on first change
+
+	// Helper function to get user name from UID
+	const getUserName = async (uid) => {
+		if (!uid) return '';
+		
+		try {
+			const idenRecord = await getIdenByUid(uid);
+			return idenRecord?.identity_name || uid; // Fallback to UID if name not found
+		} catch (error) {
+			console.error('Error getting user name for UID:', uid, error);
+			return uid; // Fallback to UID on error
+		}
+	};
 
 	useEffect(() => {
 		// Update current date
@@ -182,6 +202,9 @@ const Editor = () => {
 			}
 			if (loadTableInfoTimeoutRef.current) {
 				clearTimeout(loadTableInfoTimeoutRef.current);
+			}
+			if (firstAutoSaveTimeoutRef.current) {
+				clearTimeout(firstAutoSaveTimeoutRef.current);
 			}
 			clearInterval(dateInterval);
 		};
@@ -237,35 +260,27 @@ const Editor = () => {
 		}
 	}, [analysisIds]);
 
-	// Auto start auto-save when template is selected or content exists
-	// Single useEffect for auto-save based on status
+	// Auto-save useEffect - chỉ để cleanup khi status/mode thay đổi
 	useEffect(() => {
 		console.log('Auto-save useEffect triggered:', {
 			documentStatus,
 			editorContent: !!editorContent,
+			hasContentChanged,
 			isPreviewMode,
 			timestamp: new Date().toISOString(),
 		});
 
-		// Clear existing interval
-		if (autoSaveIntervalRef.current) {
-			clearInterval(autoSaveIntervalRef.current);
-			autoSaveIntervalRef.current = null;
-		}
-
-		// Only auto-save if status is 'draft', has content, and not in preview mode
-		if (documentStatus === 'draft' && editorContent && !isPreviewMode) {
-			console.log('Starting auto-save interval for draft document');
-			autoSaveIntervalRef.current = setInterval(() => {
-				console.log('Auto-save interval triggered');
-				autoSaveLabResultReport();
-			}, 10000);
-		} else {
-			console.log('Auto-save not started:', {
-				documentStatus,
-				hasContent: !!editorContent,
-				isPreviewMode,
-			});
+		// Clear auto-save nếu không còn ở trạng thái draft hoặc đang preview
+		if (documentStatus !== 'draft' || isPreviewMode) {
+			console.log('Stopping auto-save due to status change or preview mode');
+			if (autoSaveIntervalRef.current) {
+				clearInterval(autoSaveIntervalRef.current);
+				autoSaveIntervalRef.current = null;
+			}
+			if (firstAutoSaveTimeoutRef.current) {
+				clearTimeout(firstAutoSaveTimeoutRef.current);
+				firstAutoSaveTimeoutRef.current = null;
+			}
 		}
 
 		// Cleanup on unmount or dependency change
@@ -274,8 +289,12 @@ const Editor = () => {
 				clearInterval(autoSaveIntervalRef.current);
 				autoSaveIntervalRef.current = null;
 			}
+			if (firstAutoSaveTimeoutRef.current) {
+				clearTimeout(firstAutoSaveTimeoutRef.current);
+				firstAutoSaveTimeoutRef.current = null;
+			}
 		};
-	}, [documentStatus, editorContent, isPreviewMode]);
+	}, [documentStatus, isPreviewMode]);
 
 	// Update document status and query params
 	const updateDocumentStatus = (status) => {
@@ -297,6 +316,10 @@ const Editor = () => {
 	// Hàm xử lý dữ liệu khi load trang lần đầu
 	const handleInitialPageLoad = async () => {
 		console.log('=== handleInitialPageLoad started ===');
+		
+		// Reset template state at the beginning
+		setCurrentTemplate(null);
+		
 		const urlParams = new URLSearchParams(window.location.search);
 		const docId = urlParams.get('docId');
 		const editId = urlParams.get('editId');
@@ -333,6 +356,9 @@ const Editor = () => {
 			} else if (analysisIds.length > 0 || classifierCodeParam) {
 				// 4. Nếu có analysisIds + classifierCode
 				finalDocumentStatus = await handleAnalysisIdsAndClassifierCode(analysisIds, classifierCodeParam);
+			} else {
+				// 5. Không có params nào - đảm bảo template được reset
+				setCurrentTemplate(null);
 			}
 
 			// Sau khi xử lý, gọi auto_save và cập nhật URL với status cuối cùng
@@ -378,6 +404,14 @@ const Editor = () => {
 			// Gán content vào editor
 			if (metadata.content) {
 				setEditorContent(metadata.content);
+				// Reset change tracking for loaded content
+				initialContentRef.current = metadata.content;
+				setHasContentChanged(false);
+				// Clear any pending first auto-save
+				if (firstAutoSaveTimeoutRef.current) {
+					clearTimeout(firstAutoSaveTimeoutRef.current);
+					firstAutoSaveTimeoutRef.current = null;
+				}
 				// Set content to editor when it's ready
 				const setContentWhenReady = () => {
 					if (editorRef.current && editorRef.current.initialized) {
@@ -395,7 +429,13 @@ const Editor = () => {
 				setDocumentStatus('Published');
 			}
 			if (metadata.submittedByUID) {
-				setSubmittedBy(metadata.submittedByUID);
+				// Get user name from UID
+				getUserName(metadata.submittedByUID).then(name => {
+					setSubmittedBy(name);
+				}).catch(error => {
+					console.error('Error getting submitted by name:', error);
+					setSubmittedBy(metadata.submittedByUID); // Fallback to UID
+				});
 			}
 
 			// Gán fileId từ docrecord (for file preview) - chỉ lấy fileId thực sự
@@ -407,13 +447,16 @@ const Editor = () => {
 				console.log('No fileId found in response');
 			}
 
-			// Gán template info
-			if (metadata.templateId) {
+			// Gán template info - chỉ set khi có đầy đủ thông tin template
+			if (metadata.templateId && (metadata.templateName || metadata.templateCode)) {
 				setCurrentTemplate({
 					id: metadata.templateId,
 					templateName: metadata.templateName || '',
 					name: metadata.templateName || '',
 				});
+			} else {
+				// Reset template nếu không có thông tin đầy đủ
+				setCurrentTemplate(null);
 			}
 
 			// Gán classifier code
@@ -482,6 +525,14 @@ const Editor = () => {
 				// Gán content vào editor
 				if (metadata.content) {
 					setEditorContent(metadata.content);
+					// Reset change tracking for loaded content
+					initialContentRef.current = metadata.content;
+					setHasContentChanged(false);
+					// Clear any pending first auto-save
+					if (firstAutoSaveTimeoutRef.current) {
+						clearTimeout(firstAutoSaveTimeoutRef.current);
+						firstAutoSaveTimeoutRef.current = null;
+					}
 					const setContentWhenReady = () => {
 						if (editorRef.current && editorRef.current.initialized) {
 							editorRef.current.setContent(metadata.content);
@@ -492,13 +543,16 @@ const Editor = () => {
 					setTimeout(setContentWhenReady, 500);
 				}
 
-				// Gán template info
-				if (metadata.templateId) {
+				// Gán template info - chỉ set khi có đầy đủ thông tin template
+				if (metadata.templateId && (metadata.templateName || metadata.templateCode)) {
 					setCurrentTemplate({
 						id: metadata.templateId,
 						templateName: metadata.templateName || '',
 						name: metadata.templateName || '',
 					});
+				} else {
+					// Reset template nếu không có thông tin đầy đủ
+					setCurrentTemplate(null);
 				}
 
 				// Gán classifier code
@@ -524,18 +578,32 @@ const Editor = () => {
 				}
 
 				// Update document info
+				console.log('Document data for updateDocumentInfo:', {
+					id: document.id,
+					createdAt: document.createdAt,
+					modifiedAt: document.modifiedAt,
+					identityUID: document.identityUID,
+					modifiedByUID: document.modifiedByUID,
+				});
 				updateDocumentInfo(
 					document.id,
 					document.createdAt,
 					document.modifiedAt,
-					document.authorName,
-					document.modifiedBy,
+					document.identityUID, // Author UID
+					document.modifiedByUID, // Modified by UID
 				);
 
 				// Check if document is locked
 				let documentStatus = 'draft';
 				if (document.lockedByUID) {
 					setLockedByUID(document.lockedByUID);
+					// Get locked by user name
+					getUserName(document.lockedByUID).then(name => {
+						setLockedByName(name);
+					}).catch(error => {
+						console.error('Error getting locked by name:', error);
+						setLockedByName(document.lockedByUID); // Fallback to UID
+					});
 					setIsDocumentLocked(true);
 					updateDocumentStatus('submitted');
 					documentStatus = 'submitted';
@@ -577,12 +645,17 @@ const Editor = () => {
 		if (response.status === 200 && response.data && response.data.result && response.data.result.length > 0) {
 			const template = response.data.result[0];
 
-			// Gán template info
-			setCurrentTemplate({
-				id: template.id,
-				templateName: template.templateName || template.name || '',
-				name: template.templateName || template.name || '',
-			});
+			// Chỉ gán template info khi template thực sự tồn tại và có dữ liệu hợp lệ
+			if (template && template.id && (template.templateName || template.name)) {
+				setCurrentTemplate({
+					id: template.id,
+					templateName: template.templateName || template.name || '',
+					name: template.templateName || template.name || '',
+				});
+			} else {
+				// Reset template nếu không có thông tin hợp lệ
+				setCurrentTemplate(null);
+			}
 
 			// Gán header data từ template
 			if (template.header) {
@@ -597,6 +670,14 @@ const Editor = () => {
 			// Gán content vào editor
 			if (template.content) {
 				setEditorContent(template.content);
+				// Reset change tracking for loaded content
+				initialContentRef.current = template.content;
+				setHasContentChanged(false);
+				// Clear any pending first auto-save
+				if (firstAutoSaveTimeoutRef.current) {
+					clearTimeout(firstAutoSaveTimeoutRef.current);
+					firstAutoSaveTimeoutRef.current = null;
+				}
 				const setContentWhenReady = () => {
 					if (editorRef.current && editorRef.current.initialized) {
 						editorRef.current.setContent(template.content);
@@ -799,9 +880,9 @@ const Editor = () => {
 		try {
 			if (!currentEditId) {
 				await autoSaveLabResultReport();
-				if (!currentEditId) {
-					throw new Error('Không thể tạo mã tài liệu. Vui lòng thử lại.');
-				}
+				// if (!currentEditId) {
+				// 	throw new Error('Không thể tạo mã tài liệu. Vui lòng thử lại.');
+				// }
 			}
 			await createLabResultReport();
 		} catch (error) {
@@ -827,6 +908,9 @@ const Editor = () => {
 					publishDate: '',
 				});
 				setCurrentEditId(null);
+				// Reset change tracking
+				initialContentRef.current = '';
+				setHasContentChanged(false);
 			}
 		}
 	};
@@ -884,12 +968,13 @@ const Editor = () => {
 				return;
 			}
 
-			// Check if headerData has meaningful data
-			const hasHeaderData = headerData && (headerData.title || headerData.code || headerData.publishNo);
-			if (!hasHeaderData && (!currentTemplate || !currentTemplate.id)) {
-				console.log('Auto-save skipped: No header data or template');
-				return;
-			}
+			// Bỏ kiểm tra headerData và template để auto-save luôn hoạt động khi có content
+			// Đã comment out để auto-save hoạt động ngay cả khi không có template hoặc header data
+			// const hasHeaderData = headerData && (headerData.title || headerData.code || headerData.publishNo);
+			// if (!hasHeaderData && (!currentTemplate || !currentTemplate.id)) {
+			// 	console.log('Auto-save skipped: No header data or template');
+			// 	return;
+			// }
 
 			// Check if we have editId from URL, but only if we're not loading from docId
 			const urlParams = new URLSearchParams(window.location.search);
@@ -950,8 +1035,8 @@ const Editor = () => {
 					response.data.id,
 					response.data.createdAt,
 					response.data.modifiedAt || new Date().toISOString(),
-					response.data.authorName,
-					response.data.modifiedBy,
+					response.data.identityUID, // Author UID
+					response.data.modifiedByUID, // Modified by UID
 				);
 			} else {
 				console.warn('Auto-save response did not contain expected data:', response);
@@ -963,13 +1048,14 @@ const Editor = () => {
 
 	const createLabResultReport = async () => {
 		try {
-			// Prepare report data with exact structure: {header, content, footer, analysisIds, sampleUIDs}
+			// Prepare report data with exact structure: {header, content, footer, analysisIds, sampleUIDs, classifierCode}
 			const reportData = {
 				header: headerData,
 				content: editorContent,
 				footer: documentFooter || currentEditId,
 				analysisIds: analysisIds || [],
 				sampleUIDs: sampleUIDs || [],
+				classifierCode: classifierCode || 'BIEN_BAN_KET_QUA_THU_NGHIEM', // Always include classifierCode
 			};
 
 			const response = await apiPost('https://black.irdop.org/khsi19me/convert/lab_result_report_html', reportData);
@@ -989,6 +1075,7 @@ const Editor = () => {
 						footer: reportData.footer,
 						analysisIds: analysisIds || [],
 						sampleUIDs: sampleUIDs || [],
+						classifierCode: classifierCode,
 						documentHTML: htmlResponse,
 					},
 				});
@@ -1001,35 +1088,58 @@ const Editor = () => {
 		}
 	};
 
-	const updateDocumentInfo = (
+	const updateDocumentInfo = async (
 		editId = null,
 		createdAt = null,
 		modifiedAt = null,
-		authorName = null,
-		modifiedBy = null,
+		identityUID = null, // Author UID (for createdAt)
+		modifiedByUID = null, // Modified by UID (for modifiedAt)
 	) => {
+
+		if (!modifiedByUID && identityUID) {
+			modifiedByUID = identityUID; // Use identityUID as modifiedByUID if not provided
+		}
 		if (editId && editId !== currentEditId) {
 			setCurrentEditId(editId);
 		}
 
-		// Update document information state
+		// Update document information state - Author info
 		if (createdAt) {
 			const date = new Date(createdAt).toLocaleDateString('vi-VN');
-			let author = '-';
-			if (authorName && authorName.includes(':')) {
-				author = authorName.split(':')[1] || '-';
+			console.log('Processing author info:', { createdAt, identityUID, date });
+			if (identityUID) {
+				try {
+					const author = await getUserName(identityUID);
+					console.log('Got author name:', author);
+					setAuthor(author);
+				} catch (error) {
+					console.error('Error getting author name:', error);
+					setAuthor('-');
+				}
+			} else {
+				console.log('No identityUID, setting author to -');
+				setAuthor('-'); // Default value if no identityUID
 			}
-			setAuthor(author);
 			setAuthorAt(date);
 		}
 
+		// Update document information state - Modifier info
 		if (modifiedAt) {
 			const date = new Date(modifiedAt).toLocaleDateString('vi-VN');
-			let modifier = '-';
-			if (modifiedBy && modifiedBy.includes(':')) {
-				modifier = modifiedBy.split(':')[1] || '-';
+			console.log('Processing modifier info:', { modifiedAt, modifiedByUID, date });
+			if (modifiedByUID) {
+				try {
+					const modifier = await getUserName(modifiedByUID);
+					console.log('Got modifier name:', modifier);
+					setLastModified(modifier);
+				} catch (error) {
+					console.error('Error getting modifier name:', error);
+					setLastModified('-');
+				}
+			} else {
+				console.log('No modifiedByUID, setting lastModified to -');
+				setLastModified('-'); // Default value if no modifiedByUID
 			}
-			setLastModified(modifier);
 			setLastModifiedAt(date);
 		}
 	};
@@ -1238,8 +1348,8 @@ const Editor = () => {
 						setTimeout(setContentWhenReady, 500);
 					}
 
-					// Cập nhật template info
-					if (metadata.templateId) {
+					// Cập nhật template info - chỉ set khi có đầy đủ thông tin template
+					if (metadata.templateId && (metadata.templateName || metadata.templateCode)) {
 						setCurrentTemplate({
 							id: metadata.templateId,
 							templateName: metadata.templateName || '',
@@ -1277,8 +1387,8 @@ const Editor = () => {
 						editData.id || currentEditId,
 						editData.createdAt,
 						editData.modifiedAt,
-						editData.authorName,
-						editData.modifiedBy,
+						editData.identityUID, // Author UID
+						editData.modifiedByUID, // Modified by UID
 					);
 				}
 
@@ -1373,7 +1483,7 @@ const Editor = () => {
 				`;
 			}
 
-			// Bảng 2: Thông tin chỉ tiêu kiểm nghiệm (Mã mẫu, Mã chỉ tiêu, Chỉ tiêu, Kết quả)
+			// Bảng 2: Thông tin chỉ tiêu kiểm nghiệm (Mã mẫu, Mã chỉ tiêu, Chỉ tiêu, Kết quả, Đơn vị)
 			if (tableAnalysisInfo && tableAnalysisInfo.length > 0) {
 				const analysisRows = tableAnalysisInfo
 					.map(
@@ -1382,6 +1492,7 @@ const Editor = () => {
 								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${analysis.sample_uid || 'N/A'}</td>
 								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${analysis.id || 'N/A'}</td>
 								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;">${analysis.parameter_name || 'N/A'}</td>
+								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;"></td>
 								<td style="border: 1px solid #000; padding: 8px; font-size: 11px;"></td>
 							</tr>`,
 					)
@@ -1395,6 +1506,7 @@ const Editor = () => {
 								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Mã chỉ tiêu</th>
 								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Chỉ tiêu</th>
 								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Kết quả</th>
+								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px;">Đơn vị</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -1462,6 +1574,14 @@ const Editor = () => {
 			if (template.content && editorRef.current) {
 				editorRef.current.setContent(template.content);
 				setEditorContent(template.content);
+				// Reset change tracking for template content
+				initialContentRef.current = template.content;
+				setHasContentChanged(false);
+				// Clear any pending first auto-save
+				if (firstAutoSaveTimeoutRef.current) {
+					clearTimeout(firstAutoSaveTimeoutRef.current);
+					firstAutoSaveTimeoutRef.current = null;
+				}
 			}
 
 			// Apply template header data if available
@@ -1565,23 +1685,26 @@ const Editor = () => {
 			gap: 12px;
 		`;
 
-		// Submit report button (combined publish + PDF)
-		const submitBtn = document.createElement('button');
-		submitBtn.textContent = 'Nộp biên bản';
-		submitBtn.style.cssText = `
-			padding: 8px 16px;
-			background: #10b981;
-			color: white;
-			border: none;
-			border-radius: 6px;
-			cursor: pointer;
-			font-weight: 500;
-			font-size: 14px;
-			transition: background-color 0.2s;
-		`;
-		submitBtn.onmouseover = () => (submitBtn.style.background = '#059669');
-		submitBtn.onmouseout = () => (submitBtn.style.background = '#10b981');
-		submitBtn.onclick = () => handleSubmitReport(documentData, htmlContent);
+		// Submit report button (combined publish + PDF) - only show for BIEN_BAN_KET_QUA_THU_NGHIEM
+		let submitBtn = null;
+		if (classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM') {
+			submitBtn = document.createElement('button');
+			submitBtn.textContent = 'Nộp biên bản';
+			submitBtn.style.cssText = `
+				padding: 8px 16px;
+				background: #10b981;
+				color: white;
+				border: none;
+				border-radius: 6px;
+				cursor: pointer;
+				font-weight: 500;
+				font-size: 14px;
+				transition: background-color 0.2s;
+			`;
+			submitBtn.onmouseover = () => (submitBtn.style.background = '#059669');
+			submitBtn.onmouseout = () => (submitBtn.style.background = '#10b981');
+			submitBtn.onclick = () => handleSubmitReport(documentData, htmlContent);
+		}
 
 		// Extract data button (only show if extractData exists)
 		let extractDataBtn = null;
@@ -1670,7 +1793,9 @@ const Editor = () => {
 			overlay.remove();
 		};
 
-		buttonGroup.appendChild(submitBtn);
+		if (submitBtn) {
+			buttonGroup.appendChild(submitBtn);
+		}
 		if (extractDataBtn) {
 			buttonGroup.appendChild(extractDataBtn);
 		}
@@ -1784,7 +1909,15 @@ const Editor = () => {
 
 				// Update document status and lock from API response
 				updateDocumentStatus('submitted');
-				setLockedByUID(responseData.lockedByUID || currentUserUID);
+				const lockUID = responseData.lockedByUID || currentUserUID;
+				setLockedByUID(lockUID);
+				// Get locked by user name
+				getUserName(lockUID).then(name => {
+					setLockedByName(name);
+				}).catch(error => {
+					console.error('Error getting locked by name:', error);
+					setLockedByName(lockUID); // Fallback to UID
+				});
 				setIsDocumentLocked(true);
 				setDocumentFooter(metadata.footer || '');
 
@@ -1796,9 +1929,26 @@ const Editor = () => {
 				}
 
 				if (metadata && metadata.submittedByUID) {
-					setSubmittedBy(metadata.submittedByUID);
+					// Get user name from UID
+					getUserName(metadata.submittedByUID).then(name => {
+						setSubmittedBy(name);
+					}).catch(error => {
+						console.error('Error getting submitted by name:', error);
+						setSubmittedBy(metadata.submittedByUID); // Fallback to UID
+					});
 				} else {
-					setSubmittedBy('Current User');
+					// Get current user name
+					const currentUserUID = Cookies.get('identityUID') || '';
+					if (currentUserUID) {
+						getUserName(currentUserUID).then(name => {
+							setSubmittedBy(name);
+						}).catch(error => {
+							console.error('Error getting current user name:', error);
+							setSubmittedBy('Current User'); // Fallback
+						});
+					} else {
+						setSubmittedBy('Current User');
+					}
 				}
 
 				// Process extracted data from API response
@@ -1844,6 +1994,13 @@ const Editor = () => {
 
 				if (document.lockedByUID) {
 					setLockedByUID(document.lockedByUID);
+					// Get locked by user name
+					getUserName(document.lockedByUID).then(name => {
+						setLockedByName(name);
+					}).catch(error => {
+						console.error('Error getting locked by name:', error);
+						setLockedByName(document.lockedByUID); // Fallback to UID
+					});
 					setIsDocumentLocked(true);
 					setDocumentStatus('SENDED');
 
@@ -2037,6 +2194,22 @@ const Editor = () => {
 						setEditorContent(document.content);
 					}
 
+					// Update document info with reloaded data
+					console.log('Document data for reloadEditorData updateDocumentInfo:', {
+						id: document.id,
+						createdAt: document.createdAt,
+						modifiedAt: document.modifiedAt,
+						identityUID: document.identityUID,
+						modifiedByUID: document.modifiedByUID,
+					});
+					updateDocumentInfo(
+						document.id,
+						document.createdAt,
+						document.modifiedAt,
+						document.identityUID, // Author UID
+						document.modifiedByUID, // Modified by UID
+					);
+
 					console.log('Successfully reloaded editor data');
 					return true;
 				}
@@ -2162,6 +2335,47 @@ const Editor = () => {
 	const getEditIdFromURL = () => {
 		const urlParams = new URLSearchParams(window.location.search);
 		return urlParams.get('editId');
+	};
+
+	// Handle editor content changes with change tracking
+	const handleEditorChange = (content) => {
+		setEditorContent(content);
+		
+		// Check if both title and content have meaningful data for auto-save
+		const hasTitle = headerData.title && headerData.title.trim() !== '';
+		const hasContent = content && content.trim() !== '' && content !== '<p></p>' && content !== '<p><br></p>';
+		
+		// Only set hasContentChanged if this is a user-initiated change
+		// (not during initial loading or programmatic content setting)
+		if (initialContentRef.current && content !== initialContentRef.current) {
+			console.log('User changed editor content');
+			
+			// Set change flag first - only trigger auto-save if both title and content exist
+			if (!hasContentChanged && documentStatus === 'draft' && !isPreviewMode && hasTitle && hasContent) {
+				console.log('First change detected - triggering immediate auto-save and starting interval');
+				setHasContentChanged(true);
+				
+				// Clear any existing timeouts/intervals
+				if (firstAutoSaveTimeoutRef.current) {
+					clearTimeout(firstAutoSaveTimeoutRef.current);
+				}
+				if (autoSaveIntervalRef.current) {
+					clearInterval(autoSaveIntervalRef.current);
+				}
+				
+				// 1. Immediate auto-save (debounced để tránh spam khi user đang gõ)
+				firstAutoSaveTimeoutRef.current = setTimeout(() => {
+					console.log('Executing immediate auto-save for first change');
+					autoSaveLabResultReport();
+					
+					// 2. Bắt đầu interval auto-save sau immediate save
+					autoSaveIntervalRef.current = setInterval(() => {
+						console.log('Auto-save interval triggered');
+						autoSaveLabResultReport();
+					}, 10000); // Mỗi 10 giây
+				}, 500); // 500ms debounce
+			}
+		}
 	};
 
 	const showAutoHideMessage = (message, type = 'info') => {
@@ -2325,15 +2539,39 @@ const Editor = () => {
 		}
 	};
 
-	// Initialize document info on component mount
-	useEffect(() => {
-		const now = new Date();
-		const dateTimeString = now.toLocaleString('vi-VN');
-		setAuthor('Người dùng hiện tại');
-		setAuthorAt(dateTimeString);
-		setLastModified('Người dùng hiện tại');
-		setLastModifiedAt(dateTimeString);
-	}, []);
+	// // Initialize document info on component mount
+	// useEffect(() => {
+	// 	const now = new Date();
+	// 	const dateTimeString = now.toLocaleString('vi-VN');
+	// 	setAuthor('Người dùng hiện tại');
+	// 	setAuthorAt(dateTimeString);
+	// 	setLastModified('Người dùng hiện tại');
+	// 	setLastModifiedAt(dateTimeString);
+	// }, []);
+
+	// Handle header data changes with immediate auto-save
+	const handleHeaderDataChange = (field, value) => {
+		// Update header data state
+		const updatedHeaderData = { ...headerData, [field]: value };
+		setHeaderData(updatedHeaderData);
+		
+		// Check if both title and content have meaningful data for auto-save
+		const hasTitle = (field === 'title' ? value : updatedHeaderData.title) && (field === 'title' ? value.trim() : updatedHeaderData.title.trim()) !== '';
+		const hasContent = editorContent && editorContent.trim() !== '' && editorContent !== '<p></p>' && editorContent !== '<p><br></p>';
+		
+		// Trigger immediate auto-save if conditions are met
+		if (documentStatus === 'draft' && !isPreviewMode && hasTitle && hasContent) {
+			// Use setTimeout to debounce rapid changes
+			if (firstAutoSaveTimeoutRef.current) {
+				clearTimeout(firstAutoSaveTimeoutRef.current);
+			}
+			
+			firstAutoSaveTimeoutRef.current = setTimeout(() => {
+				console.log('Auto-save triggered by header field change:', field);
+				autoSaveLabResultReport();
+			}, 1000); // 1 second debounce
+		}
+	};
 
 	return (
 		<>
@@ -2673,7 +2911,7 @@ const Editor = () => {
 										placeholder="Nhập tiêu đề..."
 										className="w-full px-3 py-2 text-sm font-semibold outline-none transition-all duration-200 bg-white text-black border-2 border-gray-500 rounded-md focus:border-gray-700 shadow-sm"
 										value={headerData.title}
-										onChange={(e) => setHeaderData({ ...headerData, title: e.target.value })}
+										onChange={(e) => handleHeaderDataChange('title', e.target.value)}
 									/>
 								</div>
 								<div className="flex flex-col">
@@ -2684,7 +2922,7 @@ const Editor = () => {
 										placeholder="Nhập mã hiệu..."
 										className="w-full px-3 py-2 text-sm font-semibold outline-none transition-all duration-200 bg-white text-black border-2 border-gray-500 rounded-md focus:border-gray-700 shadow-sm"
 										value={headerData.code}
-										onChange={(e) => setHeaderData({ ...headerData, code: e.target.value })}
+										onChange={(e) => handleHeaderDataChange('code', e.target.value)}
 									/>
 								</div>
 								<div className="flex flex-col">
@@ -2695,7 +2933,7 @@ const Editor = () => {
 										placeholder="Nhập lần ban hành..."
 										className="w-full px-3 py-2 text-sm font-semibold outline-none transition-all duration-200 bg-white text-black border-2 border-gray-500 rounded-md focus:border-gray-700 shadow-sm"
 										value={headerData.publishNo}
-										onChange={(e) => setHeaderData({ ...headerData, publishNo: e.target.value })}
+										onChange={(e) => handleHeaderDataChange('publishNo', e.target.value)}
 									/>
 								</div>
 								<div className="flex flex-col">
@@ -2706,7 +2944,7 @@ const Editor = () => {
 										placeholder="Nhập ngày ban hành..."
 										className="w-full px-3 py-2 text-sm font-semibold outline-none transition-all duration-200 bg-white text-black border-2 border-gray-500 rounded-md focus:border-gray-700 shadow-sm"
 										value={headerData.publishDate}
-										onChange={(e) => setHeaderData({ ...headerData, publishDate: e.target.value })}
+										onChange={(e) => handleHeaderDataChange('publishDate', e.target.value)}
 									/>
 								</div>
 							</div>
@@ -2767,7 +3005,7 @@ const Editor = () => {
 								<TinyMCEEditor
 									ref={editorRef}
 									value={editorContent}
-									onEditorChange={(content) => setEditorContent(content)}
+									onEditorChange={handleEditorChange}
 									onInit={(evt, editor) => {
 										editorRef.current = editor;
 										editor.initialized = true;
@@ -2981,7 +3219,7 @@ const Editor = () => {
 										{isDocumentLocked || lockedByUID ? (
 											<span className="text-red-600 font-semibold">
 												🔒 SUBMITTED
-												{lockedByUID && <span className="text-sm text-gray-500 ml-1">- {lockedByUID}</span>}
+												{lockedByName && <span className="text-sm text-gray-500 ml-1">- {lockedByName}</span>}
 											</span>
 										) : (
 											<span className="text-gray-600 font-semibold">Draft</span>
@@ -3043,6 +3281,26 @@ const Editor = () => {
 									<div className="flex items-center">
 										<input
 											type="radio"
+											id="nhat_ky"
+											name="classifierCode"
+											value="NHAT_KY_THU_NGHIEM"
+											checked={classifierCode === 'NHAT_KY_THU_NGHIEM'}
+											onChange={handleClassifierCodeChange}
+											className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 focus:ring-2"
+										/>
+										<label
+											htmlFor="nhat_ky"
+											className={`ml-3 text-sm font-semibold cursor-pointer transition-colors duration-200 ${
+												classifierCode === 'NHAT_KY_THU_NGHIEM' ? 'text-blue-600' : 'text-gray-700'
+											}`}
+										>
+											Nhật ký thử nghiệm
+										</label>
+									</div>
+
+									<div className="flex items-center">
+										<input
+											type="radio"
 											id="tai_lieu"
 											name="classifierCode"
 											value="TAI_LIEU_KHAC"
@@ -3061,44 +3319,42 @@ const Editor = () => {
 									</div>
 								</div>
 
-								{/* Thông tin mẫu biên bản (chỉ hiện khi chọn biên bản kiểm nghiệm) */}
-								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
-									<div className="mt-4">
-										<div className="text-sm font-semibold text-gray-700 mb-2 text-left ml-2">
-											Thông tin mẫu biên bản
-										</div>
-										<div className="">
-											{currentTemplate ? (
-												<div className="space-y-2">
-													<div className="ml-4 -3 bg-gray-50 rounded-lg">
-														<div className="text-sm font-semibold text-gray-800 text-left">
-															{currentTemplate.templateName || 'Mẫu đã chọn'}
-														</div>
-														<div className="text-xs text-gray-600 text-left">Mã: {currentTemplate.id || '-'}</div>
-													</div>
-													<button
-														className="w-full py-2 px-3 text-sm font-semibold bg-white text-black border-2 border-gray-500 rounded-md hover:bg-gray-50 hover:border-gray-700 transition-all shadow-sm"
-														onClick={showTemplateSearchModal}
-													>
-														Thay đổi mẫu
-													</button>
-												</div>
-											) : (
-												<div className="space-y-2">
-													<div className="ml-4 text-sm text-gray-600 mb-2 font-semibold text-left">
-														Chưa chọn mẫu biên bản
-													</div>
-													<button
-														className="w-full py-2 px-3 text-sm font-semibold bg-white text-black border-2 border-gray-500 rounded-md hover:bg-gray-50 hover:border-gray-700 transition-all shadow-sm"
-														onClick={showTemplateSearchModal}
-													>
-														Tìm kiếm mẫu
-													</button>
-												</div>
-											)}
-										</div>
+								{/* Thông tin mẫu văn bản (hiển thị cho tất cả loại văn bản) */}
+								<div className="mt-4">
+									<div className="text-sm font-semibold text-gray-700 mb-2 text-left ml-2">
+										Thông tin mẫu văn bản
 									</div>
-								)}
+									<div className="">
+										{currentTemplate ? (
+											<div className="space-y-2">
+												<div className="ml-4 -3 bg-gray-50 rounded-lg">
+													<div className="text-sm font-semibold text-gray-800 text-left">
+														{currentTemplate.templateName || 'Mẫu đã chọn'}
+													</div>
+													<div className="text-xs text-gray-600 text-left">Mã: {currentTemplate.id || '-'}</div>
+												</div>
+												<button
+													className="w-full py-2 px-3 text-sm font-semibold bg-white text-black border-2 border-gray-500 rounded-md hover:bg-gray-50 hover:border-gray-700 transition-all shadow-sm"
+													onClick={showTemplateSearchModal}
+												>
+													Thay đổi mẫu
+												</button>
+											</div>
+										) : (
+											<div className="space-y-2">
+												<div className="ml-4 text-sm text-gray-600 mb-2 font-semibold text-left">
+													Chưa chọn mẫu văn bản
+												</div>
+												<button
+													className="w-full py-2 px-3 text-sm font-semibold bg-white text-black border-2 border-gray-500 rounded-md hover:bg-gray-50 hover:border-gray-700 transition-all shadow-sm"
+													onClick={showTemplateSearchModal}
+												>
+													Tìm kiếm mẫu
+												</button>
+											</div>
+										)}
+									</div>
+								</div>
 							</div>
 						</div>
 
@@ -3106,16 +3362,19 @@ const Editor = () => {
 						<div className="bg-white rounded-box border-2 border-gray-500 shadow-sm hover:border-gray-700 hover:shadow-md transition-all flex-1 min-h-fit">
 							<div className="bg-white text-gray-800 px-4 py-3 border-b-2 border-gray-500 font-semibold text-sm text-left rounded-box-header flex items-center justify-between">
 								<span>Thông tin liên quan</span>
-								<button
-									className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold border-0 transition-all duration-200 shadow-sm"
-									title="Quét dữ liệu"
-									onClick={handleScanData}
-								>
-									Quét
-								</button>
+								{/* Nút quét chỉ hiện khi chọn biên bản kiểm nghiệm */}
+								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
+									<button
+										className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold border-0 transition-all duration-200 shadow-md"
+										title="Quét dữ liệu"
+										onClick={handleScanData}
+									>
+										Quét
+									</button>
+								)}
 							</div>
 							<div className="p-4 bg-white rounded-box-content min-h-fit">
-								{/* Chỉ tiêu đã chọn (chỉ hiện khi là biên bản kiểm nghiệm) */}
+								{/* Chỉ tiêu đã chọn (chỉ hiện khi chọn biên bản kiểm nghiệm) */}
 								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
 									<div>
 										<div className="flex items-center justify-between mb-3">
@@ -3145,6 +3404,12 @@ const Editor = () => {
 										</div>
 									</div>
 								)}
+								{/* Thông báo khi không phải biên bản kiểm nghiệm */}
+								{classifierCode !== 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
+									<div className="text-center py-8 text-gray-500">
+										<p className="text-sm">Thông tin liên quan chỉ hiển thị cho Biên bản kiểm nghiệm</p>
+									</div>
+								)}
 							</div>
 						</div>
 					</div>
@@ -3157,7 +3422,11 @@ const Editor = () => {
 					<div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-auto">
 						<div className="flex justify-between items-center mb-4">
 							<h3 className="text-lg font-semibold text-gray-800">
-								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' ? 'Tìm kiếm mẫu biên bản' : 'Tìm kiếm mẫu tài liệu'}
+								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' 
+									? 'Tìm kiếm mẫu biên bản' 
+									: classifierCode === 'NHAT_KY_THU_NGHIEM'
+									? 'Tìm kiếm mẫu nhật ký thử nghiệm'
+									: 'Tìm kiếm mẫu tài liệu'}
 							</h3>
 							<button onClick={() => setShowTemplateSearchForm(false)} className="text-gray-500 hover:text-gray-700">
 								<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3199,6 +3468,8 @@ const Editor = () => {
 									<div className="text-gray-600">
 										{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM'
 											? 'Không tìm thấy mẫu biên bản nào'
+											: classifierCode === 'NHAT_KY_THU_NGHIEM'
+											? 'Không tìm thấy mẫu nhật ký thử nghiệm nào'
 											: 'Không tìm thấy mẫu tài liệu nào'}
 									</div>
 								</div>

@@ -10,7 +10,6 @@ import {
 	FaClock,
 	FaSearch,
 	FaFilter,
-	FaChevronDown,
 	FaTimes,
 	FaSave,
 	FaEraser,
@@ -26,6 +25,7 @@ const DocumentEditor = () => {
 	const [isLoading, setIsLoading] = useState(false);
 	const [documentStatus, setDocumentStatus] = useState('draft'); // 'draft', 'submitted', or 'published'
 	const [isDraft, setIsDraft] = useState(true); // Toggle state for draft/submitted/published
+	const [isInitialLoad, setIsInitialLoad] = useState(true); // Track initial load to prevent duplicate API calls
 
 	// Data states from EditorTemplate.html
 	const [recentDocuments, setRecentDocuments] = useState([]);
@@ -190,6 +190,7 @@ const DocumentEditor = () => {
 	// Load recent documents from API
 	const loadRecentDocuments = async (searchTerm = '', page = 1, status = 'draft') => {
 		try {
+			console.log('[DEBUG] loadRecentDocuments called with:', { searchTerm, page, status });
 			setIsLoading(true);
 
 			// Always use the same API endpoint but with different status
@@ -295,6 +296,11 @@ const DocumentEditor = () => {
 
 	// Load data on component mount (only once)
 	useEffect(() => {
+		console.log('[DEBUG] Initial mount useEffect');
+		// Load initial data only once when component mounts
+		loadRecentDocuments('', 1, documentStatus);
+		loadTemplates('', 1);
+
 		// Cleanup function
 		return () => {
 			// Clean up global function
@@ -306,19 +312,44 @@ const DocumentEditor = () => {
 
 	// Keep isDraft in sync with documentStatus
 	useEffect(() => {
+		console.log('[DEBUG] documentStatus sync useEffect:', documentStatus);
 		setIsDraft(documentStatus === 'draft');
 	}, [documentStatus]);
 
-	// Auto-search when search terms change (debounced)
+	// Handle documentStatus changes separately to avoid duplicate API calls
 	useEffect(() => {
+		console.log('[DEBUG] documentStatus change useEffect:', { isInitialLoad, documentStatus });
+		// Skip initial load (handled in mount useEffect)
+		if (isInitialLoad) {
+			setIsInitialLoad(false);
+			return;
+		}
+		
+		// Load documents when status changes (not on initial load)
+		loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
+	}, [documentStatus]); // Only depend on documentStatus
+
+	// Auto-search when search terms or pagination change (debounced) - exclude status changes
+	useEffect(() => {
+		console.log('[DEBUG] search/pagination useEffect:', { searchTerm, recentDocumentsPage, refreshTrigger });
+		// Skip on initial mount - data is already loaded in the mount useEffect
+		if (searchTerm === '' && recentDocumentsPage === 1 && refreshTrigger === 0) {
+			return;
+		}
+
 		const timeoutId = setTimeout(() => {
 			loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
 		}, 500); // 500ms debounce
 
 		return () => clearTimeout(timeoutId);
-	}, [searchTerm, documentStatus, recentDocumentsPage, refreshTrigger]);
+	}, [searchTerm, recentDocumentsPage, refreshTrigger]); // documentStatus excluded to prevent duplicate API calls
 
 	useEffect(() => {
+		// Skip on initial mount - data is already loaded in the mount useEffect
+		if (templateSearchTerm === '' && templatesPage === 1 && refreshTrigger === 0) {
+			return;
+		}
+
 		const timeoutId = setTimeout(() => {
 			loadTemplates(templateSearchTerm, templatesPage);
 		}, 500); // 500ms debounce
@@ -328,14 +359,19 @@ const DocumentEditor = () => {
 
 	// Handle document status change
 	const handleDocumentStatusChange = async (newStatus) => {
+		console.log('[DEBUG] handleDocumentStatusChange called:', { current: documentStatus, new: newStatus });
 		if (newStatus === documentStatus) return; // No change needed
 
-		setDocumentStatus(newStatus);
-		setRecentDocumentsPage(1); // Reset to first page
+		// Clear current data before switching
 		setSelectedDocument(null); // Clear selection when switching tabs
 		setPreviewContent(''); // Clear preview content
 		setCurrentPreviewedTemplate(null); // Clear previewed template
-		// Note: loadRecentDocuments will be called automatically by useEffect when documentStatus changes
+		
+		// Reset pagination and search
+		setRecentDocumentsPage(1); // Reset to first page
+		
+		// Change status - this will trigger the useEffect for loading new data
+		setDocumentStatus(newStatus);
 	};
 
 	// Handle toggle switch change
@@ -686,21 +722,7 @@ const DocumentEditor = () => {
 		console.log('Creating new document...');
 		// Navigate to Editor for new document
 		const baseUrl = window.location.origin;
-
-		// Build query parameters
-		const params = new URLSearchParams();
-		params.set('classifierCode', 'BIEN_BAN_KET_QUA_THU_NGHIEM');
-
-		// If a template is currently previewed, include its ID
-		if (currentPreviewedTemplate && currentPreviewedTemplate.id) {
-			params.set('templateId', currentPreviewedTemplate.id);
-		}
-		// If preview is from get_editor API (has selectedDocument), use metadata.templateId
-		else if (selectedDocument && selectedDocument.metadata?.templateId) {
-			params.set('templateId', selectedDocument.metadata.templateId);
-		}
-
-		const editorUrl = `${baseUrl}/editor?${params.toString()}`;
+		const editorUrl = `${baseUrl}/editor`;
 
 		// Open in new tab or navigate to editor
 		window.open(editorUrl, '_blank');
@@ -1686,11 +1708,6 @@ const DocumentEditor = () => {
 											</div>
 										</label>
 									)}
-									<FaChevronDown 
-										className={`text-gray-400 transition-transform duration-300 ${
-											isRecentDocumentsExpanded ? 'rotate-180' : ''
-										}`}
-									/>
 								</div>
 							</div>
 
@@ -1785,7 +1802,7 @@ const DocumentEditor = () => {
 														}`}
 													>
 														<div className="flex items-start justify-between mb-2">
-															<div className="flex items-center gap-2">
+															<div className="flex items-center gap-2 text-start">
 																<FaFileAlt className="text-gray-500 flex-shrink-0" />
 																<span className="font-medium text-gray-900 text-sm leading-tight">
 																	{doc.metadata?.header?.title || doc.title}
@@ -1842,11 +1859,6 @@ const DocumentEditor = () => {
 											{isLoading ? 'Đang tải...' : 'Tạo mẫu mới'}
 										</button>
 									)}
-									<FaChevronDown 
-										className={`text-gray-400 transition-transform duration-300 ${
-											isTemplatesExpanded ? 'rotate-180' : ''
-										}`}
-									/>
 								</div>
 							</div>
 
