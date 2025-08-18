@@ -962,11 +962,11 @@ const Editor = () => {
 			const content =
 				editorRef.current && editorRef.current.getContent ? editorRef.current.getContent() : editorContent;
 
-			// Validation: Don't auto-save if critical data is missing
-			if (!content || content.trim() === '' || content === '<p><br></p>') {
-				console.log('Auto-save skipped: No meaningful content');
-				return;
-			}
+			// // Validation: Don't auto-save if critical data is missing
+			// if (!content || content.trim() === '' || content === '<p><br></p>') {
+			// 	console.log('Auto-save skipped: No meaningful content');
+			// 	return;
+			// }
 
 			// Bỏ kiểm tra headerData và template để auto-save luôn hoạt động khi có content
 			// Đã comment out để auto-save hoạt động ngay cả khi không có template hoặc header data
