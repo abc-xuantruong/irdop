@@ -110,7 +110,7 @@ const applyFormatToHTML = (htmlContent) => {
 
 const Editor = () => {
 	const { currentUser, getIdenByUid } = useContext(GlobalContext);
-	
+
 	const [headerData, setHeaderData] = useState({
 		title: '',
 		code: '',
@@ -141,7 +141,7 @@ const Editor = () => {
 	const [lastSubmitResponse, setLastSubmitResponse] = useState(null); // Store full API response
 	const [documentMetadata, setDocumentMetadata] = useState({}); // Store document metadata
 	const [documentStatus, setDocumentStatus] = useState('draft'); // 'draft' | 'submitted' - from query params
-	
+
 	// AnalysesExtract component state
 	const [showAnalysesExtract, setShowAnalysesExtract] = useState(false);
 	const [analysesExtractDocument, setAnalysesExtractDocument] = useState(null);
@@ -161,7 +161,7 @@ const Editor = () => {
 	const [documentFooter, setDocumentFooter] = useState(''); // Store document footer from metadata
 
 	const [editorContent, setEditorContent] = useState('');
-	const [hasContentChanged, setHasContentChanged] = useState(false); // Track if editor has been modified
+	const [autoSaveStarted, setAutoSaveStarted] = useState(false); // Track if auto-save has been started
 
 	// Refs
 	const editorRef = useRef(null);
@@ -169,13 +169,36 @@ const Editor = () => {
 	const loadTableInfoTimeoutRef = useRef(null);
 	const isLoadingTableInfo = useRef(false);
 	const lastAnalysisIdsRef = useRef(null);
-	const initialContentRef = useRef(''); // Track initial content to detect first change
-	const firstAutoSaveTimeoutRef = useRef(null); // For immediate auto-save on first change
 
-	// Helper function to get user name from UID
+	// New unified auto-save system
+	const startAutoSave = () => {
+		// Only start if not already started and document is in draft status
+		if (!autoSaveStarted && documentStatus !== 'submitted') {
+			console.log('Starting auto-save system');
+			setAutoSaveStarted(true);
+
+			// Immediate auto-save
+			autoSaveLabResultReport();
+
+			// Start 10-second interval
+			autoSaveIntervalRef.current = setInterval(() => {
+				// Stop auto-save if document becomes submitted
+				if (documentStatus === 'submitted') {
+					console.log('Document submitted - stopping auto-save');
+					clearInterval(autoSaveIntervalRef.current);
+					autoSaveIntervalRef.current = null;
+					setAutoSaveStarted(false);
+					return;
+				}
+
+				console.log('Auto-save interval triggered');
+				autoSaveLabResultReport();
+			}, 10000); // Every 10 seconds
+		}
+	};
 	const getUserName = async (uid) => {
 		if (!uid) return '';
-		
+
 		try {
 			const idenRecord = await getIdenByUid(uid);
 			return idenRecord?.identity_name || uid; // Fallback to UID if name not found
@@ -202,9 +225,6 @@ const Editor = () => {
 			}
 			if (loadTableInfoTimeoutRef.current) {
 				clearTimeout(loadTableInfoTimeoutRef.current);
-			}
-			if (firstAutoSaveTimeoutRef.current) {
-				clearTimeout(firstAutoSaveTimeoutRef.current);
 			}
 			clearInterval(dateInterval);
 		};
@@ -260,27 +280,23 @@ const Editor = () => {
 		}
 	}, [analysisIds]);
 
-	// Auto-save useEffect - chỉ để cleanup khi status/mode thay đổi
+	// Auto-save useEffect - cleanup when status changes
 	useEffect(() => {
 		console.log('Auto-save useEffect triggered:', {
 			documentStatus,
-			editorContent: !!editorContent,
-			hasContentChanged,
+			autoSaveStarted,
 			isPreviewMode,
 			timestamp: new Date().toISOString(),
 		});
 
-		// Clear auto-save nếu không còn ở trạng thái draft hoặc đang preview
-		if (documentStatus !== 'draft' || isPreviewMode) {
+		// Stop auto-save if document becomes submitted or in preview mode
+		if (documentStatus === 'submitted' || isPreviewMode) {
 			console.log('Stopping auto-save due to status change or preview mode');
 			if (autoSaveIntervalRef.current) {
 				clearInterval(autoSaveIntervalRef.current);
 				autoSaveIntervalRef.current = null;
 			}
-			if (firstAutoSaveTimeoutRef.current) {
-				clearTimeout(firstAutoSaveTimeoutRef.current);
-				firstAutoSaveTimeoutRef.current = null;
-			}
+			setAutoSaveStarted(false);
 		}
 
 		// Cleanup on unmount or dependency change
@@ -288,10 +304,6 @@ const Editor = () => {
 			if (autoSaveIntervalRef.current) {
 				clearInterval(autoSaveIntervalRef.current);
 				autoSaveIntervalRef.current = null;
-			}
-			if (firstAutoSaveTimeoutRef.current) {
-				clearTimeout(firstAutoSaveTimeoutRef.current);
-				firstAutoSaveTimeoutRef.current = null;
 			}
 		};
 	}, [documentStatus, isPreviewMode]);
@@ -316,10 +328,10 @@ const Editor = () => {
 	// Hàm xử lý dữ liệu khi load trang lần đầu
 	const handleInitialPageLoad = async () => {
 		console.log('=== handleInitialPageLoad started ===');
-		
+
 		// Reset template state at the beginning
 		setCurrentTemplate(null);
-		
+
 		const urlParams = new URLSearchParams(window.location.search);
 		const docId = urlParams.get('docId');
 		const editId = urlParams.get('editId');
@@ -404,14 +416,6 @@ const Editor = () => {
 			// Gán content vào editor
 			if (metadata.content) {
 				setEditorContent(metadata.content);
-				// Reset change tracking for loaded content
-				initialContentRef.current = metadata.content;
-				setHasContentChanged(false);
-				// Clear any pending first auto-save
-				if (firstAutoSaveTimeoutRef.current) {
-					clearTimeout(firstAutoSaveTimeoutRef.current);
-					firstAutoSaveTimeoutRef.current = null;
-				}
 				// Set content to editor when it's ready
 				const setContentWhenReady = () => {
 					if (editorRef.current && editorRef.current.initialized) {
@@ -430,12 +434,14 @@ const Editor = () => {
 			}
 			if (metadata.submittedByUID) {
 				// Get user name from UID
-				getUserName(metadata.submittedByUID).then(name => {
-					setSubmittedBy(name);
-				}).catch(error => {
-					console.error('Error getting submitted by name:', error);
-					setSubmittedBy(metadata.submittedByUID); // Fallback to UID
-				});
+				getUserName(metadata.submittedByUID)
+					.then((name) => {
+						setSubmittedBy(name);
+					})
+					.catch((error) => {
+						console.error('Error getting submitted by name:', error);
+						setSubmittedBy(metadata.submittedByUID); // Fallback to UID
+					});
 			}
 
 			// Gán fileId từ docrecord (for file preview) - chỉ lấy fileId thực sự
@@ -525,14 +531,6 @@ const Editor = () => {
 				// Gán content vào editor
 				if (metadata.content) {
 					setEditorContent(metadata.content);
-					// Reset change tracking for loaded content
-					initialContentRef.current = metadata.content;
-					setHasContentChanged(false);
-					// Clear any pending first auto-save
-					if (firstAutoSaveTimeoutRef.current) {
-						clearTimeout(firstAutoSaveTimeoutRef.current);
-						firstAutoSaveTimeoutRef.current = null;
-					}
 					const setContentWhenReady = () => {
 						if (editorRef.current && editorRef.current.initialized) {
 							editorRef.current.setContent(metadata.content);
@@ -598,12 +596,14 @@ const Editor = () => {
 				if (document.lockedByUID) {
 					setLockedByUID(document.lockedByUID);
 					// Get locked by user name
-					getUserName(document.lockedByUID).then(name => {
-						setLockedByName(name);
-					}).catch(error => {
-						console.error('Error getting locked by name:', error);
-						setLockedByName(document.lockedByUID); // Fallback to UID
-					});
+					getUserName(document.lockedByUID)
+						.then((name) => {
+							setLockedByName(name);
+						})
+						.catch((error) => {
+							console.error('Error getting locked by name:', error);
+							setLockedByName(document.lockedByUID); // Fallback to UID
+						});
 					setIsDocumentLocked(true);
 					updateDocumentStatus('submitted');
 					documentStatus = 'submitted';
@@ -670,14 +670,6 @@ const Editor = () => {
 			// Gán content vào editor
 			if (template.content) {
 				setEditorContent(template.content);
-				// Reset change tracking for loaded content
-				initialContentRef.current = template.content;
-				setHasContentChanged(false);
-				// Clear any pending first auto-save
-				if (firstAutoSaveTimeoutRef.current) {
-					clearTimeout(firstAutoSaveTimeoutRef.current);
-					firstAutoSaveTimeoutRef.current = null;
-				}
 				const setContentWhenReady = () => {
 					if (editorRef.current && editorRef.current.initialized) {
 						editorRef.current.setContent(template.content);
@@ -908,9 +900,6 @@ const Editor = () => {
 					publishDate: '',
 				});
 				setCurrentEditId(null);
-				// Reset change tracking
-				initialContentRef.current = '';
-				setHasContentChanged(false);
 			}
 		}
 	};
@@ -1014,20 +1003,24 @@ const Editor = () => {
 			const response = await apiPost('https://red.irdop.org/v1/editor/auto_save/lab_result_report', requestBody);
 
 			if (response.status === 200 && response.data && response.data.id) {
-				// If this is the first save (no editId in request), update URL and footer
+				const responseEditId = response.data.id;
+
+				// Always update URL with editId from response
+				const newUrl = new URL(window.location);
+				newUrl.searchParams.set('editId', responseEditId);
+				window.history.replaceState({}, '', newUrl);
+				console.log('Updated URL with editId:', responseEditId);
+
+				// If this is the first save (no editId in request), update state and show message
 				if (!editId) {
 					// This was a new document creation (no editId in request body)
-					const newEditId = response.data.id;
-					setCurrentEditId(newEditId);
-
-					// Update URL to only show editId
-					const newUrl = new URL(window.location);
-					newUrl.search = '';
-					newUrl.searchParams.set('editId', newEditId);
-					window.history.replaceState({}, '', newUrl);
+					setCurrentEditId(responseEditId);
 
 					// Show success message ONLY for new document creation
-					showAutoHideMessage(`Đã tạo mã tài liệu: ${newEditId}`, 'success');
+					showAutoHideMessage(`Đã tạo mã tài liệu: ${responseEditId}`, 'success');
+				} else {
+					// Update current editId state to match response
+					setCurrentEditId(responseEditId);
 				}
 
 				// Update document info with auto-save data
@@ -1062,7 +1055,7 @@ const Editor = () => {
 
 			if (response.status === 200 && response.data) {
 				showAutoHideMessage('Đã tạo preview thành công!', 'success');
-				console.log(documentMetadata)
+				console.log(documentMetadata);
 				// Show popup instead of new tab
 				const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
 				showPreviewPopup(htmlResponse, {
@@ -1095,7 +1088,6 @@ const Editor = () => {
 		identityUID = null, // Author UID (for createdAt)
 		modifiedByUID = null, // Modified by UID (for modifiedAt)
 	) => {
-
 		if (!modifiedByUID && identityUID) {
 			modifiedByUID = identityUID; // Use identityUID as modifiedByUID if not provided
 		}
@@ -1245,6 +1237,9 @@ const Editor = () => {
 						newUrl.searchParams.set('analysisIds', newAnalysisIds.join(','));
 					}
 					window.history.replaceState({}, '', newUrl);
+
+					// Trigger auto-save when analysis selection changes
+					startAutoSave();
 				} else {
 					console.log('Analysis IDs unchanged, no update needed');
 				}
@@ -1314,7 +1309,7 @@ const Editor = () => {
 			// Gửi API request
 			const response = await apiPost('https://red.irdop.org/v1/edit/scan', {
 				id: currentEditId,
-				metadata: currentMetadata
+				metadata: currentMetadata,
 			});
 
 			if (response.status === 200 && response.data) {
@@ -1574,14 +1569,6 @@ const Editor = () => {
 			if (template.content && editorRef.current) {
 				editorRef.current.setContent(template.content);
 				setEditorContent(template.content);
-				// Reset change tracking for template content
-				initialContentRef.current = template.content;
-				setHasContentChanged(false);
-				// Clear any pending first auto-save
-				if (firstAutoSaveTimeoutRef.current) {
-					clearTimeout(firstAutoSaveTimeoutRef.current);
-					firstAutoSaveTimeoutRef.current = null;
-				}
 			}
 
 			// Apply template header data if available
@@ -1606,6 +1593,9 @@ const Editor = () => {
 
 			setShowTemplateSearchForm(false);
 			showAutoHideMessage(`Đã chọn mẫu: ${template.templateName || template.name}`, 'success');
+
+			// Trigger auto-save when template is selected
+			startAutoSave();
 		} catch (error) {
 			console.error('Error selecting template:', error);
 			showAutoHideMessage('Lỗi khi chọn mẫu biên bản', 'error');
@@ -1732,7 +1722,7 @@ const Editor = () => {
 					(documentData.metadata && documentData.metadata.extractData) ||
 					(documentMetadata && documentMetadata.extractData);
 				const { analyses = [] } = extractData || {};
-				
+
 				// Tạo document object cho AnalysesExtract
 				const documentForExtract = {
 					id: currentEditId,
@@ -1912,12 +1902,14 @@ const Editor = () => {
 				const lockUID = responseData.lockedByUID || currentUserUID;
 				setLockedByUID(lockUID);
 				// Get locked by user name
-				getUserName(lockUID).then(name => {
-					setLockedByName(name);
-				}).catch(error => {
-					console.error('Error getting locked by name:', error);
-					setLockedByName(lockUID); // Fallback to UID
-				});
+				getUserName(lockUID)
+					.then((name) => {
+						setLockedByName(name);
+					})
+					.catch((error) => {
+						console.error('Error getting locked by name:', error);
+						setLockedByName(lockUID); // Fallback to UID
+					});
 				setIsDocumentLocked(true);
 				setDocumentFooter(metadata.footer || '');
 
@@ -1930,22 +1922,26 @@ const Editor = () => {
 
 				if (metadata && metadata.submittedByUID) {
 					// Get user name from UID
-					getUserName(metadata.submittedByUID).then(name => {
-						setSubmittedBy(name);
-					}).catch(error => {
-						console.error('Error getting submitted by name:', error);
-						setSubmittedBy(metadata.submittedByUID); // Fallback to UID
-					});
+					getUserName(metadata.submittedByUID)
+						.then((name) => {
+							setSubmittedBy(name);
+						})
+						.catch((error) => {
+							console.error('Error getting submitted by name:', error);
+							setSubmittedBy(metadata.submittedByUID); // Fallback to UID
+						});
 				} else {
 					// Get current user name
 					const currentUserUID = Cookies.get('identityUID') || '';
 					if (currentUserUID) {
-						getUserName(currentUserUID).then(name => {
-							setSubmittedBy(name);
-						}).catch(error => {
-							console.error('Error getting current user name:', error);
-							setSubmittedBy('Current User'); // Fallback
-						});
+						getUserName(currentUserUID)
+							.then((name) => {
+								setSubmittedBy(name);
+							})
+							.catch((error) => {
+								console.error('Error getting current user name:', error);
+								setSubmittedBy('Current User'); // Fallback
+							});
 					} else {
 						setSubmittedBy('Current User');
 					}
@@ -1995,12 +1991,14 @@ const Editor = () => {
 				if (document.lockedByUID) {
 					setLockedByUID(document.lockedByUID);
 					// Get locked by user name
-					getUserName(document.lockedByUID).then(name => {
-						setLockedByName(name);
-					}).catch(error => {
-						console.error('Error getting locked by name:', error);
-						setLockedByName(document.lockedByUID); // Fallback to UID
-					});
+					getUserName(document.lockedByUID)
+						.then((name) => {
+							setLockedByName(name);
+						})
+						.catch((error) => {
+							console.error('Error getting locked by name:', error);
+							setLockedByName(document.lockedByUID); // Fallback to UID
+						});
 					setIsDocumentLocked(true);
 					setDocumentStatus('SENDED');
 
@@ -2337,45 +2335,12 @@ const Editor = () => {
 		return urlParams.get('editId');
 	};
 
-	// Handle editor content changes with change tracking
+	// Handle editor content changes - trigger auto-save on any change
 	const handleEditorChange = (content) => {
 		setEditorContent(content);
-		
-		// Check if both title and content have meaningful data for auto-save
-		const hasTitle = headerData.title && headerData.title.trim() !== '';
-		const hasContent = content && content.trim() !== '' && content !== '<p></p>' && content !== '<p><br></p>';
-		
-		// Only set hasContentChanged if this is a user-initiated change
-		// (not during initial loading or programmatic content setting)
-		if (initialContentRef.current && content !== initialContentRef.current) {
-			console.log('User changed editor content');
-			
-			// Set change flag first - only trigger auto-save if both title and content exist
-			if (!hasContentChanged && documentStatus === 'draft' && !isPreviewMode && hasTitle && hasContent) {
-				console.log('First change detected - triggering immediate auto-save and starting interval');
-				setHasContentChanged(true);
-				
-				// Clear any existing timeouts/intervals
-				if (firstAutoSaveTimeoutRef.current) {
-					clearTimeout(firstAutoSaveTimeoutRef.current);
-				}
-				if (autoSaveIntervalRef.current) {
-					clearInterval(autoSaveIntervalRef.current);
-				}
-				
-				// 1. Immediate auto-save (debounced để tránh spam khi user đang gõ)
-				firstAutoSaveTimeoutRef.current = setTimeout(() => {
-					console.log('Executing immediate auto-save for first change');
-					autoSaveLabResultReport();
-					
-					// 2. Bắt đầu interval auto-save sau immediate save
-					autoSaveIntervalRef.current = setInterval(() => {
-						console.log('Auto-save interval triggered');
-						autoSaveLabResultReport();
-					}, 10000); // Mỗi 10 giây
-				}, 500); // 500ms debounce
-			}
-		}
+
+		// Start auto-save on any content change (only once)
+		startAutoSave();
 	};
 
 	const showAutoHideMessage = (message, type = 'info') => {
@@ -2447,6 +2412,9 @@ const Editor = () => {
 		const url = new URL(window.location);
 		url.searchParams.set('classifierCode', newClassifierCode);
 		window.history.replaceState({}, '', url);
+
+		// Trigger auto-save when classifier code changes
+		startAutoSave();
 	};
 
 	// File preview functionality (similar to DocumentEditor)
@@ -2549,28 +2517,13 @@ const Editor = () => {
 	// 	setLastModifiedAt(dateTimeString);
 	// }, []);
 
-	// Handle header data changes with immediate auto-save
+	// Handle header data changes - trigger auto-save on any change
 	const handleHeaderDataChange = (field, value) => {
 		// Update header data state
-		const updatedHeaderData = { ...headerData, [field]: value };
-		setHeaderData(updatedHeaderData);
-		
-		// Check if both title and content have meaningful data for auto-save
-		const hasTitle = (field === 'title' ? value : updatedHeaderData.title) && (field === 'title' ? value.trim() : updatedHeaderData.title.trim()) !== '';
-		const hasContent = editorContent && editorContent.trim() !== '' && editorContent !== '<p></p>' && editorContent !== '<p><br></p>';
-		
-		// Trigger immediate auto-save if conditions are met
-		if (documentStatus === 'draft' && !isPreviewMode && hasTitle && hasContent) {
-			// Use setTimeout to debounce rapid changes
-			if (firstAutoSaveTimeoutRef.current) {
-				clearTimeout(firstAutoSaveTimeoutRef.current);
-			}
-			
-			firstAutoSaveTimeoutRef.current = setTimeout(() => {
-				console.log('Auto-save triggered by header field change:', field);
-				autoSaveLabResultReport();
-			}, 1000); // 1 second debounce
-		}
+		setHeaderData((prev) => ({ ...prev, [field]: value }));
+
+		// Start auto-save on any header change (only once)
+		startAutoSave();
 	};
 
 	return (
@@ -3321,9 +3274,7 @@ const Editor = () => {
 
 								{/* Thông tin mẫu văn bản (hiển thị cho tất cả loại văn bản) */}
 								<div className="mt-4">
-									<div className="text-sm font-semibold text-gray-700 mb-2 text-left ml-2">
-										Thông tin mẫu văn bản
-									</div>
+									<div className="text-sm font-semibold text-gray-700 mb-2 text-left ml-2">Thông tin mẫu văn bản</div>
 									<div className="">
 										{currentTemplate ? (
 											<div className="space-y-2">
@@ -3422,8 +3373,8 @@ const Editor = () => {
 					<div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-auto">
 						<div className="flex justify-between items-center mb-4">
 							<h3 className="text-lg font-semibold text-gray-800">
-								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' 
-									? 'Tìm kiếm mẫu biên bản' 
+								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM'
+									? 'Tìm kiếm mẫu biên bản'
 									: classifierCode === 'NHAT_KY_THU_NGHIEM'
 									? 'Tìm kiếm mẫu nhật ký thử nghiệm'
 									: 'Tìm kiếm mẫu tài liệu'}
@@ -3641,7 +3592,7 @@ const Editor = () => {
 					</div>
 				</div>
 			)}
-			
+
 			{/* AnalysesExtract Component */}
 			{showAnalysesExtract && analysesExtractDocument && (
 				<AnalysesExtract
