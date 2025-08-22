@@ -446,6 +446,9 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 	const location = useLocation();
 	const navigate = useNavigate();
 
+	// Ref to prevent infinite loops in API calls
+	const lastApiCallRef = useRef({ filters: null, currentPage: null, itemsPerPage: null, timestamp: 0 });
+
 	// State management - updated to match ProcessingAnalysis structure
 	const [processingSample, setProcessingSample] = useState([]);
 	const [currentPage, setCurrentPage] = useState(1);
@@ -543,13 +546,20 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 
 	// Fetch sample data with new API endpoint
 	const fetchSampleData = async (preserveScroll = false, overrideFilters = null) => {
-		if (isApiCallInProgress) return;
+		if (isApiCallInProgress) {
+			return;
+		}
 
-		// Reduce rate limiting for pagination and filter changes
+		// Enhanced rate limiting to prevent duplicate calls
 		const currentTime = Date.now();
 		const lastCallTime = window._lastFetchTime || 0;
-		// Only apply rate limiting for auto-refresh calls, not for user interactions
-		if (!preserveScroll && !overrideFilters && currentTime - lastCallTime < 500) return;
+		const timeDiff = currentTime - lastCallTime;
+
+		// Apply stricter rate limiting for pagination/filter changes
+		if (timeDiff < 300) {
+			return;
+		}
+
 		window._lastFetchTime = currentTime;
 
 		setIsApiCallInProgress(true);
@@ -830,8 +840,6 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 					}
 				}
 			}
-
-			// Debug log to verify request body
 
 			const response = await apiPost('https://black.irdop.org/v1/sample/processing/list', requestBody);
 
@@ -1504,8 +1512,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		// Reset pagination to first page
 		setCurrentPage(1);
 
-		// Gọi lại API với filters đã được reset
-		fetchSampleData(false, newFilters);
+		// Remove manual API call - useEffect will handle it when filters and currentPage change
 
 		toast.info('Đã xóa tất cả bộ lọc');
 	};
@@ -1709,7 +1716,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 					formattedResults = [
 						{ value: 'none', count: 0, label: 'none' },
 						{ value: 'pending', count: 0, label: 'pending' },
-						{ value: 'published', count: 0, label: 'published' }
+						{ value: 'published', count: 0, label: 'published' },
 					];
 				} else if (columnName === 'technician_uid') {
 					// For technician filter, convert identity_uid to display name with alias
@@ -1909,7 +1916,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 					formattedResults = [
 						{ value: 'none', count: 0, label: 'none' },
 						{ value: 'pending', count: 0, label: 'pending' },
-						{ value: 'published', count: 0, label: 'published' }
+						{ value: 'published', count: 0, label: 'published' },
 					];
 				} else if (activeFilterColumn === 'technician_uid') {
 					// For technician filter, convert identity_uid to display name with alias
@@ -2007,10 +2014,6 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 				queryParams.set(`ps_${column}`, value);
 			}
 		});
-
-		// Log if status was NOT found in headerFilters
-		if (!newFilters.headerFilters.hasOwnProperty('status')) {
-		}
 
 		// Add sorting parameters
 		if (newFilters.columnSort) {
@@ -2116,24 +2119,18 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		closeFilterModal();
 	};
 
-	// Pagination handlers - improved to ensure data loads correctly
+	// Pagination handlers - let useEffect handle API calls to avoid duplicates
 	const handleItemsPerPageChange = (newItemsPerPage) => {
 		setItemsPerPage(newItemsPerPage);
 		setCurrentPage(1); // Reset to first page when changing items per page
-		// Force API call after state update
-		setTimeout(() => {
-			fetchSampleData(false, filters);
-		}, 50);
+		// Remove setTimeout - let useEffect handle the API call
 	};
 
 	const handlePreviousPage = () => {
 		if (currentPage > 1) {
 			const newPage = currentPage - 1;
 			setCurrentPage(newPage);
-			// Force API call after state update
-			setTimeout(() => {
-				fetchSampleData(false, filters);
-			}, 50);
+			// Remove setTimeout - let useEffect handle the API call
 		}
 	};
 
@@ -2141,10 +2138,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		if (currentPage < totalPages) {
 			const newPage = currentPage + 1;
 			setCurrentPage(newPage);
-			// Force API call after state update
-			setTimeout(() => {
-				fetchSampleData(false, filters);
-			}, 50);
+			// Remove setTimeout - let useEffect handle the API call
 		}
 	};
 
@@ -2260,8 +2254,20 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		const filterModeParam = queryParams.get('ps_filter');
 
 		// Update states if query params exist, otherwise keep defaults (don't write defaults to URL)
-		if (hasFilterParams) {
-			setFilters(newFilters);
+		let finalFilters = newFilters;
+
+		// Merge sorting parameters into filters if they exist
+		if (columnSortParam || sortByParam) {
+			finalFilters = {
+				...finalFilters,
+				columnSort: columnSortParam || 'sample_uid',
+				sortBy: sortByParam || 'ASC',
+			};
+		}
+
+		// Apply all filter changes in one call to avoid multiple useEffect triggers
+		if (hasFilterParams || columnSortParam || sortByParam) {
+			setFilters(finalFilters);
 		}
 
 		if (pageParam) {
@@ -2270,14 +2276,6 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 
 		if (itemsPerPageParam) {
 			setItemsPerPage(parseInt(itemsPerPageParam, 10) || 100);
-		}
-
-		if (columnSortParam || sortByParam) {
-			setFilters((prev) => ({
-				...prev,
-				columnSort: columnSortParam || 'sample_uid',
-				sortBy: sortByParam || 'ASC',
-			}));
 		}
 
 		if (filterModeParam) {
@@ -2294,12 +2292,43 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 		// Skip on initial load
 		if (isInitialLoad) return;
 
-		// 1. Update query params with current filter state (add/replace, don't remove other params)
-		updateQueryParams(filters);
+		// Create a signature of current state for comparison
+		const currentSignature = JSON.stringify({
+			filters: filters.headerFilters,
+			columnSort: filters.columnSort,
+			sortBy: filters.sortBy,
+			currentPage,
+			itemsPerPage,
+		});
 
-		// 2. Send API with current filters (don't wait for URL update)
-		fetchSampleData(false, filters);
-	}, [filters, currentPage, itemsPerPage, isInitialLoad]); // Added isInitialLoad to dependency array
+		// Check if this exact combination was already called recently
+		const now = Date.now();
+		if (lastApiCallRef.current.signature === currentSignature && now - lastApiCallRef.current.timestamp < 500) {
+			return;
+		}
+
+		// Add a small delay to batch rapid state changes (like pagination)
+		const timeoutId = setTimeout(() => {
+			// Skip if another API call is already in progress
+			if (isApiCallInProgress) {
+				return;
+			}
+
+			// Update the ref with current call info
+			lastApiCallRef.current = {
+				signature: currentSignature,
+				timestamp: now,
+			};
+
+			// 1. Update query params with current filter state (add/replace, don't remove other params)
+			updateQueryParams(filters);
+
+			// 2. Send API with current filters (don't wait for URL update)
+			fetchSampleData(false, filters);
+		}, 150); // Increased delay to 150ms to better batch rapid changes
+
+		return () => clearTimeout(timeoutId);
+	}, [filters, currentPage, itemsPerPage, isInitialLoad]); // Removed isApiCallInProgress from dependency array
 
 	// Auto-refresh every 60 seconds - enhanced like ProcessingAnalysis
 	useEffect(() => {
@@ -2517,7 +2546,9 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 								<tr>
 									<th
 										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold w-1/6 max-w-[16.666667%] min-w-[140px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-sky-100 text-blue-600 underline' : 'cursor-pointer hover:bg-gray-100 text-gray-800'
+											isFilterCreationMode
+												? 'cursor-pointer hover:bg-sky-100 text-blue-600 underline'
+												: 'cursor-pointer hover:bg-gray-100 text-gray-800'
 										} ${isColumnFiltered('sample_uid') ? 'text-blue-600 underline' : ''}`}
 										onClick={() =>
 											isFilterCreationMode ? handleColumnFilter('sample_uid') : handleColumnSort('sample_uid')
@@ -2540,14 +2571,16 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 													✕
 												</button>
 											)}
-										{!isFilterCreationMode && filters.columnSort === 'sample_uid' && (
-											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
-										)}
+											{!isFilterCreationMode && filters.columnSort === 'sample_uid' && (
+												<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
+											)}
 										</div>
 									</th>
 									<th
 										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold min-w-[120px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'text-gray-800'
+											isFilterCreationMode
+												? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline'
+												: 'text-gray-800'
 										} ${isColumnFiltered('parameter_name') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('parameter_name')}
 									>
@@ -2572,7 +2605,9 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 									</th>
 									<th
 										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold min-w-[100px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'text-gray-800'
+											isFilterCreationMode
+												? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline'
+												: 'text-gray-800'
 										} ${isColumnFiltered('protocol_source') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('protocol_source')}
 									>
@@ -2597,7 +2632,9 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 									</th>
 									<th
 										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold min-w-[160px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'text-gray-800'
+											isFilterCreationMode
+												? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline'
+												: 'text-gray-800'
 										} ${isColumnFiltered('protocol_code') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('protocol_code')}
 									>
@@ -2636,7 +2673,9 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 									</th>
 									<th
 										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold min-w-[100px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'cursor-pointer hover:bg-gray-100 text-gray-800'
+											isFilterCreationMode
+												? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline'
+												: 'cursor-pointer hover:bg-gray-100 text-gray-800'
 										} ${isColumnFiltered('deadline') ? 'text-blue-600 underline' : ''}`}
 										onClick={() =>
 											isFilterCreationMode ? handleColumnFilter('deadline') : handleColumnSort('deadline')
@@ -2659,14 +2698,16 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 													✕
 												</button>
 											)}
-										{!isFilterCreationMode && filters.columnSort === 'deadline' && (
-											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
-										)}
+											{!isFilterCreationMode && filters.columnSort === 'deadline' && (
+												<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
+											)}
 										</div>
 									</th>
 									<th
 										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-left font-bold min-w-[150px] ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'text-gray-800'
+											isFilterCreationMode
+												? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline'
+												: 'text-gray-800'
 										} ${isColumnFiltered('technician_uid') ? 'text-blue-600 underline' : ''}`}
 										onClick={() => isFilterCreationMode && handleColumnFilter('technician_uid')}
 									>
@@ -2691,11 +2732,11 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 									</th>
 									<th
 										className={`bg-sky-400 border border-b-2 border-gray-300 px-3 py-2 text-center font-bold w-16 ${
-											isFilterCreationMode ? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline' : 'cursor-pointer hover:bg-gray-100 text-gray-800'
+											isFilterCreationMode
+												? 'cursor-pointer hover:bg-blue-100 text-blue-600 underline'
+												: 'cursor-pointer hover:bg-gray-100 text-gray-800'
 										} ${isColumnFiltered('doc_id') ? 'text-blue-600 underline' : ''}`}
-										onClick={() =>
-											isFilterCreationMode ? handleColumnFilter('doc_id') : handleColumnSort('doc_id')
-										}
+										onClick={() => (isFilterCreationMode ? handleColumnFilter('doc_id') : handleColumnSort('doc_id'))}
 									>
 										<div className="flex items-center justify-center overflow-hidden">
 											<span className="truncate">Doc</span>
@@ -2714,9 +2755,9 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 													✕
 												</button>
 											)}
-										{!isFilterCreationMode && filters.columnSort === 'doc_id' && (
-											<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
-										)}
+											{!isFilterCreationMode && filters.columnSort === 'doc_id' && (
+												<span className="ml-2 text-gray-600 text-xs">{filters.sortBy === 'ASC' ? '↑' : '↓'}</span>
+											)}
 										</div>
 									</th>
 								</tr>
@@ -3213,20 +3254,20 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 
 			{/* Document Preview Modal */}
 			{documentPreview.visible && (
-				<div className="document-preview-modal" onClick={(e) => {
-					if (e.target === e.currentTarget) {
-						closeDocumentPreview();
-					}
-				}}>
+				<div
+					className="document-preview-modal"
+					onClick={(e) => {
+						if (e.target === e.currentTarget) {
+							closeDocumentPreview();
+						}
+					}}
+				>
 					<div className="document-preview-content" onClick={(e) => e.stopPropagation()}>
 						<div className="document-preview-header">
 							<h3 className="text-lg font-semibold flex-1">
 								Xem tài liệu {documentPreview.docId && `- ${documentPreview.docId}`}
 							</h3>
-							<button 
-								onClick={closeDocumentPreview}
-								className="close-button"
-							>
+							<button onClick={closeDocumentPreview} className="close-button">
 								✕ Đóng
 							</button>
 						</div>

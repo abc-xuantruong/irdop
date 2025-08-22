@@ -260,7 +260,7 @@ const CreateReceiptFromCRM = () => {
 
 					// Set deadline if it exists in the response
 					if (response.data.deadline) {
-						setDeadline(new Date(response.data.deadline).toISOString().split('T')[0]);
+						setDeadline(response.data.deadline);
 					}
 
 					// Set defaultSampleInformation based on response
@@ -1251,6 +1251,28 @@ const CreateReceiptFromCRM = () => {
 		}));
 	};
 
+	// Handle deadline change - convert to GMT+7 at 7 AM
+	const handleDeadlineChange = (dateValue) => {
+		if (!dateValue) {
+			setDeadline('');
+			return;
+		}
+
+		// Create a date object with the selected date at 7 AM GMT+7
+		const selectedDate = new Date(dateValue);
+		selectedDate.setHours(7, 0, 0, 0); // Set to 7:00:00 AM
+		
+		// Convert to ISO string for GMT+7 timezone
+		const vietnamOffset = 7 * 60; // GMT+7 in minutes
+		const localOffset = selectedDate.getTimezoneOffset(); // Local timezone offset in minutes
+		const totalOffset = vietnamOffset + localOffset; // Total offset to add
+		
+		const gmtPlus7Date = new Date(selectedDate.getTime() + (totalOffset * 60000));
+		const isoString = gmtPlus7Date.toISOString();
+		
+		setDeadline(isoString);
+	};
+
 	// Filter matrices based on input
 	const filterMatrices = (input) => {
 		if (!input || input.length < 2) return []; // Only show suggestions with 2+ characters
@@ -2044,8 +2066,8 @@ const CreateReceiptFromCRM = () => {
 													<input
 														type="date"
 														id="deadline"
-														value={deadline}
-														onChange={(e) => setDeadline(e.target.value)}
+														value={deadline ? new Date(deadline).toISOString().split('T')[0] : ''}
+														onChange={(e) => handleDeadlineChange(e.target.value)}
 														className="border p-1 rounded bg-white"
 														required
 													/>

@@ -15,6 +15,10 @@ import {
 	FaEraser,
 	FaSquare,
 	FaExternalLinkAlt,
+	FaCheckCircle,
+	FaExclamationTriangle,
+	FaInfoCircle,
+	FaTimesCircle,
 } from 'react-icons/fa';
 
 const DocumentEditor = () => {
@@ -26,6 +30,13 @@ const DocumentEditor = () => {
 	const [documentStatus, setDocumentStatus] = useState('draft'); // 'draft', 'submitted', or 'published'
 	const [isDraft, setIsDraft] = useState(true); // Toggle state for draft/submitted/published
 	const [isInitialLoad, setIsInitialLoad] = useState(true); // Track initial load to prevent duplicate API calls
+
+	// Toast notification state
+	const [toasts, setToasts] = useState([]);
+
+	// Refs to track pending API calls
+	const pendingDocumentsCall = useRef(null);
+	const pendingTemplatesCall = useRef(null);
 
 	// Data states from EditorTemplate.html
 	const [recentDocuments, setRecentDocuments] = useState([]);
@@ -50,6 +61,7 @@ const DocumentEditor = () => {
 	const [templateForm, setTemplateForm] = useState({
 		name: '',
 		description: '',
+		classifierCode: 'TAI_LIEU_KHAC', // Default value
 		headerData: {
 			title: '',
 			code: '',
@@ -82,14 +94,28 @@ const DocumentEditor = () => {
 	const [refreshDocumentsTrigger, setRefreshDocumentsTrigger] = useState(0);
 	const [refreshTemplatesTrigger, setRefreshTemplatesTrigger] = useState(0);
 
-	// Track if useEffects have run for the first time
-	const hasDocumentsUseEffectRun = useRef(false);
-	const hasTemplatesUseEffectRun = useRef(false);
-
 	// API constants and helper functions from EditorTemplate.html
 	const API_ENDPOINT = 'https://black.irdop.org/v1/analysis/processing/list';
 	const TEMPLATE_API_ENDPOINT = 'https://black.irdop.org/v1/lab/test_report/get_template';
 	const RECENT_DOCS_API_ENDPOINT = 'https://red.irdop.org/v1/editor/lab_result_report/get_editor';
+
+	// Toast notification function
+	const showToast = (message, type = 'info', duration = 3000) => {
+		const id = Date.now() + Math.random();
+		const toast = {
+			id,
+			message,
+			type, // 'success', 'error', 'warning', 'info'
+			duration
+		};
+
+		setToasts(prev => [...prev, toast]);
+
+		// Auto remove toast after duration
+		setTimeout(() => {
+			setToasts(prev => prev.filter(t => t.id !== id));
+		}, duration);
+	};
 
 	// API helper functions
 	const getCookie = (name) => {
@@ -155,7 +181,7 @@ const DocumentEditor = () => {
 			}
 		} catch (error) {
 			console.error('File preview failed:', error);
-			alert('Không thể xem file. Vui lòng thử lại.');
+			showToast('Không thể xem file. Vui lòng thử lại.', 'error');
 		}
 	};
 
@@ -165,7 +191,7 @@ const DocumentEditor = () => {
 			window.open(downloadUrl, '_blank');
 		} catch (error) {
 			console.error('Failed to open file in new tab:', error);
-			alert('Không thể mở file. Vui lòng thử lại.');
+			showToast('Không thể mở file. Vui lòng thử lại.', 'error');
 		}
 	};
 
@@ -192,15 +218,32 @@ const DocumentEditor = () => {
 		}
 	};
 
-	// Load recent documents from API
+	// Load recent documents from API with better duplicate prevention
 	const loadRecentDocuments = async (searchTerm = '', page = 1, status = 'draft') => {
-		// Prevent duplicate API calls if already loading
+		// Create a unique call identifier to prevent duplicate calls
+		const callId = `${searchTerm}-${page}-${status}`;
+		
+		// Cancel any pending call with different parameters
+		if (pendingDocumentsCall.current && pendingDocumentsCall.current !== callId) {
+			console.log(`Cancelling previous documents call: ${pendingDocumentsCall.current}`);
+		}
+		
+		// Prevent duplicate API calls with same parameters
+		if (pendingDocumentsCall.current === callId) {
+			console.log(`Skipping duplicate loadRecentDocuments [${callId}] - same call already pending`);
+			return;
+		}
+		
+		// Prevent overlapping calls
 		if (isLoading) {
+			console.log(`Skipping loadRecentDocuments [${callId}] - already loading another request`);
 			return;
 		}
 
 		try {
+			pendingDocumentsCall.current = callId;
 			setIsLoading(true);
+			console.log(`Loading recent documents [${callId}]:`, { searchTerm, page, status });
 
 			// Always use the same API endpoint but with different status
 			const response = await apiPost(RECENT_DOCS_API_ENDPOINT, {
@@ -208,6 +251,12 @@ const DocumentEditor = () => {
 				page: page,
 				status: status, // Use status parameter instead of sended
 			});
+
+			// Check if this call is still the current one (not cancelled)
+			if (pendingDocumentsCall.current !== callId) {
+				console.log(`Call [${callId}] was cancelled, ignoring response`);
+				return;
+			}
 
 			if (response.status === 200 && response.data) {
 				const result = response.data;
@@ -240,29 +289,62 @@ const DocumentEditor = () => {
 					totalItems: result.pagination?.totalItems || documents.length,
 					totalPages: result.pagination?.totalPages || Math.ceil(documents.length / 10),
 				});
+				
+				console.log(`Successfully loaded documents [${callId}]:`, documents.length, 'documents');
 			}
 		} catch (error) {
-			console.error('Error loading recent documents:', error);
-			setRecentDocuments([]);
+			console.error(`Error loading recent documents [${callId}]:`, error);
+			// Only clear data if this is still the current call
+			if (pendingDocumentsCall.current === callId) {
+				setRecentDocuments([]);
+			}
 		} finally {
-			setIsLoading(false);
+			// Only update loading state if this is still the current call
+			if (pendingDocumentsCall.current === callId) {
+				setIsLoading(false);
+				pendingDocumentsCall.current = null;
+			}
 		}
 	};
 
-	// Load templates from API
+	// Load templates from API with better duplicate prevention
 	const loadTemplates = async (searchTerm = '', page = 1) => {
-		// Prevent duplicate API calls if already loading
+		// Create a unique call identifier to prevent duplicate calls
+		const callId = `templates-${searchTerm}-${page}`;
+		
+		// Cancel any pending call with different parameters
+		if (pendingTemplatesCall.current && pendingTemplatesCall.current !== callId) {
+			console.log(`Cancelling previous templates call: ${pendingTemplatesCall.current}`);
+		}
+		
+		// Prevent duplicate API calls with same parameters
+		if (pendingTemplatesCall.current === callId) {
+			console.log(`Skipping duplicate loadTemplates [${callId}] - same call already pending`);
+			return;
+		}
+		
+		// Prevent overlapping calls
 		if (isLoading) {
+			console.log(`Skipping loadTemplates [${callId}] - already loading another request`);
 			return;
 		}
 
 		try {
+			pendingTemplatesCall.current = callId;
 			setIsLoading(true);
+			console.log(`Loading templates [${callId}]:`, { searchTerm, page });
+			
 			const response = await apiPost(TEMPLATE_API_ENDPOINT, {
 				id: '',
 				searchTerm: searchTerm,
 				page: page,
 			});
+
+			// Check if this call is still the current one (not cancelled)
+			if (pendingTemplatesCall.current !== callId) {
+				console.log(`Call [${callId}] was cancelled, ignoring response`);
+				return;
+			}
 
 			if (response.status === 200 && response.data) {
 				const result = response.data;
@@ -290,6 +372,7 @@ const DocumentEditor = () => {
 					content: template.content || '',
 					columns: template.columns || [],
 					customRows: template.customRows || [],
+					classifierCode: template.classifierCode || 'TAI_LIEU_KHAC', // Include classifierCode from API
 				}));
 
 				setDocumentTemplates(templates);
@@ -299,20 +382,32 @@ const DocumentEditor = () => {
 					totalItems: result.pagination?.totalItems || templates.length,
 					totalPages: result.pagination?.totalPages || Math.ceil(templates.length / 10),
 				});
+				
+				console.log(`Successfully loaded templates [${callId}]:`, templates.length, 'templates');
 			}
 		} catch (error) {
-			console.error('Error loading templates:', error);
-			setDocumentTemplates([]);
+			console.error(`Error loading templates [${callId}]:`, error);
+			// Only clear data if this is still the current call
+			if (pendingTemplatesCall.current === callId) {
+				setDocumentTemplates([]);
+			}
 		} finally {
-			setIsLoading(false);
+			// Only update loading state if this is still the current call
+			if (pendingTemplatesCall.current === callId) {
+				setIsLoading(false);
+				pendingTemplatesCall.current = null;
+			}
 		}
 	};
 
-	// Load data on component mount (only once)
+	// Load data on component mount only - separate status changes from initial load
 	useEffect(() => {
-		// Load initial data only once when component mounts
-		loadRecentDocuments('', 1, documentStatus);
-		loadTemplates('', 1);
+		// Only load on initial mount
+		if (isInitialLoad) {
+			loadRecentDocuments('', 1, documentStatus);
+			loadTemplates('', 1);
+			setIsInitialLoad(false);
+		}
 
 		// Cleanup function
 		return () => {
@@ -320,19 +415,47 @@ const DocumentEditor = () => {
 			if (window.handleFilePreviewFromDocument) {
 				delete window.handleFilePreviewFromDocument;
 			}
+			
+			// Cancel any pending API calls
+			if (pendingDocumentsCall.current) {
+				console.log('Cleaning up pending documents call:', pendingDocumentsCall.current);
+				pendingDocumentsCall.current = null;
+			}
+			if (pendingTemplatesCall.current) {
+				console.log('Cleaning up pending templates call:', pendingTemplatesCall.current);
+				pendingTemplatesCall.current = null;
+			}
 		};
-	}, []); // Empty dependency array - only run once on mount
+	}, []); // Empty dependency - only run on mount
 
-	// Keep isDraft in sync with documentStatus
+	// Handle document status changes separately - no API call conflicts
 	useEffect(() => {
+		// Skip initial load (handled above)
+		if (isInitialLoad) {
+			return;
+		}
+		
+		// Update isDraft sync
 		setIsDraft(documentStatus === 'draft');
+		
+		// Only reload documents when status actually changes (not on initial load)
+		// Reset search and pagination when status changes
+		setSearchTerm('');
+		setRecentDocumentsPage(1);
+		setSelectedDocument(null);
+		setPreviewContent('');
+		setCurrentPreviewedTemplate(null);
+		
+		// Load documents with new status - but prevent duplicate calls
+		if (!isLoading) {
+			loadRecentDocuments('', 1, documentStatus);
+		}
 	}, [documentStatus]);
 
-	// Handle documentStatus changes separately to avoid duplicate API calls
+	// Auto-search when search terms or pagination change (debounced) - completely separate from status changes
 	useEffect(() => {
-		// Skip initial load (handled in mount useEffect)
+		// Skip if this is the initial load state
 		if (isInitialLoad) {
-			setIsInitialLoad(false);
 			return;
 		}
 		
@@ -340,28 +463,6 @@ const DocumentEditor = () => {
 		if (isLoading) {
 			return;
 		}
-		
-		// Load documents when status changes (not on initial load)
-		// Use page 1 directly but don't update state to avoid triggering other useEffect
-		loadRecentDocuments(searchTerm, 1, documentStatus);
-	}, [documentStatus]); // Only depend on documentStatus
-
-	// Auto-search when search terms or pagination change (debounced) - exclude status changes
-	useEffect(() => {
-		
-		// Skip if already loading to prevent duplicate API calls
-		if (isLoading) {
-			return;
-		}
-
-		// Skip ONLY on the very first run when it's default state - this case is handled by documentStatus useEffect
-		if (!hasDocumentsUseEffectRun.current && recentDocumentsPage === 1 && searchTerm === '' && refreshDocumentsTrigger === 0) {
-			hasDocumentsUseEffectRun.current = true;
-			return;
-		}
-
-		// Mark that this useEffect has run
-		hasDocumentsUseEffectRun.current = true;
 
 		// Check if this is a search operation (has search term) - use debounce
 		if (searchTerm !== '') {
@@ -370,27 +471,22 @@ const DocumentEditor = () => {
 				loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
 			}, 500);
 			return () => clearTimeout(timeoutId);
-		} else {
-			// Page change or refresh trigger - call immediately
+		} else if (!isInitialLoad) {
+			// Page change or refresh trigger - call immediately (but not on initial load)
 			loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
 		}
 	}, [searchTerm, recentDocumentsPage, refreshDocumentsTrigger]); // documentStatus excluded to prevent duplicate API calls
 
 	useEffect(() => {
+		// Skip if this is the initial load state (handled by mount useEffect)
+		if (isInitialLoad) {
+			return;
+		}
 		
 		// Skip if already loading to prevent duplicate API calls
 		if (isLoading) {
 			return;
 		}
-
-		// Skip ONLY on the very first run when it's default state
-		if (!hasTemplatesUseEffectRun.current && templateSearchTerm === '' && templatesPage === 1 && refreshTemplatesTrigger === 0) {
-			hasTemplatesUseEffectRun.current = true;
-			return;
-		}
-
-		// Mark that this useEffect has run
-		hasTemplatesUseEffectRun.current = true;
 
 		// Check if this is a search operation (has search term) - use debounce
 		if (templateSearchTerm !== '') {
@@ -405,35 +501,53 @@ const DocumentEditor = () => {
 		}
 	}, [templateSearchTerm, templatesPage, refreshTemplatesTrigger]);
 
-	// Handle document status change
+	// Handle document status change - improved to prevent duplicate API calls
 	const handleDocumentStatusChange = async (newStatus) => {
-		if (newStatus === documentStatus) return; // No change needed
+		console.log(`Status change requested: ${documentStatus} -> ${newStatus}`);
+		
+		if (newStatus === documentStatus) {
+			console.log('Status unchanged, skipping API call');
+			return; // No change needed
+		}
 
-		// Clear current data before switching
-		setSelectedDocument(null); // Clear selection when switching tabs
-		setPreviewContent(''); // Clear preview content
-		setCurrentPreviewedTemplate(null); // Clear previewed template
+		// Prevent status change if already loading
+		if (isLoading) {
+			console.log('Already loading, preventing status change');
+			return;
+		}
+
+		console.log(`Executing status change: ${documentStatus} -> ${newStatus}`);
+		
+		// Clear current data before switching - immediate UI feedback
+		setSelectedDocument(null);
+		setPreviewContent('');
+		setCurrentPreviewedTemplate(null);
 		
 		// Change status first - this will trigger the useEffect for loading new data
+		// The useEffect will handle clearing search and pagination
 		setDocumentStatus(newStatus);
-		
-		// Reset pagination after status change to avoid triggering search useEffect
-		setTimeout(() => {
-			setRecentDocumentsPage(1);
-		}, 0);
 	};
 
-	// Handle toggle switch change
+	// Handle toggle switch change - improved to prevent duplicate calls
 	const handleToggleChange = () => {
 		// Prevent toggle if already loading
 		if (isLoading) {
+			console.log('Toggle blocked - already loading');
 			return;
 		}
 		
 		const newIsDraft = !isDraft;
-		setIsDraft(newIsDraft);
 		const newStatus = newIsDraft ? 'draft' : 'submitted';
-		handleDocumentStatusChange(newStatus);
+		
+		console.log(`Toggle change: ${isDraft} -> ${newIsDraft}, Status: ${documentStatus} -> ${newStatus}`);
+		
+		// Only call handleDocumentStatusChange if status actually changes
+		if (newStatus !== documentStatus) {
+			handleDocumentStatusChange(newStatus);
+		} else {
+			// Just update isDraft if status doesn't change (shouldn't happen but safety check)
+			setIsDraft(newIsDraft);
+		}
 	};
 
 	// Search handlers - now use server-side search directly
@@ -495,10 +609,16 @@ const DocumentEditor = () => {
 		return match ? match[1].trim() : null;
 	};
 
-	// Helper function to apply format logic to HTML content with 16px font size
+	// Helper function to apply format logic to HTML content with 12px font size
 	const applyFormatToHTML = (htmlContent) => {
 		const tempContainer = document.createElement('div');
 		tempContainer.innerHTML = htmlContent;
+
+		// Remove data-mce-style from ALL elements first
+		const allElements = tempContainer.querySelectorAll('*');
+		allElements.forEach((element) => {
+			element.removeAttribute('data-mce-style');
+		});
 
 		// Process p tags - remove style but keep padding
 		const pTags = tempContainer.querySelectorAll('p');
@@ -512,7 +632,6 @@ const DocumentEditor = () => {
 
 			p.removeAttribute('style');
 			p.removeAttribute('class');
-			p.removeAttribute('data-mce-style');
 
 			const styleString = [];
 			if (padding) styleString.push(`padding: ${padding}`);
@@ -524,37 +643,21 @@ const DocumentEditor = () => {
 			}
 
 			if (styleString.length > 0) {
-				p.setAttribute('style', styleString.join('; ') + '; font-size: 16px');
+				p.setAttribute('style', styleString.join('; ') + '; font-size: 12px; text-align: left');
 			} else {
-				p.setAttribute('style', 'font-size: 16px');
+				p.setAttribute('style', 'font-size: 12px; text-align: left');
 			}
 		});
 
-		// Process td/th tags - remove style but keep padding and set default border
+		// Process td/th tags - remove all styles, only keep border, padding, text-align left
 		const tdTags = tempContainer.querySelectorAll('td, th');
 		tdTags.forEach((td) => {
-			const currentStyle = td.getAttribute('style') || '';
-			const padding = extractStyleProperty(currentStyle, 'padding');
-			const paddingTop = extractStyleProperty(currentStyle, 'padding-top');
-			const paddingBottom = extractStyleProperty(currentStyle, 'padding-bottom');
-			const paddingLeft = extractStyleProperty(currentStyle, 'padding-left');
-			const paddingRight = extractStyleProperty(currentStyle, 'padding-right');
-
 			td.removeAttribute('style');
 			td.removeAttribute('class');
 			td.removeAttribute('width');
-			td.removeAttribute('data-mce-style');
 
-			const styleString = ['border: 1px solid #000', 'font-size: 16px'];
-			if (padding) styleString.push(`padding: ${padding}`);
-			else {
-				if (paddingTop) styleString.push(`padding-top: ${paddingTop}`);
-				if (paddingBottom) styleString.push(`padding-bottom: ${paddingBottom}`);
-				if (paddingLeft) styleString.push(`padding-left: ${paddingLeft}`);
-				if (paddingRight) styleString.push(`padding-right: ${paddingRight}`);
-			}
-
-			td.setAttribute('style', styleString.join('; '));
+			// Set only required styles: border, padding (6px left/right, 0px top/bottom), text-align left, font-size: 12px
+			td.setAttribute('style', 'border: 1px solid #000; padding: 0px 6px; text-align: left; font-size: 12px');
 		});
 
 		// Process tr tags - remove all styling
@@ -562,28 +665,105 @@ const DocumentEditor = () => {
 		trTags.forEach((tr) => {
 			tr.removeAttribute('style');
 			tr.removeAttribute('class');
-			tr.removeAttribute('data-mce-style');
 		});
 
-		// Process table tags - set standard styling
+		// Process table tags - remove all styles, only keep width and border-collapse
 		const tableTags = tempContainer.querySelectorAll('table');
 		tableTags.forEach((table) => {
+			table.removeAttribute('style');
 			table.removeAttribute('class');
-			table.removeAttribute('data-mce-style');
 			table.removeAttribute('border');
 			table.removeAttribute('cellpadding');
 			table.removeAttribute('cellspacing');
 			table.removeAttribute('width');
 
-			table.setAttribute('style', 'width: 100%; max-width: 100%; border-collapse: collapse;');
+			// Set only required styles: width and border-collapse
+			table.setAttribute('style', 'width: 100%; border-collapse: collapse;');
 		});
 
-		// Set font-size 16px for all elements except headings
+		// Helper function to check if an element is part of a fraction structure
+		const isFractionElement = (element) => {
+			// Check if element itself has fraction-related styles
+			const style = element.getAttribute('style') || '';
+			if (style.includes('border-bottom') && style.includes('display: block')) {
+				return true;
+			}
+			
+			// Check if parent has fraction structure
+			const parent = element.parentElement;
+			if (parent) {
+				const parentStyle = parent.getAttribute('style') || '';
+				if (parentStyle.includes('display: inline-block') && parentStyle.includes('text-align: center') && parentStyle.includes('vertical-align: middle')) {
+					return true;
+				}
+			}
+			
+			// Check if any child has border-bottom (fraction line)
+			const childrenWithBorder = element.querySelectorAll('span[style*="border-bottom"]');
+			if (childrenWithBorder.length > 0) {
+				return true;
+			}
+			
+			return false;
+		};
+
+		// Process span tags - preserve fraction structures, remove other styles
+		const spanTags = tempContainer.querySelectorAll('span');
+		spanTags.forEach((span) => {
+			if (isFractionElement(span)) {
+				// This is a fraction element, preserve essential fraction styles
+				const currentStyle = span.getAttribute('style') || '';
+				
+				// Preserve fraction-specific styles
+				const display = extractStyleProperty(currentStyle, 'display');
+				const textAlign = extractStyleProperty(currentStyle, 'text-align');
+				const verticalAlign = extractStyleProperty(currentStyle, 'vertical-align');
+				const borderBottom = extractStyleProperty(currentStyle, 'border-bottom');
+				const fontSize = extractStyleProperty(currentStyle, 'font-size');
+				const lineHeight = extractStyleProperty(currentStyle, 'line-height');
+				const paddingBottom = extractStyleProperty(currentStyle, 'padding-bottom');
+				const paddingTop = extractStyleProperty(currentStyle, 'padding-top');
+				const fontFamily = extractStyleProperty(currentStyle, 'font-family');
+
+				// Rebuild style with preserved fraction properties
+				const preservedStyles = [];
+				if (display) preservedStyles.push(`display: ${display}`);
+				if (textAlign && textAlign === 'center') preservedStyles.push(`text-align: ${textAlign}`);
+				if (verticalAlign) preservedStyles.push(`vertical-align: ${verticalAlign}`);
+				if (borderBottom) preservedStyles.push(`border-bottom: ${borderBottom}`);
+				if (fontSize) preservedStyles.push(`font-size: ${fontSize}`);
+				if (lineHeight) preservedStyles.push(`line-height: ${lineHeight}`);
+				if (paddingBottom) preservedStyles.push(`padding-bottom: ${paddingBottom}`);
+				if (paddingTop) preservedStyles.push(`padding-top: ${paddingTop}`);
+				if (fontFamily) preservedStyles.push(`font-family: ${fontFamily}`);
+				
+				// Add default font-size if not specified
+				if (!fontSize) {
+					preservedStyles.push('font-size: 12px');
+				}
+
+				span.removeAttribute('class');
+				if (preservedStyles.length > 0) {
+					span.setAttribute('style', preservedStyles.join('; '));
+				}
+			} else {
+				// Regular span, remove all styles
+				span.removeAttribute('style');
+				span.removeAttribute('class');
+			}
+		});
+
+		// Set font-size 12px and text-align left for all elements except headings and fraction elements
 		const allTags = tempContainer.querySelectorAll('*:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6)');
 		allTags.forEach((element) => {
+			// Skip if this is a fraction element
+			if (isFractionElement(element)) {
+				return;
+			}
+			
 			const currentStyle = element.getAttribute('style') || '';
-			const styleWithFontSize = currentStyle + (currentStyle ? '; ' : '') + 'font-size: 16px';
-			element.setAttribute('style', styleWithFontSize);
+			const styleWithFontSizeAndAlign = currentStyle + (currentStyle ? '; ' : '') + 'font-size: 12px; text-align: left';
+			element.setAttribute('style', styleWithFontSizeAndAlign);
 		});
 
 		return tempContainer.innerHTML;
@@ -592,14 +772,14 @@ const DocumentEditor = () => {
 	// Format function for template editor
 	const formatTemplateContent = () => {
 		if (!templateEditorRef.current) {
-			alert('Editor chưa được khởi tạo');
+			showToast('Editor chưa được khởi tạo', 'warning');
 			return;
 		}
 
 		try {
 			const content = templateEditorRef.current.getContent();
 			if (!content) {
-				alert('Không có nội dung để định dạng');
+				showToast('Không có nội dung để định dạng', 'warning');
 				return;
 			}
 
@@ -610,10 +790,10 @@ const DocumentEditor = () => {
 				content: cleanedContent,
 			}));
 
-			alert('Đã định dạng lại nội dung thành công!');
+			showToast('Đã định dạng lại nội dung thành công!', 'success');
 		} catch (error) {
 			console.error('Error in formatTemplateContent:', error);
-			alert('Lỗi khi định dạng: ' + error.message);
+			showToast('Lỗi khi định dạng: ' + error.message, 'error');
 		}
 	};
 
@@ -623,6 +803,7 @@ const DocumentEditor = () => {
 			const requestBody = {
 				templateName: templateData.name,
 				templateDescription: templateData.description,
+				classifierCode: templateData.classifierCode, // Add classifierCode
 				columns: [
 					{ columnName: 'Mã mẫu', valueColumn: 'sample_uid', width: '30%', resizable: true },
 					{ columnName: 'Mã chỉ tiêu', valueColumn: 'id', width: '30%', resizable: true },
@@ -657,6 +838,7 @@ const DocumentEditor = () => {
 				id: editingTemplate.id,
 				templateName: templateData.name,
 				templateDescription: templateData.description,
+				classifierCode: templateData.classifierCode, // Add classifierCode
 				columns: [
 					{ columnName: 'Mã mẫu', valueColumn: 'sample_uid', width: '30%', resizable: true },
 					{ columnName: 'Mã chỉ tiêu', valueColumn: 'id', width: '30%', resizable: true },
@@ -698,7 +880,7 @@ const DocumentEditor = () => {
 
 	// Mock HTML content for preview
 	const mockPreviewContent = `
-		<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
+		<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.5;">
 			<div style="text-align: center; margin-bottom: 30px;">
 				<h2 style="margin: 0; color: #2563eb;">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</h2>
 				<h3 style="margin: 10px 0; color: #1e40af;">BIÊN BẢN KIỂM NGHIỆM CHẤT LƯỢNG NƯỚC</h3>
@@ -790,7 +972,7 @@ const DocumentEditor = () => {
 	// Handle print document functionality (like LabDocument)
 	const handlePrintDocument = async (doc) => {
 		if (!doc) {
-			alert('Không có tài liệu để in');
+			showToast('Không có tài liệu để in', 'warning');
 			return;
 		}
 
@@ -808,6 +990,7 @@ const DocumentEditor = () => {
 				footer: metadata.footer,
 				analysisIds: analysisIds,
 				sampleUIDs: sampleUIDs,
+				classifierCode: metadata.classifierCode || 'BIEN_BAN_THU_NGHIEM', // Always include classifierCode
 			};
 
 			// Call the API endpoint
@@ -854,97 +1037,118 @@ const DocumentEditor = () => {
 			}
 		} catch (error) {
 			console.error('Error printing document:', error);
-			alert('Lỗi khi in tài liệu: ' + error.message);
+			showToast('Lỗi khi in tài liệu: ' + error.message, 'error');
 		}
 	};
 
 	// Handle print template functionality
 	const handlePrintTemplate = async (template) => {
 		if (!template) {
-			alert('Không có mẫu để in');
+			showToast('Không có mẫu để in', 'warning');
 			return;
 		}
 
 		try {
+			// Debug logs to check template data
+			console.log('Print template object:', template);
+			console.log('Template classifierCode for print:', template.classifierCode);
+			
 			const header = template.header || {};
-			const content = template.content || '';
+			let content = template.content || '';
 
-			// Prepare template print data - templates don't have analysis data
+			// Apply format to content before printing
+			const shouldFormat = window.confirm('Bạn có muốn định dạng lại tài liệu để phù hợp với trang in không?');
+			if (shouldFormat) {
+				content = applyFormatToHTML(content);
+			}
+
+			// Prepare template data for API preview
 			const templateData = {
 				header: header,
 				content: content,
 				footer: template.id,
 				analysisIds: [],
 				sampleUIDs: [],
+				classifierCode: template.classifierCode || 'TAI_LIEU_KHAC', // Use template's classifierCode or default
 			};
 
-			// Create a new window/tab for printing template
-			const printWindow = window.open('', '_blank');
+			// Debug log API data being sent
+			console.log('API data being sent:', templateData);
+			console.log('ClassifierCode being sent:', templateData.classifierCode);
 
-			printWindow.document.write(`
-				<!DOCTYPE html>
-				<html>
-					<head>
-						<title>Print Template - ${template.templateName || template.name}</title>
-						<style>
-							body { 
-								font-family: 'Times New Roman', serif; 
-								margin: 0; 
-								padding: 20px; 
-								background: white; 
-								line-height: 1.6;
-							}
-							@media print {
-								body { margin: 0; padding: 10mm; }
-								.no-print { display: none; }
-							}
-							h1, h2, h3, h4 {
-								color: #1e40af;
-								margin-top: 20px;
-								margin-bottom: 10px;
-							}
-							table {
-								width: 100%;
-								border-collapse: collapse;
-								margin: 10px 0;
-							}
-							table, th, td {
-								border: 1px solid #ccc;
-							}
-							th, td {
-								padding: 8px;
-								text-align: left;
-							}
-							th {
-								background-color: #f9f9f9;
-								font-weight: bold;
-							}
-						</style>
-					</head>
-					<body>
-						<div style="text-align: center; margin-bottom: 30px;">
-							${header.title ? `<h1>${header.title}</h1>` : `<h1>${template.templateName || template.name}</h1>`}
-							${header.code ? `<p><strong>Mã hiệu:</strong> ${header.code}</p>` : ''}
-							${header.publishNo ? `<p><strong>Lần phát hành:</strong> ${header.publishNo}</p>` : ''}
-							${header.publishDate ? `<p><strong>Ngày phát hành:</strong> ${header.publishDate}</p>` : ''}
-						</div>
-						<div>
-							${content}
-						</div>
-						<script>
-							window.onload = function() {
-								setTimeout(function() {
-									window.print();
-								}, 1000);
-							};
-						</script>
-					</body>
-				</html>
-			`);
-			printWindow.document.close();
+			// Call API to get formatted HTML like in Editor
+			const response = await apiPost('https://black.irdop.org/khsi19me/convert/lab_result_report_html', templateData);
+
+			if (response.status === 200 && response.data) {
+				// Use API response for printing
+				const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+
+				// Create a new window/tab for printing
+				const printWindow = window.open('', '_blank');
+
+				printWindow.document.write(`
+					<!DOCTYPE html>
+					<html>
+						<head>
+							<title>Print Template - ${template.templateName || template.name}</title>
+							<style>
+								@media print {
+									body { margin: 0; }
+									@page { margin: 20mm; }
+								}
+								body {
+									font-family: 'Times New Roman', serif;
+									font-size: 12px;
+									line-height: 1.4;
+								}
+							</style>
+						</head>
+						<body>
+							${htmlResponse}
+							<script>
+								window.onload = function() {
+									setTimeout(function() {
+										window.focus();
+										window.print();
+										window.onafterprint = function() {
+											window.close();
+										};
+									}, 1000);
+								};
+							</script>
+						</body>
+					</html>
+				`);
+
+				printWindow.document.close();
+			} else {
+				throw new Error('Failed to generate template preview');
+			}
 		} catch (error) {
 			console.error('Error printing template:', error);
-			alert('Lỗi khi in mẫu: ' + error.message);
+			showToast('Lỗi khi in mẫu: ' + error.message, 'error');
+		}
+	};
+
+	// Insert signature box function
+	const insertSignatureBox = () => {
+		if (templateEditorRef.current) {
+			const editor = templateEditorRef.current;
+			
+			const signatureHTML =`
+				<div style="width: 100%; display: flex; justify-content: space-between; align-items: flex-start; margin-top: 20px; font-size: 11px; font-family: 'Times New Roman', serif; height: 3cm; border: none;">
+					<div style="flex: 1; text-align: center; font-weight: bold; height: 3cm; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding-top: 8px; margin-right: 10px;">
+						Ngày kiểm tra:<br>
+						NGƯỜI KIỂM TRA
+					</div>
+					<div style="flex: 1; text-align: center; font-weight: bold; height: 3cm; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding-top: 8px; margin-left: 10px;">
+						Ngày thực hiện:<br>
+						NGƯỜI THỰC HIỆN
+					</div>
+				</div>
+			`;
+			
+			editor.insertContent(signatureHTML);
 		}
 	};
 
@@ -977,7 +1181,7 @@ const DocumentEditor = () => {
 				params.set('classifierCode', selectedDocument.metadata.classifierCode);
 			} else {
 				// Default classifierCode
-				params.set('classifierCode', 'BIEN_BAN_KET_QUA_THU_NGHIEM');
+				params.set('classifierCode', 'BIEN_BAN_THU_NGHIEM');
 			}
 
 			const editorUrl = `${baseUrl}/editor?${params.toString()}`;
@@ -985,7 +1189,7 @@ const DocumentEditor = () => {
 			// Open in new tab or navigate to editor
 			window.open(editorUrl, '_blank');
 		} else {
-			alert('Vui lòng chọn một tài liệu để chỉnh sửa');
+			showToast('Vui lòng chọn một tài liệu để chỉnh sửa', 'warning');
 		}
 	};
 
@@ -997,14 +1201,15 @@ const DocumentEditor = () => {
 			// Build query parameters
 			const params = new URLSearchParams();
 			params.set('templateId', currentPreviewedTemplate.id);
-			params.set('classifierCode', 'BIEN_BAN_KET_QUA_THU_NGHIEM');
+			// Use template's classifierCode instead of hardcoded value
+			params.set('classifierCode', currentPreviewedTemplate.classifierCode || 'TAI_LIEU_KHAC');
 
 			const editorUrl = `${baseUrl}/editor?${params.toString()}`;
 
 			// Open in new tab or navigate to editor
 			window.open(editorUrl, '_blank');
 		} else {
-			alert('Không có mẫu nào được chọn');
+			showToast('Không có mẫu nào được chọn', 'warning');
 		}
 	};
 
@@ -1029,6 +1234,7 @@ const DocumentEditor = () => {
 					footer: metadata.footer,
 					analysisIds: analysisIds,
 					sampleUIDs: sampleUIDs,
+					classifierCode: metadata.classifierCode || 'BIEN_BAN_THU_NGHIEM', // Always include classifierCode
 				};
 
 
@@ -1058,7 +1264,7 @@ const DocumentEditor = () => {
 		const generatePreviewContent = async () => {
 			// First show loading state
 			const loadingContent = `
-				<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
+				<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.5;">
 					<!-- SAMPLE UIDs SECTION -->
 					${
 						sampleUIDs.length > 0
@@ -1099,7 +1305,7 @@ const DocumentEditor = () => {
 				const reportHTML = await loadReportContent();
 
 				const finalContent = `
-					<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
+					<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.5;">
 						<!-- SAMPLE UIDs SECTION -->
 						${
 							sampleUIDs.length > 0
@@ -1130,7 +1336,7 @@ const DocumentEditor = () => {
 			} catch (error) {
 				console.error('Error generating final content:', error);
 				const errorContent = `
-					<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
+					<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.5;">
 						<!-- SAMPLE UIDs SECTION -->
 						${
 							sampleUIDs.length > 0
@@ -1171,6 +1377,15 @@ const DocumentEditor = () => {
 	};
 
 	const handleTemplateClick = (template) => {
+		// Debug log to check template object and classifierCode
+		console.log('=== TEMPLATE CLICK DEBUG ===');
+		console.log('Full template object:', JSON.stringify(template, null, 2));
+		console.log('Template ID:', template.id);
+		console.log('Template name:', template.templateName || template.name);
+		console.log('Template classifierCode:', template.classifierCode);
+		console.log('Has classifierCode?', template.hasOwnProperty('classifierCode'));
+		console.log('ClassifierCode type:', typeof template.classifierCode);
+		console.log('===========================');
 
 		// Extract header information
 		const headerInfo = template.header || {};
@@ -1184,7 +1399,7 @@ const DocumentEditor = () => {
 
 		// Set preview content for template with header first, then content, then basic info
 		const templatePreviewContent = `
-			<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
+			<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.5;">
 				<!-- HEADER SECTION -->
 				<div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1e40af; padding-bottom: 15px;">
 					<h3 style="margin: 10px 0; color: #1e40af; text-transform: uppercase;">${headerTitle}</h3>
@@ -1216,6 +1431,15 @@ const DocumentEditor = () => {
 							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Mô tả:</td>
 							<td style="border: 1px solid #ccc; padding: 8px;">${
 								template.templateDescription || template.description || 'Chưa có mô tả'
+							}</td>
+						</tr>
+						<tr>
+							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Loại biên bản:</td>
+							<td style="border: 1px solid #ccc; padding: 8px;">${
+								template.classifierCode === 'NHAT_KY_THU_NGHIEM' ? 'NHẬT KÝ THỬ NGHIỆM' :
+								template.classifierCode === 'BIEN_BAN_THU_NGHIEM' ? 'BIÊN BẢN THỬ NGHIỆM' :
+								template.classifierCode === 'TAI_LIEU_KHAC' ? 'TÀI LIỆU KHÁC' :
+								(template.classifierCode || 'TÀI LIỆU KHÁC')
 							}</td>
 						</tr>
 						<tr>
@@ -1277,6 +1501,7 @@ const DocumentEditor = () => {
 		setTemplateForm({
 			name: '',
 			description: '',
+			classifierCode: 'TAI_LIEU_KHAC', // Default value
 			headerData: {
 				title: '',
 				code: '',
@@ -1294,6 +1519,7 @@ const DocumentEditor = () => {
 		setTemplateForm({
 			name: template.templateName || template.name,
 			description: template.templateDescription || template.description,
+			classifierCode: template.classifierCode || 'TAI_LIEU_KHAC', // Load from template or default
 			headerData: {
 				title: template.header?.title || template.templateName || template.name,
 				code: template.header?.code || '',
@@ -1302,7 +1528,7 @@ const DocumentEditor = () => {
 			},
 			content:
 				template.content ||
-				`<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
+				`<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.5;">
 				<p>Nội dung mẫu tài liệu sẽ được viết tại đây...</p>
 				<p>Đây là nội dung demo cho mẫu: ${template.templateName || template.name}</p>
 			</div>`,
@@ -1351,7 +1577,7 @@ const DocumentEditor = () => {
 		}
 
 		if (!templateForm.name.trim()) {
-			alert('Vui lòng nhập tên mẫu biên bản');
+			showToast('Vui lòng nhập tên mẫu biên bản', 'warning');
 			return;
 		}
 
@@ -1361,11 +1587,11 @@ const DocumentEditor = () => {
 			if (editingTemplate) {
 				// Update existing template
 				await updateTemplate(templateForm);
-				alert('Cập nhật mẫu thành công!');
+				showToast('Cập nhật mẫu thành công!', 'success');
 			} else {
 				// Create new template
 				await createTemplate(templateForm);
-				alert('Tạo mẫu thành công!');
+				showToast('Tạo mẫu thành công!', 'success');
 			}
 
 			// Refresh templates list by calling API directly
@@ -1374,7 +1600,7 @@ const DocumentEditor = () => {
 			handleCloseTemplatePopup();
 		} catch (error) {
 			console.error('Error saving template:', error);
-			alert('Có lỗi xảy ra khi lưu mẫu: ' + error.message);
+			showToast('Có lỗi xảy ra khi lưu mẫu: ' + error.message, 'error');
 		} finally {
 			setIsLoading(false);
 		}
@@ -1515,7 +1741,7 @@ const DocumentEditor = () => {
 		try {
 			const textToCopy = icon.unicode || icon.html;
 			await navigator.clipboard.writeText(textToCopy);
-			alert(`Đã copy ${icon.name} vào clipboard!`);
+			showToast(`Đã copy ${icon.name} vào clipboard!`, 'success');
 			setShowIconPicker(false);
 		} catch (error) {
 			console.error('Failed to copy to clipboard:', error);
@@ -1526,7 +1752,7 @@ const DocumentEditor = () => {
 			textarea.select();
 			document.execCommand('copy');
 			document.body.removeChild(textarea);
-			alert(`Đã copy ${icon.name} vào clipboard!`);
+			showToast(`Đã copy ${icon.name} vào clipboard!`, 'success');
 			setShowIconPicker(false);
 		}
 	};
@@ -1534,10 +1760,10 @@ const DocumentEditor = () => {
 	const insertIconIntoEditor = (icon) => {
 		if (templateEditorRef.current && templateEditorRef.current.initialized) {
 			templateEditorRef.current.insertContent(icon.html);
-			alert(`Đã chèn ${icon.name} vào editor!`);
+			showToast(`Đã chèn ${icon.name} vào editor!`, 'success');
 			setShowIconPicker(false);
 		} else {
-			alert('Editor chưa sẵn sàng');
+			showToast('Editor chưa sẵn sàng', 'warning');
 		}
 	};
 
@@ -1651,6 +1877,30 @@ const DocumentEditor = () => {
 					.document-editor-main {
 						min-width: 0;
 						overflow: hidden;
+					}
+
+					/* Toast Animation Styles */
+					@keyframes fade-in {
+						from { opacity: 0; }
+						to { opacity: 1; }
+					}
+
+					@keyframes slide-in-from-right-5 {
+						from { transform: translateX(20px); }
+						to { transform: translateX(0); }
+					}
+
+					.animate-in {
+						animation: fade-in 0.3s ease-out, slide-in-from-right-5 0.3s ease-out;
+					}
+
+					/* Toast container responsive */
+					@media (max-width: 640px) {
+						.toast-container {
+							left: 1rem !important;
+							right: 1rem !important;
+							top: 1rem !important;
+						}
 					}
 				`}
 			</style>
@@ -2013,6 +2263,11 @@ const DocumentEditor = () => {
 														<div className="text-xs text-gray-500 space-y-1 text-left">
 															<div>Tiêu đề: {template.header?.title || template.templateName || template.name}</div>
 															<div>Mô tả: {template.templateDescription || template.description}</div>
+															<div>Loại: {
+																template.classifierCode === 'NHAT_KY_THU_NGHIEM' ? 'NHẬT KÝ THỬ NGHIỆM' :
+																template.classifierCode === 'BIEN_BAN_THU_NGHIEM' ? 'BIÊN BẢN THỬ NGHIỆM' :
+																'TÀI LIỆU KHÁC'
+															}</div>
 														</div>
 													</div>
 												))}
@@ -2117,10 +2372,10 @@ const DocumentEditor = () => {
 
 			{/* Template Creation/Edit Popup */}
 			{showTemplatePopup && (
-				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-auto">
-					<div className="bg-white rounded-xl shadow-2xl min-w-5xl w-[70vw] max-h-[90vh] overflow-hidden my-auto">
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+					<div className="bg-white rounded-xl shadow-2xl min-w-5xl w-[70vw] max-h-[90vh] flex flex-col my-auto">
 						{/* Header */}
-						<div className="bg-blue-600 text-white p-4">
+						<div className="bg-blue-600 text-white p-2 flex-shrink-0">
 							<div className="flex items-center justify-between">
 								<h2 className="text-xl font-bold flex items-center gap-2">
 									{editingTemplate ? 'Chỉnh sửa mẫu tài liệu' : 'Tạo mẫu tài liệu mới'}
@@ -2161,10 +2416,25 @@ const DocumentEditor = () => {
 													<textarea
 														value={templateForm.description}
 														onChange={(e) => handleTemplateFormChange('description', e.target.value)}
-														rows={3}
-														className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+														rows={2}
+														className="w-full px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
 														placeholder="Nhập mô tả cho mẫu biên bản"
 													/>
+												</div>
+
+												<div>
+													<label className="block text-sm font-medium text-gray-700 mb-1 text-left">
+														Loại biên bản <span className="text-red-500">*</span>
+													</label>
+													<select
+														value={templateForm.classifierCode}
+														onChange={(e) => handleTemplateFormChange('classifierCode', e.target.value)}
+														className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+													>
+														<option value="NHAT_KY_THU_NGHIEM">NHẬT KÝ THỬ NGHIỆM</option>
+														<option value="BIEN_BAN_THU_NGHIEM">BIÊN BẢN THỬ NGHIỆM</option>
+														<option value="TAI_LIEU_KHAC">TÀI LIỆU KHÁC</option>
+													</select>
 												</div>
 											</div>
 										</div>
@@ -2297,8 +2567,8 @@ const DocumentEditor = () => {
 												}
 												body { 
 												font-family: 'Times New Roman', Times, serif; 
-												font-size: 16px; 
-												line-height: 1.6;
+												font-size: 12px; 
+												line-height: 1.5;
 												margin: 0;
 												background: white;
 												box-sizing: border-box;
@@ -2405,40 +2675,48 @@ const DocumentEditor = () => {
 									</div>
 								</div>
 							</div>
+						</div>
 
-							{/* Footer */}
-							<div className="bg-gray-50 px-6 py-4 border-t flex justify-end gap-3">
-								<button
-									onClick={handleCloseTemplatePopup}
-									className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-								>
-									Hủy
-								</button>
-								<button
-									onClick={showIconPickerModal}
-									className="px-4 py-2 text-purple-700 bg-purple-50 border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors flex items-center gap-2"
-									title="Chèn biểu tượng đặc biệt"
-								>
-									<FaSquare className="w-4 h-4" />
-									Chèn Icon
-								</button>
-								<button
-									onClick={formatTemplateContent}
-									className="px-4 py-2 text-orange-700 bg-orange-50 border border-orange-300 rounded-lg hover:bg-orange-100 transition-colors flex items-center gap-2"
-									title="Định dạng lại nội dung với font-size 16px"
-								>
-									<FaEraser className="w-4 h-4" />
-									Format
-								</button>
-								<button
-									onClick={handleSaveTemplate}
-									disabled={isLoading}
-									className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									<FaSave className="w-4 h-4" />
-									{isLoading ? 'Đang lưu...' : editingTemplate ? 'Cập nhật' : 'Tạo mẫu'}
-								</button>
-							</div>
+						{/* Footer */}
+						<div className="bg-gray-50 px-6 py-4 border-t flex justify-end gap-3 flex-shrink-0">
+							<button
+								onClick={handleCloseTemplatePopup}
+								className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+							>
+								Hủy
+							</button>
+							<button
+								onClick={showIconPickerModal}
+								className="px-4 py-2 text-purple-700 bg-purple-50 border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors flex items-center gap-2"
+								title="Chèn biểu tượng đặc biệt"
+							>
+								<FaSquare className="w-4 h-4" />
+								Chèn Icon
+							</button>
+							<button
+								onClick={insertSignatureBox}
+								className="px-4 py-2 text-teal-700 bg-teal-50 border border-teal-300 rounded-lg hover:bg-teal-100 transition-colors flex items-center gap-2"
+								title="Chèn khung ký tên"
+							>
+								<FaEdit className="w-4 h-4" />
+								Insert Sign
+							</button>
+							<button
+								onClick={formatTemplateContent}
+								className="px-4 py-2 text-orange-700 bg-orange-50 border border-orange-300 rounded-lg hover:bg-orange-100 transition-colors flex items-center gap-2"
+								title="Định dạng lại nội dung với font-size 12px"
+							>
+								<FaEraser className="w-4 h-4" />
+								Format
+							</button>
+							<button
+								onClick={handleSaveTemplate}
+								disabled={isLoading}
+								className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								<FaSave className="w-4 h-4" />
+								{isLoading ? 'Đang lưu...' : editingTemplate ? 'Cập nhật' : 'Tạo mẫu'}
+							</button>
 						</div>
 					</div>
 				</div>
@@ -2501,6 +2779,63 @@ const DocumentEditor = () => {
 					</div>
 				</div>
 			)}
+
+			{/* Toast Notifications */}
+			<div className="fixed top-4 right-4 z-[9999] space-y-2 toast-container">
+				{toasts.map((toast) => (
+					<div
+						key={toast.id}
+						className={`
+							flex items-center gap-3 p-4 rounded-lg shadow-lg border-l-4 min-w-[300px] max-w-[400px] bg-white
+							animate-in
+							${toast.type === 'success' ? 'border-green-500' : ''}
+							${toast.type === 'error' ? 'border-red-500' : ''}
+							${toast.type === 'warning' ? 'border-yellow-500' : ''}
+							${toast.type === 'info' ? 'border-blue-500' : ''}
+						`}
+						style={{
+							backgroundColor: 
+								toast.type === 'success' ? '#f0fdf4' :
+								toast.type === 'error' ? '#fef2f2' :
+								toast.type === 'warning' ? '#fffbeb' :
+								toast.type === 'info' ? '#eff6ff' : '#ffffff'
+						}}
+					>
+						{/* Icon */}
+						<div className="flex-shrink-0">
+							{toast.type === 'success' && <FaCheckCircle className="w-5 h-5 text-green-600" />}
+							{toast.type === 'error' && <FaTimesCircle className="w-5 h-5 text-red-600" />}
+							{toast.type === 'warning' && <FaExclamationTriangle className="w-5 h-5 text-yellow-600" />}
+							{toast.type === 'info' && <FaInfoCircle className="w-5 h-5 text-blue-600" />}
+						</div>
+
+						{/* Message */}
+						<div className={`
+							flex-1 text-sm font-medium
+							${toast.type === 'success' ? 'text-green-800' : ''}
+							${toast.type === 'error' ? 'text-red-800' : ''}
+							${toast.type === 'warning' ? 'text-yellow-800' : ''}
+							${toast.type === 'info' ? 'text-blue-800' : ''}
+						`}>
+							{toast.message}
+						</div>
+
+						{/* Close button */}
+						<button
+							onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+							className={`
+								flex-shrink-0 p-1 rounded hover:bg-opacity-20 transition-colors
+								${toast.type === 'success' ? 'hover:bg-green-600 text-green-600' : ''}
+								${toast.type === 'error' ? 'hover:bg-red-600 text-red-600' : ''}
+								${toast.type === 'warning' ? 'hover:bg-yellow-600 text-yellow-600' : ''}
+								${toast.type === 'info' ? 'hover:bg-blue-600 text-blue-600' : ''}
+							`}
+						>
+							<FaTimes className="w-4 h-4" />
+						</button>
+					</div>
+				))}
+			</div>
 		</>
 	);
 };

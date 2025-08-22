@@ -19,6 +19,12 @@ const applyFormatToHTML = (htmlContent) => {
 	const tempContainer = document.createElement('div');
 	tempContainer.innerHTML = htmlContent;
 
+	// Remove data-mce-style from ALL elements first
+	const allElements = tempContainer.querySelectorAll('*');
+	allElements.forEach((element) => {
+		element.removeAttribute('data-mce-style');
+	});
+
 	// Process p tags - remove style but keep padding
 	const pTags = tempContainer.querySelectorAll('p');
 	pTags.forEach((p) => {
@@ -31,7 +37,6 @@ const applyFormatToHTML = (htmlContent) => {
 
 		p.removeAttribute('style');
 		p.removeAttribute('class');
-		p.removeAttribute('data-mce-style');
 
 		const styleString = [];
 		if (padding) styleString.push(`padding: ${padding}`);
@@ -43,37 +48,21 @@ const applyFormatToHTML = (htmlContent) => {
 		}
 
 		if (styleString.length > 0) {
-			p.setAttribute('style', styleString.join('; ') + '; font-size: 11px');
+			p.setAttribute('style', styleString.join('; ') + '; font-size: 11px; text-align: left');
 		} else {
-			p.setAttribute('style', 'font-size: 11px');
+			p.setAttribute('style', 'font-size: 11px; text-align: left');
 		}
 	});
 
-	// Process td/th tags - remove style but keep padding and set default border
+	// Process td/th tags - remove all styles, only keep border, padding, text-align left
 	const tdTags = tempContainer.querySelectorAll('td, th');
 	tdTags.forEach((td) => {
-		const currentStyle = td.getAttribute('style') || '';
-		const padding = extractStyleProperty(currentStyle, 'padding');
-		const paddingTop = extractStyleProperty(currentStyle, 'padding-top');
-		const paddingBottom = extractStyleProperty(currentStyle, 'padding-bottom');
-		const paddingLeft = extractStyleProperty(currentStyle, 'padding-left');
-		const paddingRight = extractStyleProperty(currentStyle, 'padding-right');
-
 		td.removeAttribute('style');
 		td.removeAttribute('class');
 		td.removeAttribute('width');
-		td.removeAttribute('data-mce-style');
 
-		const styleString = ['border: 1px solid #000', 'font-size: 11px'];
-		if (padding) styleString.push(`padding: ${padding}`);
-		else {
-			if (paddingTop) styleString.push(`padding-top: ${paddingTop}`);
-			if (paddingBottom) styleString.push(`padding-bottom: ${paddingBottom}`);
-			if (paddingLeft) styleString.push(`padding-left: ${paddingLeft}`);
-			if (paddingRight) styleString.push(`padding-right: ${paddingRight}`);
-		}
-
-		td.setAttribute('style', styleString.join('; '));
+		// Set only required styles: border, padding (6px left/right, 0px top/bottom), text-align left, font-size: 11px
+		td.setAttribute('style', 'border: 1px solid #000; padding: 0px 6px; text-align: left; font-size: 11px');
 	});
 
 	// Process tr tags - remove all styling
@@ -81,28 +70,105 @@ const applyFormatToHTML = (htmlContent) => {
 	trTags.forEach((tr) => {
 		tr.removeAttribute('style');
 		tr.removeAttribute('class');
-		tr.removeAttribute('data-mce-style');
 	});
 
-	// Process table tags - set standard styling
+	// Process table tags - remove all styles, only keep width and border-collapse
 	const tableTags = tempContainer.querySelectorAll('table');
 	tableTags.forEach((table) => {
+		table.removeAttribute('style');
 		table.removeAttribute('class');
-		table.removeAttribute('data-mce-style');
 		table.removeAttribute('border');
 		table.removeAttribute('cellpadding');
 		table.removeAttribute('cellspacing');
 		table.removeAttribute('width');
 
-		table.setAttribute('style', 'width: 100%; max-width: 100%; border-collapse: collapse;');
+		// Set only required styles: width and border-collapse
+		table.setAttribute('style', 'width: 100%; border-collapse: collapse;');
 	});
 
-	// Set font-size 11px for all elements except headings
+	// Helper function to check if an element is part of a fraction structure
+	const isFractionElement = (element) => {
+		// Check if element itself has fraction-related styles
+		const style = element.getAttribute('style') || '';
+		if (style.includes('border-bottom') && style.includes('display: block')) {
+			return true;
+		}
+		
+		// Check if parent has fraction structure
+		const parent = element.parentElement;
+		if (parent) {
+			const parentStyle = parent.getAttribute('style') || '';
+			if (parentStyle.includes('display: inline-block') && parentStyle.includes('text-align: center') && parentStyle.includes('vertical-align: middle')) {
+				return true;
+			}
+		}
+		
+		// Check if any child has border-bottom (fraction line)
+		const childrenWithBorder = element.querySelectorAll('span[style*="border-bottom"]');
+		if (childrenWithBorder.length > 0) {
+			return true;
+		}
+		
+		return false;
+	};
+
+	// Process span tags - preserve fraction structures, remove other styles
+	const spanTags = tempContainer.querySelectorAll('span');
+	spanTags.forEach((span) => {
+		if (isFractionElement(span)) {
+			// This is a fraction element, preserve essential fraction styles
+			const currentStyle = span.getAttribute('style') || '';
+			
+			// Preserve fraction-specific styles
+			const display = extractStyleProperty(currentStyle, 'display');
+			const textAlign = extractStyleProperty(currentStyle, 'text-align');
+			const verticalAlign = extractStyleProperty(currentStyle, 'vertical-align');
+			const borderBottom = extractStyleProperty(currentStyle, 'border-bottom');
+			const fontSize = extractStyleProperty(currentStyle, 'font-size');
+			const lineHeight = extractStyleProperty(currentStyle, 'line-height');
+			const paddingBottom = extractStyleProperty(currentStyle, 'padding-bottom');
+			const paddingTop = extractStyleProperty(currentStyle, 'padding-top');
+			const fontFamily = extractStyleProperty(currentStyle, 'font-family');
+
+			// Rebuild style with preserved fraction properties
+			const preservedStyles = [];
+			if (display) preservedStyles.push(`display: ${display}`);
+			if (textAlign && textAlign === 'center') preservedStyles.push(`text-align: ${textAlign}`);
+			if (verticalAlign) preservedStyles.push(`vertical-align: ${verticalAlign}`);
+			if (borderBottom) preservedStyles.push(`border-bottom: ${borderBottom}`);
+			if (fontSize) preservedStyles.push(`font-size: ${fontSize}`);
+			if (lineHeight) preservedStyles.push(`line-height: ${lineHeight}`);
+			if (paddingBottom) preservedStyles.push(`padding-bottom: ${paddingBottom}`);
+			if (paddingTop) preservedStyles.push(`padding-top: ${paddingTop}`);
+			if (fontFamily) preservedStyles.push(`font-family: ${fontFamily}`);
+			
+			// Add default font-size if not specified
+			if (!fontSize) {
+				preservedStyles.push('font-size: 11px');
+			}
+
+			span.removeAttribute('class');
+			if (preservedStyles.length > 0) {
+				span.setAttribute('style', preservedStyles.join('; '));
+			}
+		} else {
+			// Regular span, remove all styles
+			span.removeAttribute('style');
+			span.removeAttribute('class');
+		}
+	});
+
+	// Set font-size 11px and text-align left for all elements except headings and fraction elements
 	const allTags = tempContainer.querySelectorAll('*:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6)');
 	allTags.forEach((element) => {
+		// Skip if this is a fraction element
+		if (isFractionElement(element)) {
+			return;
+		}
+		
 		const currentStyle = element.getAttribute('style') || '';
-		const styleWithFontSize = currentStyle + (currentStyle ? '; ' : '') + 'font-size: 11px';
-		element.setAttribute('style', styleWithFontSize);
+		const styleWithFontSizeAndAlign = currentStyle + (currentStyle ? '; ' : '') + 'font-size: 11px; text-align: left';
+		element.setAttribute('style', styleWithFontSizeAndAlign);
 	});
 
 	return tempContainer.innerHTML;
@@ -153,7 +219,7 @@ const Editor = () => {
 	const [authorAt, setAuthorAt] = useState('');
 	const [submittedAt, setSubmittedAt] = useState('');
 	const [submittedBy, setSubmittedBy] = useState('');
-	const [classifierCode, setClassifierCode] = useState('BIEN_BAN_KET_QUA_THU_NGHIEM'); // Default to test result report
+	const [classifierCode, setClassifierCode] = useState('BIEN_BAN_THU_NGHIEM'); // Default to test result report
 	const [fileId, setFileId] = useState(''); // Store fileId from published document metadata
 	const [lockedByUID, setLockedByUID] = useState(''); // Store lockedByUID when document is submitted
 	const [lockedByName, setLockedByName] = useState(''); // Store locked by user name
@@ -161,39 +227,14 @@ const Editor = () => {
 	const [documentFooter, setDocumentFooter] = useState(''); // Store document footer from metadata
 
 	const [editorContent, setEditorContent] = useState('');
-	const [autoSaveStarted, setAutoSaveStarted] = useState(false); // Track if auto-save has been started
 
 	// Refs
 	const editorRef = useRef(null);
-	const autoSaveIntervalRef = useRef(null);
 	const loadTableInfoTimeoutRef = useRef(null);
 	const isLoadingTableInfo = useRef(false);
 	const lastAnalysisIdsRef = useRef(null);
-	const lastAutoSaveMetadataRef = useRef(null); // Store last auto-saved metadata for comparison
 
-	// New unified auto-save system
-	const startAutoSave = () => {
-		// Only start if not already started and document is in draft status
-		if (!autoSaveStarted && documentStatus !== 'submitted') {
-			setAutoSaveStarted(true);
-			
-			// Immediate auto-save
-			autoSaveLabResultReport();
-			
-			// Start 10-second interval
-			autoSaveIntervalRef.current = setInterval(() => {
-				// Stop auto-save if document becomes submitted
-				if (documentStatus === 'submitted') {
-					clearInterval(autoSaveIntervalRef.current);
-					autoSaveIntervalRef.current = null;
-					setAutoSaveStarted(false);
-					return;
-				}
-				
-				autoSaveLabResultReport();
-			}, 10000); // Every 10 seconds
-		}
-	};
+	// New unified auto-save system - removed auto save, only manual save now
 	const getUserName = async (uid) => {
 		if (!uid) return '';
 		
@@ -218,9 +259,6 @@ const Editor = () => {
 
 		return () => {
 			// Cleanup
-			if (autoSaveIntervalRef.current) {
-				clearInterval(autoSaveIntervalRef.current);
-			}
 			if (loadTableInfoTimeoutRef.current) {
 				clearTimeout(loadTableInfoTimeoutRef.current);
 			}
@@ -275,23 +313,11 @@ const Editor = () => {
 		}
 	}, [analysisIds]);
 
-	// Auto-save useEffect - cleanup when status changes
+	// Auto-save useEffect - removed, no longer needed
 	useEffect(() => {
-		// Stop auto-save if document becomes submitted or in preview mode
-		if (documentStatus === 'submitted' || isPreviewMode) {
-			if (autoSaveIntervalRef.current) {
-				clearInterval(autoSaveIntervalRef.current);
-				autoSaveIntervalRef.current = null;
-			}
-			setAutoSaveStarted(false);
-		}
-
 		// Cleanup on unmount or dependency change
 		return () => {
-			if (autoSaveIntervalRef.current) {
-				clearInterval(autoSaveIntervalRef.current);
-				autoSaveIntervalRef.current = null;
-			}
+			// No cleanup needed anymore
 		};
 	}, [documentStatus, isPreviewMode]);
 
@@ -354,8 +380,8 @@ const Editor = () => {
 				setCurrentTemplate(null);
 			}
 
-			// Sau khi xử lý, gọi auto_save và cập nhật URL với status cuối cùng
-			await performAutoSaveAndCleanURL(finalDocumentStatus || 'draft');
+			// Sau khi xử lý, có thể gọi save manual và cập nhật URL với status cuối cùng
+			await performSaveAndCleanURL(finalDocumentStatus || 'draft');
 		} catch (error) {
 			console.error('Error in handleInitialPageLoad:', error);
 			showAutoHideMessage('Lỗi khi tải dữ liệu trang: ' + error.message, 'error');
@@ -563,7 +589,7 @@ const Editor = () => {
 					updateDocumentStatus('submitted');
 					documentStatus = 'submitted';
 
-					// Note: Editor remains editable, only auto-save is disabled for submitted documents
+					// Note: Editor remains editable, auto-save is removed and replaced with manual save
 				} else {
 					// Document is not locked, set status to draft
 					updateDocumentStatus('draft');
@@ -677,21 +703,21 @@ const Editor = () => {
 		return 'draft';
 	};
 
-	// Thực hiện auto_save và clean URL
-	const performAutoSaveAndCleanURL = async (documentStatus = 'draft') => {
+	// Thực hiện save và clean URL
+	const performSaveAndCleanURL = async (documentStatus = 'draft') => {
 		try {
-			// Gọi auto_save
+			// Gọi save
 			const urlParams = new URLSearchParams(window.location.search);
 			const originalEditId = urlParams.get('editId');
 			const docId = urlParams.get('docId');
 
-			// Chỉ auto save nếu không có docId (vì docId là published document)
-			// VÀ document status là 'draft' (không auto-save cho submitted documents)
-			if (!docId && documentStatus === 'draft') {
-				await autoSaveLabResultReport();
+			// Chỉ save nếu không có docId (vì docId là published document)
+			// Manual save only - no auto save
+			if (!docId) {
+				// Skip auto save, user will save manually when needed
 			}
 
-			// Lấy editId hiện tại (có thể được tạo mới từ autoSave)
+			// Lấy editId hiện tại (có thể được tạo mới từ save)
 			const finalEditId = currentEditId || originalEditId;
 
 			// Clean URL - chỉ giữ lại editId và status
@@ -713,7 +739,7 @@ const Editor = () => {
 
 			window.history.replaceState({}, '', newUrl);
 		} catch (error) {
-			console.error('Error in performAutoSaveAndCleanURL:', error);
+			console.error('Error in performSaveAndCleanURL:', error);
 		}
 	};
 
@@ -884,12 +910,12 @@ const Editor = () => {
 		}
 	};
 
-	const autoSaveLabResultReport = async () => {
+	const saveLabResultReport = async () => {
 		try {
 			const content =
 				editorRef.current && editorRef.current.getContent ? editorRef.current.getContent() : editorContent;
 
-			// Prepare current metadata for comparison
+			// Prepare current metadata
 			const currentMetadata = {
 				templateId: currentTemplate?.id || null,
 				templateName: currentTemplate?.templateName || currentTemplate?.name || null,
@@ -901,25 +927,6 @@ const Editor = () => {
 				classifierCode: classifierCode || null,
 			};
 
-			// Compare with last saved metadata to check for changes
-			const lastMetadata = lastAutoSaveMetadataRef.current;
-			if (lastMetadata) {
-				const hasChanges = (
-					JSON.stringify(currentMetadata.templateId) !== JSON.stringify(lastMetadata.templateId) ||
-					JSON.stringify(currentMetadata.templateName) !== JSON.stringify(lastMetadata.templateName) ||
-					JSON.stringify(currentMetadata.header) !== JSON.stringify(lastMetadata.header) ||
-					JSON.stringify(currentMetadata.content) !== JSON.stringify(lastMetadata.content) ||
-					JSON.stringify(currentMetadata.footer) !== JSON.stringify(lastMetadata.footer) ||
-					JSON.stringify(currentMetadata.analysisIds) !== JSON.stringify(lastMetadata.analysisIds) ||
-					JSON.stringify(currentMetadata.sampleUIDs) !== JSON.stringify(lastMetadata.sampleUIDs) ||
-					JSON.stringify(currentMetadata.classifierCode) !== JSON.stringify(lastMetadata.classifierCode)
-				);
-
-				if (!hasChanges) {
-					return;
-				}
-			}
-
 			// Check if we have editId from URL, but only if we're not loading from docId
 			const urlParams = new URLSearchParams(window.location.search);
 			const urlEditId = urlParams.get('editId');
@@ -927,6 +934,7 @@ const Editor = () => {
 
 			const requestBody = {
 				metadata: currentMetadata,
+				classifierCode: classifierCode || 'BIEN_BAN_THU_NGHIEM',
 			};
 
 			// Add editorId only if we have a valid editId AND we're not loading from docId
@@ -947,8 +955,85 @@ const Editor = () => {
 			if (response.status === 200 && response.data && response.data.id) {
 				const responseEditId = response.data.id;
 				
-				// Store current metadata as last saved metadata
-				lastAutoSaveMetadataRef.current = { ...currentMetadata };
+				// Always update URL with editId from response
+				const newUrl = new URL(window.location);
+				newUrl.searchParams.set('editId', responseEditId);
+				window.history.replaceState({}, '', newUrl);
+
+				// If this is the first save (no editId in request), update state and show message
+				if (!editId) {
+					// This was a new document creation (no editId in request body)
+					setCurrentEditId(responseEditId);
+					
+					// Show success message for new document creation
+					showAutoHideMessage(`Đã tạo và lưu tài liệu: ${responseEditId}`, 'success');
+				} else {
+					// Update current editId state to match response
+					setCurrentEditId(responseEditId);
+					
+					// Show success message for existing document update
+					showAutoHideMessage('Đã lưu tài liệu thành công!', 'success');
+				}
+
+				// Update document info with save data
+				updateDocumentInfo(
+					response.data.id,
+					response.data.createdAt,
+					response.data.modifiedAt || new Date().toISOString(),
+					response.data.identityUID, // Author UID
+					response.data.modifiedByUID, // Modified by UID
+				);
+			}
+		} catch (error) {
+			console.error('Save error:', error);
+			showAutoHideMessage('Lỗi khi lưu tài liệu: ' + error.message, 'error');
+		}
+	};
+
+	const autoSaveLabResultReport = async () => {
+		try {
+			const content =
+				editorRef.current && editorRef.current.getContent ? editorRef.current.getContent() : editorContent;
+
+			// Prepare current metadata
+			const currentMetadata = {
+				templateId: currentTemplate?.id || null,
+				templateName: currentTemplate?.templateName || currentTemplate?.name || null,
+				header: headerData,
+				content: content,
+				footer: documentFooter || currentEditId,
+				analysisIds: analysisIds || [],
+				sampleUIDs: sampleUIDs || [],
+				classifierCode: classifierCode || null,
+			};
+
+			// Check if we have editId from URL, but only if we're not loading from docId
+			const urlParams = new URLSearchParams(window.location.search);
+			const urlEditId = urlParams.get('editId');
+			const urlDocId = urlParams.get('docId');
+
+			const requestBody = {
+				metadata: currentMetadata,
+				classifierCode: classifierCode || 'BIEN_BAN_THU_NGHIEM',
+			};
+
+			// Add editorId only if we have a valid editId AND we're not loading from docId
+			// When loading from docId, we want to create a NEW document, not update existing one
+			let editId = null;
+			if (!urlDocId) {
+				// Only use editId if we're not loading from docId
+				editId = currentEditId || urlEditId;
+			}
+			// If loading from docId, editId stays null to create new document
+
+			if (editId) {
+				requestBody.editorId = editId;
+			}
+
+			const response = await apiPost('https://red.irdop.org/v1/editor/auto_save/lab_result_report', requestBody);
+
+			if (response.status === 200 && response.data && response.data.id) {
+				const responseEditId = response.data.id;
 				
 				// Always update URL with editId from response
 				const newUrl = new URL(window.location);
@@ -977,7 +1062,8 @@ const Editor = () => {
 				);
 			}
 		} catch (error) {
-			console.error('Auto-save error:', error);
+			console.error('Save error:', error);
+			showAutoHideMessage('Lỗi khi lưu tài liệu: ' + error.message, 'error');
 		}
 	};
 
@@ -990,7 +1076,7 @@ const Editor = () => {
 				footer: documentFooter || currentEditId,
 				analysisIds: analysisIds || [],
 				sampleUIDs: sampleUIDs || [],
-				classifierCode: classifierCode || 'BIEN_BAN_KET_QUA_THU_NGHIEM', // Always include classifierCode
+				classifierCode: classifierCode || 'BIEN_BAN_THU_NGHIEM', // Always include classifierCode
 			};
 
 			const response = await apiPost('https://black.irdop.org/khsi19me/convert/lab_result_report_html', reportData);
@@ -1108,9 +1194,9 @@ const Editor = () => {
 		popup.style.cssText = `
 			background: white;
 			border-radius: 8px;
-			width: 90vw;
-			max-width: 1200px;
-			height: 80vh;
+			width: 95vw;
+			max-width: 1700px;
+			height: 90vh;
 			display: flex;
 			flex-direction: column;
 			box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
@@ -1181,8 +1267,7 @@ const Editor = () => {
 					}
 					window.history.replaceState({}, '', newUrl);
 					
-					// Trigger auto-save when analysis selection changes
-					startAutoSave();
+					// No auto save, user will save manually when needed
 				} else {
 					console.log('Analysis IDs unchanged, no update needed');
 				}
@@ -1489,6 +1574,60 @@ const Editor = () => {
 		}
 	};
 
+	const insertSignatureBox = async () => {
+		// Check if editor is available and initialized
+		if (!editorRef.current) {
+			showAutoHideMessage('Editor chưa được khởi tạo, vui lòng chờ một chút...', 'warning');
+			setTimeout(() => insertSignatureBox(), 500);
+			return;
+		}
+
+		// Wait for TinyMCE to be fully initialized
+		const editor = editorRef.current;
+		if (!editor.initialized) {
+			showAutoHideMessage('Editor đang được khởi tạo, vui lòng chờ một chút...', 'warning');
+			setTimeout(() => insertSignatureBox(), 500);
+			return;
+		}
+
+		try {
+			// Double check that methods exist
+			if (typeof editor.getContent !== 'function' || typeof editor.setContent !== 'function') {
+				showAutoHideMessage('Editor chưa sẵn sàng, vui lòng thử lại...', 'warning');
+				return;
+			}
+
+			// Create signature box HTML with 2 sections (left and right) - 3cm height
+			const signatureBoxHTML = `
+				<div style="width: 100%; display: flex; justify-content: space-between; align-items: flex-start; margin-top: 20px; font-size: 11px; font-family: 'Times New Roman', serif; height: 3cm; border: none;">
+					<div style="flex: 1; text-align: center; font-weight: bold; height: 3cm; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding-top: 8px; margin-right: 10px;">
+						Ngày kiểm tra:<br>
+						NGƯỜI KIỂM TRA
+					</div>
+					<div style="flex: 1; text-align: center; font-weight: bold; height: 3cm; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding-top: 8px; margin-left: 10px;">
+						Ngày thực hiện:<br>
+						NGƯỜI THỰC HIỆN
+					</div>
+				</div>
+			`;
+
+			// Get current editor content
+			const currentContent = editor.getContent();
+
+			// Add signature box at the end of current content
+			const newContent = currentContent + signatureBoxHTML;
+
+			// Set the new content
+			editor.setContent(newContent);
+			setEditorContent(newContent);
+
+			showAutoHideMessage('Đã chèn khung ký tên thành công', 'success');
+		} catch (error) {
+			console.error('Error inserting signature box:', error);
+			showAutoHideMessage('Lỗi khi chèn khung ký tên: ' + error.message, 'error');
+		}
+	};
+
 	const showTemplateSearchModal = () => {
 		setShowTemplateSearchForm(true);
 		// Load available templates when modal opens
@@ -1551,8 +1690,7 @@ const Editor = () => {
 			setShowTemplateSearchForm(false);
 			showAutoHideMessage(`Đã chọn mẫu: ${template.templateName || template.name}`, 'success');
 			
-			// Trigger auto-save when template is selected
-			startAutoSave();
+			// No auto save, user will save manually when needed
 		} catch (error) {
 			console.error('Error selecting template:', error);
 			showAutoHideMessage('Lỗi khi chọn mẫu biên bản', 'error');
@@ -1632,9 +1770,9 @@ const Editor = () => {
 			gap: 12px;
 		`;
 
-		// Submit report button (combined publish + PDF) - only show for BIEN_BAN_KET_QUA_THU_NGHIEM
+		// Submit report button (combined publish + PDF) - only show for BIEN_BAN_THU_NGHIEM
 		let submitBtn = null;
-		if (classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM') {
+		if (classifierCode === 'BIEN_BAN_THU_NGHIEM') {
 			submitBtn = document.createElement('button');
 			submitBtn.textContent = 'Nộp biên bản';
 			submitBtn.style.cssText = `
@@ -1734,7 +1872,7 @@ const Editor = () => {
 		closeBtn.onmouseover = () => (closeBtn.style.background = '#dc2626');
 		closeBtn.onmouseout = () => (closeBtn.style.background = '#ef4444');
 		closeBtn.onclick = () => {
-			// Resume auto-save when closing preview
+			// Resume editor functionality when closing preview
 			setIsPreviewMode(false);
 			setPreviewExtractData(null);
 			overlay.remove();
@@ -1835,6 +1973,7 @@ const Editor = () => {
 			// Call submit API to lock document and export
 			const submitResponse = await apiPost('https://red.irdop.org/v1/edit/submit', {
 				editId: documentData.editId,
+				classifierCode: classifierCode || 'BIEN_BAN_THU_NGHIEM',
 				metadata: {
 					...documentData.metadata,
 					classifierCode: classifierCode || null,
@@ -1951,7 +2090,7 @@ const Editor = () => {
 					setIsDocumentLocked(true);
 					setDocumentStatus('SENDED');
 
-					// Note: Editor remains editable, only auto-save is disabled for submitted documents
+					// Note: Editor remains editable, auto-save is removed and replaced with manual save
 				}
 			}
 		} catch (error) {
@@ -2288,8 +2427,7 @@ const Editor = () => {
 	const handleEditorChange = (content) => {
 		setEditorContent(content);
 		
-		// Start auto-save on any content change (only once)
-		startAutoSave();
+		// No auto save, user will save manually when needed
 	};
 
 	const showAutoHideMessage = (message, type = 'info') => {
@@ -2362,8 +2500,7 @@ const Editor = () => {
 		url.searchParams.set('classifierCode', newClassifierCode);
 		window.history.replaceState({}, '', url);
 		
-		// Trigger auto-save when classifier code changes
-		startAutoSave();
+		// No auto save, user will save manually when needed
 	};
 
 	// File preview functionality (similar to DocumentEditor)
@@ -2471,8 +2608,7 @@ const Editor = () => {
 		// Update header data state
 		setHeaderData(prev => ({ ...prev, [field]: value }));
 		
-		// Start auto-save on any header change (only once)
-		startAutoSave();
+		// No auto save, user will save manually when needed
 	};
 
 	return (
@@ -2874,6 +3010,13 @@ const Editor = () => {
 									>
 										Insert Icon
 									</button>
+									<button
+										className="py-1 px-3 text-xs font-semibold bg-white text-black border-2 border-gray-500 rounded hover:bg-gray-50 hover:border-gray-700 transition-all shadow-sm"
+										title="Chèn khung ký tên"
+										onClick={insertSignatureBox}
+									>
+										Insert Sign
+									</button>
 								</div>
 
 								<div className="flex gap-2">
@@ -2884,6 +3027,14 @@ const Editor = () => {
 										onClick={clearFormatting}
 									>
 										Auto Format
+									</button>
+									<button
+										id="saveBtn"
+										className="py-1 px-3 text-xs font-semibold bg-blue-500 text-white border-2 border-blue-500 rounded hover:bg-blue-600 hover:border-blue-600 transition-all shadow-sm"
+										title="Lưu tài liệu"
+										onClick={saveLabResultReport}
+									>
+										Save
 									</button>
 									<button
 										id="clearAllBtn"
@@ -2913,6 +3064,17 @@ const Editor = () => {
 										editor.initialized = true;
 									}}
 									init={{
+										plugins: 'paste table',
+								        paste_data_images: true,
+								        paste_retain_style_properties: 'none', // Loại bỏ các thuộc tính style không cần thiết
+								        paste_strip_class_attributes: 'all', // Loại bỏ các thuộc tính class
+								        paste_remove_styles: true, // Loại bỏ tất cả style
+								        paste_remove_styles_if_webkit: true,
+								        paste_preprocess: (editor, args) => {
+								          // Làm sạch nội dung trước khi dán
+								          args.content = args.content.replace(/<o:p>.*?<\/o:p>/g, ''); // Loại bỏ thẻ <o:p>
+								          args.content = args.content.replace(/<xml>.*?<\/xml>/g, ''); // Loại bỏ thẻ <xml>
+								        },
 										height: '100%',
 										min_height: 300,
 										max_height: 500,
@@ -2953,7 +3115,7 @@ const Editor = () => {
 											'quickbars',
 										],
 										toolbar:
-											'blocks fontfamily fontsize bold italic underline strikethrough subscript superscript forecolor align lineheight checklist numlist bullist indent outdent anchor table tabledelete tableprops tablerowprops tablecellprops tableinsertrowbefore tableinsertrowafter tabledeleterow tableinsertcolbefore tableinsertcolafter tabledeletecol',
+											'blocks fontfamily fontsize bold italic underline strikethrough subscript superscript forecolor align lineheight checklist numlist bullist indent outdent anchor table tabledelete tableprops tablerowprops tablecellprops tableinsertrowbefore tableinsertrowafter tabledeleterow tableinsertcolbefore tableinsertcolafter tabledeletecol tablecellmerge tablecellsplit',
 										content_style: `
                     * {
                       box-sizing: border-box !important;
@@ -3165,15 +3327,15 @@ const Editor = () => {
 											type="radio"
 											id="bien_ban"
 											name="classifierCode"
-											value="BIEN_BAN_KET_QUA_THU_NGHIEM"
-											checked={classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM'}
+											value="BIEN_BAN_THU_NGHIEM"
+											checked={classifierCode === 'BIEN_BAN_THU_NGHIEM'}
 											onChange={handleClassifierCodeChange}
 											className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 focus:ring-2"
 										/>
 										<label
 											htmlFor="bien_ban"
 											className={`ml-3 text-sm font-semibold cursor-pointer transition-colors duration-200 ${
-												classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' ? 'text-blue-600' : 'text-gray-700'
+												classifierCode === 'BIEN_BAN_THU_NGHIEM' ? 'text-blue-600' : 'text-gray-700'
 											}`}
 										>
 											Biên bản thử nghiệm
@@ -3265,7 +3427,7 @@ const Editor = () => {
 							<div className="bg-white text-gray-800 px-4 py-3 border-b-2 border-gray-500 font-semibold text-sm text-left rounded-box-header flex items-center justify-between">
 								<span>Thông tin liên quan</span>
 								{/* Nút quét chỉ hiện khi chọn Biên bản thử nghiệm */}
-								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' && (
+								{classifierCode === 'BIEN_BAN_THU_NGHIEM' && (
 									<button
 										className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold border-0 transition-all duration-200 shadow-md"
 										title="Quét dữ liệu"
@@ -3277,7 +3439,7 @@ const Editor = () => {
 							</div>
 							<div className="p-4 bg-white rounded-box-content min-h-fit">
 								{/* Chỉ tiêu đã chọn (hiện khi chọn Biên bản thử nghiệm HOẶC Nhật ký thử nghiệm) */}
-								{(classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' || classifierCode === 'NHAT_KY_THU_NGHIEM') && (
+								{(classifierCode === 'BIEN_BAN_THU_NGHIEM' || classifierCode === 'NHAT_KY_THU_NGHIEM') && (
 									<div>
 										<div className="flex items-center justify-between mb-3">
 											<p className="text-sm font-semibold text-gray-700 text-left">
@@ -3307,7 +3469,7 @@ const Editor = () => {
 									</div>
 								)}
 								{/* Thông báo khi không phải Biên bản thử nghiệm hoặc Nhật ký thử nghiệm */}
-								{(classifierCode !== 'BIEN_BAN_KET_QUA_THU_NGHIEM' && classifierCode !== 'NHAT_KY_THU_NGHIEM') && (
+								{(classifierCode !== 'BIEN_BAN_THU_NGHIEM' && classifierCode !== 'NHAT_KY_THU_NGHIEM') && (
 									<div className="text-center py-8 text-gray-500">
 										<p className="text-sm">Thông tin liên quan chỉ hiển thị cho Biên bán thử nghiệm và Nhật ký thử nghiệm</p>
 									</div>
@@ -3324,7 +3486,7 @@ const Editor = () => {
 					<div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-auto">
 						<div className="flex justify-between items-center mb-4">
 							<h3 className="text-lg font-semibold text-gray-800">
-								{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM' 
+								{classifierCode === 'BIEN_BAN_THU_NGHIEM' 
 									? 'Tìm kiếm mẫu biên bản' 
 									: classifierCode === 'NHAT_KY_THU_NGHIEM'
 									? 'Tìm kiếm mẫu nhật ký thử nghiệm'
@@ -3368,7 +3530,7 @@ const Editor = () => {
 							) : (
 								<div className="text-center py-8">
 									<div className="text-gray-600">
-										{classifierCode === 'BIEN_BAN_KET_QUA_THU_NGHIEM'
+										{classifierCode === 'BIEN_BAN_THU_NGHIEM'
 											? 'Không tìm thấy mẫu biên bản nào'
 											: classifierCode === 'NHAT_KY_THU_NGHIEM'
 											? 'Không tìm thấy mẫu nhật ký thử nghiệm nào'

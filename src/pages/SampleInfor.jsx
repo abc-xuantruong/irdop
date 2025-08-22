@@ -31,6 +31,36 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 
 const SampleInfor = () => {
+	// Timezone adjustment functions for GMT+7 (Vietnam timezone)
+	const adjustTimezoneForDisplay = (dateValue) => {
+		if (!dateValue) return null;
+		
+		const date = new Date(dateValue);
+		if (isNaN(date.getTime())) return dateValue;
+		
+		// Add 7 hours to convert from UTC to Vietnam time for display
+		date.setHours(date.getHours() + 7);
+		return date.toISOString();
+	};
+
+	const adjustDateForApiSubmission = (dateValue) => {
+		if (!dateValue) return null;
+		
+		const date = new Date(dateValue);
+		if (isNaN(date.getTime())) return dateValue;
+		
+		// Convert to GMT+7 by setting the time to 7 AM of the selected date
+		date.setHours(7, 0, 0, 0);
+		
+		// Convert to ISO string for GMT+7 timezone
+		const vietnamOffset = 7 * 60; // GMT+7 in minutes
+		const localOffset = date.getTimezoneOffset(); // Local timezone offset in minutes
+		const totalOffset = vietnamOffset + localOffset; // Total offset to add
+		
+		const gmtPlus7Date = new Date(date.getTime() + (totalOffset * 60000));
+		return gmtPlus7Date.toISOString();
+	};
+
 	const [searchParams] = useSearchParams();
 	const receipt_uid = searchParams.get('receipt_uid');
 	const sample_uid = searchParams.get('sample_uid');
@@ -82,7 +112,7 @@ const SampleInfor = () => {
 		protocol_source: 'IRDOP',
 		result_value: '',
 		result_unit: '',
-		deadline: new Date().toISOString(),
+		deadline: adjustDateForApiSubmission(new Date()),
 		technician_uid: '',
 		sample_id: 0,
 		display_style: [
@@ -586,8 +616,8 @@ const SampleInfor = () => {
 					protocol_id: parameter.protocol_id,
 					technician_uid: parameter.technician_uid,
 					deadline: parameter.deadline
-						? parameter.deadline
-						: new Date(Date.now() + parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0),
+						? adjustDateForApiSubmission(new Date(parameter.deadline))
+						: adjustDateForApiSubmission(new Date(Date.now() + (parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0))),
 					protocol_code: parameter.protocol_code,
 					result_unit: parameter.default_unit || parameter.result_unit,
 					protocol_source: parameter.protocol_source,
@@ -810,7 +840,7 @@ const SampleInfor = () => {
 					protocol_source: 'IRDOP',
 					result_value: '',
 					result_unit: '',
-					deadline: new Date().toISOString(),
+					deadline: adjustDateForApiSubmission(new Date()),
 					technician_uid: '',
 					sample_id: currentSample?.id || 0,
 					display_style: [
@@ -1175,6 +1205,10 @@ const SampleInfor = () => {
 							const reviewerData = await getIdenByUid(analysis.reviewed_by);
 							analysis.reviewerName = reviewerData ? reviewerData.identity_name : 'Unknown';
 						}
+						// Adjust deadline for display (GMT+7)
+						if (analysis.deadline) {
+							analysis.deadline = adjustTimezoneForDisplay(analysis.deadline);
+						}
 					}
 				}
 				setSample(response.data);
@@ -1314,7 +1348,7 @@ const SampleInfor = () => {
 					updateData.result_value = newValue;
 					// Add submission information when updating result value
 					updateData.submit_result_by = currentUser?.identity_name;
-					updateData.submit_result_at = new Date().toISOString();
+					updateData.submit_result_at = adjustDateForApiSubmission(new Date());
 				}
 			} else if (fieldType === 'result_unit') {
 				updateData.result_unit = newValue;
@@ -2019,7 +2053,7 @@ const SampleInfor = () => {
 		// Update UI only - we'll make the API call separately
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
-				return { ...item, deadline: date.toISOString() };
+				return { ...item, deadline: adjustDateForApiSubmission(date) };
 			}
 			return item;
 		});
@@ -2033,8 +2067,8 @@ const SampleInfor = () => {
 			// Close the dropdown
 			setDeadlineDropdownVisible(null);
 
-			// Convert date to ISO string for API
-			const newDeadline = date.toISOString();
+			// Convert date to GMT+7 ISO string for API
+			const newDeadline = adjustDateForApiSubmission(date);
 
 			// Find the analysis item
 			const analysis = listAnalytes.find((item) => item.id === index);
@@ -2474,7 +2508,7 @@ const SampleInfor = () => {
 					...item,
 					ex_info: {
 						...exInfo,
-						send_at: date.toISOString(),
+						send_at: adjustDateForApiSubmission(date),
 					},
 				};
 			}
@@ -2990,7 +3024,7 @@ const SampleInfor = () => {
 		try {
 			// Get the selected analytes
 			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
-			const newDeadline = bulkDeadlineDate.toISOString();
+			const newDeadline = adjustDateForApiSubmission(bulkDeadlineDate);
 
 			let successCount = 0;
 			let failCount = 0;

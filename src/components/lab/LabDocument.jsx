@@ -24,6 +24,33 @@ const LabDocument = () => {
 		return currentUser?.role?.staff_admin === true;
 	};
 
+	// Helper function to get identity name from document
+	const getIdentityName = (doc) => {
+		// List of possible UID fields to check
+		const possibleUIDs = [
+			doc.metadata?.submittedByUID,
+			doc.metadata?.identityUID,
+			doc.metadata?.authorUID,
+			doc.metadata?.createdByUID,
+			doc.metadata?.modifiedByUID,
+			doc.identityUID,
+			doc.authorUID,
+			doc.createdByUID,
+			doc.modifiedByUID,
+		];
+
+		// Find the first UID that has a corresponding identity name
+		for (const uid of possibleUIDs) {
+			if (uid && identityNames[uid]) {
+				return identityNames[uid];
+			}
+		}
+
+		// If no identity name found, return the first available UID or 'N/A'
+		const firstUID = possibleUIDs.find((uid) => uid);
+		return firstUID || 'N/A';
+	};
+
 	// Fetch identity name by UID
 	const fetchIdentityName = async (identityUID) => {
 		if (!identityUID || identityNames[identityUID]) {
@@ -31,12 +58,15 @@ const LabDocument = () => {
 		}
 
 		try {
+			console.log('Calling getIdenByUid for:', identityUID);
 			const identity = await getIdenByUid(identityUID);
+			console.log('getIdenByUid response:', identity);
 			if (identity && identity.identity_name) {
-				setIdentityNames(prev => ({
+				setIdentityNames((prev) => ({
 					...prev,
-					[identityUID]: identity.identity_name
+					[identityUID]: identity.identity_name,
 				}));
+				console.log('Successfully cached identity name:', identity.identity_name);
 				return identity.identity_name;
 			}
 		} catch (error) {
@@ -46,13 +76,19 @@ const LabDocument = () => {
 		return identityUID; // Fallback to UID if failed
 	};
 
-	const [selectedDocument, setSelectedDocument] = useState(null);
+	// State riêng cho document được chọn - CHỈ thay đổi khi user click chọn document khác
+	const [selectedDocumentForPreview, setSelectedDocumentForPreview] = useState(null);
+	const [selectedDocument, setSelectedDocument] = useState(null); // State hiển thị UI selection
 	const [previewContent, setPreviewContent] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
+	const [lastSearchTerm, setLastSearchTerm] = useState(''); // Lưu search term đã được thực hiện
 	const [isLoading, setIsLoading] = useState(false);
+	const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 	const [mode, setMode] = useState('personal'); // 'personal' or 'all'
 	const [showAnalysisExtract, setShowAnalysisExtract] = useState(false);
+	const [analysisExtractDocument, setAnalysisExtractDocument] = useState(null); // Separate state for analysis modal
 	const [identityNames, setIdentityNames] = useState({}); // Cache for identity names
+	const [reportCache, setReportCache] = useState({}); // Cache for loaded reports
 
 	// Load TinyMCE if not already loaded
 	useEffect(() => {
@@ -183,10 +219,33 @@ const LabDocument = () => {
 		}
 	};
 
-	// Load documents from API
-	const loadDocuments = async (searchTerm = '', page = 1, currentMode = mode, status = documentStatus) => {
+	// Helper function to preserve selected document after search - LOẠI BỎ
+	// const preserveSelectedDocument = (newDocuments) => {
+	// 	if (selectedDocument) {
+	// 		// Find the document with the same ID in the new list
+	// 		const foundDoc = newDocuments.find(doc => doc.id === selectedDocument.id);
+	// 		if (foundDoc) {
+	// 			// Chỉ update nếu có sự khác biệt thực sự để tránh re-render không cần thiết
+	// 			const hasChanges = JSON.stringify(foundDoc.metadata) !== JSON.stringify(selectedDocument.metadata) ||
+	// 							   foundDoc.fileId !== selectedDocument.fileId;
+	// 			if (hasChanges) {
+	// 				setSelectedDocument(foundDoc);
+	// 			}
+	// 		}
+	// 		// If not found, keep the current selectedDocument (it might be from a different page/filter)
+	// 	}
+	// };
+
+	// Load documents from API - CLEAN VERSION WITHOUT SELECTION LOGIC
+	const loadDocuments = async (searchTermToUse = '', page = 1, currentMode = mode, status = documentStatus) => {
 		try {
 			setIsLoading(true);
+
+			// Close analysis extract modal when loading new documents
+			if (showAnalysisExtract) {
+				setShowAnalysisExtract(false);
+				setAnalysisExtractDocument(null);
+			}
 
 			// Nếu không phải admin, luôn dùng mode 'personal'
 			const finalMode = isAdmin() ? currentMode : 'personal';
@@ -195,15 +254,16 @@ const LabDocument = () => {
 			const apiEndpoint = status === 'published' ? PUBLISHED_DOCS_API_ENDPOINT : DRAFT_DOCS_API_ENDPOINT;
 
 			const requestBody = {
-				searchTerm: searchTerm,
+				searchTerm: searchTermToUse,
 				page: page,
-				mode: finalMode, // Use finalMode instead of currentMode
-				status: 'submitted', // Add status: 'submitted' to request body
+				mode: finalMode,
+				status: 'submitted',
+				classifierCode: ['NHAT_KY_THU_NGHIEM', 'BIEN_BAN_THU_NGHIEM'],
 			};
 
 			// Add status-specific fields
 			if (status === 'published') {
-				requestBody.sended = status; // For published documents
+				requestBody.sended = status;
 			}
 
 			const response = await apiPostLocal(apiEndpoint, requestBody);
@@ -221,29 +281,71 @@ const LabDocument = () => {
 					templateCode: doc.metadata?.templateId || 'N/A',
 					lastModified: formatDateTimeGMT7(doc.modifiedAt),
 					author: doc.metadata?.modifiedBy || doc.metadata?.authorName || 'N/A',
-					status: status, // Use the status parameter to set document status
-					// Preserve all original data for preview
+					status: status,
 					createdAt: doc.createdAt,
 					modifiedAt: doc.modifiedAt,
 					authorName: doc.metadata?.authorName,
 					modifiedBy: doc.metadata?.modifiedBy,
 					metadata: doc.metadata || {},
-					fileId: doc.fileId, // Extract fileId from document level
-					originalData: doc, // Keep original data for navigation
+					fileId: doc.fileId,
+					originalData: doc,
 				}));
 
 				setDocuments(transformedDocuments);
 
-				// Fetch identity names for all submittedByUID
-				const uniqueUIDs = [...new Set(transformedDocuments
-					.map(doc => doc.metadata?.submittedByUID)
-					.filter(uid => uid && !identityNames[uid])
-				)];
+				// Lưu search term đã thực hiện
+				setLastSearchTerm(searchTermToUse);
+
+				// Update selectedDocument for UI highlighting if same document exists in new results
+				if (selectedDocument) {
+					const foundDoc = transformedDocuments.find(doc => doc.id === selectedDocument.id);
+					if (foundDoc) {
+						setSelectedDocument(foundDoc); // Update UI selection với data mới
+					} else {
+						setSelectedDocument(null); // Clear UI selection nếu không tìm thấy
+					}
+				}
+
+				// Update selectedDocumentForPreview nếu cùng document tồn tại trong kết quả mới
+				if (selectedDocumentForPreview) {
+					const foundPreviewDoc = transformedDocuments.find(doc => doc.id === selectedDocumentForPreview.id);
+					if (foundPreviewDoc) {
+						setSelectedDocumentForPreview(foundPreviewDoc); // Update preview document với data mới
+					} else if (searchTermToUse !== lastSearchTerm) {
+						// Chỉ clear khi search thay đổi, không clear khi chuyển mode/status
+						setSelectedDocumentForPreview(null); // Clear preview selection nếu không tìm thấy
+					}
+				}
+
+				// Fetch identity names for all possible identity UID fields
+				const uniqueUIDs = [
+					...new Set(
+						transformedDocuments
+							.flatMap((doc) => [
+								doc.metadata?.submittedByUID,
+								doc.metadata?.identityUID,
+								doc.metadata?.authorUID,
+								doc.metadata?.createdByUID,
+								doc.metadata?.modifiedByUID,
+								doc.identityUID,
+								doc.authorUID,
+								doc.createdByUID,
+								doc.modifiedByUID,
+							])
+							.filter((uid) => uid && !identityNames[uid]),
+					),
+				];
+
+				console.log('Found unique UIDs to fetch:', uniqueUIDs);
+				console.log('Sample document metadata:', transformedDocuments[0]?.metadata);
 
 				// Fetch identity names asynchronously
-				uniqueUIDs.forEach(async (uid) => {
-					await fetchIdentityName(uid);
-				});
+				if (uniqueUIDs.length > 0) {
+					uniqueUIDs.forEach(async (uid) => {
+						console.log('Fetching identity for UID:', uid);
+						await fetchIdentityName(uid);
+					});
+				}
 				setPagination({
 					currentPage: page,
 					itemsPerPage: result.pagination?.itemsPerPage || 10,
@@ -259,14 +361,33 @@ const LabDocument = () => {
 		}
 	};
 
-	// File preview functionality
-	const handleFilePreview = async (fileId) => {
+	// File preview functionality with metadata checking
+	const handleFilePreview = async (fileRecord) => {
 		try {
-			// Get download link directly using fileId
+			// Nếu fileRecord là string (fileId), chuyển thành object
+			let requestFileRecord = fileRecord;
+			if (typeof fileRecord === 'string') {
+				requestFileRecord = { id: fileRecord };
+			}
+
+			// Kiểm tra metadata của bản ghi trước
+			const hasCompleteMetadata =
+				requestFileRecord.originInfo?.fileName &&
+				requestFileRecord.originInfo?.mimeType &&
+				requestFileRecord.originInfo?.fileSize;
+
+			// Nếu không có đủ metadata, kiểm tra fileId và tạo fileRecord mới
+			if (!hasCompleteMetadata && (requestFileRecord.id || requestFileRecord.fileId)) {
+				const fileId = requestFileRecord.id || requestFileRecord.fileId;
+				console.log('Metadata không đầy đủ, sử dụng fileId để preview:', fileId);
+				requestFileRecord = { id: fileId };
+			}
+
+			// Get download link using fileRecord
 			const response = await apiPostLocal('https://red.irdop.org/v1/file/get/download_link', {
 				expiry: 60 * 10, // 10 minutes
 				mode: 'view',
-				fileId: fileId, // Use fileId directly
+				fileRecord: requestFileRecord,
 			});
 
 			if (response.status === 200 && response.data) {
@@ -288,12 +409,54 @@ const LabDocument = () => {
 			return;
 		}
 
-		try {
-			showAutoHideMessage('Đang tạo preview...', 'info');
+		const metadata = document.metadata;
+		const header = metadata.header || {};
+		const content = metadata.content || '';
+		const footer = metadata.footer || '';
 
-			const metadata = document.metadata;
-			const header = metadata.header || {};
-			const content = metadata.content || '';
+		// Kiểm tra xem có đủ dữ liệu để tạo HTML report không
+		const hasHeaderContent = header && Object.keys(header).length > 0;
+		const hasContent = content && content.trim() !== '';
+		const hasFooter = footer && footer.trim() !== '';
+		console.log('Document metadata:', { hasHeaderContent, hasContent, hasFooter });
+
+		// Nếu không có đủ header và content, sử dụng file preview thay thế
+		if (!hasHeaderContent && !hasContent) {
+			showAutoHideMessage('Tài liệu không có đủ dữ liệu để tạo HTML preview, chuyển sang file preview...', 'info');
+
+			// Kiểm tra xem có fileId không
+			if (document.fileId) {
+				await handleFilePreview(document.fileId);
+				return;
+			} else {
+				showAutoHideMessage('Không có fileId để preview file', 'error');
+				return;
+			}
+		}
+
+		// Kiểm tra nếu đã có cache cho document này
+		const cachedReport = reportCache[document.id];
+		if (cachedReport) {
+			showAutoHideMessage('Sử dụng preview đã có sẵn!', 'success');
+			showPreviewPopup(cachedReport, {
+				editId: document.id,
+				metadata: {
+					templateId: document.metadata.templateId,
+					templateName: document.metadata.templateName,
+					header: header,
+					content: content,
+					footer: metadata.footer || document.id,
+					analysisIds: document.metadata.analysisIds || [],
+					sampleUIDs: document.metadata.sampleUIDs || [],
+					documentHTML: cachedReport,
+				},
+			});
+			return;
+		}
+
+		try {
+			showAutoHideMessage('Đang tạo HTML preview...', 'info');
+
 			const analysisIds = metadata.analysisIds || [];
 			const sampleUIDs = metadata.sampleUIDs || [];
 
@@ -301,9 +464,10 @@ const LabDocument = () => {
 			const reportData = {
 				header: header,
 				content: content,
-				footer: document.id,
+				footer: metadata.footer || document.id, // Use metadata.footer if available
 				analysisIds: analysisIds,
 				sampleUIDs: sampleUIDs,
+				classifierCode: metadata.classifierCode || 'BIEN_BAN_THU_NGHIEM', // Always include classifierCode
 			};
 
 			// Call the same API endpoint as in Editor.jsx
@@ -315,8 +479,14 @@ const LabDocument = () => {
 			if (response.status === 200 && response.data) {
 				showAutoHideMessage('Đã tạo preview thành công!', 'success');
 
-				// Show preview popup similar to Editor.jsx
+				// Save to cache
 				const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+				setReportCache((prev) => ({
+					...prev,
+					[document.id]: htmlResponse,
+				}));
+
+				// Show preview popup similar to Editor.jsx
 				showPreviewPopup(htmlResponse, {
 					editId: document.id,
 					metadata: {
@@ -324,7 +494,7 @@ const LabDocument = () => {
 						templateName: metadata.templateName,
 						header: header,
 						content: content,
-						footer: document.id,
+						footer: metadata.footer || document.id,
 						analysisIds: analysisIds,
 						sampleUIDs: sampleUIDs,
 						documentHTML: htmlResponse,
@@ -651,12 +821,24 @@ const LabDocument = () => {
 
 	// Handle showing analysis extract component
 	const handleShowAnalysisExtract = (doc) => {
-		if (!doc || !doc.metadata || !doc.metadata.extractData || !doc.metadata.extractData.analyses) {
+		// Check both extractData.analyses and direct analyses property
+		const hasExtractAnalyses = doc?.metadata?.extractData?.analyses;
+		const hasDirectAnalyses = doc?.metadata?.analyses;
+
+		if (!doc || (!hasExtractAnalyses && !hasDirectAnalyses)) {
 			showAutoHideMessage('Không có dữ liệu chỉ tiêu để hiển thị', 'warning');
 			return;
 		}
-		setSelectedDocument(doc);
+
+		// Set the specific document for analysis extract
+		setAnalysisExtractDocument(doc);
 		setShowAnalysisExtract(true);
+	};
+
+	// Handle closing analysis extract
+	const handleCloseAnalysisExtract = () => {
+		setShowAnalysisExtract(false);
+		setAnalysisExtractDocument(null);
 	};
 
 	// Load data on component mount
@@ -678,16 +860,25 @@ const LabDocument = () => {
 		};
 	}, [currentUser]); // Add currentUser as dependency to re-run when user changes
 
+	// Effect riêng để load preview CHỈ KHI selectedDocumentForPreview thay đổi
+	useEffect(() => {
+		if (selectedDocumentForPreview && selectedDocumentForPreview.id) {
+			loadPreviewContent(selectedDocumentForPreview);
+		} else {
+			setPreviewContent('');
+		}
+	}, [selectedDocumentForPreview]); // CHỈ phụ thuộc vào selectedDocumentForPreview
+
 	// Keep isDraft in sync with documentStatus
 	useEffect(() => {
 		setIsDraft(documentStatus === 'draft');
 	}, [documentStatus]);
 
-	// Refresh data
+	// Refresh data - SIMPLE VERSION
 	const refreshData = async () => {
 		setIsLoading(true);
 		try {
-			await loadDocuments(searchTerm, pagination.currentPage, mode, documentStatus);
+			await loadDocuments(lastSearchTerm, pagination.currentPage, mode, documentStatus);
 		} catch (error) {
 			console.error('Error refreshing data:', error);
 		} finally {
@@ -695,15 +886,13 @@ const LabDocument = () => {
 		}
 	};
 
-	// Handle document status change
+	// Handle document status change - SIMPLE VERSION
 	const handleDocumentStatusChange = async (newStatus) => {
 		if (newStatus === documentStatus) return; // No change needed
 
 		setDocumentStatus(newStatus);
 		setPagination((prev) => ({ ...prev, currentPage: 1 })); // Reset to first page
-		setSelectedDocument(null); // Clear selection when switching status
-		setPreviewContent(''); // Clear preview content
-		await loadDocuments(searchTerm, 1, mode, newStatus);
+		await loadDocuments(lastSearchTerm, 1, mode, newStatus);
 	};
 
 	// Handle toggle switch change
@@ -714,7 +903,7 @@ const LabDocument = () => {
 		handleDocumentStatusChange(newStatus);
 	};
 
-	// Handle mode change - chỉ admin mới được thay đổi mode
+	// Handle mode change - SIMPLE VERSION
 	const handleModeChange = async (newMode) => {
 		// Nếu không phải admin, luôn dùng mode 'personal'
 		if (!isAdmin()) {
@@ -725,188 +914,315 @@ const LabDocument = () => {
 
 		setMode(newMode);
 		setPagination((prev) => ({ ...prev, currentPage: 1 })); // Reset to first page
-		setSelectedDocument(null); // Clear selection when switching modes
-		setPreviewContent(''); // Clear preview content
-		await loadDocuments(searchTerm, 1, newMode, documentStatus);
+		await loadDocuments(lastSearchTerm, 1, newMode, documentStatus);
 	};
 
-	// Handle search
-	const handleSearch = () => {
-		loadDocuments(searchTerm, 1, mode, documentStatus);
+	// Handle search input changes - ISOLATED VERSION
+	const handleSearchInputChange = (value) => {
+		setSearchTerm(value);
+		// Chỉ lưu giá trị, không load documents
 	};
 
-	// Search on Enter key
+	// Execute search - SIMPLE VERSION
+	const executeSearch = async () => {
+		// Chỉ thực hiện search khi nhấn Enter và khác với search term hiện tại
+		if (searchTerm !== lastSearchTerm) {
+			await loadDocuments(searchTerm, 1);
+		}
+	};
+
+	// Search on Enter key - UPDATED
 	const handleSearchKeyPress = (e) => {
 		if (e.key === 'Enter') {
 			e.preventDefault();
-			handleSearch();
+			executeSearch();
 		}
 	};
 
-	// Handle document click for preview
-	const handleDocumentClick = (doc) => {
+	// Handle document click for preview - SIMPLE VERSION CHỈ CẬP NHẬT KHI KHÁC NHAU
+	const handleDocumentClick = async (doc) => {
+		// Close analysis extract modal when selecting a different document
+		if (showAnalysisExtract && analysisExtractDocument?.id !== doc?.id) {
+			setShowAnalysisExtract(false);
+			setAnalysisExtractDocument(null);
+		}
+
+		// Update UI selection
 		setSelectedDocument(doc);
 
-		// Create preview content từ document metadata - chỉ hiển thị mã mẫu thử
-		const metadata = doc.metadata || {};
-		const sampleUIDs = metadata.sampleUIDs || [];
-
-		// Generate document preview content - chỉ hiển thị mã mẫu thử
-		const documentPreviewContent = `
-			<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
-				<!-- SAMPLE UIDs SECTION - Chỉ hiển thị mã mẫu thử -->
-				${
-					sampleUIDs.length > 0
-						? `
-				<div style="margin-bottom: 30px;">
-					<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DANH SÁCH MÃ MẪU THỬ</h4>
-					<div style="margin-top: 10px; padding: 15px; background: #f0f9ff; border-radius: 6px; border-left: 4px solid #3b82f6;">
-						<div style="display: flex; flex-wrap: wrap; gap: 8px;">
-							${sampleUIDs
-								.map(
-									(uid) => `
-								<span style="background: #1e40af; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">
-									${uid}
-								</span>
-							`,
-								)
-								.join('')}
-						</div>
-						<p style="margin: 10px 0 0 0; font-size: 12px; color: #6b7280;">
-							Tổng số mẫu thử: <strong>${sampleUIDs.length}</strong>
-						</p>
-					</div>
-				</div>
-				`
-						: `
-				<div style="margin-bottom: 30px;">
-					<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DANH SÁCH MÃ MẪU THỬ</h4>
-					<div style="margin-top: 10px; padding: 15px; background: #f9f9ff; border-radius: 6px; border-left: 4px solid #f59e0b; text-align: center;">
-						<p style="margin: 0; color: #6b7280; font-style: italic;">Không có mã mẫu thử nào</p>
-					</div>
-				</div>
-				`
-				}
-			</div>
-		`;
-
-		setPreviewContent(documentPreviewContent);
-
-		// Expose file preview function to window for use in HTML content
-		window.handleFilePreviewFromDocument = (fileId) => {
-			handleFilePreview(fileId);
-		};
+		// CHỈ cập nhật selectedDocumentForPreview và load preview khi chọn document KHÁC
+		if (selectedDocumentForPreview?.id !== doc?.id) {
+			setSelectedDocumentForPreview(doc);
+		}
 	};
 
-	// Component ReportDetail để thay thế iframe
-	const ReportDetail = ({ document }) => {
-		const [reportHtml, setReportHtml] = useState('');
-		const [isLoading, setIsLoading] = useState(false);
-		const [error, setError] = useState(null);
+	// Load preview content - SEPARATED FUNCTION
+	const loadPreviewContent = async (document) => {
+		try {
+			setIsLoadingPreview(true);
 
-		const loadReport = async () => {
-			if (!document || !document.metadata) {
-				setError('Không có dữ liệu tài liệu');
-				return;
-			}
+			// Create preview content từ document metadata - chỉ hiển thị mã mẫu thử
+			const metadata = document.metadata || {};
+			const sampleUIDs = metadata.sampleUIDs || [];
 
-			setIsLoading(true);
-			setError(null);
+			// Generate document preview content - chỉ hiển thị mã mẫu thử
+			const documentPreviewContent = `
+				<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
+					<!-- SAMPLE UIDs SECTION - Chỉ hiển thị mã mẫu thử -->
+					${
+						sampleUIDs.length > 0
+							? `
+					<div style="margin-bottom: 30px;">
+						<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DANH SÁCH MÃ MẪU THỬ</h4>
+						<div style="margin-top: 10px; padding: 15px; background: #f0f9ff; border-radius: 6px; border-left: 4px solid #3b82f6;">
+							<div style="display: flex; flex-wrap: wrap; gap: 8px;">
+								${sampleUIDs
+									.map(
+										(uid) => `
+									<span style="background: #1e40af; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">
+										${uid}
+									</span>
+								`,
+									)
+									.join('')}
+							</div>
+							<p style="margin: 10px 0 0 0; font-size: 12px; color: #6b7280;">
+								Tổng số mẫu thử: <strong>${sampleUIDs.length}</strong>
+							</p>
+						</div>
+					</div>
+					`
+							: `
+					<div style="margin-bottom: 30px;">
+						<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DANH SÁCH MÃ MẪU THỬ</h4>
+						<div style="margin-top: 10px; padding: 15px; background: #f9f9ff; border-radius: 6px; border-left: 4px solid #f59e0b; text-align: center;">
+							<p style="margin: 0; color: #6b7280; font-style: italic;">Không có mã mẫu thử nào</p>
+						</div>
+					</div>
+					`
+					}
+				</div>
+			`;
 
-			try {
+			setPreviewContent(documentPreviewContent);
+
+			// Expose file preview function to window for use in HTML content
+			window.handleFilePreviewFromDocument = (fileId) => {
+				handleFilePreview(fileId);
+			};
+		} catch (error) {
+			console.error('Error loading preview:', error);
+			setPreviewContent('<p>Lỗi khi tải nội dung xem trước.</p>');
+		} finally {
+			setIsLoadingPreview(false);
+		}
+	};
+
+	// Component ReportDetail để thay thế iframe - sử dụng React.memo để tránh re-render không cần thiết
+	const ReportDetail = React.memo(
+		({ document }) => {
+			const [isLoading, setIsLoading] = useState(false);
+			const [error, setError] = useState(null);
+			const [filePreviewUrl, setFilePreviewUrl] = useState(null);
+			const [isFilePreview, setIsFilePreview] = useState(false);
+
+			// Lấy báo cáo từ cache hoặc state
+			const reportHtml = reportCache[document?.id] || '';
+
+			const loadFilePreview = async () => {
+				if (!document || !document.fileId) {
+					setError('Không có fileId để tải file preview');
+					return;
+				}
+
+				setIsLoading(true);
+				setError(null);
+				setIsFilePreview(true);
+
+				try {
+					// Sử dụng API file preview thay vì HTML generation
+					const response = await apiPostLocal('https://red.irdop.org/v1/file/get/download_link', {
+						expiry: 60 * 10, // 10 minutes
+						mode: 'view',
+						fileRecord: { id: document.fileId },
+					});
+
+					if (response.status === 200 && response.data) {
+						setFilePreviewUrl(response.data);
+					} else {
+						throw new Error('Không thể lấy link preview file');
+					}
+				} catch (error) {
+					console.error('File preview failed:', error);
+					setError('Lỗi khi tải file preview: ' + error.message);
+				} finally {
+					setIsLoading(false);
+				}
+			};
+
+			const loadReport = async () => {
+				if (!document || !document.metadata) {
+					setError('Không có dữ liệu tài liệu');
+					return;
+				}
+
+				// Kiểm tra nếu báo cáo cho document này đã được tải rồi
+				if (reportCache[document.id]) {
+					return; // Không tải lại nếu đã có dữ liệu cho document này
+				}
+
 				const metadata = document.metadata;
 				const header = metadata.header || {};
 				const content = metadata.content || '';
-				const analysisIds = metadata.analysisIds || [];
-				const sampleUIDs = metadata.sampleUIDs || [];
+				const footer = metadata.footer || '';
 
-				// Prepare report data
-				const reportData = {
-					header: header,
-					content: content,
-					footer: document.id,
-					analysisIds: analysisIds,
-					sampleUIDs: sampleUIDs,
-				};
+				// Kiểm tra xem có đủ dữ liệu để tạo HTML report không
+				const hasHeaderContent = header && Object.keys(header).length > 0;
+				const hasContent = content && content.trim() !== '';
+				const hasFooter = footer && footer.trim() !== '';
 
-				const response = await apiPostLocal(
-					'https://black.irdop.org/khsi19me/convert/lab_result_report_html',
-					reportData,
-				);
-
-				if (response.status === 200 && response.data) {
-					const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-					setReportHtml(htmlResponse);
-				} else {
-					throw new Error('Không thể tải báo cáo từ server');
+				// Nếu không có đủ header và content, chuyển sang file preview
+				if (!hasContent) {
+					console.log('Không có đủ metadata, chuyển sang file preview cho document:', document.id);
+					await loadFilePreview();
+					return;
 				}
-			} catch (error) {
-				console.error('Error loading report:', error);
-				setError('Lỗi khi tải báo cáo: ' + error.message);
-			} finally {
-				setIsLoading(false);
+
+				setIsLoading(true);
+				setError(null);
+				setIsFilePreview(false);
+
+				try {
+					const analysisIds = metadata.analysisIds || [];
+					const sampleUIDs = metadata.sampleUIDs || [];
+
+					// Prepare report data
+					const reportData = {
+						header: header,
+						content: content,
+						footer: metadata.footer || document.id,
+						analysisIds: analysisIds,
+						sampleUIDs: sampleUIDs,
+						classifierCode: metadata.classifierCode || 'BIEN_BAN_THU_NGHIEM', // Always include classifierCode
+					};
+
+					const response = await apiPostLocal(
+						'https://black.irdop.org/khsi19me/convert/lab_result_report_html',
+						reportData,
+					);
+
+					if (response.status === 200 && response.data) {
+						const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+						// Lưu vào cache
+						setReportCache((prev) => ({
+							...prev,
+							[document.id]: htmlResponse,
+						}));
+					} else {
+						throw new Error('Không thể tải báo cáo từ server');
+					}
+				} catch (error) {
+					console.error('Error loading report:', error);
+					setError('Lỗi khi tải báo cáo: ' + error.message);
+				} finally {
+					setIsLoading(false);
+				}
+			};
+
+			useEffect(() => {
+				// Reset states khi document thay đổi
+				setFilePreviewUrl(null);
+				setIsFilePreview(false);
+				setError(null);
+
+				// Chỉ tải nếu document tồn tại, có ID, và chưa có trong cache
+				if (document && document.id && !reportCache[document.id]) {
+					loadReport();
+				}
+			}, [document?.id]); // Chỉ theo dõi document.id, không theo dõi reportCache để tránh re-render không cần thiết
+
+			if (isLoading) {
+				return (
+					<div className="border-t border-gray-200 pt-6">
+						<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+							<FaPlay className="text-green-600" />
+							{isFilePreview ? 'File Preview' : 'Báo cáo chi tiết'}
+						</h4>
+						<div className="border border-gray-300 rounded-lg p-8 text-center">
+							<div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+							<p className="text-gray-600">{isFilePreview ? 'Đang tải file preview...' : 'Đang tải báo cáo...'}</p>
+						</div>
+					</div>
+				);
 			}
-		};
 
-		useEffect(() => {
-			loadReport();
-		}, [document]);
+			if (error) {
+				const isMetadataError = error.includes('không có đủ dữ liệu để tạo HTML preview');
+				return (
+					<div className="border-t border-gray-200 pt-6">
+						<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+							<FaPlay className="text-green-600" />
+							Báo cáo chi tiết
+						</h4>
+						<div className="border border-red-300 rounded-lg p-8 text-center bg-red-50">
+							<p className="text-red-600 mb-4">❌ {error}</p>
+							<div className="flex gap-2 justify-center">
+								{isMetadataError && document.fileId && (
+									<button
+										onClick={() => handleFilePreview(document.fileId)}
+										className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+									>
+										Xem file gốc
+									</button>
+								)}
+								{!isMetadataError && (
+									<button
+										onClick={loadReport}
+										className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+									>
+										Thử lại
+									</button>
+								)}
+							</div>
+						</div>
+					</div>
+				);
+			}
 
-		if (isLoading) {
 			return (
 				<div className="border-t border-gray-200 pt-6">
 					<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
 						<FaPlay className="text-green-600" />
-						Báo cáo chi tiết
+						{isFilePreview ? 'File Preview' : 'Báo cáo chi tiết'}
 					</h4>
-					<div className="border border-gray-300 rounded-lg p-8 text-center">
-						<div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-						<p className="text-gray-600">Đang tải báo cáo...</p>
+					<div className="border border-gray-300 rounded-lg overflow-hidden">
+						{isFilePreview && filePreviewUrl ? (
+							<iframe
+								src={filePreviewUrl}
+								className="w-full min-h-[500px] border-0"
+								title="File Preview"
+								style={{ height: '70vh' }}
+							/>
+						) : (
+							<div
+								className="w-full min-h-[500px] p-4 bg-white overflow-auto custom-scrollbar text-start"
+								style={{
+									fontFamily: "'Times New Roman', serif",
+									fontSize: '11px',
+									lineHeight: '1.4',
+								}}
+								dangerouslySetInnerHTML={{ __html: reportHtml }}
+							/>
+						)}
 					</div>
 				</div>
 			);
-		}
-
-		if (error) {
-			return (
-				<div className="border-t border-gray-200 pt-6">
-					<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-						<FaPlay className="text-green-600" />
-						Báo cáo chi tiết
-					</h4>
-					<div className="border border-red-300 rounded-lg p-8 text-center bg-red-50">
-						<p className="text-red-600 mb-2">❌ {error}</p>
-						<button
-							onClick={loadReport}
-							className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-						>
-							Thử lại
-						</button>
-					</div>
-				</div>
-			);
-		}
-
-		return (
-			<div className="border-t border-gray-200 pt-6">
-				<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-					<FaPlay className="text-green-600" />
-					Báo cáo chi tiết
-				</h4>
-				<div className="border border-gray-300 rounded-lg overflow-hidden">
-					<div
-						className="w-full min-h-[500px] p-4 bg-white overflow-auto custom-scrollbar text-start"
-						style={{
-							fontFamily: "'Times New Roman', serif",
-							fontSize: '11px',
-							lineHeight: '1.4',
-						}}
-						dangerouslySetInnerHTML={{ __html: reportHtml }}
-					/>
-				</div>
-			</div>
-		);
-	};
+		},
+		(prevProps, nextProps) => {
+			// Chỉ re-render nếu document.id thay đổi
+			return prevProps.document?.id === nextProps.document?.id;
+		},
+	);
 
 	// Generate smart pagination numbers
 	const getSmartPaginationNumbers = (currentPage, totalPages) => {
@@ -941,10 +1257,10 @@ const LabDocument = () => {
 		return pages;
 	};
 
-	// Page change handler
+	// Page change handler - SIMPLE VERSION
 	const handlePageChange = async (newPage) => {
 		setPagination((prev) => ({ ...prev, currentPage: newPage }));
-		await loadDocuments(searchTerm, newPage, mode, documentStatus);
+		await loadDocuments(lastSearchTerm, newPage, mode, documentStatus);
 	};
 
 	// Remove client-side filtering since we now search via API
@@ -1081,7 +1397,7 @@ const LabDocument = () => {
 									type="text"
 									placeholder="Tìm tài liệu... (Nhấn Enter để tìm kiếm)"
 									value={searchTerm}
-									onChange={(e) => setSearchTerm(e.target.value)}
+									onChange={(e) => handleSearchInputChange(e.target.value)}
 									onKeyPress={handleSearchKeyPress}
 									className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
 								/>
@@ -1158,24 +1474,22 @@ const LabDocument = () => {
 											}`}
 										>
 											<div className="relative">
-											{/* Header info section with code, identity, date */}
-											<div className="flex items-center justify-between text-xs text-start mb-2">
-												<div className="text-gray-600 px-2 py-1 rounded">Mã tài liệu: {doc.id}</div>
-												<div className="text-gray-500">
-													{identityNames[doc.metadata?.submittedByUID] || doc.metadata?.submittedByUID || 'N/A'}
-												</div>
-												<div className="text-gray-500">{doc.lastModified}</div>
-											</div>												{/* Title Section */}
+												{/* Header info section with code, identity, date */}
+												<div className="flex items-center justify-between text-xs text-start mb-2">
+													<div className="text-gray-600 px-2 py-1 rounded">Mã tài liệu: {doc.id}</div>
+													<div className="text-gray-500">{getIdentityName(doc)}</div>
+													<div className="text-gray-500">{doc.lastModified}</div>
+												</div>{' '}
+												{/* Title Section */}
 												<div className="flex items-center gap-2 mb-2">
 													<FaFileAlt className="text-gray-500 flex-shrink-0" />
 													<span className="font-medium text-gray-900 text-sm leading-tight text-start">
 														{doc.metadata?.header?.title || doc.title}
 													</span>
-													{doc.metadata?.extractData?.analyses && (
+													{(doc.metadata?.extractData?.analyses || doc.metadata?.analyses) && (
 														<FaTable className="text-blue-500 w-3 h-3 flex-shrink-0" title="Có dữ liệu chỉ tiêu" />
 													)}
 												</div>
-
 												{/* Sample UIDs Section - Display up to 5 */}
 												{doc.metadata?.sampleUIDs && doc.metadata.sampleUIDs.length > 0 && (
 													<div className="mb-0">
@@ -1215,19 +1529,20 @@ const LabDocument = () => {
 								Xem trước
 							</h3>
 							<div className="flex gap-3">
-								{selectedDocument && selectedDocument.metadata?.extractData?.analyses && (
+								{selectedDocumentForPreview &&
+									(selectedDocumentForPreview.metadata?.extractData?.analyses || selectedDocumentForPreview.metadata?.analyses) && (
+										<button
+											onClick={() => handleShowAnalysisExtract(selectedDocumentForPreview)}
+											className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+											title="Xem dữ liệu chỉ tiêu"
+										>
+											<FaTable className="w-3 h-3" />
+											Duyệt kết quả
+										</button>
+									)}
+								{selectedDocumentForPreview && (
 									<button
-										onClick={() => handleShowAnalysisExtract(selectedDocument)}
-										className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-										title="Xem dữ liệu chỉ tiêu"
-									>
-										<FaTable className="w-3 h-3" />
-										Duyệt kết quả
-									</button>
-								)}
-								{selectedDocument && (
-									<button
-										onClick={() => previewDocumentReport(selectedDocument)}
+										onClick={() => previewDocumentReport(selectedDocumentForPreview)}
 										className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
 										title="In báo cáo"
 									>
@@ -1241,19 +1556,19 @@ const LabDocument = () => {
 
 						{/* Nội dung xem trước */}
 						<div className="flex-1 p-4 overflow-auto custom-scrollbar min-h-0">
-							{selectedDocument || previewContent ? (
+							{selectedDocumentForPreview || previewContent ? (
 								<div className="bg-gray-50 rounded-lg p-4 h-full">
 									<div className="bg-white rounded-lg shadow-sm h-full overflow-auto custom-scrollbar space-y-6">
 										{/* Hiển thị preview mã mẫu thử */}
 										<div dangerouslySetInnerHTML={{ __html: previewContent }} />
 
 										{/* Hiển thị báo cáo chi tiết từ API */}
-										{selectedDocument && <ReportDetail document={selectedDocument} />}
+										{selectedDocumentForPreview && <ReportDetail document={selectedDocumentForPreview} />}
 									</div>
 								</div>
 							) : (
 								<div className="flex items-center justify-center h-full text-gray-500">
-									<div className="text-center">
+									<div className="text-start">
 										<FaFileAlt className="w-16 h-16 mx-auto mb-4 text-gray-300" />
 										<p className="text-lg font-medium mb-2">Chưa chọn tài liệu</p>
 										<p className="text-sm">Vui lòng chọn một tài liệu từ danh sách bên trái để xem trước</p>
@@ -1275,12 +1590,13 @@ const LabDocument = () => {
 			</div>
 
 			{/* Analysis Extract Modal */}
-			{showAnalysisExtract && selectedDocument && (
+			{showAnalysisExtract && analysisExtractDocument && (
 				<AnalysesExtract
-					document={selectedDocument}
+					key={analysisExtractDocument.id} // Add key to force re-render
+					document={analysisExtractDocument}
 					showAnalysisExtractInstead={true}
-					editId={selectedDocument.id}
-					onClose={() => setShowAnalysisExtract(false)}
+					editId={analysisExtractDocument.id}
+					onClose={handleCloseAnalysisExtract}
 				/>
 			)}
 		</>

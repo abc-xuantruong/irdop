@@ -98,13 +98,21 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 			if (!matched) return extracted;
 			const diffObj = { ...extracted };
 			
-			// Chỉ so sánh parameterName và protocolCode
-			const fieldsToCompare = ['parameterName', 'protocolCode'];
+			// So sánh các field: parameterName, protocolCode, sampleUID, resultValue, resultUnit
+			const fieldsToCompare = ['parameterName', 'protocolCode', 'sampleUID'];
 			fieldsToCompare.forEach(field => {
 				if (extracted[field] !== matched[field]) {
 					diffObj[field + 'Diff'] = matched[field];
 				}
 			});
+			
+			// So sánh resultValue và resultUnit (chỉ hiển thị cảnh báo nếu matched có giá trị khác null/empty)
+			if (matched.resultValue && matched.resultValue !== '' && extracted.resultValue !== matched.resultValue) {
+				diffObj.resultValueDiff = matched.resultValue;
+			}
+			if (matched.resultUnit && matched.resultUnit !== '' && extracted.resultUnit !== matched.resultUnit) {
+				diffObj.resultUnitDiff = matched.resultUnit;
+			}
 			
 			return diffObj;
 		}
@@ -253,7 +261,12 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 							${mergedAnalyses.map(a => `
 								<tr>
 									<td class="border border-gray-300 p-2">${a.id || ''}</td>
-									<td class="border border-gray-300 p-2">${a.sampleUID || ''}</td>
+									<td class="border border-gray-300 p-2">
+										${a.sampleUIDDiff !== undefined ? (!showDifferences
+											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.sampleUIDDiff || 'Không có'}</div></span></span>${a.sampleUID || ''}</div>`
+											: `<div style="width: 100%;">${a.sampleUID || ''}<div class="difference-tag">Giá trị gốc: ${a.sampleUIDDiff || 'Không có'}</div></div>`
+										) : `<div>${a.sampleUID || ''}</div>`}
+									</td>
 									<td class="border border-gray-300 p-2">${a.sampleName || ''}</td>
 									<td class="border border-gray-300 p-2">
 										${a.parameterNameDiff !== undefined ? (!showDifferences
@@ -268,10 +281,16 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 										) : `<div>${a.protocolCode || ''}</div>`}
 									</td>
 									<td class="border border-gray-300 p-2">
-										<div style="width: 100%;">${a.resultValue || ''}</div>
+										${a.resultValueDiff !== undefined ? (!showDifferences
+											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.resultValueDiff || 'Không có'}</div></span></span>${a.resultValue || ''}</div>`
+											: `<div style="width: 100%;">${a.resultValue || ''}<div class="difference-tag">Giá trị gốc: ${a.resultValueDiff || 'Không có'}</div></div>`
+										) : `<div>${a.resultValue || ''}</div>`}
 									</td>
 									<td class="border border-gray-300 p-2">
-										<div style="width: 100%;">${a.resultUnit || ''}</div>
+										${a.resultUnitDiff !== undefined ? (!showDifferences
+											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.resultUnitDiff || 'Không có'}</div></span></span>${a.resultUnit || ''}</div>`
+											: `<div style="width: 100%;">${a.resultUnit || ''}<div class="difference-tag">Giá trị gốc: ${a.resultUnitDiff || 'Không có'}</div></div>`
+										) : `<div>${a.resultUnit || ''}</div>`}
 									</td>
 								</tr>
 							`).join('')}
@@ -331,73 +350,169 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 					return;
 				}
 
-				// Kiểm tra xem có khác biệt về protocolCode không
+				// Kiểm tra các loại khác biệt theo thứ tự ưu tiên
+				const hasSampleUIDDifference = mergedAnalyses.some(a => a.sampleUIDDiff !== undefined);
+				const hasResultValueDifference = mergedAnalyses.some(a => a.resultValueDiff !== undefined);
 				const hasProtocolDifference = mergedAnalyses.some(a => a.protocolCodeDiff !== undefined);
 
-				if (hasProtocolDifference) {
-					// Hiển thị dialog xác nhận với select option
-					const confirmDialog = globalThis.document.createElement('div');
-					confirmDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
+				// 1. Kiểm tra khác biệt về sample_uid trước (cao nhất)
+				if (hasSampleUIDDifference) {
+					const sampleUIDDialog = globalThis.document.createElement('div');
+					sampleUIDDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
 					
 					const dialogContent = globalThis.document.createElement('div');
-					dialogContent.className = 'bg-yellow-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-yellow-200';
+					dialogContent.className = 'bg-red-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-red-200';
+					
+					dialogContent.innerHTML = `
+						<div class="flex items-center mb-4">
+							<span class="text-2xl mr-3">🚨</span>
+							<h3 class="text-lg font-semibold text-gray-900">Cảnh báo: Có sự khác biệt về thông tin mẫu thử</h3>
+						</div>
+						<p class="text-gray-700 mb-4">Phát hiện sự khác biệt về mã mẫu thử. Vui lòng kiểm tra lại thông tin mẫu thử trước khi tiếp tục.</p>
+						
+						<div class="flex justify-end">
+							<button id="closeSampleUIDDialog" class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors">Đóng</button>
+						</div>
+					`;
+					
+					sampleUIDDialog.appendChild(dialogContent);
+					globalThis.document.body.appendChild(sampleUIDDialog);
+					
+					const closeBtn = dialogContent.querySelector('#closeSampleUIDDialog');
+					closeBtn.onclick = () => {
+						sampleUIDDialog.remove();
+						overlay.remove();
+						const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
+						remainingPopups.forEach(popup => popup.remove());
+						if (onClose) onClose();
+					};
+					
+					sampleUIDDialog.addEventListener('click', (e) => {
+						if (e.target === sampleUIDDialog) {
+							sampleUIDDialog.remove();
+							overlay.remove();
+							const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
+							remainingPopups.forEach(popup => popup.remove());
+							if (onClose) onClose();
+						}
+					});
+					return;
+				}
+
+				// 2. Kiểm tra khác biệt về resultValue
+				if (hasResultValueDifference) {
+					const resultValueDialog = globalThis.document.createElement('div');
+					resultValueDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
+					
+					const dialogContent = globalThis.document.createElement('div');
+					dialogContent.className = 'bg-orange-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-orange-200';
 					
 					dialogContent.innerHTML = `
 						<div class="flex items-center mb-4">
 							<span class="text-2xl mr-3">⚠️</span>
-							<h3 class="text-lg font-semibold text-gray-900">Cảnh báo: Phát hiện khác biệt về phương pháp</h3>
+							<h3 class="text-lg font-semibold text-gray-900">Cảnh báo: Kết quả đã được nhập</h3>
 						</div>
-						<p class="text-gray-700 mb-4">Một số chỉ tiêu có phương pháp khác với dữ liệu trong app. Bạn muốn áp dụng phương pháp nào?</p>
-						
-						<div class="mb-6">
-							<label class="block text-sm font-medium text-gray-700 mb-2">
-								Chọn phương pháp áp dụng:
-							</label>
-							<select id="methodChoice" class="w-full p-3 bg-white border-2 border-yellow-400 rounded-md focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-gray-900 font-medium shadow-sm">
-								<option value="delivered">Áp dụng phương pháp được bàn giao (mặc định)</option>
-								<option value="report">Áp dụng phương pháp trong biên bản</option>
-							</select>
-						</div>
+						<p class="text-gray-700 mb-4">Phát hiện một số chỉ tiêu đã có kết quả trong hệ thống. Bạn có muốn tiếp tục thực hiện cập nhật không?</p>
 						
 						<div class="flex justify-end gap-3">
-							<button id="cancelConfirm" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors">Hủy bỏ</button>
-							<button id="proceedConfirm" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">Xác nhận</button>
+							<button id="cancelResultDialog" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors">Hủy bỏ</button>
+							<button id="continueResultDialog" class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-colors">Xác nhận thực hiện</button>
 						</div>
 					`;
 					
-					confirmDialog.appendChild(dialogContent);
-					globalThis.document.body.appendChild(confirmDialog);
+					resultValueDialog.appendChild(dialogContent);
+					globalThis.document.body.appendChild(resultValueDialog);
 					
-					// Xử lý sự kiện dialog
-					const cancelBtn = dialogContent.querySelector('#cancelConfirm');
-					const proceedBtn = dialogContent.querySelector('#proceedConfirm');
-					const methodSelect = dialogContent.querySelector('#methodChoice');
+					const cancelBtn = dialogContent.querySelector('#cancelResultDialog');
+					const continueBtn = dialogContent.querySelector('#continueResultDialog');
 					
 					cancelBtn.onclick = () => {
-						confirmDialog.remove();
-						// Remove any remaining confirmation dialogs
-						const remainingDialogs = globalThis.document.querySelectorAll('.fixed.inset-0.bg-black.bg-opacity-50');
-						remainingDialogs.forEach(dialog => dialog.remove());
+						resultValueDialog.remove();
 					};
 					
-					proceedBtn.onclick = async () => {
-						const methodChoice = methodSelect.value;
-						confirmDialog.remove();
-						await performUpdate(methodChoice);
+					continueBtn.onclick = async () => {
+						resultValueDialog.remove();
+						// Sau khi xác nhận, kiểm tra khác biệt về protocol
+						await checkProtocolDifference();
 					};
 					
-					// Đóng dialog khi click outside
-					confirmDialog.addEventListener('click', (e) => {
-						if (e.target === confirmDialog) {
+					resultValueDialog.addEventListener('click', (e) => {
+						if (e.target === resultValueDialog) {
+							resultValueDialog.remove();
+						}
+					});
+					return;
+				}
+
+				// 3. Nếu không có khác biệt về sample_uid và resultValue, kiểm tra protocol
+				checkProtocolDifference();
+
+				async function checkProtocolDifference() {
+					if (hasProtocolDifference) {
+						// Hiển thị dialog xác nhận với select option
+						const confirmDialog = globalThis.document.createElement('div');
+						confirmDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
+						
+						const dialogContent = globalThis.document.createElement('div');
+						dialogContent.className = 'bg-yellow-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-yellow-200';
+						
+						dialogContent.innerHTML = `
+							<div class="flex items-center mb-4">
+								<span class="text-2xl mr-3">⚠️</span>
+								<h3 class="text-lg font-semibold text-gray-900">Cảnh báo: Phát hiện khác biệt về phương pháp</h3>
+							</div>
+							<p class="text-gray-700 mb-4">Một số chỉ tiêu có phương pháp khác với dữ liệu trong app. Bạn muốn áp dụng phương pháp nào?</p>
+							
+							<div class="mb-6">
+								<label class="block text-sm font-medium text-gray-700 mb-2">
+									Chọn phương pháp áp dụng:
+								</label>
+								<select id="methodChoice" class="w-full p-3 bg-white border-2 border-yellow-400 rounded-md focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-gray-900 font-medium shadow-sm">
+									<option value="delivered">Áp dụng phương pháp được bàn giao (mặc định)</option>
+									<option value="report">Áp dụng phương pháp trong biên bản</option>
+								</select>
+							</div>
+							
+							<div class="flex justify-end gap-3">
+								<button id="cancelConfirm" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors">Hủy bỏ</button>
+								<button id="proceedConfirm" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">Xác nhận</button>
+							</div>
+						`;
+						
+						confirmDialog.appendChild(dialogContent);
+						globalThis.document.body.appendChild(confirmDialog);
+						
+						// Xử lý sự kiện dialog
+						const cancelBtn = dialogContent.querySelector('#cancelConfirm');
+						const proceedBtn = dialogContent.querySelector('#proceedConfirm');
+						const methodSelect = dialogContent.querySelector('#methodChoice');
+						
+						cancelBtn.onclick = () => {
 							confirmDialog.remove();
 							// Remove any remaining confirmation dialogs
 							const remainingDialogs = globalThis.document.querySelectorAll('.fixed.inset-0.bg-black.bg-opacity-50');
 							remainingDialogs.forEach(dialog => dialog.remove());
-						}
-					});
-				} else {
-					// Không có khác biệt về protocol, thực hiện update trực tiếp
-					await performUpdate('delivered');
+						};
+						
+						proceedBtn.onclick = async () => {
+							const methodChoice = methodSelect.value;
+							confirmDialog.remove();
+							await performUpdate(methodChoice);
+						};
+						
+						// Đóng dialog khi click outside
+						confirmDialog.addEventListener('click', (e) => {
+							if (e.target === confirmDialog) {
+								confirmDialog.remove();
+								// Remove any remaining confirmation dialogs
+								const remainingDialogs = globalThis.document.querySelectorAll('.fixed.inset-0.bg-black.bg-opacity-50');
+								remainingDialogs.forEach(dialog => dialog.remove());
+							}
+						});
+					} else {
+						// Không có khác biệt về protocol, thực hiện update trực tiếp
+						await performUpdate('delivered');
+					}
 				}
 			} catch (error) {
 				console.error('Error in confirm update:', error);

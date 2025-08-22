@@ -363,17 +363,21 @@ const ReceiptInfor = ({ receipt }) => {
 		return date;
 	};
 
-	// NEW FUNCTION: Adjust dates for API submission (subtract 7 hours)
+	// Function to adjust dates for API submission - convert to GMT+7 at 7 AM
 	const adjustDateForApiSubmission = (dateValue) => {
 		if (!dateValue) return null;
 
-		// Create a copy of the date to avoid modifying the original
-		const date = new Date(dateValue);
-		if (isNaN(date.getTime())) return dateValue;
-
-		// Subtract 7 hours to convert from Vietnam time to UTC for storage
-		date.setHours(date.getHours() + 7);
-		return date;
+		// Create a date object with the selected date at 7 AM GMT+7
+		const selectedDate = new Date(dateValue);
+		selectedDate.setHours(7, 0, 0, 0); // Set to 7:00:00 AM
+		
+		// Convert to ISO string for GMT+7 timezone
+		const vietnamOffset = 7 * 60; // GMT+7 in minutes
+		const localOffset = selectedDate.getTimezoneOffset(); // Local timezone offset in minutes
+		const totalOffset = vietnamOffset + localOffset; // Total offset to add
+		
+		const gmtPlus7Date = new Date(selectedDate.getTime() + (totalOffset * 60000));
+		return gmtPlus7Date.toISOString();
 	};
 
 	// Function to fetch sample image if sample_img_uid exists
@@ -917,8 +921,8 @@ const ReceiptInfor = ({ receipt }) => {
 									protocol_id: analysis.protocol_id,
 									technician_uid: analysis.technician_uid,
 									deadline: analysis.deadline
-										? analysis.deadline
-										: new Date(Date.now() + (analysis?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0)),
+										? adjustDateForApiSubmission(new Date(analysis.deadline))
+										: adjustDateForApiSubmission(new Date(Date.now() + (analysis?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0))),
 									protocol_code: analysis.protocol_code,
 									result_unit: analysis.result_unit || '',
 									protocol_source: analysis.protocol_source,
@@ -3840,7 +3844,7 @@ const ReceiptInfor = ({ receipt }) => {
 			/>
 			{/* FileForm */}
 			<FileForm
-				foreignKeyUIDs={[currentReceipt?.record_code]}
+				foreignKeyUIDs={[currentReceipt?.record_code, currentReceipt?.order_code]}
 				// localPath="activities/LAB"
 				objectPath="activities/LAB"
 				isVisible={isFileFormVisible}
