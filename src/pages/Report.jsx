@@ -22,12 +22,13 @@ export default function MultiPageEditor() {
 	// Add state to track if we're in read-only mode (when a ppt_uid is in the URL)
 	const [isReadOnly, setIsReadOnly] = useState(false);
 
-	// Add new toggle states for VLAS, COMMENT, REFERENCE, ENGLISH, and REPLACE
+	// Add new toggle states for VLAS, COMMENT, REFERENCE, ENGLISH, REPLACE, and SIGN
 	const [showVlas, setShowVlas] = useState(false);
 	const [showComment, setShowComment] = useState(false);
 	const [showReference, setShowReference] = useState(false);
 	const [showEnglish, setShowEnglish] = useState(false);
 	const [showReplace, setShowReplace] = useState(false);
+	const [showSign, setShowSign] = useState(false);
 
 	// State for section HTML content
 	const [headerHTML, setHeaderHTML] = useState('');
@@ -185,6 +186,7 @@ export default function MultiPageEditor() {
 			setShowComment(hasCommentFromAPI);
 			setShowReference(reportData.is_reference || false);
 			setShowReplace(reportData.is_replace || false);
+			setShowSign(reportData.is_sign || false);
 
 			// Process the header content to replace the draft text with actual ppt_uid
 			let processedHeader = reportData.header_section || header;
@@ -419,6 +421,7 @@ export default function MultiPageEditor() {
 				setShowComment(false);
 				setShowReference(false);
 				setShowReplace(false);
+				setShowSign(false);
 				updateContentWithData(sampleData);
 			} else {
 				// If no sample data available yet, fetch it
@@ -700,7 +703,7 @@ export default function MultiPageEditor() {
 
 			extractCurrentReferences();
 		}
-	}, [showVlas, showComment, showReference, showEnglish, showReplace, sampleData]);
+	}, [showVlas, showComment, showReference, showEnglish, showReplace, showSign, sampleData]);
 
 	// Function to generate customer section from API data
 	const generateCustomerSection = (clientData) => {
@@ -1240,8 +1243,7 @@ export default function MultiPageEditor() {
 
         <div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
             <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-                <strong style="font-size:12px; line-height:1.2; margin:0;">PHÒNG PHÂN TÍCH KIỂM NGHIỆM/<br>KIỂM SOÁT CHẤT LƯỢNG / Laboratory Manager</strong>
-                <p style="font-size:12px; margin:0; line-height:1.4;">Nguyễn Công Phúc</p>
+                <!-- Phần bên trái để trống -->
             </div>
             <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
                 <strong style="font-size:12px; line-height:1.2; margin:0;">KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President</strong>
@@ -3361,6 +3363,7 @@ export default function MultiPageEditor() {
 				is_comment: showComment,
 				is_reference: showReference,
 				is_replace: showReplace,
+				is_sign: showSign,
 				created_by_uid: currentUser.identity_uid,
 				receipt_note: receiptNote,
 				additional_request: additionalRequest,
@@ -3879,7 +3882,7 @@ export default function MultiPageEditor() {
 							onClick={() => !isReadOnly && setShowVlas((prev) => !prev)}
 							className={`${
 								showVlas ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
 								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
 							}`}
 							disabled={isReadOnly}
@@ -3891,12 +3894,24 @@ export default function MultiPageEditor() {
 							onClick={() => !isReadOnly && setShowComment((prev) => !prev)}
 							className={`${
 								showComment ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
 								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
 							}`}
 							disabled={isReadOnly}
 						>
 							COMMENT
+						</button>
+
+						<button
+							onClick={() => !isReadOnly && setShowSign((prev) => !prev)}
+							className={`${
+								showSign ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
+							}`}
+							disabled={isReadOnly}
+						>
+							SIGN
 						</button>
 
 						<button
@@ -3908,19 +3923,19 @@ export default function MultiPageEditor() {
 							}}
 							className={`${
 								showReference ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
 								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
 							}`}
 							disabled={isReadOnly}
 						>
-							REFERENCE
+							REF
 						</button>
 
 						<button
 							onClick={() => !isReadOnly && setShowEnglish((prev) => !prev)}
 							className={`${
 								showEnglish ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
 								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
 							}`}
 							disabled={isReadOnly}
@@ -3932,7 +3947,7 @@ export default function MultiPageEditor() {
 							onClick={() => !isReadOnly && setShowReplace((prev) => !prev)}
 							className={`${
 								showReplace ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
 								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
 							}`}
 							disabled={isReadOnly}

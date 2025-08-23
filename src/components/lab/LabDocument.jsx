@@ -1,23 +1,11 @@
 import React, { useState, useEffect, useContext } from 'react';
-import {
-	FaFileAlt,
-	FaEye,
-	FaSearch,
-	FaSync,
-	FaExternalLinkAlt,
-	FaUser,
-	FaUsers,
-	FaPlay,
-	FaClock,
-	FaTable,
-	FaPrint,
-} from 'react-icons/fa';
+import { FaFileAlt, FaEye, FaSearch, FaSync, FaUser, FaUsers, FaPlay, FaClock, FaTable, FaPrint } from 'react-icons/fa';
 import { apiPost } from '../../contexts/helperFunctionCallAPI';
 import { GlobalContext } from '../../contexts/GlobalContext';
 import AnalysesExtract from './AnalysesExtract';
 
 const LabDocument = () => {
-	const { currentUser, setCurrentUser, fetchUser, getIdenByUid } = useContext(GlobalContext);
+	const { currentUser, getIdenByUid } = useContext(GlobalContext);
 
 	// Utility functions
 	const isAdmin = () => {
@@ -89,6 +77,7 @@ const LabDocument = () => {
 	const [analysisExtractDocument, setAnalysisExtractDocument] = useState(null); // Separate state for analysis modal
 	const [identityNames, setIdentityNames] = useState({}); // Cache for identity names
 	const [reportCache, setReportCache] = useState({}); // Cache for loaded reports
+	const [pendingDocumentType, setPendingDocumentType] = useState('lab_reports'); // 'lab_reports' or 'documents'
 
 	// Load TinyMCE if not already loaded
 	useEffect(() => {
@@ -237,7 +226,13 @@ const LabDocument = () => {
 	// };
 
 	// Load documents from API - CLEAN VERSION WITHOUT SELECTION LOGIC
-	const loadDocuments = async (searchTermToUse = '', page = 1, currentMode = mode, status = documentStatus) => {
+	const loadDocuments = async (
+		searchTermToUse = '',
+		page = 1,
+		currentMode = mode,
+		status = documentStatus,
+		docType = pendingDocumentType,
+	) => {
 		try {
 			setIsLoading(true);
 
@@ -250,20 +245,41 @@ const LabDocument = () => {
 			// Nếu không phải admin, luôn dùng mode 'personal'
 			const finalMode = isAdmin() ? currentMode : 'personal';
 
-			// Choose API endpoint based on status
-			const apiEndpoint = status === 'published' ? PUBLISHED_DOCS_API_ENDPOINT : DRAFT_DOCS_API_ENDPOINT;
+			// Choose API endpoint and parameters based on status and document type
+			let apiEndpoint, requestBody;
 
-			const requestBody = {
-				searchTerm: searchTermToUse,
-				page: page,
-				mode: finalMode,
-				status: 'submitted',
-				classifierCode: ['NHAT_KY_THU_NGHIEM', 'BIEN_BAN_THU_NGHIEM'],
-			};
-
-			// Add status-specific fields
 			if (status === 'published') {
-				requestBody.sended = status;
+				apiEndpoint = PUBLISHED_DOCS_API_ENDPOINT;
+				requestBody = {
+					searchTerm: searchTermToUse,
+					page: page,
+					mode: finalMode,
+					sended: status,
+					classifierCode: ['NHAT_KY_THU_NGHIEM', 'BIEN_BAN_THU_NGHIEM'],
+				};
+			} else {
+				// For draft status, check document type
+				if (docType === 'documents') {
+					// Use get_doc API for documents with pendingApproval status
+					apiEndpoint = PUBLISHED_DOCS_API_ENDPOINT;
+					requestBody = {
+						searchTerm: searchTermToUse,
+						page: page,
+						mode: finalMode,
+						status: 'pendingApproval',
+						classifierCode: ['NHAT_KY_THU_NGHIEM', 'BIEN_BAN_THU_NGHIEM'],
+					};
+				} else {
+					// Use get_editor API for lab reports with submitted status
+					apiEndpoint = DRAFT_DOCS_API_ENDPOINT;
+					requestBody = {
+						searchTerm: searchTermToUse,
+						page: page,
+						mode: finalMode,
+						status: 'submitted',
+						classifierCode: ['NHAT_KY_THU_NGHIEM', 'BIEN_BAN_THU_NGHIEM'],
+					};
+				}
 			}
 
 			const response = await apiPostLocal(apiEndpoint, requestBody);
@@ -298,7 +314,7 @@ const LabDocument = () => {
 
 				// Update selectedDocument for UI highlighting if same document exists in new results
 				if (selectedDocument) {
-					const foundDoc = transformedDocuments.find(doc => doc.id === selectedDocument.id);
+					const foundDoc = transformedDocuments.find((doc) => doc.id === selectedDocument.id);
 					if (foundDoc) {
 						setSelectedDocument(foundDoc); // Update UI selection với data mới
 					} else {
@@ -308,7 +324,7 @@ const LabDocument = () => {
 
 				// Update selectedDocumentForPreview nếu cùng document tồn tại trong kết quả mới
 				if (selectedDocumentForPreview) {
-					const foundPreviewDoc = transformedDocuments.find(doc => doc.id === selectedDocumentForPreview.id);
+					const foundPreviewDoc = transformedDocuments.find((doc) => doc.id === selectedDocumentForPreview.id);
 					if (foundPreviewDoc) {
 						setSelectedDocumentForPreview(foundPreviewDoc); // Update preview document với data mới
 					} else if (searchTermToUse !== lastSearchTerm) {
@@ -849,7 +865,7 @@ const LabDocument = () => {
 			setMode(initialMode);
 		}
 
-		loadDocuments('', 1, initialMode, documentStatus);
+		loadDocuments('', 1, initialMode, documentStatus, pendingDocumentType);
 
 		// Cleanup function
 		return () => {
@@ -878,7 +894,7 @@ const LabDocument = () => {
 	const refreshData = async () => {
 		setIsLoading(true);
 		try {
-			await loadDocuments(lastSearchTerm, pagination.currentPage, mode, documentStatus);
+			await loadDocuments(lastSearchTerm, pagination.currentPage, mode, documentStatus, pendingDocumentType);
 		} catch (error) {
 			console.error('Error refreshing data:', error);
 		} finally {
@@ -892,7 +908,16 @@ const LabDocument = () => {
 
 		setDocumentStatus(newStatus);
 		setPagination((prev) => ({ ...prev, currentPage: 1 })); // Reset to first page
-		await loadDocuments(lastSearchTerm, 1, mode, newStatus);
+		await loadDocuments(lastSearchTerm, 1, mode, newStatus, pendingDocumentType);
+	};
+
+	// Handle pending document type change
+	const handlePendingDocumentTypeChange = async (newType) => {
+		if (newType === pendingDocumentType) return; // No change needed
+
+		setPendingDocumentType(newType);
+		setPagination((prev) => ({ ...prev, currentPage: 1 })); // Reset to first page
+		await loadDocuments(lastSearchTerm, 1, mode, documentStatus, newType);
 	};
 
 	// Handle toggle switch change
@@ -914,7 +939,7 @@ const LabDocument = () => {
 
 		setMode(newMode);
 		setPagination((prev) => ({ ...prev, currentPage: 1 })); // Reset to first page
-		await loadDocuments(lastSearchTerm, 1, newMode, documentStatus);
+		await loadDocuments(lastSearchTerm, 1, newMode, documentStatus, pendingDocumentType);
 	};
 
 	// Handle search input changes - ISOLATED VERSION
@@ -927,7 +952,7 @@ const LabDocument = () => {
 	const executeSearch = async () => {
 		// Chỉ thực hiện search khi nhấn Enter và khác với search term hiện tại
 		if (searchTerm !== lastSearchTerm) {
-			await loadDocuments(searchTerm, 1);
+			await loadDocuments(searchTerm, 1, mode, documentStatus, pendingDocumentType);
 		}
 	};
 
@@ -1260,7 +1285,7 @@ const LabDocument = () => {
 	// Page change handler - SIMPLE VERSION
 	const handlePageChange = async (newPage) => {
 		setPagination((prev) => ({ ...prev, currentPage: newPage }));
-		await loadDocuments(lastSearchTerm, newPage, mode, documentStatus);
+		await loadDocuments(lastSearchTerm, newPage, mode, documentStatus, pendingDocumentType);
 	};
 
 	// Remove client-side filtering since we now search via API
@@ -1295,15 +1320,61 @@ const LabDocument = () => {
 						<FaFileAlt className="text-blue-600" />
 						Tài liệu - Văn bản
 					</h1>
-					<button
-						onClick={refreshData}
-						disabled={isLoading}
-						className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-						title="Làm mới dữ liệu"
-					>
-						<FaSync className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-						Làm mới
-					</button>
+					<div className="flex items-center gap-4">
+						{/* Mode Toggle Section - Chỉ hiển thị cho admin */}
+						{isAdmin() && (
+							<div className="flex items-center gap-2">
+								<span className="text-sm font-medium text-gray-700">Phạm vi:</span>
+								{/* Mode Toggle Switch */}
+								<label className="relative inline-flex items-center cursor-pointer">
+									<input
+										type="checkbox"
+										checked={mode === 'all'}
+										onChange={() => handleModeChange(mode === 'all' ? 'personal' : 'all')}
+										className="sr-only"
+										disabled={isLoading}
+									/>
+									<div className="w-32 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
+										{/* Sliding background */}
+										<div
+											className={`absolute top-0 h-full w-1/2 bg-blue-500 rounded-full transition-all duration-300 ease-in-out
+												${mode === 'personal' ? 'left-0' : 'left-1/2'}`}
+										></div>
+
+										{/* PERSONAL text */}
+										<div className="absolute left-0 w-1/2 h-full flex items-center justify-center">
+											<span
+												className={`text-xs font-medium transition-all duration-300 ease-in-out
+													${mode === 'personal' ? 'text-white' : 'text-gray-600'}`}
+											>
+												CÁ NHÂN
+											</span>
+										</div>
+
+										{/* ALL text */}
+										<div className="absolute right-0 w-1/2 h-full flex items-center justify-center">
+											<span
+												className={`text-xs font-medium transition-all duration-300 ease-in-out
+													${mode === 'all' ? 'text-white' : 'text-gray-600'}`}
+											>
+												TOÀN BỘ
+											</span>
+										</div>
+									</div>
+								</label>
+							</div>
+						)}
+
+						<button
+							onClick={refreshData}
+							disabled={isLoading}
+							className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+							title="Làm mới dữ liệu"
+						>
+							<FaSync className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+							Làm mới
+						</button>
+					</div>
 				</div>
 			</div>
 
@@ -1314,7 +1385,11 @@ const LabDocument = () => {
 						<div className="flex items-center justify-between mb-4 flex-shrink-0">
 							<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
 								<FaClock className="text-blue-600" />
-								{documentStatus === 'published' ? 'Tài liệu đã phát hành' : 'Tài liệu chưa duyệt'}
+								{documentStatus === 'published'
+									? 'Tài liệu đã phát hành'
+									: documentStatus === 'draft' && pendingDocumentType === 'lab_reports'
+									? 'Biên bản chờ duyệt'
+									: 'Tài liệu chờ duyệt'}
 								{isLoading && (
 									<div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
 								)}
@@ -1359,34 +1434,19 @@ const LabDocument = () => {
 							</label>
 						</div>
 
-						{/* Mode Toggle Section - Chỉ hiển thị cho admin */}
-						{isAdmin() && (
+						{/* Pending Document Type Selection - Chỉ hiển thị khi ở trạng thái draft */}
+						{documentStatus === 'draft' && (
 							<div className="flex items-center justify-between mb-4 flex-shrink-0">
-								<span className="text-sm font-medium text-gray-700">Phạm vi hiển thị:</span>
-								<div className="flex items-center gap-2">
-									<button
-										onClick={() => handleModeChange('personal')}
-										disabled={isLoading}
-										className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium ${
-											mode === 'personal' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-										}`}
-										title="Chế độ cá nhân - chỉ hiển thị tài liệu của bạn"
-									>
-										<FaUser className="w-3 h-3" />
-										Cá nhân
-									</button>
-									<button
-										onClick={() => handleModeChange('all')}
-										disabled={isLoading}
-										className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium ${
-											mode === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-										}`}
-										title="Chế độ toàn bộ - hiển thị tất cả tài liệu"
-									>
-										<FaUsers className="w-3 h-3" />
-										Toàn bộ
-									</button>
-								</div>
+								<span className="text-sm font-medium text-gray-700">Loại tài liệu:</span>
+								<select
+									value={pendingDocumentType}
+									onChange={(e) => handlePendingDocumentTypeChange(e.target.value)}
+									disabled={isLoading}
+									className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+								>
+									<option value="lab_reports">Biên bản chờ duyệt</option>
+									<option value="documents">Tài liệu chờ duyệt</option>
+								</select>
 							</div>
 						)}
 
@@ -1457,9 +1517,13 @@ const LabDocument = () => {
 											? mode === 'personal'
 												? 'Không có tài liệu đã phát hành cá nhân nào'
 												: 'Không có tài liệu đã phát hành nào'
+											: documentStatus === 'draft' && pendingDocumentType === 'lab_reports'
+											? mode === 'personal'
+												? 'Không có biên bản chờ duyệt cá nhân nào'
+												: 'Không có biên bản chờ duyệt nào'
 											: mode === 'personal'
-											? 'Không có tài liệu nháp cá nhân nào'
-											: 'Không có tài liệu nháp nào'}
+											? 'Không có tài liệu chờ duyệt cá nhân nào'
+											: 'Không có tài liệu chờ duyệt nào'}
 									</div>
 									<div className="text-xs mt-1">Nhấn Enter để tìm kiếm với từ khóa mới</div>
 								</div>
@@ -1530,7 +1594,8 @@ const LabDocument = () => {
 							</h3>
 							<div className="flex gap-3">
 								{selectedDocumentForPreview &&
-									(selectedDocumentForPreview.metadata?.extractData?.analyses || selectedDocumentForPreview.metadata?.analyses) && (
+									(selectedDocumentForPreview.metadata?.extractData?.analyses ||
+										selectedDocumentForPreview.metadata?.analyses) && (
 										<button
 											onClick={() => handleShowAnalysisExtract(selectedDocumentForPreview)}
 											className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -1578,7 +1643,12 @@ const LabDocument = () => {
 												{isAdmin() ? (mode === 'personal' ? 'Cá nhân' : 'Toàn bộ') : 'Cá nhân'}
 											</p>
 											<p className="text-sm text-blue-700 mt-1">
-												<strong>Loại tài liệu:</strong> {documentStatus === 'published' ? 'Đã phát hành' : 'Nháp'}
+												<strong>Loại tài liệu:</strong>{' '}
+												{documentStatus === 'published'
+													? 'Đã phát hành'
+													: documentStatus === 'draft' && pendingDocumentType === 'lab_reports'
+													? 'Biên bản chờ duyệt'
+													: 'Tài liệu chờ duyệt'}
 											</p>
 										</div>
 									</div>

@@ -89,7 +89,7 @@ const DocumentEditor = () => {
 	// Expand/Collapse states for sections
 	const [isRecentDocumentsExpanded, setIsRecentDocumentsExpanded] = useState(true); // Default expanded
 	const [isTemplatesExpanded, setIsTemplatesExpanded] = useState(false); // Default collapsed
-	
+
 	// Force refresh states
 	const [refreshDocumentsTrigger, setRefreshDocumentsTrigger] = useState(0);
 	const [refreshTemplatesTrigger, setRefreshTemplatesTrigger] = useState(0);
@@ -106,14 +106,14 @@ const DocumentEditor = () => {
 			id,
 			message,
 			type, // 'success', 'error', 'warning', 'info'
-			duration
+			duration,
 		};
 
-		setToasts(prev => [...prev, toast]);
+		setToasts((prev) => [...prev, toast]);
 
 		// Auto remove toast after duration
 		setTimeout(() => {
-			setToasts(prev => prev.filter(t => t.id !== id));
+			setToasts((prev) => prev.filter((t) => t.id !== id));
 		}, duration);
 	};
 
@@ -221,19 +221,24 @@ const DocumentEditor = () => {
 	// Load recent documents from API with better duplicate prevention
 	const loadRecentDocuments = async (searchTerm = '', page = 1, status = 'draft') => {
 		// Create a unique call identifier to prevent duplicate calls
-		const callId = `${searchTerm}-${page}-${status}`;
-		
+		const callId = `${searchTerm}-${page}-${status}-${Date.now()}`;
+
 		// Cancel any pending call with different parameters
 		if (pendingDocumentsCall.current && pendingDocumentsCall.current !== callId) {
 			console.log(`Cancelling previous documents call: ${pendingDocumentsCall.current}`);
 		}
-		
-		// Prevent duplicate API calls with same parameters
-		if (pendingDocumentsCall.current === callId) {
-			console.log(`Skipping duplicate loadRecentDocuments [${callId}] - same call already pending`);
+
+		// Prevent duplicate API calls with same parameters (excluding timestamp)
+		const currentCallParams = `${searchTerm}-${page}-${status}`;
+		const existingCallParams = pendingDocumentsCall.current
+			? pendingDocumentsCall.current.split('-').slice(0, -1).join('-')
+			: '';
+
+		if (pendingDocumentsCall.current && currentCallParams === existingCallParams) {
+			console.log(`Skipping duplicate loadRecentDocuments [${currentCallParams}] - same call already pending`);
 			return;
 		}
-		
+
 		// Prevent overlapping calls
 		if (isLoading) {
 			console.log(`Skipping loadRecentDocuments [${callId}] - already loading another request`);
@@ -289,7 +294,7 @@ const DocumentEditor = () => {
 					totalItems: result.pagination?.totalItems || documents.length,
 					totalPages: result.pagination?.totalPages || Math.ceil(documents.length / 10),
 				});
-				
+
 				console.log(`Successfully loaded documents [${callId}]:`, documents.length, 'documents');
 			}
 		} catch (error) {
@@ -311,18 +316,18 @@ const DocumentEditor = () => {
 	const loadTemplates = async (searchTerm = '', page = 1) => {
 		// Create a unique call identifier to prevent duplicate calls
 		const callId = `templates-${searchTerm}-${page}`;
-		
+
 		// Cancel any pending call with different parameters
 		if (pendingTemplatesCall.current && pendingTemplatesCall.current !== callId) {
 			console.log(`Cancelling previous templates call: ${pendingTemplatesCall.current}`);
 		}
-		
+
 		// Prevent duplicate API calls with same parameters
 		if (pendingTemplatesCall.current === callId) {
 			console.log(`Skipping duplicate loadTemplates [${callId}] - same call already pending`);
 			return;
 		}
-		
+
 		// Prevent overlapping calls
 		if (isLoading) {
 			console.log(`Skipping loadTemplates [${callId}] - already loading another request`);
@@ -333,7 +338,7 @@ const DocumentEditor = () => {
 			pendingTemplatesCall.current = callId;
 			setIsLoading(true);
 			console.log(`Loading templates [${callId}]:`, { searchTerm, page });
-			
+
 			const response = await apiPost(TEMPLATE_API_ENDPOINT, {
 				id: '',
 				searchTerm: searchTerm,
@@ -382,7 +387,7 @@ const DocumentEditor = () => {
 					totalItems: result.pagination?.totalItems || templates.length,
 					totalPages: result.pagination?.totalPages || Math.ceil(templates.length / 10),
 				});
-				
+
 				console.log(`Successfully loaded templates [${callId}]:`, templates.length, 'templates');
 			}
 		} catch (error) {
@@ -415,7 +420,7 @@ const DocumentEditor = () => {
 			if (window.handleFilePreviewFromDocument) {
 				delete window.handleFilePreviewFromDocument;
 			}
-			
+
 			// Cancel any pending API calls
 			if (pendingDocumentsCall.current) {
 				console.log('Cleaning up pending documents call:', pendingDocumentsCall.current);
@@ -428,16 +433,16 @@ const DocumentEditor = () => {
 		};
 	}, []); // Empty dependency - only run on mount
 
-	// Handle document status changes separately - no API call conflicts
+	// Handle document status changes separately - ONLY call API when status actually changes
 	useEffect(() => {
 		// Skip initial load (handled above)
 		if (isInitialLoad) {
 			return;
 		}
-		
+
 		// Update isDraft sync
 		setIsDraft(documentStatus === 'draft');
-		
+
 		// Only reload documents when status actually changes (not on initial load)
 		// Reset search and pagination when status changes
 		setSearchTerm('');
@@ -445,12 +450,13 @@ const DocumentEditor = () => {
 		setSelectedDocument(null);
 		setPreviewContent('');
 		setCurrentPreviewedTemplate(null);
-		
+
 		// Load documents with new status - but prevent duplicate calls
 		if (!isLoading) {
+			console.log('Status changed, loading documents with new status:', documentStatus);
 			loadRecentDocuments('', 1, documentStatus);
 		}
-	}, [documentStatus]);
+	}, [documentStatus]); // ONLY depend on documentStatus
 
 	// Auto-search when search terms or pagination change (debounced) - completely separate from status changes
 	useEffect(() => {
@@ -458,7 +464,7 @@ const DocumentEditor = () => {
 		if (isInitialLoad) {
 			return;
 		}
-		
+
 		// Skip if already loading to prevent duplicate API calls
 		if (isLoading) {
 			return;
@@ -468,11 +474,13 @@ const DocumentEditor = () => {
 		if (searchTerm !== '') {
 			// Search term change - use debounce
 			const timeoutId = setTimeout(() => {
+				console.log('Search term changed, loading documents with search:', searchTerm);
 				loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
 			}, 500);
 			return () => clearTimeout(timeoutId);
 		} else if (!isInitialLoad) {
 			// Page change or refresh trigger - call immediately (but not on initial load)
+			console.log('Page or refresh changed, loading documents');
 			loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
 		}
 	}, [searchTerm, recentDocumentsPage, refreshDocumentsTrigger]); // documentStatus excluded to prevent duplicate API calls
@@ -482,7 +490,7 @@ const DocumentEditor = () => {
 		if (isInitialLoad) {
 			return;
 		}
-		
+
 		// Skip if already loading to prevent duplicate API calls
 		if (isLoading) {
 			return;
@@ -504,7 +512,7 @@ const DocumentEditor = () => {
 	// Handle document status change - improved to prevent duplicate API calls
 	const handleDocumentStatusChange = async (newStatus) => {
 		console.log(`Status change requested: ${documentStatus} -> ${newStatus}`);
-		
+
 		if (newStatus === documentStatus) {
 			console.log('Status unchanged, skipping API call');
 			return; // No change needed
@@ -517,36 +525,35 @@ const DocumentEditor = () => {
 		}
 
 		console.log(`Executing status change: ${documentStatus} -> ${newStatus}`);
-		
+
 		// Clear current data before switching - immediate UI feedback
 		setSelectedDocument(null);
 		setPreviewContent('');
 		setCurrentPreviewedTemplate(null);
-		
-		// Change status first - this will trigger the useEffect for loading new data
+
+		// Change status - this will trigger the useEffect for loading new data
 		// The useEffect will handle clearing search and pagination
 		setDocumentStatus(newStatus);
+		// Note: Don't call loadRecentDocuments here as it will be called by useEffect
 	};
 
-	// Handle toggle switch change - improved to prevent duplicate calls
+	// Handle toggle switch change - simplified to prevent duplicate calls
 	const handleToggleChange = () => {
 		// Prevent toggle if already loading
 		if (isLoading) {
 			console.log('Toggle blocked - already loading');
 			return;
 		}
-		
+
 		const newIsDraft = !isDraft;
 		const newStatus = newIsDraft ? 'draft' : 'submitted';
-		
+
 		console.log(`Toggle change: ${isDraft} -> ${newIsDraft}, Status: ${documentStatus} -> ${newStatus}`);
-		
-		// Only call handleDocumentStatusChange if status actually changes
+
+		// Directly change the status - useEffect will handle the API call
 		if (newStatus !== documentStatus) {
-			handleDocumentStatusChange(newStatus);
-		} else {
-			// Just update isDraft if status doesn't change (shouldn't happen but safety check)
-			setIsDraft(newIsDraft);
+			setDocumentStatus(newStatus);
+			// Don't call handleDocumentStatusChange as it's redundant
 		}
 	};
 
@@ -582,7 +589,7 @@ const DocumentEditor = () => {
 				// If already expanded, refresh data without API duplication
 				// Only trigger refresh if not currently loading
 				if (!isLoading) {
-					setRefreshDocumentsTrigger(prev => prev + 1);
+					setRefreshDocumentsTrigger((prev) => prev + 1);
 				}
 			}
 		} else if (section === 'templates') {
@@ -594,7 +601,7 @@ const DocumentEditor = () => {
 				// If already expanded, refresh data without API duplication
 				// Only trigger refresh if not currently loading
 				if (!isLoading) {
-					setRefreshTemplatesTrigger(prev => prev + 1);
+					setRefreshTemplatesTrigger((prev) => prev + 1);
 				}
 			}
 		}
@@ -688,22 +695,26 @@ const DocumentEditor = () => {
 			if (style.includes('border-bottom') && style.includes('display: block')) {
 				return true;
 			}
-			
+
 			// Check if parent has fraction structure
 			const parent = element.parentElement;
 			if (parent) {
 				const parentStyle = parent.getAttribute('style') || '';
-				if (parentStyle.includes('display: inline-block') && parentStyle.includes('text-align: center') && parentStyle.includes('vertical-align: middle')) {
+				if (
+					parentStyle.includes('display: inline-block') &&
+					parentStyle.includes('text-align: center') &&
+					parentStyle.includes('vertical-align: middle')
+				) {
 					return true;
 				}
 			}
-			
+
 			// Check if any child has border-bottom (fraction line)
 			const childrenWithBorder = element.querySelectorAll('span[style*="border-bottom"]');
 			if (childrenWithBorder.length > 0) {
 				return true;
 			}
-			
+
 			return false;
 		};
 
@@ -713,7 +724,7 @@ const DocumentEditor = () => {
 			if (isFractionElement(span)) {
 				// This is a fraction element, preserve essential fraction styles
 				const currentStyle = span.getAttribute('style') || '';
-				
+
 				// Preserve fraction-specific styles
 				const display = extractStyleProperty(currentStyle, 'display');
 				const textAlign = extractStyleProperty(currentStyle, 'text-align');
@@ -736,7 +747,7 @@ const DocumentEditor = () => {
 				if (paddingBottom) preservedStyles.push(`padding-bottom: ${paddingBottom}`);
 				if (paddingTop) preservedStyles.push(`padding-top: ${paddingTop}`);
 				if (fontFamily) preservedStyles.push(`font-family: ${fontFamily}`);
-				
+
 				// Add default font-size if not specified
 				if (!fontSize) {
 					preservedStyles.push('font-size: 12px');
@@ -760,7 +771,7 @@ const DocumentEditor = () => {
 			if (isFractionElement(element)) {
 				return;
 			}
-			
+
 			const currentStyle = element.getAttribute('style') || '';
 			const styleWithFontSizeAndAlign = currentStyle + (currentStyle ? '; ' : '') + 'font-size: 12px; text-align: left';
 			element.setAttribute('style', styleWithFontSizeAndAlign);
@@ -1052,7 +1063,7 @@ const DocumentEditor = () => {
 			// Debug logs to check template data
 			console.log('Print template object:', template);
 			console.log('Template classifierCode for print:', template.classifierCode);
-			
+
 			const header = template.header || {};
 			let content = template.content || '';
 
@@ -1134,8 +1145,8 @@ const DocumentEditor = () => {
 	const insertSignatureBox = () => {
 		if (templateEditorRef.current) {
 			const editor = templateEditorRef.current;
-			
-			const signatureHTML =`
+
+			const signatureHTML = `
 				<div style="width: 100%; display: flex; justify-content: space-between; align-items: flex-start; margin-top: 20px; font-size: 11px; font-family: 'Times New Roman', serif; height: 3cm; border: none;">
 					<div style="flex: 1; text-align: center; font-weight: bold; height: 3cm; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding-top: 8px; margin-right: 10px;">
 						Ngày kiểm tra:<br>
@@ -1147,7 +1158,7 @@ const DocumentEditor = () => {
 					</div>
 				</div>
 			`;
-			
+
 			editor.insertContent(signatureHTML);
 		}
 	};
@@ -1236,7 +1247,6 @@ const DocumentEditor = () => {
 					sampleUIDs: sampleUIDs,
 					classifierCode: metadata.classifierCode || 'BIEN_BAN_THU_NGHIEM', // Always include classifierCode
 				};
-
 
 				// Call the API endpoint directly
 				const response = await apiPost('https://black.irdop.org/khsi19me/convert/lab_result_report_html', reportData);
@@ -1436,10 +1446,13 @@ const DocumentEditor = () => {
 						<tr>
 							<td style="border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-weight: bold;">Loại biên bản:</td>
 							<td style="border: 1px solid #ccc; padding: 8px;">${
-								template.classifierCode === 'NHAT_KY_THU_NGHIEM' ? 'NHẬT KÝ THỬ NGHIỆM' :
-								template.classifierCode === 'BIEN_BAN_THU_NGHIEM' ? 'BIÊN BẢN THỬ NGHIỆM' :
-								template.classifierCode === 'TAI_LIEU_KHAC' ? 'TÀI LIỆU KHÁC' :
-								(template.classifierCode || 'TÀI LIỆU KHÁC')
+								template.classifierCode === 'NHAT_KY_THU_NGHIEM'
+									? 'NHẬT KÝ THỬ NGHIỆM'
+									: template.classifierCode === 'BIEN_BAN_THU_NGHIEM'
+									? 'BIÊN BẢN THỬ NGHIỆM'
+									: template.classifierCode === 'TAI_LIEU_KHAC'
+									? 'TÀI LIỆU KHÁC'
+									: template.classifierCode || 'TÀI LIỆU KHÁC'
 							}</td>
 						</tr>
 						<tr>
@@ -1948,16 +1961,16 @@ const DocumentEditor = () => {
 					{/* Container cho Expand/Collapse sections */}
 					<div className="h-full flex flex-col bg-white rounded-xl shadow-sm border">
 						{/* Hoạt động gần đây */}
-						<div 
+						<div
 							className={`flex flex-col transition-all duration-500 ease-in-out overflow-hidden ${
 								isRecentDocumentsExpanded ? 'flex-shrink-0' : 'flex-shrink-0'
 							}`}
 							style={{
-								height: isRecentDocumentsExpanded ? 'calc(100% - 60px)' : '60px'
+								height: isRecentDocumentsExpanded ? 'calc(100% - 60px)' : '60px',
 							}}
 						>
 							{/* Header - Always visible */}
-							<div 
+							<div
 								className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-200"
 								onClick={() => handleSectionToggle('recent')}
 							>
@@ -1971,7 +1984,11 @@ const DocumentEditor = () => {
 								<div className="flex items-center gap-2">
 									{/* Document Status Toggle - only show when expanded */}
 									{isRecentDocumentsExpanded && (
-										<label className={`relative inline-flex items-center ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+										<label
+											className={`relative inline-flex items-center ${
+												isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+											}`}
+										>
 											<input
 												type="checkbox"
 												checked={isDraft}
@@ -1979,7 +1996,11 @@ const DocumentEditor = () => {
 												className="sr-only"
 												disabled={isLoading}
 											/>
-											<div className={`w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden ${isLoading ? 'opacity-75' : ''}`}>
+											<div
+												className={`w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden ${
+													isLoading ? 'opacity-75' : ''
+												}`}
+											>
 												{/* Sliding background */}
 												<div
 													className={`absolute top-0 w-1/2 h-full bg-blue-500 rounded-full transition-all duration-300 ease-in-out transform
@@ -2037,7 +2058,9 @@ const DocumentEditor = () => {
 											<div className="flex items-center justify-center pb-2">
 												<div className="flex items-center gap-1 flex-wrap justify-center">
 													<button
-														onClick={() => handleRecentDocumentsPageChange(recentDocumentsData.pagination.currentPage - 1)}
+														onClick={() =>
+															handleRecentDocumentsPageChange(recentDocumentsData.pagination.currentPage - 1)
+														}
 														disabled={recentDocumentsData.pagination.currentPage === 1}
 														className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
 													>
@@ -2065,7 +2088,9 @@ const DocumentEditor = () => {
 														</span>
 													))}
 													<button
-														onClick={() => handleRecentDocumentsPageChange(recentDocumentsData.pagination.currentPage + 1)}
+														onClick={() =>
+															handleRecentDocumentsPageChange(recentDocumentsData.pagination.currentPage + 1)
+														}
 														disabled={
 															recentDocumentsData.pagination.currentPage === recentDocumentsData.pagination.totalPages
 														}
@@ -2127,16 +2152,16 @@ const DocumentEditor = () => {
 						</div>
 
 						{/* Mẫu tài liệu */}
-						<div 
+						<div
 							className={`flex flex-col transition-all duration-500 ease-in-out overflow-hidden ${
 								isTemplatesExpanded ? 'flex-shrink-0' : 'flex-shrink-0'
 							}`}
 							style={{
-								height: isTemplatesExpanded ? 'calc(100% - 60px)' : '60px'
+								height: isTemplatesExpanded ? 'calc(100% - 60px)' : '60px',
 							}}
 						>
 							{/* Header - Always visible */}
-							<div 
+							<div
 								className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors border-t border-gray-200"
 								onClick={() => handleSectionToggle('templates')}
 							>
@@ -2218,7 +2243,8 @@ const DocumentEditor = () => {
 													<button
 														onClick={() => handleTemplatesPageChange(documentTemplatesData.pagination.currentPage + 1)}
 														disabled={
-															documentTemplatesData.pagination.currentPage === documentTemplatesData.pagination.totalPages
+															documentTemplatesData.pagination.currentPage ===
+															documentTemplatesData.pagination.totalPages
 														}
 														className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
 													>
@@ -2263,11 +2289,14 @@ const DocumentEditor = () => {
 														<div className="text-xs text-gray-500 space-y-1 text-left">
 															<div>Tiêu đề: {template.header?.title || template.templateName || template.name}</div>
 															<div>Mô tả: {template.templateDescription || template.description}</div>
-															<div>Loại: {
-																template.classifierCode === 'NHAT_KY_THU_NGHIEM' ? 'NHẬT KÝ THỬ NGHIỆM' :
-																template.classifierCode === 'BIEN_BAN_THU_NGHIEM' ? 'BIÊN BẢN THỬ NGHIỆM' :
-																'TÀI LIỆU KHÁC'
-															}</div>
+															<div>
+																Loại:{' '}
+																{template.classifierCode === 'NHAT_KY_THU_NGHIEM'
+																	? 'NHẬT KÝ THỬ NGHIỆM'
+																	: template.classifierCode === 'BIEN_BAN_THU_NGHIEM'
+																	? 'BIÊN BẢN THỬ NGHIỆM'
+																	: 'TÀI LIỆU KHÁC'}
+															</div>
 														</div>
 													</div>
 												))}
@@ -2794,11 +2823,16 @@ const DocumentEditor = () => {
 							${toast.type === 'info' ? 'border-blue-500' : ''}
 						`}
 						style={{
-							backgroundColor: 
-								toast.type === 'success' ? '#f0fdf4' :
-								toast.type === 'error' ? '#fef2f2' :
-								toast.type === 'warning' ? '#fffbeb' :
-								toast.type === 'info' ? '#eff6ff' : '#ffffff'
+							backgroundColor:
+								toast.type === 'success'
+									? '#f0fdf4'
+									: toast.type === 'error'
+									? '#fef2f2'
+									: toast.type === 'warning'
+									? '#fffbeb'
+									: toast.type === 'info'
+									? '#eff6ff'
+									: '#ffffff',
 						}}
 					>
 						{/* Icon */}
@@ -2810,19 +2844,21 @@ const DocumentEditor = () => {
 						</div>
 
 						{/* Message */}
-						<div className={`
+						<div
+							className={`
 							flex-1 text-sm font-medium
 							${toast.type === 'success' ? 'text-green-800' : ''}
 							${toast.type === 'error' ? 'text-red-800' : ''}
 							${toast.type === 'warning' ? 'text-yellow-800' : ''}
 							${toast.type === 'info' ? 'text-blue-800' : ''}
-						`}>
+						`}
+						>
 							{toast.message}
 						</div>
 
 						{/* Close button */}
 						<button
-							onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+							onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
 							className={`
 								flex-shrink-0 p-1 rounded hover:bg-opacity-20 transition-colors
 								${toast.type === 'success' ? 'hover:bg-green-600 text-green-600' : ''}

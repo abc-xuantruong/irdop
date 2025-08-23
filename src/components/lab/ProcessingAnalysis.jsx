@@ -387,6 +387,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		analysis: [],
 		sample: [],
 		matrix: [],
+		technician: [],
 		pagination: {},
 	});
 	const [selectedParameter, setSelectedParameter] = useState('');
@@ -394,6 +395,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		analysis: true, // Default expanded
 		sample: false,
 		matrix: false,
+		technician: false,
 	});
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -429,6 +431,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			'result_value',
 			'result_unit',
 			'deadline',
+			'technician_uid',
 			'doc_id',
 		],
 		parameters: [],
@@ -810,6 +813,17 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					}
 				} else if (column === 'protocol_source' && filterValue) {
 					requestBody.sources = Array.isArray(filterValue) ? filterValue : [filterValue];
+				} else if (column === 'technician_uid' && filterValue) {
+					if (!requestBody.technicianUIDs) {
+						requestBody.technicianUIDs = [];
+						const values = Array.isArray(filterValue)
+							? filterValue
+							: filterValue
+									.split(',')
+									.map((s) => s.trim())
+									.filter((s) => s);
+						requestBody.technicianUIDs = values;
+					}
 				}
 			});
 
@@ -873,6 +887,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					analysis: response.data.analysis || [],
 					sample: response.data.sample || [],
 					matrix: response.data.matrix || [],
+					technician: response.data.technician || [],
 					pagination: response.data.pagination || {},
 				});
 			}
@@ -999,6 +1014,19 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								value: item.result_unit,
 								count: item.total || 1,
 							};
+						} else if (column === 'technician_uid' && item.technician_uid !== undefined) {
+							// For technician filter, convert identity_uid to display name with alias
+							const technicianUid = item.technician_uid;
+							const technician = technicians?.find((tech) => tech.identity_uid === technicianUid);
+							const displayName = technician
+								? `${technician.identity_name}${technician.alias ? ` (${technician.alias})` : ''}`
+								: technicianUid || 'Không có người thực hiện';
+
+							return {
+								value: technicianUid, // Keep original identity_uid as value
+								count: item.total || 1,
+								label: displayName, // Display name with alias
+							};
 						} else {
 							// Fallback for other column types or if the item is just a string
 							return {
@@ -1123,7 +1151,16 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 			return () => clearInterval(autoRefreshInterval);
 		}
-	}, [updating, editingCell, editableCell.analysisId, editingProtocolSource, isInitialLoad, filters, currentPage, itemsPerPage]);
+	}, [
+		updating,
+		editingCell,
+		editableCell.analysisId,
+		editingProtocolSource,
+		isInitialLoad,
+		filters,
+		currentPage,
+		itemsPerPage,
+	]);
 
 	// Keyboard shortcuts
 	useEffect(() => {
@@ -1177,6 +1214,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			itemKey = `${type}|${itemName}|${sampleName || ''}`;
 		} else if (type === 'matrix') {
 			itemKey = `${type}|${itemName}`;
+		} else if (type === 'technician') {
+			itemKey = `${type}|${itemName}`;
 		}
 
 		// If same item is selected, clear it
@@ -1192,6 +1231,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					protocol_code: undefined,
 					sample_uid: undefined,
 					matrix: undefined,
+					technician_uid: undefined,
 				},
 			}));
 		} else {
@@ -1212,18 +1252,28 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				// Clear other filters
 				newFilters.headerFilters.sample_uid = undefined;
 				newFilters.headerFilters.matrix = undefined;
+				newFilters.headerFilters.technician_uid = undefined;
 			} else if (type === 'sample') {
 				newFilters.headerFilters.sample_uid = [itemName];
 				// Clear other filters
 				newFilters.headerFilters.parameter_name = undefined;
 				newFilters.headerFilters.protocol_code = undefined;
 				newFilters.headerFilters.matrix = undefined;
+				newFilters.headerFilters.technician_uid = undefined;
 			} else if (type === 'matrix') {
 				newFilters.headerFilters.matrix = itemName;
 				// Clear other filters
 				newFilters.headerFilters.parameter_name = undefined;
 				newFilters.headerFilters.protocol_code = undefined;
 				newFilters.headerFilters.sample_uid = undefined;
+				newFilters.headerFilters.technician_uid = undefined;
+			} else if (type === 'technician') {
+				newFilters.headerFilters.technician_uid = [itemName];
+				// Clear other filters
+				newFilters.headerFilters.parameter_name = undefined;
+				newFilters.headerFilters.protocol_code = undefined;
+				newFilters.headerFilters.sample_uid = undefined;
+				newFilters.headerFilters.matrix = undefined;
 			}
 
 			setFilters((prev) => ({
@@ -1757,10 +1807,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// Open document
 	const openDocument = async (docId) => {
-	
-			// Use the new modal preview for all document types
-			handleDocumentPreview(docId);
-		
+		// Use the new modal preview for all document types
+		handleDocumentPreview(docId);
 	};
 
 	// Handle sorting
@@ -1776,21 +1824,21 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			// Calculate filter position from the clicked header
 			const headerElement = event.currentTarget;
 			const rect = headerElement.getBoundingClientRect();
-			
+
 			// For doc_id column, position dropdown to the left to prevent cutoff
 			const dropdownWidth = 320; // Approximate width of filter dropdown
 			let leftPosition = rect.left + window.scrollX;
-			
+
 			if (column === 'doc_id') {
 				// Position dropdown to the left of the column
 				leftPosition = rect.right + window.scrollX - dropdownWidth;
-				
+
 				// Ensure it doesn't go off the left side of the screen
 				if (leftPosition < 10) {
 					leftPosition = 10;
 				}
 			}
-			
+
 			setFilterPosition({
 				top: rect.bottom + window.scrollY,
 				left: leftPosition,
@@ -1833,6 +1881,41 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		setFilterSearchTerm('');
 		setFilterResults([]);
 		setSelectedFilterValues([]);
+	};
+
+	// Open filter modal for specific column
+	const openFilterModal = (column) => {
+		// Set filter creation mode if not already active
+		if (!isFilterCreationMode) {
+			setIsFilterCreationMode(true);
+		}
+
+		// If the same filter column is already active, close it
+		if (activeFilterColumn === column) {
+			setActiveFilterColumn(null);
+			setFilterSearchTerm('');
+			setFilterResults([]);
+			setSelectedFilterValues([]);
+			return;
+		}
+
+		// Set active filter column
+		setActiveFilterColumn(column);
+		setFilterSearchTerm('');
+
+		// Load existing filter values for this column
+		const existingFilterValues = filters.headerFilters[column];
+		if (existingFilterValues && Array.isArray(existingFilterValues)) {
+			setSelectedFilterValues([...existingFilterValues]);
+		} else {
+			setSelectedFilterValues([]);
+		}
+
+		// Set filter position (default center)
+		setFilterPosition({
+			top: window.scrollY + 100,
+			left: window.innerWidth / 2 - 160, // Center the modal
+		});
 	};
 
 	// Handle filter value selection
@@ -1907,10 +1990,10 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				...filters.headerFilters,
 			},
 		};
-		
+
 		// Remove the specific column filter
 		delete newFilters.headerFilters[column];
-		
+
 		// Also clear related sidebar filters if needed
 		if (column === 'parameter_name') {
 			newFilters.parameters = [];
@@ -1921,19 +2004,23 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			delete newFilters.headerFilters.deadline;
 		} else if (column === 'matrix' || column === 'sample_uid') {
 			// Clear the selected parameter if it's related to matrix or sample
-			if (selectedParameter && 
+			if (
+				selectedParameter &&
 				((column === 'matrix' && selectedParameter.includes('matrix|')) ||
-				 (column === 'sample_uid' && selectedParameter.includes('sample|')))) {
+					(column === 'sample_uid' && selectedParameter.includes('sample|')))
+			) {
 				setSelectedParameter('');
 			}
 		}
-		
+
 		setFilters(newFilters);
-		
+
 		// Clear selected parameter if all filters are cleared
-		if (Object.keys(newFilters.headerFilters).length === 0 && 
-			newFilters.parameters.length === 0 && 
-			newFilters.protocols.length === 0) {
+		if (
+			Object.keys(newFilters.headerFilters).length === 0 &&
+			newFilters.parameters.length === 0 &&
+			newFilters.protocols.length === 0
+		) {
 			setSelectedParameter('');
 		}
 	};
@@ -1948,6 +2035,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		result_value: 'Kết quả',
 		result_unit: 'Đơn vị',
 		deadline: 'Hạn trả',
+		technician_uid: 'Người thực hiện',
 		doc_id: 'Doc',
 		document: 'Tài liệu',
 		id: 'ID',
@@ -1964,7 +2052,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		const rect = event.target.getBoundingClientRect();
 		const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
 		const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-		
+
 		setTooltip({
 			visible: true,
 			content,
@@ -1987,7 +2075,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		const rect = event.target.getBoundingClientRect();
 		const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
 		const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-		
+
 		setSampleTooltip({
 			visible: true,
 			content: sampleData,
@@ -2108,7 +2196,10 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								<span className="text-left">
 									Tìm thấy{' '}
 									<strong>
-										{parametersData.analysis.length + parametersData.sample.length + parametersData.matrix.length}
+										{parametersData.analysis.length +
+											parametersData.sample.length +
+											parametersData.matrix.length +
+											parametersData.technician.length}
 									</strong>{' '}
 									kết quả theo từ khóa <strong>{parameterSearchTerm}</strong>.
 									<span
@@ -2122,7 +2213,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								<span className="text-left">
 									<strong>{parametersData.analysis.length}</strong> chỉ tiêu,{' '}
 									<strong>{parametersData.sample.length}</strong> mẫu, <strong>{parametersData.matrix.length}</strong>{' '}
-									nền mẫu
+									nền mẫu, <strong>{parametersData.technician.length}</strong> người thực hiện
 								</span>
 							)}
 						</div>
@@ -2305,9 +2396,60 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								)}
 							</div>
 
+							{/* Technician Section */}
+							<div className="mb-1">
+								<div
+									className={`sidebar-section-header flex items-center justify-between py-2 cursor-pointer ${
+										sidebarExpandedSections.technician ? 'active' : ''
+									}`}
+									onClick={() => toggleSidebarSection('technician')}
+								>
+									<h3 className="text-sm font-bold text-gray-800">NGƯỜI THỰC HIỆN</h3>
+									<div className="flex items-center space-x-2 pr-2">
+										<span className="sidebar-subtitle text-purple-800">{parametersData.technician.length}</span>
+										<span className="text-gray-500">{sidebarExpandedSections.technician ? '▼' : '▶'}</span>
+									</div>
+								</div>
+								{sidebarExpandedSections.technician && (
+									<div className="ml-2 pr-2 space-y-1 max-h-[calc(100vh-350px)] overflow-y-auto overflow-x-hidden custom-scrollbar">
+										{parametersData.technician.map((technician) => {
+											const itemKey = `technician|${technician.technician_uid}`;
+											const isSelected = selectedParameter === itemKey;
+											const technicianInfo = technicians?.find(
+												(tech) => tech.identity_uid === technician.technician_uid,
+											);
+											const displayName = technicianInfo
+												? `${technicianInfo.identity_name}${technicianInfo.alias ? ` (${technicianInfo.alias})` : ''}`
+												: technician.technician_uid || 'Không có tên';
+
+											return (
+												<div
+													key={technician.technician_uid}
+													className={`sidebar-item py-1 cursor-pointer transition-all duration-200 flex items-center justify-between ${
+														isSelected ? 'text-purple-600 font-bold underline' : 'text-gray-700'
+													}`}
+													onClick={() => selectItem('technician', technician.technician_uid)}
+												>
+													<div className="flex-1 min-w-0 text-left">
+														<p className="text-xs font-medium text-left">
+															<span className="text-left">{displayName}</span>
+														</p>
+													</div>
+													<div className="item-count text-xs font-semibold text-gray-600">{technician.total}</div>
+												</div>
+											);
+										})}
+										{parametersData.technician.length === 0 && (
+											<div className="text-center py-4 text-gray-500 text-xs">Không có dữ liệu người thực hiện</div>
+										)}
+									</div>
+								)}
+							</div>
+
 							{parametersData.analysis.length === 0 &&
 								parametersData.sample.length === 0 &&
 								parametersData.matrix.length === 0 &&
+								parametersData.technician.length === 0 &&
 								!loading && (
 									<div className="text-center py-8 text-gray-500">
 										<div className="text-4xl mb-2">🔍</div>
@@ -2385,6 +2527,24 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									<span>Lập biên bản</span>
 								</button>
 
+								<button
+									onClick={() => openFilterModal('technician_uid')}
+									className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm ${
+										filters.headerFilters.technician_uid
+											? 'bg-purple-500 border-purple-700 text-white hover:bg-purple-600'
+											: 'bg-white border-gray-400 text-gray-700 hover:bg-gray-50'
+									}`}
+								>
+									<span>Người thực hiện</span>
+									{filters.headerFilters.technician_uid && (
+										<span className="ml-2 bg-white text-purple-600 px-2 py-1 rounded text-xs">
+											{Array.isArray(filters.headerFilters.technician_uid)
+												? filters.headerFilters.technician_uid.length
+												: 1}
+										</span>
+									)}
+								</button>
+
 								{selectedRows.size > 0 && (
 									<button
 										className="px-3 py-2 bg-green-500 border-2 border-green-700 text-white rounded-md text-sm font-bold hover:bg-green-600 transition-colors shadow-sm"
@@ -2427,7 +2587,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																		  (column === 'parameter_name' && filters.parameters.length > 0) ||
 																		  (column === 'protocol_code' && filters.protocols.length > 0) ||
 																		  (column === 'matrix' && filters.parameters.some((p) => p.includes('matrix|'))) ||
-																		  (column === 'sample_uid' && filters.parameters.some((p) => p.includes('sample|'))) ||
+																		  (column === 'sample_uid' &&
+																				filters.parameters.some((p) => p.includes('sample|'))) ||
 																		  (column === 'deadline' && filters.headerFilters.deadline)
 																		? 'underline font-black'
 																		: 'underline'
@@ -2435,7 +2596,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																	  (column === 'parameter_name' && filters.parameters.length > 0) ||
 																	  (column === 'protocol_code' && filters.protocols.length > 0) ||
 																	  (column === 'matrix' && filters.parameters.some((p) => p.includes('matrix|'))) ||
-																	  (column === 'sample_uid' && filters.parameters.some((p) => p.includes('sample|'))) ||
+																	  (column === 'sample_uid' &&
+																			filters.parameters.some((p) => p.includes('sample|'))) ||
 																	  (column === 'deadline' && filters.headerFilters.deadline)
 																	? 'text-blue-600 font-bold underline'
 																	: ''
@@ -2510,13 +2672,15 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																	<div className="relative text-left w-full">
 																		<span className="text-left">{row.sample_uid || ''}</span>
 																		{row.sample_uid && (
-																			<span 
+																			<span
 																				className="ml-1 inline-flex items-center justify-center w-4 h-4 text-blue-800 border border-gray-400 rounded-full text-xs cursor-help font-bold"
-																				onMouseEnter={(e) => showSampleTooltip(e, {
-																					sample_uid: row.sample_uid,
-																					sample_name: row.sample_name,
-																					sample_description: row.sample_description
-																				})}
+																				onMouseEnter={(e) =>
+																					showSampleTooltip(e, {
+																						sample_uid: row.sample_uid,
+																						sample_name: row.sample_name,
+																						sample_description: row.sample_description,
+																					})
+																				}
 																				onMouseLeave={hideSampleTooltip}
 																			>
 																				i
@@ -2764,6 +2928,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																			📄
 																		</span>
 																	) : null
+																) : column === 'technician_uid' ? (
+																	<div className="text-xs text-gray-900">{getTechnicianName(row.technician_uid)}</div>
 																) : column === 'deadline' ? (
 																	formatDate(row.deadline)
 																) : (
@@ -2983,7 +3149,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 															onChange={() => handleFilterValueSelect(result.value)}
 															className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
 														/>
-														<span className="flex-1 text-sm text-black">{result.value || '(Trống)'}</span>
+														<span className="flex-1 text-sm text-black">
+															{result.label || result.value || '(Trống)'}
+														</span>
 														<span className="text-xs text-gray-500 flex-shrink-0">({result.count})</span>
 													</label>
 												))}
@@ -3069,9 +3237,15 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					>
 						{sampleTooltip.content && (
 							<div className="text-left">
-								<div><strong>Mã mẫu:</strong> {sampleTooltip.content.sample_uid}</div>
-								<div><strong>Tên mẫu:</strong> {sampleTooltip.content.sample_name || 'Không có'}</div>
-								<div><strong>Mô tả:</strong> {sampleTooltip.content.sample_description || 'Không có'}</div>
+								<div>
+									<strong>Mã mẫu:</strong> {sampleTooltip.content.sample_uid}
+								</div>
+								<div>
+									<strong>Tên mẫu:</strong> {sampleTooltip.content.sample_name || 'Không có'}
+								</div>
+								<div>
+									<strong>Mô tả:</strong> {sampleTooltip.content.sample_description || 'Không có'}
+								</div>
 							</div>
 						)}
 					</div>,
@@ -3080,20 +3254,20 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 			{/* Document Preview Modal */}
 			{documentPreview.visible && (
-				<div className="document-preview-modal" onClick={(e) => {
-					if (e.target === e.currentTarget) {
-						closeDocumentPreview();
-					}
-				}}>
+				<div
+					className="document-preview-modal"
+					onClick={(e) => {
+						if (e.target === e.currentTarget) {
+							closeDocumentPreview();
+						}
+					}}
+				>
 					<div className="document-preview-content" onClick={(e) => e.stopPropagation()}>
 						<div className="document-preview-header">
 							<h3 className="text-lg font-semibold flex-1">
 								Xem tài liệu {documentPreview.docId && `- ${documentPreview.docId}`}
 							</h3>
-							<button 
-								onClick={closeDocumentPreview}
-								className="close-button"
-							>
+							<button onClick={closeDocumentPreview} className="close-button">
 								✕ Đóng
 							</button>
 						</div>

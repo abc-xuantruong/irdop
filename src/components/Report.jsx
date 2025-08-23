@@ -3879,7 +3879,7 @@ export default function MultiPageEditor() {
 							onClick={() => !isReadOnly && setShowVlas((prev) => !prev)}
 							className={`${
 								showVlas ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
 								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
 							}`}
 							disabled={isReadOnly}
@@ -3891,7 +3891,7 @@ export default function MultiPageEditor() {
 							onClick={() => !isReadOnly && setShowComment((prev) => !prev)}
 							className={`${
 								showComment ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
 								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
 							}`}
 							disabled={isReadOnly}
@@ -3908,7 +3908,7 @@ export default function MultiPageEditor() {
 							}}
 							className={`${
 								showReference ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
 								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
 							}`}
 							disabled={isReadOnly}
@@ -3920,7 +3920,7 @@ export default function MultiPageEditor() {
 							onClick={() => !isReadOnly && setShowEnglish((prev) => !prev)}
 							className={`${
 								showEnglish ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
 								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
 							}`}
 							disabled={isReadOnly}
@@ -3932,7 +3932,7 @@ export default function MultiPageEditor() {
 							onClick={() => !isReadOnly && setShowReplace((prev) => !prev)}
 							className={`${
 								showReplace ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-							} px-4 py-1 w-32 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
 								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
 							}`}
 							disabled={isReadOnly}

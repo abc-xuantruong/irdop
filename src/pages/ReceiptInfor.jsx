@@ -8,7 +8,7 @@ import { NavLink, useSearchParams, useNavigate } from 'react-router-dom';
 import { PiDownloadSimpleBold } from 'react-icons/pi';
 import { CgFileDocument } from 'react-icons/cg';
 import { TiBusinessCard } from 'react-icons/ti';
-import { MdOutlineContactPhone } from 'react-icons/md';
+import { MdOutlineContactPhone, MdCalendarMonth } from 'react-icons/md';
 import {
 	FaTrashAlt,
 	FaEdit,
@@ -22,6 +22,11 @@ import {
 	FaFolder,
 	FaQrcode,
 	FaCamera,
+	FaUserCog,
+	FaSync,
+	FaDatabase,
+	FaLayerGroup,
+	FaStar,
 } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -51,6 +56,14 @@ const ReceiptInfor = ({ receipt }) => {
 
 	// Keep editingRevenueField state but remove showRevenueSection
 	const [editingRevenueField, setEditingRevenueField] = useState(null);
+
+	// Add states for bulk analysis operations
+	const [selectedAnalytes, setSelectedAnalytes] = useState([]); // Add state to track selected analytes
+	const [selectAllAnalytes, setSelectAllAnalytes] = useState(false); // Add state for select all checkbox
+	const [isTransferMultipleVisible, setIsTransferMultipleVisible] = useState(false);
+	const [selectedTechnician, setSelectedTechnician] = useState(null);
+	const [isBulkDeadlineVisible, setIsBulkDeadlineVisible] = useState(false);
+	const [bulkDeadlineDate, setBulkDeadlineDate] = useState(new Date());
 	const [newSample, setNewSample] = useState({
 		sample_name: '',
 		matrix: '',
@@ -1109,6 +1122,441 @@ const ReceiptInfor = ({ receipt }) => {
 			});
 		}
 	};
+
+	// Add handler for checkbox selection
+	const handleAnalyteSelect = (id) => {
+		if (selectedAnalytes.includes(id)) {
+			setSelectedAnalytes(selectedAnalytes.filter((item) => item !== id));
+		} else {
+			setSelectedAnalytes([...selectedAnalytes, id]);
+		}
+	};
+
+	// Add handler for select all checkbox
+	const handleSelectAllAnalytes = () => {
+		if (selectAllAnalytes) {
+			setSelectedAnalytes([]);
+		} else {
+			setSelectedAnalytes(listAnalytes.map((analyte) => analyte.id));
+		}
+		setSelectAllAnalytes(!selectAllAnalytes);
+	};
+
+	// Modify delete handler to handle multiple selections
+	const handleDeleteSelected = () => {
+		if (selectedAnalytes.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Vui lòng chọn ít nhất một chỉ tiêu để xóa',
+			});
+			return;
+		}
+		setIsDeleteConfirmVisible(true);
+		setDeleteType('multiple');
+	};
+
+	const handleDeleteMultipleConfirmAction = async () => {
+		try {
+			const response = await apiPost('https://black.irdop.org/trelw82ki/db/delete/analysis', {
+				ids: selectedAnalytes,
+				modified_by_uid: currentUser.identity_uid,
+			});
+
+			if (response.status === 200) {
+				showToast(`${selectedAnalytes.length} chỉ tiêu đã được xóa thành công!`);
+				// Update listAnalytes by removing deleted items
+				setListAnalytes(listAnalytes.filter((analyte) => !selectedAnalytes.includes(analyte.id)));
+				setSelectedAnalytes([]);
+				setSelectAllAnalytes(false);
+				// Refresh receipt data
+				fetchReceipt();
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Xóa chỉ tiêu thất bại',
+				});
+			}
+		} catch (error) {
+			console.error('Error deleting analyses:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi xóa chỉ tiêu',
+			});
+		} finally {
+			setIsDeleteConfirmVisible(false);
+		}
+	};
+
+	const handleBulkTransfer = () => {
+		if (selectedAnalytes.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Vui lòng chọn ít nhất một chỉ tiêu để bàn giao',
+			});
+			return;
+		}
+		setIsTransferMultipleVisible(true);
+	};
+
+	const handleBulkTransferConfirm = async () => {
+		if (!selectedTechnician) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Vui lòng chọn người thực hiện',
+			});
+			return;
+		}
+
+		try {
+			// Get the selected analytes
+			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
+
+			let successCount = 0;
+			let failCount = 0;
+
+			// Make API calls for each analyte separately with minimal data
+			for (const analyte of selectedItems) {
+				try {
+					// Create minimal update object
+					const updateData = {
+						id: analyte.id,
+						sample_id: analyte.sample_id,
+						receipt_id: analyte.receipt_id,
+						technician_uid: selectedTechnician,
+						modified_by_uid: currentUser.identity_uid,
+					};
+
+					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+						analysis: updateData,
+					});
+					successCount++;
+				} catch (error) {
+					console.error(`Error updating analysis ID ${analyte.id}:`, error);
+					failCount++;
+				}
+			}
+
+			// Update the UI
+			const newAnalytesList = listAnalytes.map((analyte) => {
+				if (selectedAnalytes.includes(analyte.id)) {
+					return { ...analyte, technician_uid: selectedTechnician };
+				}
+				return analyte;
+			});
+			setListAnalytes(newAnalytesList);
+
+			if (failCount > 0) {
+				Swal.fire({
+					icon: 'warning',
+					title: 'Kết quả',
+					text: `${successCount} chỉ tiêu cập nhật thành công, ${failCount} thất bại`,
+				});
+			} else {
+				showToast(
+					`Đã bàn giao thành công ${selectedAnalytes.length} chỉ tiêu cho ${
+						technicians.find((tech) => tech.identity_uid === selectedTechnician)?.identity_name
+					}`,
+				);
+			}
+
+			setIsTransferMultipleVisible(false);
+			setSelectedTechnician(null);
+			setSelectedAnalytes([]);
+			setSelectAllAnalytes(false);
+		} catch (error) {
+			console.error('Error transferring analyses:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi bàn giao chỉ tiêu',
+			});
+		}
+	};
+
+	// Add function to handle bulk deadline updates
+	const handleBulkDeadlineUpdate = async () => {
+		if (selectedAnalytes.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Vui lòng chọn ít nhất một chỉ tiêu để cập nhật hạn trả',
+			});
+			return;
+		}
+
+		setIsBulkDeadlineVisible(true);
+	};
+
+	// Function to apply the new deadline to all selected analyses
+	const handleConfirmBulkDeadline = async () => {
+		try {
+			// Get the selected analytes
+			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
+			const newDeadline = adjustDateForApiSubmission(bulkDeadlineDate);
+
+			let successCount = 0;
+			let failCount = 0;
+
+			// Make API calls for each analyte separately with minimal data
+			for (const analyte of selectedItems) {
+				try {
+					// Create minimal update object
+					const updateData = {
+						id: analyte.id,
+						sample_id: analyte.sample_id,
+						receipt_id: analyte.receipt_id,
+						deadline: newDeadline,
+						modified_by_uid: currentUser.identity_uid,
+					};
+
+					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+						analysis: updateData,
+					});
+					successCount++;
+				} catch (error) {
+					console.error(`Error updating analysis ID ${analyte.id}:`, error);
+					failCount++;
+				}
+			}
+
+			// Update the UI
+			const newAnalytesList = listAnalytes.map((analyte) => {
+				if (selectedAnalytes.includes(analyte.id)) {
+					return { ...analyte, deadline: newDeadline };
+				}
+				return analyte;
+			});
+			setListAnalytes(newAnalytesList);
+
+			if (failCount > 0) {
+				Swal.fire({
+					icon: 'warning',
+					title: 'Kết quả',
+					text: `${successCount} chỉ tiêu cập nhật thành công, ${failCount} thất bại`,
+				});
+			} else {
+				showToast(`Đã cập nhật hạn trả cho ${selectedAnalytes.length} chỉ tiêu thành ${formatDate(bulkDeadlineDate)}`);
+			}
+
+			setIsBulkDeadlineVisible(false);
+			setSelectedAnalytes([]);
+			setSelectAllAnalytes(false);
+		} catch (error) {
+			console.error('Error updating deadlines:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật hạn trả',
+			});
+		}
+	};
+
+	// Add function to handle bulk field updates
+	const handleBulkFieldUpdate = async () => {
+		if (selectedAnalytes.length === 0) {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Vui lòng chọn ít nhất một chỉ tiêu để cập nhật lĩnh vực',
+			});
+			return;
+		}
+
+		// Prompt for the field value
+		const { value: field } = await Swal.fire({
+			title: 'Chọn lĩnh vực',
+			input: 'select',
+			inputOptions: {
+				'Hóa lý': 'Hóa lý',
+				'Vi sinh': 'Vi sinh',
+			},
+			inputPlaceholder: 'Chọn lĩnh vực',
+			showCancelButton: true,
+			cancelButtonText: 'Hủy bỏ',
+			confirmButtonText: 'Cập nhật',
+			inputValidator: (value) => {
+				if (!value) {
+					return 'Bạn cần chọn một lĩnh vực!';
+				}
+			},
+		});
+
+		if (field) {
+			try {
+				// Get the selected analytes
+				const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
+
+				let successCount = 0;
+				let failCount = 0;
+
+				// Make API calls for each analyte separately with minimal data
+				for (const analyte of selectedItems) {
+					try {
+						// Create minimal update object
+						const updateData = {
+							id: analyte.id,
+							sample_id: analyte.sample_id,
+							receipt_id: analyte.receipt_id,
+							field: field,
+							modified_by_uid: currentUser.identity_uid,
+						};
+
+						await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+							analysis: updateData,
+						});
+						successCount++;
+					} catch (error) {
+						console.error(`Error updating analysis ID ${analyte.id}:`, error);
+						failCount++;
+					}
+				}
+
+				// Update the UI
+				const newAnalytesList = listAnalytes.map((analyte) => {
+					if (selectedAnalytes.includes(analyte.id)) {
+						return { ...analyte, field: field };
+					}
+					return analyte;
+				});
+				setListAnalytes(newAnalytesList);
+
+				if (failCount > 0) {
+					Swal.fire({
+						icon: 'warning',
+						title: 'Kết quả',
+						text: `${successCount} chỉ tiêu cập nhật thành công, ${failCount} thất bại`,
+					});
+				} else {
+					showToast(`Đã cập nhật lĩnh vực "${field}" cho ${selectedAnalytes.length} chỉ tiêu`);
+				}
+
+				setSelectedAnalytes([]);
+				setSelectAllAnalytes(false);
+			} catch (error) {
+				console.error('Error updating fields:', error);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: error.message || 'Đã xảy ra lỗi khi cập nhật lĩnh vực',
+				});
+			}
+		}
+	};
+
+	// // Delete selected analytes
+	// const handleDeleteSelected = () => {
+	// 	if (selectedAnalytes.length === 0) return;
+
+	// 	Swal.fire({
+	// 		title: `Xóa ${selectedAnalytes.length} chỉ tiêu?`,
+	// 		text: 'Bạn có chắc chắn muốn xóa các chỉ tiêu đã chọn không?',
+	// 		icon: 'warning',
+	// 		showCancelButton: true,
+	// 		confirmButtonColor: '#d33',
+	// 		cancelButtonColor: '#3085d6',
+	// 		confirmButtonText: 'Xóa',
+	// 		cancelButtonText: 'Hủy',
+	// 	}).then(async (result) => {
+	// 		if (result.isConfirmed) {
+	// 			try {
+	// 				const promises = selectedAnalytes.map(id => 
+	// 					apiPost('/api/delete/analysis', { analysis_id: id }, token)
+	// 				);
+					
+	// 				await Promise.all(promises);
+					
+	// 				setSelectedAnalytes([]);
+	// 				setSelectAllAnalytes(false);
+					
+	// 				Swal.fire({
+	// 					position: 'top-end',
+	// 					icon: 'success',
+	// 					title: `Đã xóa ${selectedAnalytes.length} chỉ tiêu`,
+	// 					showConfirmButton: false,
+	// 					timer: 1500,
+	// 				});
+					
+	// 				// Refresh data
+	// 				getReceiptData(receiptId);
+	// 			} catch (error) {
+	// 				console.error('Error deleting analyses:', error);
+	// 				Swal.fire({
+	// 					icon: 'error',
+	// 					title: 'Lỗi',
+	// 					text: 'Có lỗi xảy ra khi xóa chỉ tiêu',
+	// 				});
+	// 			}
+	// 		}
+	// 	});
+	// };
+
+	const renderBulkTransferForm = () => (
+		<div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
+			<div className="bg-white p-4 rounded-lg w-[400px] h-[400px] relative flex flex-col justify-between">
+				<h2 className="text-2xl font-semibold mb-4">Bàn giao {selectedAnalytes.length} chỉ tiêu</h2>
+				<div className="overflow-auto mb-4 flex-1">
+					<p className="font-medium mb-2">Chọn người thực hiện:</p>
+					<div className="max-h-[240px] overflow-y-auto border rounded p-2">
+						{technicians.map((tech) => (
+							<div
+								key={tech.identity_uid}
+								className={`p-2 mb-2 cursor-pointer border rounded ${
+									selectedTechnician === tech.identity_uid ? 'border-primary bg-blue-50' : 'border-gray-300'
+								}`}
+								onClick={() => setSelectedTechnician(tech.identity_uid)}
+							>
+								<p className="font-bold text-primary">{tech.alias || ''}</p>
+								<p>{tech.identity_name || ''}</p>
+							</div>
+						))}
+					</div>
+				</div>
+				<div className="flex justify-end">
+					<button
+						className="bg-gray-500 text-white p-2 rounded mr-2"
+						onClick={() => {
+							setIsTransferMultipleVisible(false);
+							setSelectedTechnician(null);
+						}}
+					>
+						Hủy bỏ
+					</button>
+					<button
+						className={`${selectedTechnician ? 'bg-green-500' : 'bg-gray-400'} text-white p-2 rounded`}
+						onClick={handleBulkTransferConfirm}
+						disabled={!selectedTechnician}
+					>
+						Xác nhận
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+
+	// Add the bulk deadline picker modal
+	const renderBulkDeadlinePicker = () => (
+		<div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
+			<div className="bg-white p-4 rounded-lg w-[320px] relative">
+				<h2 className="text-xl font-semibold mb-4">Cập nhật hạn trả cho {selectedAnalytes.length} chỉ tiêu</h2>
+				<div className="mb-4 flex justify-center">
+					<DatePicker selected={bulkDeadlineDate} onChange={(date) => setBulkDeadlineDate(date)} inline />
+				</div>
+				<div className="flex justify-end">
+					<button className="bg-gray-500 text-white p-2 rounded mr-2" onClick={() => setIsBulkDeadlineVisible(false)}>
+						Hủy bỏ
+					</button>
+					<button className="bg-green-500 text-white p-2 rounded" onClick={handleConfirmBulkDeadline}>
+						Xác nhận
+					</button>
+				</div>
+			</div>
+		</div>
+	);
 
 	// Fixed handleInputChange function to avoid null object errors
 	const handleInputChange = (e) => {
@@ -3575,6 +4023,55 @@ const ReceiptInfor = ({ receipt }) => {
 				<div className="overflow-x-auto mt-1">
 					{viewMode === 'analyte' ? (
 						<>
+							{/* Add toolbar for bulk operations */}
+							<div className="mb-1 flex justify-end">
+								<div className="w-fit flex items-center flex-wrap py-1 mr-0.5">
+									<div className="flex -translate-y-0 md:translate-y-0 md:pt-0 w-full justify-end">
+										{/* Hidden delete button
+										<button
+											className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+												selectedAnalytes.length > 0 ? 'bg-red-500' : 'bg-gray-300 cursor-not-allowed'
+											} mr-2`}
+											onClick={selectedAnalytes.length > 0 ? handleDeleteSelected : undefined}
+										>
+											<FaTrashAlt className="mr-1" />
+											{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
+										</button>
+										*/}
+										<button
+											className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+												selectedAnalytes.length > 0 ? 'bg-blue-500' : 'bg-gray-300 cursor-not-allowed'
+											} mr-2`}
+											onClick={selectedAnalytes.length > 0 ? handleBulkTransfer : undefined}
+										>
+											<FaUserCog className="mr-1" />
+											{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
+										</button>
+										{/* Add the bulk deadline update button */}
+										<button
+											className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+												selectedAnalytes.length > 0 ? 'bg-orange-500' : 'bg-gray-300 cursor-not-allowed'
+											} mr-2`}
+											onClick={selectedAnalytes.length > 0 ? handleBulkDeadlineUpdate : undefined}
+											title="Cập nhật hạn trả"
+										>
+											<MdCalendarMonth className="mr-1" size={16} />
+											{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
+										</button>
+										{/* Add button to update field in bulk */}
+										<button
+											className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+												selectedAnalytes.length > 0 ? 'bg-purple-500' : 'bg-gray-300 cursor-not-allowed'
+											} mr-2`}
+											onClick={selectedAnalytes.length > 0 ? handleBulkFieldUpdate : undefined}
+											title="Cập nhật lĩnh vực"
+										>
+											<FaLayerGroup className="mr-1" size={14} />
+											{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
+										</button>
+									</div>
+								</div>
+							</div>
 							<div className="overflow-x-auto">
 								<table className="text-black w-full relative z-0">
 									<thead>
@@ -3586,7 +4083,14 @@ const ReceiptInfor = ({ receipt }) => {
 											<th className="py-2 border-x w-1/12 min-w-20">Đơn vị</th>
 											<th className="py-2 border-x w-1/12 min-w-28">Hạn trả</th>
 											<th className="py-2 border-x w-[12%] min-w-36">Người thực hiện</th>
-											<th className="py-2 border-2 text-center w-14 min-w-14">Xóa</th>
+											<th className="py-2 border-x w-10 min-w-10">
+												<input 
+													type="checkbox" 
+													checked={selectAllAnalytes} 
+													onChange={handleSelectAllAnalytes} 
+													className="w-4 h-4" 
+												/>
+											</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -3627,13 +4131,13 @@ const ReceiptInfor = ({ receipt }) => {
 													{canViewDeadline() ? formatDate(order.deadline) : '--'}
 												</td>
 												<td className="p-1 border text-start">{getTechnicianName(order.technician_uid)}</td>
-												<td className="p-1 border text-center text-red-500">
-													<button
-														className="text-red-500 bg-white text-sm rounded-lg p-1.5 focus:outline-none text-center"
-														onClick={() => handleDeleteConfirm(order.id, 'analysis')}
-													>
-														<FaTrashAlt size={20} />
-													</button>
+												<td className="pt-[5px] pb-0 border align-top text-center">
+													<input
+														type="checkbox"
+														checked={selectedAnalytes.includes(order.id)}
+														onChange={() => handleAnalyteSelect(order.id)}
+														className="w-4 h-4 mt-2"
+													/>
 												</td>
 											</tr>
 										))}
@@ -3933,6 +4437,12 @@ const ReceiptInfor = ({ receipt }) => {
 					</div>
 				</div>
 			)}
+
+			{/* Bulk Transfer Modal */}
+			{isTransferMultipleVisible && renderBulkTransferForm()}
+
+			{/* Bulk Deadline Update Modal */}
+			{isBulkDeadlineVisible && renderBulkDeadlinePicker()}
 		</div>
 	);
 };

@@ -186,6 +186,44 @@ const CreateReceiptFromCRM = () => {
 	const closeModal = () => {
 		setIsModalOpen(false);
 	};
+	// Function to auto-fill code format
+	const formatCode = (inputCode) => {
+		if (!inputCode) return inputCode;
+
+		// Remove any existing 'DH' prefix and leading zeros for processing
+		let cleanCode = inputCode.replace(/^DH*/i, '');
+
+		// If the clean code is less than 9 characters (after removing DH prefix)
+		if (cleanCode.length < 9) {
+			// Calculate how many zeros we need
+			const zerosNeeded = 9 - cleanCode.length;
+			const prefix = 'DH' + '0'.repeat(zerosNeeded - 2);
+			return prefix + cleanCode;
+		}
+
+		// If already 9 or more characters, just add DH prefix if not present
+		if (!inputCode.toUpperCase().startsWith('DH')) {
+			return 'DH' + inputCode;
+		}
+
+		return inputCode.toUpperCase();
+	};
+
+	// Handle code input change with auto-formatting
+	const handleCodeChange = (e) => {
+		const inputValue = e.target.value;
+		setCode(inputValue);
+	};
+
+	// Handle code input blur to apply formatting
+	const handleCodeBlur = (e) => {
+		const inputValue = e.target.value;
+		if (inputValue.trim()) {
+			const formattedCode = formatCode(inputValue);
+			setCode(formattedCode);
+		}
+	};
+
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 		setIsLoading(true);
@@ -238,13 +276,16 @@ const CreateReceiptFromCRM = () => {
 				return; // hasAuthCookies will handle redirect
 			}
 
+			// Format the code before sending to API
+			const formattedCode = formatCode(code);
+
 			// Convert code to uppercase before sending to API
 			let response;
 			let dataFound = false;
 
 			// First try the database API
 			try {
-				response = await apiPost('https://black.irdop.org/db/generate_receipt', { code: code.toUpperCase() });
+				response = await apiPost('https://black.irdop.org/db/generate_receipt', { code: formattedCode });
 
 				// Check if the response contains data
 				if (
@@ -295,7 +336,7 @@ const CreateReceiptFromCRM = () => {
 
 			// If no data found from database API, try CRM API
 			if (!dataFound) {
-				response = await apiPost('https://black.irdop.org/crm/generate_receipt', { code: code.toUpperCase() });
+				response = await apiPost('https://black.irdop.org/crm/generate_receipt', { code: formattedCode });
 
 				// Check if the response contains an error
 				if (response && response.data && response.data.error) {
@@ -1261,15 +1302,15 @@ const CreateReceiptFromCRM = () => {
 		// Create a date object with the selected date at 7 AM GMT+7
 		const selectedDate = new Date(dateValue);
 		selectedDate.setHours(7, 0, 0, 0); // Set to 7:00:00 AM
-		
+
 		// Convert to ISO string for GMT+7 timezone
 		const vietnamOffset = 7 * 60; // GMT+7 in minutes
 		const localOffset = selectedDate.getTimezoneOffset(); // Local timezone offset in minutes
 		const totalOffset = vietnamOffset + localOffset; // Total offset to add
-		
-		const gmtPlus7Date = new Date(selectedDate.getTime() + (totalOffset * 60000));
+
+		const gmtPlus7Date = new Date(selectedDate.getTime() + totalOffset * 60000);
 		const isoString = gmtPlus7Date.toISOString();
-		
+
 		setDeadline(isoString);
 	};
 
@@ -1459,8 +1500,11 @@ const CreateReceiptFromCRM = () => {
 				return; // hasAuthCookies will handle redirect
 			}
 
+			// Format the code before sending to API
+			const formattedCode = formatCode(code);
+
 			// Load data from CRM API
-			const response = await apiPost('https://black.irdop.org/crm/generate_receipt', { code: code.toUpperCase() });
+			const response = await apiPost('https://black.irdop.org/crm/generate_receipt', { code: formattedCode });
 
 			// Check if the response contains an error
 			if (response && response.data && response.data.error) {
@@ -1648,8 +1692,9 @@ const CreateReceiptFromCRM = () => {
 									<input
 										type="text"
 										value={code}
-										onChange={(e) => setCode(e.target.value)}
-										placeholder="Nhập mã đơn hàng"
+										onChange={handleCodeChange}
+										onBlur={handleCodeBlur}
+										placeholder="Nhập mã đơn hàng (VD: 2222 sẽ tự động thành DH0002222)"
 										className="border p-2 rounded flex-grow bg-white"
 										required
 									/>
