@@ -34,10 +34,10 @@ const SampleInfor = () => {
 	// Timezone adjustment functions for GMT+7 (Vietnam timezone)
 	const adjustTimezoneForDisplay = (dateValue) => {
 		if (!dateValue) return null;
-		
+
 		const date = new Date(dateValue);
 		if (isNaN(date.getTime())) return dateValue;
-		
+
 		// Add 7 hours to convert from UTC to Vietnam time for display
 		date.setHours(date.getHours() + 7);
 		return date.toISOString();
@@ -45,19 +45,19 @@ const SampleInfor = () => {
 
 	const adjustDateForApiSubmission = (dateValue) => {
 		if (!dateValue) return null;
-		
+
 		const date = new Date(dateValue);
 		if (isNaN(date.getTime())) return dateValue;
-		
+
 		// Convert to GMT+7 by setting the time to 7 AM of the selected date
 		date.setHours(7, 0, 0, 0);
-		
+
 		// Convert to ISO string for GMT+7 timezone
 		const vietnamOffset = 7 * 60; // GMT+7 in minutes
 		const localOffset = date.getTimezoneOffset(); // Local timezone offset in minutes
 		const totalOffset = vietnamOffset + localOffset; // Total offset to add
-		
-		const gmtPlus7Date = new Date(date.getTime() + (totalOffset * 60000));
+
+		const gmtPlus7Date = new Date(date.getTime() + totalOffset * 60000);
 		return gmtPlus7Date.toISOString();
 	};
 
@@ -617,7 +617,9 @@ const SampleInfor = () => {
 					technician_uid: parameter.technician_uid,
 					deadline: parameter.deadline
 						? adjustDateForApiSubmission(new Date(parameter.deadline))
-						: adjustDateForApiSubmission(new Date(Date.now() + (parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0))),
+						: adjustDateForApiSubmission(
+								new Date(Date.now() + (parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0)),
+						  ),
 					protocol_code: parameter.protocol_code,
 					result_unit: parameter.default_unit || parameter.result_unit,
 					protocol_source: parameter.protocol_source,
@@ -2803,21 +2805,21 @@ const SampleInfor = () => {
 
 	const renderBulkTransferForm = () => (
 		<div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
-			<div className="bg-white p-4 rounded-lg w-[400px] h-[400px] relative flex flex-col justify-between">
+			<div className="bg-white p-4 rounded-lg w-[800px] max-w-[90vw] max-h-[90vh] relative flex flex-col justify-between">
 				<h2 className="text-2xl font-semibold mb-4">Bàn giao {selectedAnalytes.length} chỉ tiêu</h2>
 				<div className="overflow-auto mb-4 flex-1">
 					<p className="font-medium mb-2">Chọn người thực hiện:</p>
-					<div className="max-h-[240px] overflow-y-auto border rounded p-2">
+					<div className="grid grid-cols-4 gap-3">
 						{technicians.map((tech) => (
 							<div
 								key={tech.identity_uid}
-								className={`p-2 mb-2 cursor-pointer border rounded ${
+								className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 text-center ${
 									selectedTechnician === tech.identity_uid ? 'border-primary bg-blue-50' : 'border-gray-300'
 								}`}
 								onClick={() => setSelectedTechnician(tech.identity_uid)}
 							>
-								<p className="font-bold text-primary">{tech.alias || ''}</p>
-								<p>{tech.identity_name || ''}</p>
+								<p className="font-bold text-primary text-sm mb-1">{tech.alias || ''}</p>
+								<p className="text-xs text-gray-600 leading-tight">{tech.identity_name || ''}</p>
 							</div>
 						))}
 					</div>
@@ -3973,8 +3975,13 @@ const SampleInfor = () => {
 								<th className="p-2 border-x w-1/12 min-w-28 text-left">Hạn trả</th>
 								<th className="p-2 border-x w-[5%] min-w-24 text-left ">Lĩnh vực</th>
 								<th className="p-2 border-x w-[10%] min-w-32 text-left">Thực hiện</th>
-								<th className="py-2 border-x w-10 min-w-10">
-									<input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="w-4 h-4" />
+								<th className="py-2 border-x w-10 min-w-10 cursor-pointer" onClick={handleSelectAll}>
+									<input
+										type="checkbox"
+										checked={selectAll}
+										onChange={handleSelectAll}
+										className="w-4 h-4 pointer-events-none"
+									/>
 								</th>
 							</tr>
 						</thead>
@@ -4458,36 +4465,42 @@ const SampleInfor = () => {
 
 										{technicianDropdownVisible === order.id &&
 											createPortal(
-												<ul
-													className="fixed w-max min-w-[150px] bg-white border rounded shadow-lg z-[99]"
+												<div
+													className="fixed bg-white border rounded shadow-lg z-[99] p-4"
 													style={{
 														top: dropdownPosition.top + 'px',
 														left: dropdownPosition.left + 'px',
 														position: 'absolute',
-														maxHeight: '200px',
-														overflowY: 'auto',
+														minWidth: '500px',
+														maxWidth: '800px',
+														width: 'max-content',
 													}}
 												>
-													{technicians.map((identity) => (
-														<li
-															key={identity.alias}
-															className="p-1 text-md cursor-pointer hover:bg-gray-200 dropdown-item"
-															onClick={() => handleTechnicianChange(order.id, identity.identity_uid)}
-														>
-															<p className="font-bold text-primary text-sm text-start">{identity.alias || ''}</p>
-															<p className="text-start">{identity.identity_name || ''}</p>
-														</li>
-													))}
-												</ul>,
+													<div className="grid grid-cols-4 gap-3 max-h-96">
+														{technicians.map((identity) => (
+															<div
+																key={identity.alias}
+																className="p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 hover:border-primary transition-all duration-200 min-w-[100px] text-center"
+																onClick={() => handleTechnicianChange(order.id, identity.identity_uid)}
+															>
+																<p className="font-bold text-primary text-sm mb-1">{identity.alias || ''}</p>
+																<p className="text-xs text-gray-600 leading-tight">{identity.identity_name || ''}</p>
+															</div>
+														))}
+													</div>
+												</div>,
 												document.body,
 											)}
 									</td>
-									<td className="pt-[5px] pb-0 border align-top text-center">
+									<td
+										className="pt-[5px] pb-0 border align-top text-center cursor-pointer"
+										onClick={() => handleAnalyteSelect(order.id)}
+									>
 										<input
 											type="checkbox"
 											checked={selectedAnalytes.includes(order.id)}
 											onChange={() => handleAnalyteSelect(order.id)}
-											className="w-4 h-4 mt-2"
+											className="w-4 h-4 mt-2 pointer-events-none"
 										/>
 									</td>
 								</tr>

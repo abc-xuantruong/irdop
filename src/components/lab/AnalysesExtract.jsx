@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { apiPost } from '../../contexts/helperFunctionCallAPI';
 
 const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId = null, onClose = null }) => {
+	// useEffect phải ở cấp độ top của component
+	useEffect(() => {
+		if (showAnalysisExtractInstead && document) {
+			showAnalysisDataPopupFromExtract(document);
+		}
+	}, [showAnalysisExtractInstead, document]);
+
 	// Show auto-hide message function
 	const showAutoHideMessage = (message, type = 'info') => {
 		// Remove existing message if any
@@ -64,16 +71,55 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 		}, 3000);
 	};
 
+	// Helper function to validate analyses array
+	const isValidAnalysesArray = (analyses) => {
+		return analyses && analyses !== '' && Array.isArray(analyses) && analyses.length > 0;
+	};
+
 	// Show analysis data popup with simplified logic for extracted data comparison
 	const showAnalysisDataPopupFromExtract = async (doc) => {
-		if (!doc || !doc.metadata || !doc.metadata.extractData || !doc.metadata.extractData.analyses) {
+		// Chỉ kiểm tra extractData.analyses, không kiểm tra analyses trực tiếp
+		const extractDataAnalyses = doc?.metadata?.extractData?.analyses;
+
+		const hasValidExtractData = isValidAnalysesArray(extractDataAnalyses);
+
+		console.log('🔍 AnalysesExtract debug:', {
+			hasValidExtractData,
+			extractDataAnalyses,
+			extractDataLength: extractDataAnalyses?.length,
+			documentId: doc?.id,
+		});
+
+		if (!doc || !doc.metadata || !hasValidExtractData) {
+			console.log('❌ No analysis data found for document:', doc?.id);
+
+			// Nếu có editId, mở tab mới để chỉnh sửa
+			if (editId || doc?.id) {
+				const targetEditId = editId || doc.id;
+				console.log('🔀 Opening new tab for edit page with editId:', targetEditId);
+				showAutoHideMessage('Mở tab mới để chỉnh sửa...', 'info');
+
+				// Mở tab mới và đảm bảo không bị duplicate
+				const editUrl = `/editor?editId=${targetEditId}`;
+				const newTab = window.open(editUrl, `edit_${targetEditId}`);
+
+				// Kiểm tra nếu tab không được mở (popup blocked)
+				if (!newTab || newTab.closed || typeof newTab.closed == 'undefined') {
+					showAutoHideMessage('Không thể mở tab mới. Vui lòng cho phép popup hoặc click lại.', 'warning');
+				}
+
+				// Đóng modal hiện tại nếu có onClose callback
+				if (onClose) onClose();
+				return;
+			}
+
 			showAutoHideMessage('Không có dữ liệu chỉ tiêu để hiển thị', 'warning');
 			return;
 		}
 
-		// 1. Lấy dữ liệu trích xuất
+		// 1. Lấy dữ liệu trích xuất từ extractData.analyses
 		const extractedAnalyses = doc.metadata.extractData.analyses;
-		const analysisIds = extractedAnalyses.map(a => a.id).filter(id => id);
+		const analysisIds = extractedAnalyses.map((a) => a.id).filter((id) => id);
 
 		// 2. Gọi API lấy matchAnalysis
 		let matchAnalysis = [];
@@ -97,15 +143,15 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 		function getAnalysisDifferences(extracted, matched) {
 			if (!matched) return extracted;
 			const diffObj = { ...extracted };
-			
+
 			// So sánh các field: parameterName, protocolCode, sampleUID, resultValue, resultUnit
 			const fieldsToCompare = ['parameterName', 'protocolCode', 'sampleUID'];
-			fieldsToCompare.forEach(field => {
+			fieldsToCompare.forEach((field) => {
 				if (extracted[field] !== matched[field]) {
 					diffObj[field + 'Diff'] = matched[field];
 				}
 			});
-			
+
 			// So sánh resultValue và resultUnit (chỉ hiển thị cảnh báo nếu matched có giá trị khác null/empty)
 			if (matched.resultValue && matched.resultValue !== '' && extracted.resultValue !== matched.resultValue) {
 				diffObj.resultValueDiff = matched.resultValue;
@@ -113,13 +159,13 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 			if (matched.resultUnit && matched.resultUnit !== '' && extracted.resultUnit !== matched.resultUnit) {
 				diffObj.resultUnitDiff = matched.resultUnit;
 			}
-			
+
 			return diffObj;
 		}
 
 		// 4. Gộp dữ liệu trích xuất với các trường ...Diff nếu có
-		const mergedAnalyses = extractedAnalyses.map(extract => {
-			const matched = matchAnalysis.find(m => m.id === parseInt(extract.id));
+		const mergedAnalyses = extractedAnalyses.map((extract) => {
+			const matched = matchAnalysis.find((m) => m.id === parseInt(extract.id));
 			return getAnalysisDifferences(extract, matched);
 		});
 
@@ -153,7 +199,7 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 			overlay.remove();
 			// Remove any remaining popup overlays
 			const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
-			remainingPopups.forEach(popup => popup.remove());
+			remainingPopups.forEach((popup) => popup.remove());
 			// Call onClose callback if provided
 			if (onClose) onClose();
 		};
@@ -161,7 +207,8 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 		// Nút hiển thị khác biệt
 		const showDiffBtn = globalThis.document.createElement('button');
 		showDiffBtn.textContent = 'Hiển thị dữ liệu khác biệt';
-		showDiffBtn.className = 'px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200';
+		showDiffBtn.className =
+			'px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white border-0 rounded-md cursor-pointer font-bold text-xs transition-colors duration-200';
 
 		// CSS cho difference indicators
 		const style = globalThis.document.createElement('style');
@@ -258,42 +305,81 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 							</tr>
 						</thead>
 						<tbody>
-							${mergedAnalyses.map(a => `
+							${mergedAnalyses
+								.map(
+									(a) => `
 								<tr>
 									<td class="border border-gray-300 p-2">${a.id || ''}</td>
 									<td class="border border-gray-300 p-2">
-										${a.sampleUIDDiff !== undefined ? (!showDifferences
-											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.sampleUIDDiff || 'Không có'}</div></span></span>${a.sampleUID || ''}</div>`
-											: `<div style="width: 100%;">${a.sampleUID || ''}<div class="difference-tag">Giá trị gốc: ${a.sampleUIDDiff || 'Không có'}</div></div>`
-										) : `<div>${a.sampleUID || ''}</div>`}
+										${
+											a.sampleUIDDiff !== undefined
+												? !showDifferences
+													? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${
+															a.sampleUIDDiff || 'Không có'
+													  }</div></span></span>${a.sampleUID || ''}</div>`
+													: `<div style="width: 100%;">${a.sampleUID || ''}<div class="difference-tag">Giá trị gốc: ${
+															a.sampleUIDDiff || 'Không có'
+													  }</div></div>`
+												: `<div>${a.sampleUID || ''}</div>`
+										}
 									</td>
 									<td class="border border-gray-300 p-2">${a.sampleName || ''}</td>
 									<td class="border border-gray-300 p-2">
-										${a.parameterNameDiff !== undefined ? (!showDifferences
-											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.parameterNameDiff || 'Không có'}</div></span></span>${a.parameterName || ''}</div>`
-											: `<div style="width: 100%;">${a.parameterName || ''}<div class="difference-tag">Giá trị gốc: ${a.parameterNameDiff || 'Không có'}</div></div>`
-										) : `<div>${a.parameterName || ''}</div>`}
+										${
+											a.parameterNameDiff !== undefined
+												? !showDifferences
+													? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${
+															a.parameterNameDiff || 'Không có'
+													  }</div></span></span>${a.parameterName || ''}</div>`
+													: `<div style="width: 100%;">${
+															a.parameterName || ''
+													  }<div class="difference-tag">Giá trị gốc: ${a.parameterNameDiff || 'Không có'}</div></div>`
+												: `<div>${a.parameterName || ''}</div>`
+										}
 									</td>
 									<td class="border border-gray-300 p-2">
-										${a.protocolCodeDiff !== undefined ? (!showDifferences
-											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.protocolCodeDiff || 'Không có'}</div></span></span>${a.protocolCode || ''}</div>`
-											: `<div style="width: 100%;">${a.protocolCode || ''}<div class="difference-tag">Giá trị gốc: ${a.protocolCodeDiff || 'Không có'}</div></div>`
-										) : `<div>${a.protocolCode || ''}</div>`}
+										${
+											a.protocolCodeDiff !== undefined
+												? !showDifferences
+													? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${
+															a.protocolCodeDiff || 'Không có'
+													  }</div></span></span>${a.protocolCode || ''}</div>`
+													: `<div style="width: 100%;">${
+															a.protocolCode || ''
+													  }<div class="difference-tag">Giá trị gốc: ${a.protocolCodeDiff || 'Không có'}</div></div>`
+												: `<div>${a.protocolCode || ''}</div>`
+										}
 									</td>
 									<td class="border border-gray-300 p-2">
-										${a.resultValueDiff !== undefined ? (!showDifferences
-											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.resultValueDiff || 'Không có'}</div></span></span>${a.resultValue || ''}</div>`
-											: `<div style="width: 100%;">${a.resultValue || ''}<div class="difference-tag">Giá trị gốc: ${a.resultValueDiff || 'Không có'}</div></div>`
-										) : `<div>${a.resultValue || ''}</div>`}
+										${
+											a.resultValueDiff !== undefined
+												? !showDifferences
+													? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${
+															a.resultValueDiff || 'Không có'
+													  }</div></span></span>${a.resultValue || ''}</div>`
+													: `<div style="width: 100%;">${a.resultValue || ''}<div class="difference-tag">Giá trị gốc: ${
+															a.resultValueDiff || 'Không có'
+													  }</div></div>`
+												: `<div>${a.resultValue || ''}</div>`
+										}
 									</td>
 									<td class="border border-gray-300 p-2">
-										${a.resultUnitDiff !== undefined ? (!showDifferences
-											? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${a.resultUnitDiff || 'Không có'}</div></span></span>${a.resultUnit || ''}</div>`
-											: `<div style="width: 100%;">${a.resultUnit || ''}<div class="difference-tag">Giá trị gốc: ${a.resultUnitDiff || 'Không có'}</div></div>`
-										) : `<div>${a.resultUnit || ''}</div>`}
+										${
+											a.resultUnitDiff !== undefined
+												? !showDifferences
+													? `<div><span class="difference-indicator">⚠️<span class="tooltip">Giá trị trong app: <div style="margin-top:4px; font-weight:bold;">${
+															a.resultUnitDiff || 'Không có'
+													  }</div></span></span>${a.resultUnit || ''}</div>`
+													: `<div style="width: 100%;">${a.resultUnit || ''}<div class="difference-tag">Giá trị gốc: ${
+															a.resultUnitDiff || 'Không có'
+													  }</div></div>`
+												: `<div>${a.resultUnit || ''}</div>`
+										}
 									</td>
 								</tr>
-							`).join('')}
+							`,
+								)
+								.join('')}
 						</tbody>
 					</table>
 				</div>
@@ -327,19 +413,21 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 		// Cancel button
 		const cancelBtn = globalThis.document.createElement('button');
 		cancelBtn.textContent = 'Hủy bỏ';
-		cancelBtn.className = 'px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
+		cancelBtn.className =
+			'px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
 		cancelBtn.onclick = () => {
 			overlay.remove();
 			// Remove any remaining popup overlays
 			const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
-			remainingPopups.forEach(popup => popup.remove());
+			remainingPopups.forEach((popup) => popup.remove());
 			// Call onClose callback if provided
 			if (onClose) onClose();
 		};
 
 		const confirmBtn = globalThis.document.createElement('button');
 		confirmBtn.textContent = 'Nhập kết quả';
-		confirmBtn.className = 'px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
+		confirmBtn.className =
+			'px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg cursor-pointer font-semibold text-sm transition-colors duration-200 shadow-sm hover:shadow-md';
 
 		// Hàm xử lý xác nhận cập nhật
 		confirmBtn.onclick = async () => {
@@ -351,18 +439,18 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 				}
 
 				// Kiểm tra các loại khác biệt theo thứ tự ưu tiên
-				const hasSampleUIDDifference = mergedAnalyses.some(a => a.sampleUIDDiff !== undefined);
-				const hasResultValueDifference = mergedAnalyses.some(a => a.resultValueDiff !== undefined);
-				const hasProtocolDifference = mergedAnalyses.some(a => a.protocolCodeDiff !== undefined);
+				const hasSampleUIDDifference = mergedAnalyses.some((a) => a.sampleUIDDiff !== undefined);
+				const hasResultValueDifference = mergedAnalyses.some((a) => a.resultValueDiff !== undefined);
+				const hasProtocolDifference = mergedAnalyses.some((a) => a.protocolCodeDiff !== undefined);
 
 				// 1. Kiểm tra khác biệt về sample_uid trước (cao nhất)
 				if (hasSampleUIDDifference) {
 					const sampleUIDDialog = globalThis.document.createElement('div');
 					sampleUIDDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
-					
+
 					const dialogContent = globalThis.document.createElement('div');
 					dialogContent.className = 'bg-red-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-red-200';
-					
+
 					dialogContent.innerHTML = `
 						<div class="flex items-center mb-4">
 							<span class="text-2xl mr-3">🚨</span>
@@ -374,25 +462,25 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 							<button id="closeSampleUIDDialog" class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors">Đóng</button>
 						</div>
 					`;
-					
+
 					sampleUIDDialog.appendChild(dialogContent);
 					globalThis.document.body.appendChild(sampleUIDDialog);
-					
+
 					const closeBtn = dialogContent.querySelector('#closeSampleUIDDialog');
 					closeBtn.onclick = () => {
 						sampleUIDDialog.remove();
 						overlay.remove();
 						const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
-						remainingPopups.forEach(popup => popup.remove());
+						remainingPopups.forEach((popup) => popup.remove());
 						if (onClose) onClose();
 					};
-					
+
 					sampleUIDDialog.addEventListener('click', (e) => {
 						if (e.target === sampleUIDDialog) {
 							sampleUIDDialog.remove();
 							overlay.remove();
 							const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
-							remainingPopups.forEach(popup => popup.remove());
+							remainingPopups.forEach((popup) => popup.remove());
 							if (onClose) onClose();
 						}
 					});
@@ -402,11 +490,13 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 				// 2. Kiểm tra khác biệt về resultValue
 				if (hasResultValueDifference) {
 					const resultValueDialog = globalThis.document.createElement('div');
-					resultValueDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
-					
+					resultValueDialog.className =
+						'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
+
 					const dialogContent = globalThis.document.createElement('div');
-					dialogContent.className = 'bg-orange-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-orange-200';
-					
+					dialogContent.className =
+						'bg-orange-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-orange-200';
+
 					dialogContent.innerHTML = `
 						<div class="flex items-center mb-4">
 							<span class="text-2xl mr-3">⚠️</span>
@@ -419,23 +509,23 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 							<button id="continueResultDialog" class="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-colors">Xác nhận thực hiện</button>
 						</div>
 					`;
-					
+
 					resultValueDialog.appendChild(dialogContent);
 					globalThis.document.body.appendChild(resultValueDialog);
-					
+
 					const cancelBtn = dialogContent.querySelector('#cancelResultDialog');
 					const continueBtn = dialogContent.querySelector('#continueResultDialog');
-					
+
 					cancelBtn.onclick = () => {
 						resultValueDialog.remove();
 					};
-					
+
 					continueBtn.onclick = async () => {
 						resultValueDialog.remove();
 						// Sau khi xác nhận, kiểm tra khác biệt về protocol
 						await checkProtocolDifference();
 					};
-					
+
 					resultValueDialog.addEventListener('click', (e) => {
 						if (e.target === resultValueDialog) {
 							resultValueDialog.remove();
@@ -452,10 +542,11 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 						// Hiển thị dialog xác nhận với select option
 						const confirmDialog = globalThis.document.createElement('div');
 						confirmDialog.className = 'fixed inset-0 bg-black bg-opacity-50 z-[10001] flex items-center justify-center';
-						
+
 						const dialogContent = globalThis.document.createElement('div');
-						dialogContent.className = 'bg-yellow-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-yellow-200';
-						
+						dialogContent.className =
+							'bg-yellow-50 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl border-2 border-yellow-200';
+
 						dialogContent.innerHTML = `
 							<div class="flex items-center mb-4">
 								<span class="text-2xl mr-3">⚠️</span>
@@ -478,35 +569,35 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 								<button id="proceedConfirm" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">Xác nhận</button>
 							</div>
 						`;
-						
+
 						confirmDialog.appendChild(dialogContent);
 						globalThis.document.body.appendChild(confirmDialog);
-						
+
 						// Xử lý sự kiện dialog
 						const cancelBtn = dialogContent.querySelector('#cancelConfirm');
 						const proceedBtn = dialogContent.querySelector('#proceedConfirm');
 						const methodSelect = dialogContent.querySelector('#methodChoice');
-						
+
 						cancelBtn.onclick = () => {
 							confirmDialog.remove();
 							// Remove any remaining confirmation dialogs
 							const remainingDialogs = globalThis.document.querySelectorAll('.fixed.inset-0.bg-black.bg-opacity-50');
-							remainingDialogs.forEach(dialog => dialog.remove());
+							remainingDialogs.forEach((dialog) => dialog.remove());
 						};
-						
+
 						proceedBtn.onclick = async () => {
 							const methodChoice = methodSelect.value;
 							confirmDialog.remove();
 							await performUpdate(methodChoice);
 						};
-						
+
 						// Đóng dialog khi click outside
 						confirmDialog.addEventListener('click', (e) => {
 							if (e.target === confirmDialog) {
 								confirmDialog.remove();
 								// Remove any remaining confirmation dialogs
 								const remainingDialogs = globalThis.document.querySelectorAll('.fixed.inset-0.bg-black.bg-opacity-50');
-								remainingDialogs.forEach(dialog => dialog.remove());
+								remainingDialogs.forEach((dialog) => dialog.remove());
 							}
 						});
 					} else {
@@ -524,28 +615,29 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 		const performUpdate = async (methodChoice) => {
 			try {
 				showAutoHideMessage('Đang xử lý cập nhật...', 'info');
-				
-				// Chuẩn bị dữ liệu analyses
-				const analysesData = mergedAnalyses.map(a => {
-					const baseData = {
-						id: parseInt(a.id),
-						resultValue: a.resultValue,
-						resultUnit: a.resultUnit
-					};
-					
-					// Nếu chọn áp dụng phương pháp trong biên bản
-					if (methodChoice === 'report') {
-						// Sử dụng protocolCode từ extractData.analyses (giá trị hiện tại trong biên bản)
-						baseData.protocolCode = a.protocolCode;
-					}
-					// Nếu chọn mặc định (delivered) thì không thêm protocolCode
-					
-					return baseData;
-				}).filter(a => a.id); // Chỉ lấy những item có ID
 
+				// Chuẩn bị dữ liệu analyses
+				const analysesData = mergedAnalyses
+					.map((a) => {
+						const baseData = {
+							id: parseInt(a.id),
+							resultValue: a.resultValue,
+							resultUnit: a.resultUnit,
+						};
+
+						// Nếu chọn áp dụng phương pháp trong biên bản
+						if (methodChoice === 'report') {
+							// Sử dụng protocolCode từ extractData.analyses (giá trị hiện tại trong biên bản)
+							baseData.protocolCode = a.protocolCode;
+						}
+						// Nếu chọn mặc định (delivered) thì không thêm protocolCode
+
+						return baseData;
+					})
+					.filter((a) => a.id); // Chỉ lấy những item có ID
 
 				const requestBody = {
-					analyses: analysesData
+					analyses: analysesData,
 				};
 
 				// Thêm editId vào request body nếu có
@@ -560,12 +652,17 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 					overlay.remove(); // Đóng popup sau khi cập nhật thành công
 					// Remove any remaining popup overlays
 					const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
-					remainingPopups.forEach(popup => popup.remove());
+					remainingPopups.forEach((popup) => popup.remove());
 					// Call onClose callback if provided
 					if (onClose) onClose();
 
 					// Chuyển hướng đến trang processing nếu có sampleUIDs
-					if (response.data && response.data.docRecord && response.data.docRecord.metadata && response.data.docRecord.metadata.sampleUIDs) {
+					if (
+						response.data &&
+						response.data.docRecord &&
+						response.data.docRecord.metadata &&
+						response.data.docRecord.metadata.sampleUIDs
+					) {
 						const sampleUIDs = response.data.docRecord.metadata.sampleUIDs;
 						if (Array.isArray(sampleUIDs) && sampleUIDs.length > 0) {
 							const sampleUIDsString = sampleUIDs.join(',');
@@ -601,7 +698,7 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 				overlay.remove();
 				// Remove any remaining popup overlays
 				const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
-				remainingPopups.forEach(popup => popup.remove());
+				remainingPopups.forEach((popup) => popup.remove());
 				// Call onClose callback if provided
 				if (onClose) onClose();
 			}
@@ -613,7 +710,7 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 				overlay.remove();
 				// Remove any remaining popup overlays
 				const remainingPopups = globalThis.document.querySelectorAll('#analysisDataPopupOverlay');
-				remainingPopups.forEach(popup => popup.remove());
+				remainingPopups.forEach((popup) => popup.remove());
 				globalThis.document.removeEventListener('keydown', handleEscape);
 				// Call onClose callback if provided
 				if (onClose) onClose();
@@ -623,27 +720,27 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 	};
 
 	// Render component
-	if (!document || !document.metadata || !document.metadata.extractData || !document.metadata.extractData.analyses) {
+	// Chỉ kiểm tra extractData.analyses
+	const extractDataAnalysesForRender = document?.metadata?.extractData?.analyses;
+
+	const hasValidExtractDataForRender = isValidAnalysesArray(extractDataAnalysesForRender);
+
+	if (!document || !document.metadata || !hasValidExtractDataForRender) {
 		return null;
 	}
 
 	if (showAnalysisExtractInstead) {
-		// Show extracted analyses in popup on component mount
-		React.useEffect(() => {
-			showAnalysisDataPopupFromExtract(document);
-		}, []);
+		// Show extracted analyses in popup on component mount - đã xử lý bằng useEffect ở trên
 		return null;
 	}
 
-	// Return normal component view
+	// Return normal component view - chỉ sử dụng extractData.analyses
 	const extractedAnalyses = document.metadata.extractData.analyses;
 
 	return (
 		<div className="bg-white rounded-lg border border-gray-200 p-4">
 			<div className="flex items-center justify-between mb-4">
-				<h4 className="text-lg font-semibold text-gray-900">
-					Dữ liệu chỉ tiêu ({extractedAnalyses.length})
-				</h4>
+				<h4 className="text-lg font-semibold text-gray-900">Dữ liệu chỉ tiêu ({extractedAnalyses.length})</h4>
 				<button
 					onClick={() => showAnalysisDataPopupFromExtract(document)}
 					className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
@@ -651,7 +748,7 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 					Xem chi tiết
 				</button>
 			</div>
-			
+
 			<div className="overflow-auto max-h-96">
 				<table className="w-full border-collapse border border-gray-300 text-xs">
 					<thead>

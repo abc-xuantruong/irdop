@@ -89,10 +89,11 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 		try {
 			const constraints = {
 				video: {
-					width: { ideal: 2560, min: 1920 }, // Request 2K resolution (2560x1440)
-					height: { ideal: 1440, min: 1080 },
+					width: { ideal: 3840, min: 1920 }, // Request 4K resolution (3840x2160)
+					height: { ideal: 2160, min: 1080 },
 					facingMode: isMobile ? 'environment' : undefined,
 					deviceId: deviceId ? { exact: deviceId } : undefined,
+					focusMode: 'continuous'
 				},
 			};
 

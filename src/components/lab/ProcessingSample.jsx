@@ -439,6 +439,47 @@ const customStyles = `
 	0% { transform: rotate(0deg); }
 	100% { transform: rotate(360deg); }
 }
+
+/* Selected row styles */
+.row-selected {
+	background-color: #dbeafe !important;
+	border-left: 4px solid #3b82f6 !important;
+	box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2);
+}
+
+.row-selected:hover {
+	background-color: #bfdbfe !important;
+}
+
+.row-selected td {
+	background-color: inherit !important;
+}
+
+.my-tasks-btn {
+	background: white;
+	color: #10b981;
+	border: 2px solid #10b981;
+	border-radius: 8px;
+	padding: 6px 12px;
+	font-size: 0.875rem;
+	font-weight: 600;
+	transition: all 0.15s ease;
+	box-shadow: 0 2px 4px rgba(16, 185, 129, 0.1);
+	will-change: background, transform, color;
+}
+
+.my-tasks-btn:hover {
+	background: #f0fdf4;
+	transform: translateY(-1px);
+	box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
+}
+
+.my-tasks-btn.active {
+	background: linear-gradient(135deg, #10b981, #059669);
+	color: white;
+	border-color: #059669;
+	box-shadow: 0 4px 6px rgba(16, 185, 129, 0.4);
+}
 `;
 
 const ProcessingSample = ({ onNavigateToLab }) => {
@@ -1464,6 +1505,27 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 
 			setFilters(newFilters);
 			updateQueryParams(newFilters);
+		} else if (filterType === 'my_tasks') {
+			const newFilters = { ...filters };
+
+			// Check if already filtering by current user
+			const isMyTasksActive =
+				newFilters.headerFilters.technician_uid &&
+				Array.isArray(newFilters.headerFilters.technician_uid) &&
+				newFilters.headerFilters.technician_uid.includes(currentUser?.identity_uid);
+
+			if (isMyTasksActive) {
+				// Remove my tasks filter
+				delete newFilters.headerFilters.technician_uid;
+				toast.info('Đã tắt bộ lọc chỉ tiêu của bản thân');
+			} else {
+				// Add my tasks filter
+				newFilters.headerFilters.technician_uid = [currentUser?.identity_uid];
+				toast.info('Đã bật bộ lọc chỉ tiêu của bản thân');
+			}
+
+			setFilters(newFilters);
+			updateQueryParams(newFilters);
 		}
 	};
 
@@ -2474,6 +2536,19 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 							{/* Filter buttons */}
 							<div className="flex items-center space-x-2 pl-3">
 								<button
+									onClick={() => handleFilterToggle('my_tasks')}
+									className={`px-3 py-1.5 text-sm rounded transition-colors whitespace-nowrap focus:outline-none my-tasks-btn ${
+										filters.headerFilters.technician_uid &&
+										Array.isArray(filters.headerFilters.technician_uid) &&
+										filters.headerFilters.technician_uid.includes(currentUser?.identity_uid)
+											? 'active'
+											: ''
+									}`}
+								>
+									Chỉ tiêu của tôi
+								</button>
+
+								<button
 									onClick={() => handleFilterToggle('urgent')}
 									className={`px-3 py-1.5 text-sm rounded transition-colors whitespace-nowrap focus:outline-none ${
 										filters.headerFilters.status === 1
@@ -2769,7 +2844,7 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 											<tr
 												key={`${group.sample.sample_uid}-${item.id}`}
 												className={`
-													${selectedAnalysisIds.has(item.id) ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-gray-50'}
+													${selectedAnalysisIds.has(item.id) ? 'row-selected' : 'hover:bg-gray-50'}
 													${groupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}
 													border-b border-gray-200 cursor-pointer user-select-none
 												`}

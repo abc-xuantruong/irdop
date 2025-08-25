@@ -48,7 +48,7 @@ const ReceiptInfor = ({ receipt }) => {
 	const [editingField, setEditingField] = useState(null);
 	const [inputValue, setInputValue] = useState('');
 	const [isEditorVisible, setIsEditorVisible] = useState(false);
-	const [viewMode, setViewMode] = useState('sample'); // 'analyte' or 'sample' or 'ppt'
+	const [viewMode, setViewMode] = useState('analyte'); // 'analyte' or 'sample' or 'ppt'
 	const [isAddingSample, setIsAddingSample] = useState(false);
 	const [isEditMode, setIsEditMode] = useState(false); // Add edit mode state
 	const [selectedReports, setSelectedReports] = useState({});
@@ -383,13 +383,13 @@ const ReceiptInfor = ({ receipt }) => {
 		// Create a date object with the selected date at 7 AM GMT+7
 		const selectedDate = new Date(dateValue);
 		selectedDate.setHours(7, 0, 0, 0); // Set to 7:00:00 AM
-		
+
 		// Convert to ISO string for GMT+7 timezone
 		const vietnamOffset = 7 * 60; // GMT+7 in minutes
 		const localOffset = selectedDate.getTimezoneOffset(); // Local timezone offset in minutes
 		const totalOffset = vietnamOffset + localOffset; // Total offset to add
-		
-		const gmtPlus7Date = new Date(selectedDate.getTime() + (totalOffset * 60000));
+
+		const gmtPlus7Date = new Date(selectedDate.getTime() + totalOffset * 60000);
 		return gmtPlus7Date.toISOString();
 	};
 
@@ -935,7 +935,9 @@ const ReceiptInfor = ({ receipt }) => {
 									technician_uid: analysis.technician_uid,
 									deadline: analysis.deadline
 										? adjustDateForApiSubmission(new Date(analysis.deadline))
-										: adjustDateForApiSubmission(new Date(Date.now() + (analysis?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0))),
+										: adjustDateForApiSubmission(
+												new Date(Date.now() + (analysis?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0)),
+										  ),
 									protocol_code: analysis.protocol_code,
 									result_unit: analysis.result_unit || '',
 									protocol_source: analysis.protocol_source,
@@ -1464,15 +1466,15 @@ const ReceiptInfor = ({ receipt }) => {
 	// 	}).then(async (result) => {
 	// 		if (result.isConfirmed) {
 	// 			try {
-	// 				const promises = selectedAnalytes.map(id => 
+	// 				const promises = selectedAnalytes.map(id =>
 	// 					apiPost('/api/delete/analysis', { analysis_id: id }, token)
 	// 				);
-					
+
 	// 				await Promise.all(promises);
-					
+
 	// 				setSelectedAnalytes([]);
 	// 				setSelectAllAnalytes(false);
-					
+
 	// 				Swal.fire({
 	// 					position: 'top-end',
 	// 					icon: 'success',
@@ -1480,7 +1482,7 @@ const ReceiptInfor = ({ receipt }) => {
 	// 					showConfirmButton: false,
 	// 					timer: 1500,
 	// 				});
-					
+
 	// 				// Refresh data
 	// 				getReceiptData(receiptId);
 	// 			} catch (error) {
@@ -1497,21 +1499,21 @@ const ReceiptInfor = ({ receipt }) => {
 
 	const renderBulkTransferForm = () => (
 		<div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
-			<div className="bg-white p-4 rounded-lg w-[400px] h-[400px] relative flex flex-col justify-between">
+			<div className="bg-white p-4 rounded-lg w-[800px] max-w-[90vw] max-h-[90vh] relative flex flex-col justify-between">
 				<h2 className="text-2xl font-semibold mb-4">Bàn giao {selectedAnalytes.length} chỉ tiêu</h2>
 				<div className="overflow-auto mb-4 flex-1">
 					<p className="font-medium mb-2">Chọn người thực hiện:</p>
-					<div className="max-h-[240px] overflow-y-auto border rounded p-2">
+					<div className="grid grid-cols-4 gap-3">
 						{technicians.map((tech) => (
 							<div
 								key={tech.identity_uid}
-								className={`p-2 mb-2 cursor-pointer border rounded ${
+								className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 text-center ${
 									selectedTechnician === tech.identity_uid ? 'border-primary bg-blue-50' : 'border-gray-300'
 								}`}
 								onClick={() => setSelectedTechnician(tech.identity_uid)}
 							>
-								<p className="font-bold text-primary">{tech.alias || ''}</p>
-								<p>{tech.identity_name || ''}</p>
+								<p className="font-bold text-primary text-sm mb-1">{tech.alias || ''}</p>
+								<p className="text-xs text-gray-600 leading-tight">{tech.identity_name || ''}</p>
 							</div>
 						))}
 					</div>
@@ -3111,10 +3113,10 @@ const ReceiptInfor = ({ receipt }) => {
 							<th className="py-2 border-2 text-start pl-2 w-[12%] min-w-32">Lần cuối cập nhật</th>
 							<th className="py-2 border-2 text-start pl-2 w-[24%] min-w-52">Mã phiếu phân tích</th>
 							<th className="py-2 border-2 text-start pl-2 w-32 min-w-32">Ngày phát hành</th>
-							<th className="py-2 border-2 text-center w-14 min-w-14">
+							<th className="py-2 border-2 text-center w-14 min-w-14 cursor-pointer" onClick={handleSelectAllToggle}>
 								<input
 									type="checkbox"
-									className="w-4 h-4"
+									className="w-4 h-4 pointer-events-none"
 									checked={selectAllChecked}
 									onChange={handleSelectAllToggle}
 								/>
@@ -3230,10 +3232,10 @@ const ReceiptInfor = ({ receipt }) => {
 									<td className="p-2 border text-start">
 										{selectedReport && selectedReport.publish_date ? formatDate(selectedReport.publish_date) : '--'}
 									</td>
-									<td className="p-2 border text-center">
+									<td className="p-2 border text-center cursor-pointer" onClick={() => handleCheckboxToggle(sample.id)}>
 										<input
 											type="checkbox"
-											className="w-4 h-4"
+											className="w-4 h-4 pointer-events-none"
 											checked={!!selectedReports[sample.id]?.isChecked}
 											onChange={() => handleCheckboxToggle(sample.id)}
 										/>
@@ -4083,12 +4085,12 @@ const ReceiptInfor = ({ receipt }) => {
 											<th className="py-2 border-x w-1/12 min-w-20">Đơn vị</th>
 											<th className="py-2 border-x w-1/12 min-w-28">Hạn trả</th>
 											<th className="py-2 border-x w-[12%] min-w-36">Người thực hiện</th>
-											<th className="py-2 border-x w-10 min-w-10">
-												<input 
-													type="checkbox" 
-													checked={selectAllAnalytes} 
-													onChange={handleSelectAllAnalytes} 
-													className="w-4 h-4" 
+											<th className="py-2 border-x w-10 min-w-10 cursor-pointer" onClick={handleSelectAllAnalytes}>
+												<input
+													type="checkbox"
+													checked={selectAllAnalytes}
+													onChange={handleSelectAllAnalytes}
+													className="w-4 h-4 pointer-events-none"
 												/>
 											</th>
 										</tr>
@@ -4131,12 +4133,15 @@ const ReceiptInfor = ({ receipt }) => {
 													{canViewDeadline() ? formatDate(order.deadline) : '--'}
 												</td>
 												<td className="p-1 border text-start">{getTechnicianName(order.technician_uid)}</td>
-												<td className="pt-[5px] pb-0 border align-top text-center">
+												<td
+													className="pt-[5px] pb-0 border align-top text-center cursor-pointer"
+													onClick={() => handleAnalyteSelect(order.id)}
+												>
 													<input
 														type="checkbox"
 														checked={selectedAnalytes.includes(order.id)}
 														onChange={() => handleAnalyteSelect(order.id)}
-														className="w-4 h-4 mt-2"
+														className="w-4 h-4 mt-2 pointer-events-none"
 													/>
 												</td>
 											</tr>
@@ -4437,10 +4442,8 @@ const ReceiptInfor = ({ receipt }) => {
 					</div>
 				</div>
 			)}
-
 			{/* Bulk Transfer Modal */}
 			{isTransferMultipleVisible && renderBulkTransferForm()}
-
 			{/* Bulk Deadline Update Modal */}
 			{isBulkDeadlineVisible && renderBulkDeadlinePicker()}
 		</div>

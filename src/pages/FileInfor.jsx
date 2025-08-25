@@ -1249,7 +1249,18 @@ const FileInfor = () => {
 												{file.originInfo?.fileSize ? (file.originInfo.fileSize / 1024).toFixed(2) + ' KB' : '-'}
 											</td>
 											<td className="py-1 px-2 border text-left">
-												{file.createdAt ? new Date(file.createdAt).toLocaleDateString() : '-'}
+												{file.createdAt
+													? new Date(file.createdAt).toLocaleString('vi-VN', {
+															timeZone: 'Asia/Ho_Chi_Minh',
+															year: 'numeric',
+															month: '2-digit',
+															day: '2-digit',
+															hour: '2-digit',
+															minute: '2-digit',
+															second: '2-digit',
+															hour12: false,
+													  })
+													: '-'}
 											</td>
 											<td className="py-1 px-2 border text-left">
 												<div className="flex flex-wrap gap-1">
@@ -1576,7 +1587,18 @@ const FileInfor = () => {
 														{file.originInfo?.fileSize ? (file.originInfo.fileSize / 1024).toFixed(2) + ' KB' : '-'}
 													</td>
 													<td className="py-1 px-2 border text-left">
-														{file.createdAt ? new Date(file.createdAt).toLocaleDateString() : '-'}
+														{file.createdAt
+															? new Date(file.createdAt).toLocaleString('vi-VN', {
+																	timeZone: 'Asia/Ho_Chi_Minh',
+																	year: 'numeric',
+																	month: '2-digit',
+																	day: '2-digit',
+																	hour: '2-digit',
+																	minute: '2-digit',
+																	second: '2-digit',
+																	hour12: false,
+															  })
+															: '-'}
 													</td>
 													<td className="py-1 px-2 border text-left">
 														{editingFile === file.id ? (

@@ -3898,6 +3898,12 @@ const Dashboard = () => {
 														(order) => order?.result_value !== null && order?.result_value !== '<p></p>',
 													)?.length || 0;
 
+												// Calculate assigned tests count (chỉ tiêu được phân công)
+												const assignedTests =
+													sample?.analysis?.filter(
+														(order) => order?.technician_uid !== null && order?.technician_uid !== '',
+													)?.length || 0;
+
 												// Get sample id or uid for lookup
 												const sampleKey = sample.id || sample.sample_uid;
 
@@ -4601,17 +4607,17 @@ const Dashboard = () => {
 																			{totalTests > 0 ? (
 																				<span
 																					className={`font-medium ${
-																						completedTests === totalTests
-																							? 'text-green-600'
-																							: completedTests > 0
+																						assignedTests === totalTests
+																							? 'text-green-800'
+																							: assignedTests < totalTests
 																							? 'text-yellow-600'
 																							: 'text-gray-600'
 																					}`}
 																				>
-																					{completedTests}/{totalTests}
+																					{assignedTests}/{completedTests}/{totalTests}
 																				</span>
 																			) : (
-																				<span className="text-gray-500">0/0</span>
+																				<span className="text-gray-500">0/0/0</span>
 																			)}
 																		</div>
 																	</td>
@@ -4782,17 +4788,17 @@ const Dashboard = () => {
 																			{totalTests > 0 ? (
 																				<span
 																					className={`font-medium ${
-																						completedTests === totalTests
-																							? 'text-green-600'
-																							: completedTests > 0
+																						assignedTests === totalTests
+																							? 'text-green-800'
+																							: assignedTests < totalTests
 																							? 'text-yellow-600'
 																							: 'text-gray-600'
 																					}`}
 																				>
-																					{completedTests}/{totalTests}
+																					{assignedTests}/{completedTests}/{totalTests}
 																				</span>
 																			) : (
-																				<span className="text-gray-500">0/0</span>
+																				<span className="text-gray-500">0/0/0</span>
 																			)}
 																		</div>
 																	</td>

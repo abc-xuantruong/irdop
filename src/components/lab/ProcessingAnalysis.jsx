@@ -258,6 +258,33 @@ table td {
 	50% {
 		opacity: 0.5;
 	}
+}
+
+/* My tasks button styles */
+.my-tasks-btn {
+	background: white;
+	color: #10b981;
+	border: 2px solid #10b981;
+	border-radius: 8px;
+	padding: 6px 12px;
+	font-size: 0.875rem;
+	font-weight: 600;
+	transition: all 0.15s ease;
+	box-shadow: 0 2px 4px rgba(16, 185, 129, 0.1);
+}
+
+.my-tasks-btn:hover {
+	background: #f0fdf4;
+	transform: translateY(-1px);
+	box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
+}
+
+.my-tasks-btn.active {
+	background: linear-gradient(135deg, #10b981, #059669);
+	color: white;
+	border-color: #059669;
+	box-shadow: 0 4px 6px rgba(16, 185, 129, 0.4);
+}
 `;
 
 // Document preview modal CSS
@@ -352,7 +379,7 @@ const documentPreviewStyles = `
 `;
 
 const ProcessingAnalysis = ({ onNavigateToLab }) => {
-	const { technicians } = useContext(GlobalContext);
+	const { technicians, currentUser } = useContext(GlobalContext);
 	const location = useLocation();
 
 	/*
@@ -880,6 +907,11 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				requestBody.deadline = useFilters.headerFilters.deadline;
 			}
 
+			// Add technician filter if active
+			if (useFilters.headerFilters.technician_uid) {
+				requestBody.technician_uid = useFilters.headerFilters.technician_uid;
+			}
+
 			const response = await apiPost(PARAMETER_API_ENDPOINT, requestBody);
 
 			if (response.status < 300 && response.data) {
@@ -1195,6 +1227,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			analysis: section === 'analysis' ? !prev.analysis : false,
 			sample: section === 'sample' ? !prev.sample : false,
 			matrix: section === 'matrix' ? !prev.matrix : false,
+			technician: section === 'technician' ? !prev.technician : false,
 		}));
 	};
 
@@ -1323,6 +1356,86 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			};
 			setFilters(newFilters);
 		}
+	};
+
+	// Select my tasks filter
+	const selectMyTasksFilter = () => {
+		// Clear table filter state when switching to sidebar filtering
+		setIsFilterCreationMode(false);
+		setActiveFilterColumn(null);
+		setFilterSearchTerm('');
+		setFilterResults([]);
+		setSelectedFilterValues([]);
+
+		// Check if my tasks filter is already active
+		const isMyTasksActive =
+			filters.headerFilters.technician_uid &&
+			Array.isArray(filters.headerFilters.technician_uid) &&
+			filters.headerFilters.technician_uid.includes(currentUser?.identity_uid);
+
+		if (isMyTasksActive) {
+			// Clear my tasks filter
+			const newFilters = {
+				...filters,
+				headerFilters: {
+					...filters.headerFilters,
+					technician_uid: undefined,
+				},
+			};
+			setFilters(newFilters);
+			toast.info('Đã tắt bộ lọc chỉ tiêu của bản thân');
+		} else {
+			// Apply my tasks filter
+			const newFilters = {
+				...filters,
+				headerFilters: {
+					...filters.headerFilters,
+					technician_uid: [currentUser?.identity_uid],
+				},
+			};
+			setFilters(newFilters);
+			toast.info('Đã bật bộ lọc chỉ tiêu của bản thân');
+		}
+	};
+
+	// State for date picker visibility
+	const [showDatePicker, setShowDatePicker] = useState(false);
+	const [selectedDate, setSelectedDate] = useState('');
+	const [datePickerMode, setDatePickerMode] = useState('sidebar'); // 'sidebar' or 'filter'
+
+	// Open date picker for specific date filter
+	const openDatePicker = (mode = 'sidebar') => {
+		setDatePickerMode(mode);
+		setShowDatePicker(true);
+		setSelectedDate(filters.headerFilters.deadline || '');
+	};
+
+	// Handle date selection
+	const handleDateSelection = (date) => {
+		if (date) {
+			if (datePickerMode === 'filter') {
+				applySpecialFilter('deadline', date);
+			} else {
+				const newFilters = {
+					...filters,
+					headerFilters: {
+						...filters.headerFilters,
+						deadline: date,
+					},
+				};
+				setFilters(newFilters);
+			}
+		}
+		setShowDatePicker(false);
+		setSelectedDate('');
+		setDatePickerMode('sidebar');
+	};
+
+	// Cancel date picker
+	const cancelDatePicker = () => {
+		setShowDatePicker(false);
+		setSelectedDate('');
+		setDatePickerMode('sidebar');
 	};
 
 	// Clear all filters (for selected items indicator)
@@ -1911,11 +2024,14 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			setSelectedFilterValues([]);
 		}
 
-		// Set filter position (default center)
-		setFilterPosition({
-			top: window.scrollY + 100,
-			left: window.innerWidth / 2 - 160, // Center the modal
-		});
+		// Set default center position for non-technician filters
+		if (column !== 'technician_uid') {
+			setFilterPosition({
+				top: window.scrollY + 100,
+				left: window.innerWidth / 2 - 160, // Center the modal
+			});
+		}
+		// technician_uid position is set directly in the button click handler
 	};
 
 	// Handle filter value selection
@@ -2190,40 +2306,13 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								}}
 							/>
 						</div>
-						{/* Summary text */}
-						<div className="mt-2 text-xs text-gray-600 text-left">
-							{parameterSearchTerm ? (
-								<span className="text-left">
-									Tìm thấy{' '}
-									<strong>
-										{parametersData.analysis.length +
-											parametersData.sample.length +
-											parametersData.matrix.length +
-											parametersData.technician.length}
-									</strong>{' '}
-									kết quả theo từ khóa <strong>{parameterSearchTerm}</strong>.
-									<span
-										className="text-yellow-600 font-bold underline cursor-pointer ml-1"
-										onClick={() => setParameterSearchTerm('')}
-									>
-										Hủy
-									</span>
-								</span>
-							) : (
-								<span className="text-left">
-									<strong>{parametersData.analysis.length}</strong> chỉ tiêu,{' '}
-									<strong>{parametersData.sample.length}</strong> mẫu, <strong>{parametersData.matrix.length}</strong>{' '}
-									nền mẫu, <strong>{parametersData.technician.length}</strong> người thực hiện
-								</span>
-							)}
-						</div>
 
 						{/* Deadline filter buttons */}
 						<div className="pt-3 border-gray-300">
-							<div className="grid grid-cols-3 gap-2">
+							<div className="grid grid-cols-4 gap-1">
 								<button
 									onClick={() => selectDeadlineFilter('overdue')}
-									className={`px-2 py-1 text-xs rounded-md font-medium transition-colors ${
+									className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
 										filters.headerFilters.deadline === 'overdue'
 											? 'bg-red-600 text-white'
 											: 'bg-gray-100 text-black hover:bg-gray-200'
@@ -2233,7 +2322,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								</button>
 								<button
 									onClick={() => selectDeadlineFilter('3days')}
-									className={`px-2 py-1 text-xs rounded-md font-medium transition-colors ${
+									className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
 										filters.headerFilters.deadline === '3days'
 											? 'bg-yellow-600 text-white'
 											: 'bg-gray-100 text-black hover:bg-gray-200'
@@ -2243,13 +2332,24 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								</button>
 								<button
 									onClick={() => selectDeadlineFilter('week')}
-									className={`px-2 py-1 text-xs rounded-md font-medium transition-colors ${
+									className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
 										filters.headerFilters.deadline === 'week'
 											? 'bg-blue-600 text-white'
 											: 'bg-gray-100 text-black hover:bg-gray-200'
 									}`}
 								>
 									1 Tuần
+								</button>
+								<button
+									onClick={openDatePicker}
+									className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
+										filters.headerFilters.deadline &&
+										!['overdue', '3days', 'week'].includes(filters.headerFilters.deadline)
+											? 'bg-purple-600 text-white'
+											: 'bg-gray-100 text-black hover:bg-gray-200'
+									}`}
+								>
+									Chọn ngày
 								</button>
 							</div>
 						</div>
@@ -2415,12 +2515,14 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 										{parametersData.technician.map((technician) => {
 											const itemKey = `technician|${technician.technician_uid}`;
 											const isSelected = selectedParameter === itemKey;
-											const technicianInfo = technicians?.find(
+
+											// Find technician display name
+											const technicianData = technicians?.find(
 												(tech) => tech.identity_uid === technician.technician_uid,
 											);
-											const displayName = technicianInfo
-												? `${technicianInfo.identity_name}${technicianInfo.alias ? ` (${technicianInfo.alias})` : ''}`
-												: technician.technician_uid || 'Không có tên';
+											const displayName = technicianData
+												? `${technicianData.identity_name}${technicianData.alias ? ` (${technicianData.alias})` : ''}`
+												: technician.technician_uid || 'Không có người thực hiện';
 
 											return (
 												<div
@@ -2445,17 +2547,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									</div>
 								)}
 							</div>
-
-							{parametersData.analysis.length === 0 &&
-								parametersData.sample.length === 0 &&
-								parametersData.matrix.length === 0 &&
-								parametersData.technician.length === 0 &&
-								!loading && (
-									<div className="text-center py-8 text-gray-500">
-										<div className="text-4xl mb-2">🔍</div>
-										<p>Không có dữ liệu</p>
-									</div>
-								)}
 						</div>
 					</div>
 				</div>
@@ -2528,21 +2619,16 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								</button>
 
 								<button
-									onClick={() => openFilterModal('technician_uid')}
-									className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm ${
-										filters.headerFilters.technician_uid
-											? 'bg-purple-500 border-purple-700 text-white hover:bg-purple-600'
-											: 'bg-white border-gray-400 text-gray-700 hover:bg-gray-50'
+									onClick={selectMyTasksFilter}
+									className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm my-tasks-btn ${
+										filters.headerFilters.technician_uid &&
+										Array.isArray(filters.headerFilters.technician_uid) &&
+										filters.headerFilters.technician_uid.includes(currentUser?.identity_uid)
+											? 'active'
+											: ''
 									}`}
 								>
-									<span>Người thực hiện</span>
-									{filters.headerFilters.technician_uid && (
-										<span className="ml-2 bg-white text-purple-600 px-2 py-1 rounded text-xs">
-											{Array.isArray(filters.headerFilters.technician_uid)
-												? filters.headerFilters.technician_uid.length
-												: 1}
-										</span>
-									)}
+									<span>Chỉ tiêu của tôi</span>
 								</button>
 
 								{selectedRows.size > 0 && (
@@ -2648,6 +2734,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 										data.map((row, index) => {
 											const rowId = String(row.id);
 											const isSelected = selectedRows.has(rowId);
+											const isHighPriority = row.status === 1;
 
 											return (
 												<tr
@@ -2658,7 +2745,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 															: index % 2 === 0
 															? 'bg-white hover:bg-blue-50'
 															: 'bg-gray-50 hover:bg-blue-50'
-													}`}
+													} ${isHighPriority ? 'font-bold text-red-600' : ''}`}
 													onClick={() => toggleRowSelection(rowId, row)}
 													onMouseDown={(e) => handleMouseDown(e, index, rowId, row)}
 													onMouseEnter={(e) => handleMouseEnter(e, index, rowId, row)}
@@ -2667,7 +2754,12 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 													{filters.columns
 														.filter((col) => col !== 'id' && col !== 'sample_name')
 														.map((column) => (
-															<td key={column} className="px-2 py-1 text-sm text-gray-900 align-top text-left">
+															<td
+																key={column}
+																className={`px-2 py-1 text-sm align-top text-left ${
+																	isHighPriority ? 'text-red-600 font-bold' : 'text-gray-900'
+																}`}
+															>
 																{column === 'sample_uid' ? (
 																	<div className="relative text-left w-full">
 																		<span className="text-left">{row.sample_uid || ''}</span>
@@ -3056,6 +3148,14 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 										>
 											7 ngày
 										</button>
+										<button
+											onClick={() => {
+												openDatePicker('filter');
+											}}
+											className="w-full text-left p-2 rounded hover:bg-purple-50 border border-gray-200 text-sm text-purple-700"
+										>
+											Chọn ngày cụ thể
+										</button>
 									</div>
 									<div className="flex justify-end mt-3 pt-3 border-t border-gray-200">
 										<button
@@ -3285,6 +3385,39 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									sandbox="allow-same-origin allow-scripts"
 								/>
 							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Date Picker Modal */}
+			{showDatePicker && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg p-6 w-80 max-w-md mx-4">
+						<h3 className="text-lg font-semibold text-gray-800 mb-4">Chọn ngày cụ thể</h3>
+						<div className="mb-4">
+							<input
+								type="date"
+								value={selectedDate}
+								onChange={(e) => setSelectedDate(e.target.value)}
+								className=" text-black w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-200"
+								autoFocus
+							/>
+						</div>
+						<div className="flex justify-end space-x-3">
+							<button
+								onClick={cancelDatePicker}
+								className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
+							>
+								Hủy
+							</button>
+							<button
+								onClick={() => handleDateSelection(selectedDate)}
+								disabled={!selectedDate}
+								className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								Áp dụng
+							</button>
 						</div>
 					</div>
 				</div>

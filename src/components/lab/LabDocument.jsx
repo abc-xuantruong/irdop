@@ -64,9 +64,11 @@ const LabDocument = () => {
 		return identityUID; // Fallback to UID if failed
 	};
 
-	// State riêng cho document được chọn - CHỈ thay đổi khi user click chọn document khác
-	const [selectedDocumentForPreview, setSelectedDocumentForPreview] = useState(null);
-	const [selectedDocument, setSelectedDocument] = useState(null); // State hiển thị UI selection
+	// STATES TÁCH BIỆT HOÀN TOÀN:
+	// - selectedDocument: CHỈ để highlight UI trong danh sách (có thể bị clear khi search)
+	// - selectedDocumentForPreview: CHỈ để preview, KHÔNG BAO GIỜ bị ảnh hưởng bởi search
+	const [selectedDocumentForPreview, setSelectedDocumentForPreview] = useState(null); // PREVIEW STATE - TÁCH BIỆT
+	const [selectedDocument, setSelectedDocument] = useState(null); // UI SELECTION STATE - có thể thay đổi theo search
 	const [previewContent, setPreviewContent] = useState('');
 	const [searchTerm, setSearchTerm] = useState('');
 	const [lastSearchTerm, setLastSearchTerm] = useState(''); // Lưu search term đã được thực hiện
@@ -225,7 +227,7 @@ const LabDocument = () => {
 	// 	}
 	// };
 
-	// Load documents from API - CLEAN VERSION WITHOUT SELECTION LOGIC
+	// Load documents from API - TÁCH BIỆT HOÀN TOÀN VỚI PREVIEW LOGIC
 	const loadDocuments = async (
 		searchTermToUse = '',
 		page = 1,
@@ -235,6 +237,15 @@ const LabDocument = () => {
 	) => {
 		try {
 			setIsLoading(true);
+
+			console.log('📚 Loading documents:', {
+				searchTermToUse,
+				page,
+				currentMode,
+				status,
+				docType,
+				currentSelectedDocumentForPreview: selectedDocumentForPreview?.id,
+			});
 
 			// Close analysis extract modal when loading new documents
 			if (showAnalysisExtract) {
@@ -322,14 +333,26 @@ const LabDocument = () => {
 					}
 				}
 
-				// Update selectedDocumentForPreview nếu cùng document tồn tại trong kết quả mới
+				// KHÔNG BAO GIỜ CLEAR selectedDocumentForPreview khi search
+				// Preview document sẽ được giữ nguyên bất kể search thế nào
+				// Chỉ update selectedDocumentForPreview nếu cùng document vẫn tồn tại và có thay đổi metadata
 				if (selectedDocumentForPreview) {
 					const foundPreviewDoc = transformedDocuments.find((doc) => doc.id === selectedDocumentForPreview.id);
 					if (foundPreviewDoc) {
-						setSelectedDocumentForPreview(foundPreviewDoc); // Update preview document với data mới
-					} else if (searchTermToUse !== lastSearchTerm) {
-						// Chỉ clear khi search thay đổi, không clear khi chuyển mode/status
-						setSelectedDocumentForPreview(null); // Clear preview selection nếu không tìm thấy
+						// CHỈ update nếu có sự khác biệt thực sự trong metadata để tránh re-render preview
+						const hasMetadataChanges =
+							JSON.stringify(foundPreviewDoc.metadata) !== JSON.stringify(selectedDocumentForPreview.metadata) ||
+							foundPreviewDoc.fileId !== selectedDocumentForPreview.fileId;
+						if (hasMetadataChanges) {
+							console.log('📝 Updating selectedDocumentForPreview due to metadata changes');
+							setSelectedDocumentForPreview(foundPreviewDoc); // Update preview document khi có thay đổi thực sự
+						} else {
+							console.log('✅ selectedDocumentForPreview unchanged - no metadata changes');
+						}
+					} else {
+						console.log('ℹ️ selectedDocumentForPreview not found in new search results, but keeping it');
+						// KHÔNG CLEAR - giữ nguyên selectedDocumentForPreview ngay cả khi không tìm thấy trong kết quả search
+						// User có thể đang xem document từ trang khác hoặc từ search term khác
 					}
 				}
 
@@ -837,12 +860,8 @@ const LabDocument = () => {
 
 	// Handle showing analysis extract component
 	const handleShowAnalysisExtract = (doc) => {
-		// Check both extractData.analyses and direct analyses property
-		const hasExtractAnalyses = doc?.metadata?.extractData?.analyses;
-		const hasDirectAnalyses = doc?.metadata?.analyses;
-
-		if (!doc || (!hasExtractAnalyses && !hasDirectAnalyses)) {
-			showAutoHideMessage('Không có dữ liệu chỉ tiêu để hiển thị', 'warning');
+		if (!doc) {
+			showAutoHideMessage('Không có tài liệu để xử lý', 'warning');
 			return;
 		}
 
@@ -866,7 +885,7 @@ const LabDocument = () => {
 		}
 
 		loadDocuments('', 1, initialMode, documentStatus, pendingDocumentType);
-
+		console.log('Component mounted, loading documents with mode:', initialMode);
 		// Cleanup function
 		return () => {
 			// Clean up global function
@@ -876,14 +895,39 @@ const LabDocument = () => {
 		};
 	}, [currentUser]); // Add currentUser as dependency to re-run when user changes
 
-	// Effect riêng để load preview CHỈ KHI selectedDocumentForPreview thay đổi
+	// Effect riêng để load preview - HOÀN TOÀN TÁCH BIỆT VỚI SEARCH
 	useEffect(() => {
+		console.log('🎯 Preview useEffect triggered:', {
+			selectedDocumentId: selectedDocumentForPreview?.id,
+			hasPreviewContent: Boolean(previewContent),
+			currentSearchTerm: searchTerm,
+			lastSearchTerm,
+		});
+
 		if (selectedDocumentForPreview && selectedDocumentForPreview.id) {
-			loadPreviewContent(selectedDocumentForPreview);
+			// Kiểm tra xem có thực sự cần load preview mới không
+			const needsReload =
+				!previewContent ||
+				previewContent.includes('Không có mã mẫu thử nào') ||
+				!previewContent.includes(selectedDocumentForPreview.id);
+
+			console.log('🔍 Preview reload check:', {
+				needsReload,
+				hasPreviewContent: Boolean(previewContent),
+				previewContainsDocId: previewContent.includes(selectedDocumentForPreview.id),
+			});
+
+			if (needsReload) {
+				console.log('🔄 Loading preview content for document:', selectedDocumentForPreview.id);
+				loadPreviewContent(selectedDocumentForPreview);
+			} else {
+				console.log('✅ Preview content already loaded for document:', selectedDocumentForPreview.id);
+			}
 		} else {
+			console.log('❌ No selectedDocumentForPreview, clearing preview content');
 			setPreviewContent('');
 		}
-	}, [selectedDocumentForPreview]); // CHỈ phụ thuộc vào selectedDocumentForPreview
+	}, [selectedDocumentForPreview?.id]); // CHỈ phụ thuộc vào ID của document - KHÔNG phụ thuộc vào search
 
 	// Keep isDraft in sync with documentStatus
 	useEffect(() => {
@@ -948,11 +992,24 @@ const LabDocument = () => {
 		// Chỉ lưu giá trị, không load documents
 	};
 
-	// Execute search - SIMPLE VERSION
+	// Execute search - TÁCH BIỆT HOÀN TOÀN VỚI PREVIEW
 	const executeSearch = async () => {
+		console.log('🔍 Execute search triggered:', {
+			searchTerm,
+			lastSearchTerm,
+			currentSelectedDocumentForPreview: selectedDocumentForPreview?.id,
+		});
+
 		// Chỉ thực hiện search khi nhấn Enter và khác với search term hiện tại
 		if (searchTerm !== lastSearchTerm) {
+			console.log('🚀 Performing search with term:', searchTerm);
+			console.log('📌 Preview document before search:', selectedDocumentForPreview?.id);
+
 			await loadDocuments(searchTerm, 1, mode, documentStatus, pendingDocumentType);
+
+			console.log('📌 Preview document after search (should be unchanged):', selectedDocumentForPreview?.id);
+		} else {
+			console.log('⏭️ Search term unchanged, skipping search');
 		}
 	};
 
@@ -964,27 +1021,47 @@ const LabDocument = () => {
 		}
 	};
 
-	// Handle document click for preview - SIMPLE VERSION CHỈ CẬP NHẬT KHI KHÁC NHAU
+	// Handle document click for preview - TÁCH BIỆT HOÀN TOÀN VỚI SEARCH
 	const handleDocumentClick = async (doc) => {
+		console.log('🖱️ Document clicked:', doc.id);
+
 		// Close analysis extract modal when selecting a different document
 		if (showAnalysisExtract && analysisExtractDocument?.id !== doc?.id) {
 			setShowAnalysisExtract(false);
 			setAnalysisExtractDocument(null);
 		}
 
-		// Update UI selection
-		setSelectedDocument(doc);
+		// Update UI selection only if different
+		if (selectedDocument?.id !== doc?.id) {
+			console.log('🎯 Updating selectedDocument to:', doc.id);
+			setSelectedDocument(doc);
+		} else {
+			console.log('✅ selectedDocument already selected:', doc.id);
+		}
 
 		// CHỈ cập nhật selectedDocumentForPreview và load preview khi chọn document KHÁC
 		if (selectedDocumentForPreview?.id !== doc?.id) {
+			console.log('🔄 Changing selectedDocumentForPreview from:', selectedDocumentForPreview?.id, 'to:', doc.id);
 			setSelectedDocumentForPreview(doc);
+		} else {
+			console.log('✅ selectedDocumentForPreview already selected:', doc.id);
 		}
 	};
 
-	// Load preview content - SEPARATED FUNCTION
+	// Load preview content - OPTIMIZED VERSION
 	const loadPreviewContent = async (document) => {
 		try {
 			setIsLoadingPreview(true);
+			console.log('Loading preview content for document:', document.id);
+
+			// Kiểm tra xem đã có preview content cho document này chưa
+			const currentDocumentId = document.id;
+			if (previewContent && previewContent.includes(currentDocumentId)) {
+				// Đã có preview cho document này, không cần load lại
+				console.log('Preview content already loaded for document:', currentDocumentId);
+				setIsLoadingPreview(false);
+				return;
+			}
 
 			// Create preview content từ document metadata - chỉ hiển thị mã mẫu thử
 			const metadata = document.metadata || {};
@@ -1030,6 +1107,7 @@ const LabDocument = () => {
 			`;
 
 			setPreviewContent(documentPreviewContent);
+			console.log('Preview content generated for document:', currentDocumentId);
 
 			// Expose file preview function to window for use in HTML content
 			window.handleFilePreviewFromDocument = (fileId) => {
@@ -1043,211 +1121,246 @@ const LabDocument = () => {
 		}
 	};
 
-	// Component ReportDetail để thay thế iframe - sử dụng React.memo để tránh re-render không cần thiết
-	const ReportDetail = React.memo(
-		({ document }) => {
-			const [isLoading, setIsLoading] = useState(false);
-			const [error, setError] = useState(null);
-			const [filePreviewUrl, setFilePreviewUrl] = useState(null);
-			const [isFilePreview, setIsFilePreview] = useState(false);
+	// Component ReportDetail - VERSION MỚI KHÔNG DÙNG REACT.MEMO
+	const ReportDetail = ({ document }) => {
+		const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+		const [detailError, setDetailError] = useState(null);
+		const [filePreviewUrl, setFilePreviewUrl] = useState(null);
+		const [isFilePreview, setIsFilePreview] = useState(false);
 
-			// Lấy báo cáo từ cache hoặc state
-			const reportHtml = reportCache[document?.id] || '';
+		// Kiểm tra xem có báo cáo trong cache không
+		const reportHtml = reportCache[document?.id] || '';
+		const hasReportInCache = Boolean(reportHtml);
 
-			const loadFilePreview = async () => {
-				if (!document || !document.fileId) {
-					setError('Không có fileId để tải file preview');
-					return;
+		// Kiểm tra xem document có đủ dữ liệu để tạo HTML report không
+		const hasValidMetadata = () => {
+			if (!document || !document.metadata) return false;
+			const metadata = document.metadata;
+			const content = metadata.content || '';
+			return content.trim() !== '';
+		};
+
+		// Load file preview function
+		const loadFilePreview = async () => {
+			if (!document || !document.fileId) {
+				setDetailError('Không có fileId để tải file preview');
+				return;
+			}
+
+			console.log('🔄 Loading file preview for document:', document.id);
+			setIsLoadingDetail(true);
+			setDetailError(null);
+			setIsFilePreview(true);
+
+			try {
+				const response = await apiPostLocal('https://red.irdop.org/v1/file/get/download_link', {
+					expiry: 60 * 10,
+					mode: 'view',
+					fileRecord: { id: document.fileId },
+				});
+
+				if (response.status === 200 && response.data) {
+					setFilePreviewUrl(response.data);
+					console.log('✅ File preview loaded successfully for document:', document.id);
+				} else {
+					throw new Error('Không thể lấy link preview file');
 				}
+			} catch (error) {
+				console.error('❌ File preview failed:', error);
+				setDetailError('Lỗi khi tải file preview: ' + error.message);
+			} finally {
+				setIsLoadingDetail(false);
+			}
+		};
 
-				setIsLoading(true);
-				setError(null);
-				setIsFilePreview(true);
+		// Load HTML report function
+		const loadHtmlReport = async () => {
+			if (!document) {
+				setDetailError('Không có dữ liệu tài liệu');
+				return;
+			}
 
-				try {
-					// Sử dụng API file preview thay vì HTML generation
-					const response = await apiPostLocal('https://red.irdop.org/v1/file/get/download_link', {
-						expiry: 60 * 10, // 10 minutes
-						mode: 'view',
-						fileRecord: { id: document.fileId },
-					});
+			// KIỂM TRA TRƯỚC KHI GỌI API
+			console.log('🔍 Checking conditions before loading report for document:', document.id);
 
-					if (response.status === 200 && response.data) {
-						setFilePreviewUrl(response.data);
-					} else {
-						throw new Error('Không thể lấy link preview file');
-					}
-				} catch (error) {
-					console.error('File preview failed:', error);
-					setError('Lỗi khi tải file preview: ' + error.message);
-				} finally {
-					setIsLoading(false);
-				}
-			};
+			// 1. Kiểm tra cache trước
+			if (reportCache[document.id]) {
+				console.log('💾 Report already in cache for document:', document.id);
+				return;
+			}
 
-			const loadReport = async () => {
-				if (!document || !document.metadata) {
-					setError('Không có dữ liệu tài liệu');
-					return;
-				}
+			// 2. Kiểm tra metadata
+			if (!hasValidMetadata()) {
+				console.log('⚠️ No valid metadata, switching to file preview for document:', document.id);
+				await loadFilePreview();
+				return;
+			}
 
-				// Kiểm tra nếu báo cáo cho document này đã được tải rồi
-				if (reportCache[document.id]) {
-					return; // Không tải lại nếu đã có dữ liệu cho document này
-				}
+			// 3. Chỉ gọi API khi thực sự cần thiết
+			console.log('🚀 Starting API call for document:', document.id);
+			setIsLoadingDetail(true);
+			setDetailError(null);
+			setIsFilePreview(false);
 
+			try {
 				const metadata = document.metadata;
 				const header = metadata.header || {};
 				const content = metadata.content || '';
-				const footer = metadata.footer || '';
 
-				// Kiểm tra xem có đủ dữ liệu để tạo HTML report không
-				const hasHeaderContent = header && Object.keys(header).length > 0;
-				const hasContent = content && content.trim() !== '';
-				const hasFooter = footer && footer.trim() !== '';
+				const reportData = {
+					header: header,
+					content: content,
+					footer: metadata.footer || document.id,
+					analysisIds: metadata.analysisIds || [],
+					sampleUIDs: metadata.sampleUIDs || [],
+					classifierCode: metadata.classifierCode || 'BIEN_BAN_THU_NGHIEM',
+				};
 
-				// Nếu không có đủ header và content, chuyển sang file preview
-				if (!hasContent) {
-					console.log('Không có đủ metadata, chuyển sang file preview cho document:', document.id);
-					await loadFilePreview();
-					return;
-				}
-
-				setIsLoading(true);
-				setError(null);
-				setIsFilePreview(false);
-
-				try {
-					const analysisIds = metadata.analysisIds || [];
-					const sampleUIDs = metadata.sampleUIDs || [];
-
-					// Prepare report data
-					const reportData = {
-						header: header,
-						content: content,
-						footer: metadata.footer || document.id,
-						analysisIds: analysisIds,
-						sampleUIDs: sampleUIDs,
-						classifierCode: metadata.classifierCode || 'BIEN_BAN_THU_NGHIEM', // Always include classifierCode
-					};
-
-					const response = await apiPostLocal(
-						'https://black.irdop.org/khsi19me/convert/lab_result_report_html',
-						reportData,
-					);
-
-					if (response.status === 200 && response.data) {
-						const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-						// Lưu vào cache
-						setReportCache((prev) => ({
-							...prev,
-							[document.id]: htmlResponse,
-						}));
-					} else {
-						throw new Error('Không thể tải báo cáo từ server');
-					}
-				} catch (error) {
-					console.error('Error loading report:', error);
-					setError('Lỗi khi tải báo cáo: ' + error.message);
-				} finally {
-					setIsLoading(false);
-				}
-			};
-
-			useEffect(() => {
-				// Reset states khi document thay đổi
-				setFilePreviewUrl(null);
-				setIsFilePreview(false);
-				setError(null);
-
-				// Chỉ tải nếu document tồn tại, có ID, và chưa có trong cache
-				if (document && document.id && !reportCache[document.id]) {
-					loadReport();
-				}
-			}, [document?.id]); // Chỉ theo dõi document.id, không theo dõi reportCache để tránh re-render không cần thiết
-
-			if (isLoading) {
-				return (
-					<div className="border-t border-gray-200 pt-6">
-						<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-							<FaPlay className="text-green-600" />
-							{isFilePreview ? 'File Preview' : 'Báo cáo chi tiết'}
-						</h4>
-						<div className="border border-gray-300 rounded-lg p-8 text-center">
-							<div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-							<p className="text-gray-600">{isFilePreview ? 'Đang tải file preview...' : 'Đang tải báo cáo...'}</p>
-						</div>
-					</div>
+				const response = await apiPostLocal(
+					'https://black.irdop.org/khsi19me/convert/lab_result_report_html',
+					reportData,
 				);
+
+				if (response.status === 200 && response.data) {
+					const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+
+					// Lưu vào cache
+					setReportCache((prev) => ({
+						...prev,
+						[document.id]: htmlResponse,
+					}));
+
+					console.log('✅ Report API call completed and cached for document:', document.id);
+				} else {
+					throw new Error('Không thể tải báo cáo từ server');
+				}
+			} catch (error) {
+				console.error('❌ Error loading report:', error);
+				setDetailError('Lỗi khi tải báo cáo: ' + error.message);
+			} finally {
+				setIsLoadingDetail(false);
+			}
+		};
+
+		// Effect chạy khi document thay đổi
+		useEffect(() => {
+			if (!document || !document.id) {
+				console.log('❌ No document or document ID');
+				return;
 			}
 
-			if (error) {
-				const isMetadataError = error.includes('không có đủ dữ liệu để tạo HTML preview');
-				return (
-					<div className="border-t border-gray-200 pt-6">
-						<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-							<FaPlay className="text-green-600" />
-							Báo cáo chi tiết
-						</h4>
-						<div className="border border-red-300 rounded-lg p-8 text-center bg-red-50">
-							<p className="text-red-600 mb-4">❌ {error}</p>
-							<div className="flex gap-2 justify-center">
-								{isMetadataError && document.fileId && (
-									<button
-										onClick={() => handleFilePreview(document.fileId)}
-										className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-									>
-										Xem file gốc
-									</button>
-								)}
-								{!isMetadataError && (
-									<button
-										onClick={loadReport}
-										className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-									>
-										Thử lại
-									</button>
-								)}
-							</div>
-						</div>
-					</div>
-				);
+			console.log('📄 ReportDetail useEffect triggered for document:', document.id);
+
+			// Reset states
+			setFilePreviewUrl(null);
+			setIsFilePreview(false);
+			setDetailError(null);
+
+			// Kiểm tra cache và metadata trước khi quyết định load gì
+			const hasCache = Boolean(reportCache[document.id]);
+			const hasValidMeta = hasValidMetadata();
+
+			console.log('📊 Document analysis:', {
+				documentId: document.id,
+				hasCache,
+				hasValidMeta,
+				hasFileId: Boolean(document.fileId),
+			});
+
+			if (hasCache) {
+				console.log('✅ Using cached report for document:', document.id);
+				return; // Đã có cache, không cần làm gì
 			}
 
+			if (hasValidMeta) {
+				console.log('🔄 No cache but has valid metadata, loading HTML report...');
+				loadHtmlReport();
+			} else if (document.fileId) {
+				console.log('🔄 No valid metadata, loading file preview...');
+				loadFilePreview();
+			} else {
+				console.log('❌ No valid metadata and no fileId');
+				setDetailError('Không có dữ liệu để hiển thị');
+			}
+		}, [document?.id]); // CHỈ phụ thuộc vào document.id
+
+		// Render loading state
+		if (isLoadingDetail) {
 			return (
 				<div className="border-t border-gray-200 pt-6">
 					<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
 						<FaPlay className="text-green-600" />
 						{isFilePreview ? 'File Preview' : 'Báo cáo chi tiết'}
 					</h4>
-					<div className="border border-gray-300 rounded-lg overflow-hidden">
-						{isFilePreview && filePreviewUrl ? (
-							<iframe
-								src={filePreviewUrl}
-								className="w-full min-h-[500px] border-0"
-								title="File Preview"
-								style={{ height: '70vh' }}
-							/>
-						) : (
-							<div
-								className="w-full min-h-[500px] p-4 bg-white overflow-auto custom-scrollbar text-start"
-								style={{
-									fontFamily: "'Times New Roman', serif",
-									fontSize: '11px',
-									lineHeight: '1.4',
-								}}
-								dangerouslySetInnerHTML={{ __html: reportHtml }}
-							/>
-						)}
+					<div className="border border-gray-300 rounded-lg p-8 text-center">
+						<div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+						<p className="text-gray-600">{isFilePreview ? 'Đang tải file preview...' : 'Đang tải báo cáo...'}</p>
 					</div>
 				</div>
 			);
-		},
-		(prevProps, nextProps) => {
-			// Chỉ re-render nếu document.id thay đổi
-			return prevProps.document?.id === nextProps.document?.id;
-		},
-	);
+		}
+
+		// Render error state
+		if (detailError) {
+			return (
+				<div className="border-t border-gray-200 pt-6">
+					<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+						<FaPlay className="text-green-600" />
+						Báo cáo chi tiết
+					</h4>
+					<div className="border border-red-300 rounded-lg p-8 text-center bg-red-50">
+						<p className="text-red-600 mb-4">❌ {detailError}</p>
+						<div className="flex gap-2 justify-center">
+							{document?.fileId && (
+								<button
+									onClick={() => handleFilePreview(document.fileId)}
+									className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+								>
+									Xem file gốc
+								</button>
+							)}
+							<button
+								onClick={() => (hasValidMetadata() ? loadHtmlReport() : loadFilePreview())}
+								className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+							>
+								Thử lại
+							</button>
+						</div>
+					</div>
+				</div>
+			);
+		}
+
+		// Render content
+		return (
+			<div className="border-t border-gray-200 pt-6">
+				<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+					<FaPlay className="text-green-600" />
+					{isFilePreview ? 'File Preview' : 'Báo cáo chi tiết'}
+				</h4>
+				<div className="border border-gray-300 rounded-lg overflow-hidden">
+					{isFilePreview && filePreviewUrl ? (
+						<iframe
+							src={filePreviewUrl}
+							className="w-full min-h-[500px] border-0"
+							title="File Preview"
+							style={{ height: '70vh' }}
+						/>
+					) : (
+						<div
+							className="w-full min-h-[500px] p-4 bg-white overflow-auto custom-scrollbar text-start"
+							style={{
+								fontFamily: "'Times New Roman', serif",
+								fontSize: '11px',
+								lineHeight: '1.4',
+							}}
+							dangerouslySetInnerHTML={{ __html: reportHtml }}
+						/>
+					)}
+				</div>
+			</div>
+		);
+	};
 
 	// Generate smart pagination numbers
 	const getSmartPaginationNumbers = (currentPage, totalPages) => {
@@ -1550,9 +1663,7 @@ const LabDocument = () => {
 													<span className="font-medium text-gray-900 text-sm leading-tight text-start">
 														{doc.metadata?.header?.title || doc.title}
 													</span>
-													{(doc.metadata?.extractData?.analyses || doc.metadata?.analyses) && (
-														<FaTable className="text-blue-500 w-3 h-3 flex-shrink-0" title="Có dữ liệu chỉ tiêu" />
-													)}
+													<FaTable className="text-blue-500 w-3 h-3 flex-shrink-0" title="Có thể duyệt kết quả" />
 												</div>
 												{/* Sample UIDs Section - Display up to 5 */}
 												{doc.metadata?.sampleUIDs && doc.metadata.sampleUIDs.length > 0 && (
@@ -1593,18 +1704,16 @@ const LabDocument = () => {
 								Xem trước
 							</h3>
 							<div className="flex gap-3">
-								{selectedDocumentForPreview &&
-									(selectedDocumentForPreview.metadata?.extractData?.analyses ||
-										selectedDocumentForPreview.metadata?.analyses) && (
-										<button
-											onClick={() => handleShowAnalysisExtract(selectedDocumentForPreview)}
-											className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-											title="Xem dữ liệu chỉ tiêu"
-										>
-											<FaTable className="w-3 h-3" />
-											Duyệt kết quả
-										</button>
-									)}
+								{selectedDocumentForPreview && (
+									<button
+										onClick={() => handleShowAnalysisExtract(selectedDocumentForPreview)}
+										className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+										title="Duyệt kết quả hoặc chỉnh sửa tài liệu"
+									>
+										<FaTable className="w-3 h-3" />
+										Duyệt kết quả
+									</button>
+								)}
 								{selectedDocumentForPreview && (
 									<button
 										onClick={() => previewDocumentReport(selectedDocumentForPreview)}
