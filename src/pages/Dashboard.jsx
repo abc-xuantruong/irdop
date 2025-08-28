@@ -4614,7 +4614,7 @@ const Dashboard = () => {
 																							: 'text-gray-600'
 																					}`}
 																				>
-																					{assignedTests}/{completedTests}/{totalTests}
+																					{completedTests}/{assignedTests}/{totalTests}
 																				</span>
 																			) : (
 																				<span className="text-gray-500">0/0/0</span>
@@ -4795,7 +4795,7 @@ const Dashboard = () => {
 																							: 'text-gray-600'
 																					}`}
 																				>
-																					{assignedTests}/{completedTests}/{totalTests}
+																					{completedTests}/{assignedTests}/{totalTests}
 																				</span>
 																			) : (
 																				<span className="text-gray-500">0/0/0</span>

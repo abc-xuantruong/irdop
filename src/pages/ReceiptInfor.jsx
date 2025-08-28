@@ -4098,7 +4098,15 @@ const ReceiptInfor = ({ receipt }) => {
 									<tbody>
 										{listAnalytes.map((order) => (
 											<tr key={`${getSampleUid(order.sample_id)}-${order.id}`}>
-												<td className="p-1 border">{getSampleUid(order.sample_id)}</td>
+												<td className="p-1 border">
+													<NavLink
+														to={`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${getSampleUid(order.sample_id)}`}
+														className="text-primary font-semibold hover:text-[#103667]"
+													>
+														{getSampleUid(order.sample_id)}
+													</NavLink>
+
+												</td>
 												<td className="p-1 border text-start">{order.parameter_name}</td>
 												<td className="p-1 border text-start">
 													<span>

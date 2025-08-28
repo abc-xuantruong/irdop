@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { GlobalContext } from '../../contexts/GlobalContext';
 import { apiGet, apiPost } from '../../contexts/helperFunctionCallAPI';
 import { useLocation } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import TinyMceInput from '../Input';
+import { IoIosArrowDown } from 'react-icons/io';
 import LabBulkUpdate from './LabBulkUpdate';
 
 // Custom CSS for thin scrollbars and enhanced editing experience
@@ -488,6 +489,10 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	// State to track if this is the initial load
 	const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+	// Technician dropdown state for sidebar header
+	const [technicianDropdownOpen, setTechnicianDropdownOpen] = useState(false);
+	const [selectedTechnicianName, setSelectedTechnicianName] = useState('TOÀN BỘ');
+
 	// Tooltip state
 	const [tooltip, setTooltip] = useState({
 		visible: false,
@@ -511,6 +516,11 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		loading: false,
 		docId: null,
 	});
+
+	// Ref to prevent unnecessary API calls
+	const lastFetchParamsRef = useRef('');
+	const lastSearchTermRef = useRef('');
+	const isCurrentlyFetchingRef = useRef(false);
 
 	// Handle drag selection
 	const handleMouseDown = (e, index, rowId, item) => {
@@ -750,6 +760,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		customCurrentPage = null,
 		customItemsPerPage = null,
 	) => {
+		console.log('🔄 fetchAnalysisData called', { preserveScroll, customFilters: !!customFilters });
+
 		// Save current scroll position if preserving scroll
 		if (preserveScroll && scrollContainerRef.current) {
 			setScrollPosition(scrollContainerRef.current.scrollTop);
@@ -823,21 +835,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									.filter((s) => s);
 						requestBody.protocols = values;
 					}
-				} else if (column === 'deadline' && filterValue) {
-					// Use the same deadline filter values as sidebar
-					requestBody.deadline = filterValue;
-				} else if (column === 'doc_id' && filterValue) {
-					if (filterValue === 'has_file') {
-						requestBody.hasDocument = true;
-					} else if (filterValue === 'no_file') {
-						requestBody.hasDocument = false;
-					}
-				} else if (column === 'result_value' && filterValue) {
-					if (filterValue === 'hasResult') {
-						requestBody.hasResult = true;
-					} else if (filterValue === 'noResult') {
-						requestBody.hasResult = false;
-					}
 				} else if (column === 'protocol_source' && filterValue) {
 					requestBody.sources = Array.isArray(filterValue) ? filterValue : [filterValue];
 				} else if (column === 'technician_uid' && filterValue) {
@@ -850,6 +847,67 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									.map((s) => s.trim())
 									.filter((s) => s);
 						requestBody.technicianUIDs = values;
+					}
+				} else if (column === 'status' && filterValue === 1) {
+					// Handle urgent filter (status = 1)
+					requestBody.status = 1;
+				} else if (column === 'done' && filterValue === true) {
+					// Handle done filter (sufficient results)
+					requestBody.done = true;
+				} else if (column === 'overdue' && filterValue === true) {
+					// Handle overdue filter (today's deadline)
+					requestBody.overdue = true;
+				} else if (column === 'deadline' && filterValue) {
+					// Use the same deadline filter values as sidebar
+					if (Array.isArray(filterValue)) {
+						// Handle multiple deadline values
+						requestBody.deadline = filterValue;
+					} else if (filterValue === 'today') {
+						requestBody.deadline = 'today';
+					} else if (filterValue === 'overdue') {
+						requestBody.deadline = 'overdue';
+					} else if (filterValue === '3days') {
+						requestBody.deadline = '3days';
+					} else if (filterValue === 'week') {
+						requestBody.deadline = 'week';
+					} else if (filterValue === 'future') {
+						requestBody.deadline = 'future';
+					} else {
+						requestBody.deadline = filterValue;
+					}
+				} else if (column === 'doc_id' && filterValue) {
+					if (Array.isArray(filterValue)) {
+						// Handle multiple doc_id values
+						filterValue.forEach((value) => {
+							if (value === 'none') {
+								requestBody.hasDocument = false;
+							} else if (value === 'pending') {
+								requestBody.docStatus = 'pending';
+							} else if (value === 'published') {
+								requestBody.docStatus = 'published';
+							}
+						});
+					} else {
+						if (filterValue === 'none') {
+							requestBody.hasDocument = false;
+						} else if (filterValue === 'pending') {
+							requestBody.docStatus = 'pending';
+						} else if (filterValue === 'published') {
+							requestBody.docStatus = 'published';
+						} else if (filterValue === 'has_file') {
+							requestBody.hasDocument = true;
+						} else if (filterValue === 'no_file') {
+							requestBody.hasDocument = false;
+						}
+					}
+				} else if (column === 'result_value' && filterValue) {
+					if (filterValue === 'hasResult') {
+						requestBody.hasResult = true;
+					} else if (filterValue === 'noResult') {
+						requestBody.hasResult = false;
+					} else {
+						// Handle custom result_value filtering
+						requestBody.result_value = filterValue;
 					}
 				}
 			});
@@ -898,18 +956,59 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// Fetch parameters list
 	const fetchParameters = async (searchTerm = '', customFilters = null) => {
+		console.log('🔍 fetchParameters called', { searchTerm, customFilters: !!customFilters });
+
 		try {
 			const useFilters = customFilters || filters;
 			const requestBody = { searchTerm: searchTerm };
 
-			// Add deadline filter if active
+			// Add all current filters to ensure parameter list is context-aware
+			if (useFilters.headerFilters.sample_uid) {
+				requestBody.sample_uid = useFilters.headerFilters.sample_uid;
+			}
+
+			if (useFilters.headerFilters.parameter_name) {
+				requestBody.parameter_name = useFilters.headerFilters.parameter_name;
+			}
+
+			if (useFilters.headerFilters.protocol_source) {
+				requestBody.protocol_source = useFilters.headerFilters.protocol_source;
+			}
+
+			if (useFilters.headerFilters.protocol_code) {
+				requestBody.protocol_code = useFilters.headerFilters.protocol_code;
+			}
+
+			if (useFilters.headerFilters.matrix) {
+				requestBody.matrix = useFilters.headerFilters.matrix;
+			}
+
+			if (useFilters.headerFilters.technician_uid) {
+				requestBody.technician_uid = useFilters.headerFilters.technician_uid;
+			}
+
+			if (useFilters.headerFilters.status === 1) {
+				requestBody.status = 1;
+			}
+
+			if (useFilters.headerFilters.done === true) {
+				requestBody.done = true;
+			}
+
+			if (useFilters.headerFilters.overdue === true) {
+				requestBody.overdue = true;
+			}
+
 			if (useFilters.headerFilters.deadline) {
 				requestBody.deadline = useFilters.headerFilters.deadline;
 			}
 
-			// Add technician filter if active
-			if (useFilters.headerFilters.technician_uid) {
-				requestBody.technician_uid = useFilters.headerFilters.technician_uid;
+			if (useFilters.headerFilters.doc_id) {
+				requestBody.doc_id = useFilters.headerFilters.doc_id;
+			}
+
+			if (useFilters.headerFilters.result_value) {
+				requestBody.result_value = useFilters.headerFilters.result_value;
 			}
 
 			const response = await apiPost(PARAMETER_API_ENDPOINT, requestBody);
@@ -940,115 +1039,73 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				page: 1,
 			};
 
-			// Add current filters to request body
-			const queryParams = new URLSearchParams(location.search);
-
-			// Add sample_uid filter if exists
-			if (queryParams.has('sample_uid')) {
-				const sampleUids = queryParams
-					.get('sample_uid')
-					.split(',')
-					.filter((s) => s.trim());
-				if (sampleUids.length > 0) {
-					requestBody.sample_uid = sampleUids;
-				}
+			// Add current filters to request body directly from filters state
+			if (filters.headerFilters.sample_uid) {
+				requestBody.sample_uid = filters.headerFilters.sample_uid;
 			}
 
-			// Add parameter_name filter if exists
-			if (queryParams.has('parameter_name')) {
-				const paramNames = queryParams
-					.get('parameter_name')
-					.split(',')
-					.filter((s) => s.trim());
-				if (paramNames.length > 0) {
-					requestBody.parameter_name = paramNames;
-				}
+			if (filters.headerFilters.parameter_name) {
+				requestBody.parameter_name = filters.headerFilters.parameter_name;
 			}
 
-			// Add protocol_code filter if exists
-			if (queryParams.has('protocol_code')) {
-				const protocolCodes = queryParams
-					.get('protocol_code')
-					.split(',')
-					.filter((s) => s.trim());
-				if (protocolCodes.length > 0) {
-					requestBody.protocol_code = protocolCodes;
-				}
+			if (filters.headerFilters.protocol_source) {
+				requestBody.protocol_source = filters.headerFilters.protocol_source;
 			}
 
-			// Add matrix filter if exists
-			if (queryParams.has('matrix')) {
-				const matrices = queryParams
-					.get('matrix')
-					.split(',')
-					.filter((s) => s.trim());
-				if (matrices.length > 0) {
-					requestBody.matrix = matrices;
-				}
+			if (filters.headerFilters.protocol_code) {
+				requestBody.protocol_code = filters.headerFilters.protocol_code;
 			}
 
-			// Add deadline filter if exists
-			if (queryParams.has('deadline')) {
-				const deadline = queryParams.get('deadline');
-				if (deadline) {
-					requestBody.deadline = deadline;
-				}
+			if (filters.headerFilters.matrix) {
+				requestBody.matrix = filters.headerFilters.matrix;
 			}
 
-			// Add doc_id filter if exists
-			if (queryParams.has('doc_id')) {
-				const docIds = queryParams
-					.get('doc_id')
-					.split(',')
-					.filter((s) => s.trim());
-				if (docIds.length > 0) {
-					requestBody.doc_id = docIds;
-				}
+			if (filters.headerFilters.technician_uid) {
+				requestBody.technician_uid = filters.headerFilters.technician_uid;
 			}
 
-			// Add result_value filter if exists
-			if (queryParams.has('result_value')) {
-				const resultValue = queryParams.get('result_value');
-				if (resultValue) {
-					requestBody.result_value = resultValue;
-				}
+			if (filters.headerFilters.status === 1) {
+				requestBody.status = 1;
+			}
+
+			if (filters.headerFilters.done === true) {
+				requestBody.done = true;
+			}
+
+			if (filters.headerFilters.overdue === true) {
+				requestBody.overdue = true;
+			}
+
+			if (filters.headerFilters.deadline) {
+				requestBody.deadline = filters.headerFilters.deadline;
+			}
+
+			if (filters.headerFilters.doc_id) {
+				requestBody.doc_id = filters.headerFilters.doc_id;
+			}
+
+			if (filters.headerFilters.result_value) {
+				requestBody.result_value = filters.headerFilters.result_value;
 			}
 
 			const response = await apiPost('https://black.irdop.org/v1/analysis/search_filter_column', requestBody);
 
 			if (response.status < 300 && response.data) {
 				if (response.data.result && Array.isArray(response.data.result)) {
-					// Transform the API response to the expected format
-					const transformedResults = response.data.result.map((item) => {
-						// Handle different column types
-						if (column === 'protocol_code' && item.protocol_code !== undefined) {
-							return {
-								value: item.protocol_code,
-								count: item.total || 1,
-							};
-						} else if (column === 'parameter_name' && item.parameter_name !== undefined) {
-							return {
-								value: item.parameter_name,
-								count: item.total || 1,
-							};
-						} else if (column === 'sample_uid' && item.sample_uid !== undefined) {
-							return {
-								value: item.sample_uid,
-								count: item.total || 1,
-							};
-						} else if (column === 'matrix' && item.matrix !== undefined) {
-							return {
-								value: item.matrix,
-								count: item.total || 1,
-							};
-						} else if (column === 'result_unit' && item.result_unit !== undefined) {
-							return {
-								value: item.result_unit,
-								count: item.total || 1,
-							};
-						} else if (column === 'technician_uid' && item.technician_uid !== undefined) {
-							// For technician filter, convert identity_uid to display name with alias
-							const technicianUid = item.technician_uid;
+					let formattedResults = [];
+
+					if (column === 'doc_id') {
+						// Special handling for doc_id column - predefined options
+						formattedResults = [
+							{ value: 'none', count: 0, label: 'none' },
+							{ value: 'pending', count: 0, label: 'pending' },
+							{ value: 'published', count: 0, label: 'published' },
+						];
+					} else if (column === 'technician_uid') {
+						// For technician filter, convert identity_uid to display name with alias
+						formattedResults = response.data.result.map((item) => {
+							// API returns technician_uid field, not value
+							const technicianUid = item.technician_uid || item.value;
 							const technician = technicians?.find((tech) => tech.identity_uid === technicianUid);
 							const displayName = technician
 								? `${technician.identity_name}${technician.alias ? ` (${technician.alias})` : ''}`
@@ -1056,18 +1113,78 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 							return {
 								value: technicianUid, // Keep original identity_uid as value
-								count: item.total || 1,
+								count: item.total || item.count || 0,
 								label: displayName, // Display name with alias
 							};
-						} else {
-							// Fallback for other column types or if the item is just a string
-							return {
-								value: typeof item === 'string' ? item : item.value || item[column] || '',
-								count: item.total || item.count || 1,
-							};
-						}
-					});
-					setFilterResults(transformedResults);
+						});
+					} else if (column === 'deadline') {
+						// For deadline filter, convert deadline values to Vietnamese labels
+						const deadlineLabels = {
+							overdue: 'Quá hạn',
+							today: 'Hôm nay',
+							'3days': '3 ngày tới',
+							week: 'Tuần này',
+							future: 'Tương lai',
+						};
+
+						formattedResults = response.data.result.map((item) => ({
+							value: item.deadline,
+							count: item.total || item.count || 0,
+							label: deadlineLabels[item.deadline] || item.deadline,
+						}));
+					} else {
+						// For other columns, use standard formatting
+						formattedResults = response.data.result.map((item) => {
+							// Handle different column types
+							if (column === 'protocol_code' && item.protocol_code !== undefined) {
+								return {
+									value: item.protocol_code,
+									count: item.total || item.count || 1,
+									label: item.protocol_code,
+								};
+							} else if (column === 'parameter_name' && item.parameter_name !== undefined) {
+								return {
+									value: item.parameter_name,
+									count: item.total || item.count || 1,
+									label: item.parameter_name,
+								};
+							} else if (column === 'sample_uid' && item.sample_uid !== undefined) {
+								return {
+									value: item.sample_uid,
+									count: item.total || item.count || 1,
+									label: item.sample_uid,
+								};
+							} else if (column === 'matrix' && item.matrix !== undefined) {
+								return {
+									value: item.matrix,
+									count: item.total || item.count || 1,
+									label: item.matrix,
+								};
+							} else if (column === 'protocol_source' && item.protocol_source !== undefined) {
+								return {
+									value: item.protocol_source,
+									count: item.total || item.count || 1,
+									label: item.protocol_source,
+								};
+							} else if (column === 'result_unit' && item.result_unit !== undefined) {
+								return {
+									value: item.result_unit,
+									count: item.total || item.count || 1,
+									label: item.result_unit,
+								};
+							} else {
+								// Fallback for other column types or if the item is just a string
+								const value = item[column] || item.parameter_name || item.value || '';
+								return {
+									value: value,
+									count: item.total || item.count || 1,
+									label: value,
+								};
+							}
+						});
+					}
+
+					setFilterResults(formattedResults);
 				} else {
 					setFilterResults([]);
 				}
@@ -1118,39 +1235,58 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		}
 	}, []);
 
-	// Handle filter changes after initial load (update URL and fetch data)
+	// Simple effect with debounce to prevent rapid API calls
 	useEffect(() => {
-		if (!isInitialLoad) {
-			// Update URL parameters
-			updateUrlParams(filters, currentPage, itemsPerPage);
+		if (isInitialLoad) return;
 
-			// Fetch both sidebar and table data - keep current search term for sidebar
-			fetchParameters(parameterSearchTerm);
-			fetchAnalysisData();
-		}
+		console.log('🔄 Filter/pagination changed, debouncing fetch...');
+
+		const timeoutId = setTimeout(() => {
+			if (!isCurrentlyFetchingRef.current) {
+				console.log('✅ Debounced fetch executing...');
+				isCurrentlyFetchingRef.current = true;
+
+				// Update URL parameters
+				updateUrlParams(filters, currentPage, itemsPerPage);
+
+				// Fetch data
+				Promise.all([fetchParameters(parameterSearchTerm), fetchAnalysisData()]).finally(() => {
+					isCurrentlyFetchingRef.current = false;
+				});
+			}
+		}, 100); // 100ms debounce
+
+		return () => clearTimeout(timeoutId);
 	}, [
 		currentPage,
 		itemsPerPage,
-		filters.parameters,
-		filters.protocols,
-		filters.headerFilters,
-		sortConfig,
-		// isInitialLoad,
+		filters.columnSort,
+		filters.sortBy,
+		isInitialLoad,
+		// Only trigger on filter content changes, not object reference changes
+		JSON.stringify(filters.parameters),
+		JSON.stringify(filters.protocols),
+		JSON.stringify(filters.headerFilters),
 	]);
 
 	// Search parameters with debounce (only for search box, doesn't update URL)
 	useEffect(() => {
-		// Don't fetch during initial load, but allow empty search to fetch default data
-		if (!isInitialLoad) {
+		// Don't fetch during initial load
+		if (!isInitialLoad && lastSearchTermRef.current !== parameterSearchTerm) {
+			lastSearchTermRef.current = parameterSearchTerm;
+
+			console.log('🔍 Search term changed, debouncing fetchParameters...');
+
 			const timeoutId = setTimeout(() => {
-				fetchParameters(parameterSearchTerm);
+				if (!isCurrentlyFetchingRef.current) {
+					console.log('✅ Search fetch executing...');
+					fetchParameters(parameterSearchTerm);
+				}
 			}, 300);
 
 			return () => clearTimeout(timeoutId);
 		}
-	}, [parameterSearchTerm, isInitialLoad]);
-
-	// Search filter values with debounce
+	}, [parameterSearchTerm, isInitialLoad]); // Search filter values with debounce
 	useEffect(() => {
 		if (activeFilterColumn) {
 			// For special filter columns, don't fetch from API
@@ -1174,8 +1310,15 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	useEffect(() => {
 		if (!isInitialLoad) {
 			const autoRefreshInterval = setInterval(() => {
-				// Only prevent auto-refresh when actively editing a cell
-				if (!updating && !editingCell && !editableCell.analysisId && !editingProtocolSource) {
+				// Only prevent auto-refresh when actively editing a cell or currently fetching
+				if (
+					!updating &&
+					!editingCell &&
+					!editableCell.analysisId &&
+					!editingProtocolSource &&
+					!isCurrentlyFetchingRef.current
+				) {
+					console.log('🔄 Auto-refresh triggered');
 					// Use current state instead of parsing URL to maintain filters
 					fetchAnalysisData(true, filters, currentPage, itemsPerPage);
 				}
@@ -1184,15 +1327,24 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			return () => clearInterval(autoRefreshInterval);
 		}
 	}, [
-		updating,
-		editingCell,
-		editableCell.analysisId,
-		editingProtocolSource,
-		isInitialLoad,
-		filters,
-		currentPage,
-		itemsPerPage,
+		isInitialLoad, // Only depend on isInitialLoad to avoid unnecessary re-creation of interval
 	]);
+
+	// Close technician dropdown when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			// Check if dropdown is open and click is outside the dropdown container
+			if (technicianDropdownOpen && !event.target.closest('[data-technician-dropdown]')) {
+				// Add a small delay to ensure selection events can complete first
+				setTimeout(() => {
+					setTechnicianDropdownOpen(false);
+				}, 100);
+			}
+		};
+
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, [technicianDropdownOpen]);
 
 	// Keyboard shortcuts
 	useEffect(() => {
@@ -1437,6 +1589,57 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		setSelectedDate('');
 		setDatePickerMode('sidebar');
 	};
+
+	// Handle technician dropdown in sidebar header
+	const handleTechnicianDropdownToggle = () => {
+		setTechnicianDropdownOpen(!technicianDropdownOpen);
+	};
+
+	const handleTechnicianSelection = (technicianUid) => {
+		if (technicianUid === null) {
+			// Remove technician filter
+			const newFilters = {
+				...filters,
+				headerFilters: {
+					...filters.headerFilters,
+				},
+			};
+			delete newFilters.headerFilters.technician_uid;
+			setFilters(newFilters);
+			setSelectedTechnicianName('TOÀN BỘ');
+		} else {
+			// Apply technician filter
+			const technician = technicians?.find((tech) => tech.identity_uid === technicianUid);
+			const technicianName = technician ? technician.identity_name : 'TOÀN BỘ';
+
+			const newFilters = {
+				...filters,
+				headerFilters: {
+					...filters.headerFilters,
+					technician_uid: [technicianUid],
+				},
+			};
+			setFilters(newFilters);
+			setSelectedTechnicianName(technicianName);
+		}
+		setTechnicianDropdownOpen(false);
+	};
+
+	// Get current selected technician name for display
+	const getCurrentTechnicianName = () => {
+		if (!filters.headerFilters.technician_uid || filters.headerFilters.technician_uid.length === 0) {
+			return 'TOÀN BỘ';
+		}
+
+		const selectedUid = filters.headerFilters.technician_uid[0];
+		const technician = technicians?.find((tech) => tech.identity_uid === selectedUid);
+		return technician ? technician.identity_name : 'TOÀN BỘ';
+	};
+
+	// Sync selectedTechnicianName with current filters when filters change
+	useEffect(() => {
+		setSelectedTechnicianName(getCurrentTechnicianName());
+	}, [filters.headerFilters.technician_uid, technicians]);
 
 	// Clear all filters (for selected items indicator)
 	const clearAllFilters = () => {
@@ -1997,7 +2200,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	};
 
 	// Open filter modal for specific column
-	const openFilterModal = (column) => {
+	const openFilterModal = async (column) => {
 		// Set filter creation mode if not already active
 		if (!isFilterCreationMode) {
 			setIsFilterCreationMode(true);
@@ -2012,16 +2215,143 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			return;
 		}
 
-		// Set active filter column
+		// Set active filter column and loading state
 		setActiveFilterColumn(column);
+		setFilterLoading(true);
+		setFilterResults([]);
+		setSelectedFilterValues([]);
 		setFilterSearchTerm('');
 
-		// Load existing filter values for this column
-		const existingFilterValues = filters.headerFilters[column];
-		if (existingFilterValues && Array.isArray(existingFilterValues)) {
-			setSelectedFilterValues([...existingFilterValues]);
-		} else {
-			setSelectedFilterValues([]);
+		try {
+			// Prepare request body with current filters
+			const requestBody = {
+				filterColumn: column,
+				searchTerm: '',
+				itemsPerPage: 50,
+				page: 1,
+			};
+
+			// Add current filters to request body directly from filters state
+			if (filters.headerFilters.sample_uid) {
+				requestBody.sample_uid = filters.headerFilters.sample_uid;
+			}
+
+			if (filters.headerFilters.parameter_name) {
+				requestBody.parameter_name = filters.headerFilters.parameter_name;
+			}
+
+			if (filters.headerFilters.protocol_source) {
+				requestBody.protocol_source = filters.headerFilters.protocol_source;
+			}
+
+			if (filters.headerFilters.protocol_code) {
+				requestBody.protocol_code = filters.headerFilters.protocol_code;
+			}
+
+			if (filters.headerFilters.matrix) {
+				requestBody.matrix = filters.headerFilters.matrix;
+			}
+
+			if (filters.headerFilters.technician_uid) {
+				requestBody.technician_uid = filters.headerFilters.technician_uid;
+			}
+
+			if (filters.headerFilters.status === 1) {
+				requestBody.status = 1;
+			}
+
+			if (filters.headerFilters.done === true) {
+				requestBody.done = true;
+			}
+
+			if (filters.headerFilters.overdue === true) {
+				requestBody.overdue = true;
+			}
+
+			if (filters.headerFilters.deadline) {
+				requestBody.deadline = filters.headerFilters.deadline;
+			}
+
+			if (filters.headerFilters.doc_id) {
+				requestBody.doc_id = filters.headerFilters.doc_id;
+			}
+
+			if (filters.headerFilters.result_value) {
+				requestBody.result_value = filters.headerFilters.result_value;
+			}
+
+			const response = await apiPost('https://black.irdop.org/v1/analysis/search_filter_column', requestBody);
+
+			if (response?.status < 300 && response?.data?.result) {
+				let formattedResults = [];
+
+				if (column === 'doc_id') {
+					// Special handling for doc_id column - predefined options
+					formattedResults = [
+						{ value: 'none', count: 0, label: 'none' },
+						{ value: 'pending', count: 0, label: 'pending' },
+						{ value: 'published', count: 0, label: 'published' },
+					];
+				} else if (column === 'technician_uid') {
+					// For technician filter, convert identity_uid to display name with alias
+					formattedResults = response.data.result.map((item) => {
+						// API returns technician_uid field, not value
+						const technicianUid = item.technician_uid || item.value;
+						const technician = technicians?.find((tech) => tech.identity_uid === technicianUid);
+						const displayName = technician
+							? `${technician.identity_name}${technician.alias ? ` (${technician.alias})` : ''}`
+							: technicianUid || 'Không có người thực hiện';
+
+						return {
+							value: technicianUid, // Keep original identity_uid as value
+							count: item.total || item.count || 0,
+							label: displayName, // Display name with alias
+						};
+					});
+				} else if (column === 'deadline') {
+					// For deadline filter, convert deadline values to Vietnamese labels
+					const deadlineLabels = {
+						overdue: 'Quá hạn',
+						today: 'Hôm nay',
+						'3days': '3 ngày tới',
+						week: 'Tuần này',
+						future: 'Tương lai',
+					};
+
+					formattedResults = response.data.result.map((item) => ({
+						value: item.deadline,
+						count: item.total || item.count || 0,
+						label: deadlineLabels[item.deadline] || item.deadline,
+					}));
+				} else {
+					// For other columns, use standard formatting
+					formattedResults = response.data.result.map((item) => ({
+						value: item[column] || item.parameter_name || item.value,
+						count: item.total || item.count || 0,
+						label: item[column] || item.parameter_name || item.value,
+					}));
+				}
+
+				setFilterResults(formattedResults);
+
+				// Auto-select values based on current filters
+				const currentFilter = filters.headerFilters[column];
+				if (currentFilter) {
+					if (Array.isArray(currentFilter)) {
+						setSelectedFilterValues(currentFilter);
+					} else {
+						setSelectedFilterValues([currentFilter]);
+					}
+				}
+			} else {
+				setFilterResults([]);
+			}
+		} catch (error) {
+			console.error('Error fetching filter options:', error);
+			setFilterResults([]);
+			toast.error('Lỗi khi tải dữ liệu lọc');
+		} finally {
+			setFilterLoading(false);
 		}
 
 		// Set default center position for non-technician filters
@@ -2258,7 +2588,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	};
 
 	return (
-		<div className="flex h-full bg-gray-100 relative">
+		<div className="flex h-full bg-gray-100 relative overflow-y-hidden">
 			{/* Loading overlay when updating */}
 			{updating && (
 				<div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50">
@@ -2269,20 +2599,154 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				</div>
 			)}
 
-			{/* Sidebar */}
-			<div
-				className={`left-0 h-lvh bg-gray-100 border-gray-300 z-40 flex flex-col box-border transition-all duration-300 ${
-					sidebarCollapsed ? 'min-w-0 max-w-0 overflow-hidden' : 'min-w-72 max-w-80'
-				}`}
-			>
-				<div className="flex-1 flex flex-col overflow-hidden">
-					{/* Parameter search with title */}
-					<div className="p-3 border-b border-gray-300 bg-gray-50 sticky top-0 z-10">
-						<div className="flex items-center justify-between mb-3">
-							<h2 className="text-base font-bold text-gray-800 text-left">DANH SÁCH CHỈ TIÊU</h2>
+			{/* Fixed Header with breadcrumb - đè lên toàn bộ chiều rộng */}
+			<div className="fixed top-0 left-16 right-0 z-40 bg-white p-2 shadow-md">
+				<div className="flex justify-between items-center w-full">
+					{/* Extended Breadcrumb with Technician Dropdown - chiếm hết chiều rộng */}
+					<div className="flex items-center space-x-2 font-bold text-sm text-gray-500 flex-1">
+						{sidebarCollapsed && (
 							<button
 								onClick={toggleSidebarCollapse}
-								className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors"
+								className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors mr-2 flex-shrink-0"
+								onMouseEnter={(e) => showTooltip(e, 'Mở rộng sidebar')}
+								onMouseLeave={hideTooltip}
+							>
+								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+								</svg>
+							</button>
+						)}
+						<span
+							className="hover:underline flex-shrink-0"
+							onClick={() => onNavigateToLab && onNavigateToLab('analysis')}
+						>
+							PHÒNG THỬ NGHIỆM
+						</span>
+						<span className="flex-shrink-0">/</span>
+						<span className="hover:underline flex-shrink-0">DANH SÁCH PHÉP THỬ</span>
+						<span className="flex-shrink-0">/</span>
+						<div className="relative flex-shrink-0" data-technician-dropdown>
+							<button
+								className="text-blue-600 font-bold underline hover:text-blue-800 transition-colors px-1 py-0.5 flex gap-1"
+								onClick={(e) => {
+									e.stopPropagation();
+									handleTechnicianDropdownToggle();
+								}}
+							>
+								{getCurrentTechnicianName() === 'TOÀN BỘ' ? 'TẤT CẢ KIỂM NGHIỆM VIÊN' : getCurrentTechnicianName()}{' '}
+								<IoIosArrowDown size={20} />
+							</button>
+							{technicianDropdownOpen && (
+								<div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-48">
+									<div className="max-h-60 overflow-y-auto">
+										<button
+											className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
+											onClick={() => handleTechnicianSelection(null)}
+										>
+											Tất cả kiểm nghiệm viên
+										</button>
+										{/* Remove duplicates by using unique identity_uid */}
+										{technicians
+											?.filter(
+												(tech, index, arr) => arr.findIndex((t) => t.identity_uid === tech.identity_uid) === index,
+											)
+											.map((tech) => (
+												<button
+													key={tech.identity_uid}
+													className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
+													onClick={() => handleTechnicianSelection(tech.identity_uid)}
+												>
+													{tech.identity_name} ({tech.alias})
+												</button>
+											))}
+									</div>
+								</div>
+							)}
+						</div>
+					</div>
+
+					{/* Action buttons - flex-shrink-0 để không bị thu nhỏ */}
+					<div className="flex items-center space-x-3 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 flex-shrink-0">
+						{/* Action buttons */}
+						<div className="flex items-center space-x-2 flex-shrink-0">
+							{/* Selected items indicator */}
+							{selectedRows.size > 0 && (
+								<div
+									className="px-3 py-2 bg-yellow-100 text-yellow-800 rounded-md text-sm font-medium border border-yellow-200 cursor-pointer hover:bg-yellow-200 transition-colors"
+									onClick={clearAllFilters}
+									onMouseEnter={(e) => showTooltip(e, 'Click để xóa tất cả bộ lọc và bỏ chọn')}
+									onMouseLeave={hideTooltip}
+								>
+									<span>{selectedRows.size} mục đã chọn</span>
+								</div>
+							)}
+							{(filters.parameters.length > 0 || Object.keys(filters.headerFilters).length > 0) && (
+								<button
+									className="px-3 py-2 bg-white border-2 border-gray-400 text-gray-700 rounded-md text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm"
+									onClick={clearParameter}
+								>
+									<span>Xóa bộ lọc</span>
+								</button>
+							)}
+
+							<button
+								className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm ${
+									isFilterCreationMode
+										? 'bg-blue-500 border-blue-700 text-white hover:bg-blue-600'
+										: 'bg-white border-gray-400 text-gray-700 hover:bg-gray-50'
+								}`}
+								onClick={toggleFilterCreationMode}
+							>
+								<span>Tạo bộ lọc</span>
+							</button>
+
+							<button
+								className="px-3 py-2 bg-white border-2 border-gray-400 text-gray-700 rounded-md text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm"
+								onClick={openEditor}
+							>
+								<span>Lập biên bản</span>
+							</button>
+
+							<button
+								onClick={selectMyTasksFilter}
+								className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm my-tasks-btn ${
+									filters.headerFilters.technician_uid &&
+									Array.isArray(filters.headerFilters.technician_uid) &&
+									filters.headerFilters.technician_uid.includes(currentUser?.identity_uid)
+										? 'active'
+										: ''
+								}`}
+							>
+								<span>Chỉ tiêu của tôi</span>
+							</button>
+
+							{selectedRows.size > 0 && (
+								<button
+									className="px-3 py-2 bg-green-500 border-2 border-green-700 text-white rounded-md text-sm font-bold hover:bg-green-600 transition-colors shadow-sm"
+									onClick={handleBulkEditClick}
+								>
+									<span>Cập nhật hàng loạt ({selectedRows.size})</span>
+								</button>
+							)}
+						</div>
+					</div>
+				</div>
+			</div>
+
+			{/* Sidebar - nằm dưới breadcrumb */}
+			<div
+				className={`bg-gray-100 border-gray-300 z-30 flex flex-col box-border transition-all duration-300 ${
+					sidebarCollapsed ? 'min-w-0 max-w-0 overflow-hidden' : 'min-w-72 max-w-80'
+				}`}
+				style={{ height: 'calc(100% - 50px)', marginTop: '50px' }}
+			>
+				<div className="flex-1 flex flex-col overflow-hidden">
+					{/* Parameter search */}
+					<div className="p-3 border-b border-gray-300 bg-gray-50">
+						<div className="flex items-center gap-2 mb-3">
+							<button
+								onClick={toggleSidebarCollapse}
+								className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
 								onMouseEnter={(e) => showTooltip(e, 'Thu gọn sidebar')}
 								onMouseLeave={hideTooltip}
 							>
@@ -2290,21 +2754,21 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
 								</svg>
 							</button>
-						</div>
-						<div className="relative">
-							<input
-								type="text"
-								placeholder="Tìm kiếm chỉ tiêu..."
-								className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white text-black text-left"
-								value={parameterSearchTerm}
-								onChange={(e) => setParameterSearchTerm(e.target.value)}
-								onKeyDown={(e) => {
-									if (e.key === 'Enter') {
-										// Immediately fetch parameters when Enter is pressed, even with empty value
-										fetchParameters(parameterSearchTerm);
-									}
-								}}
-							/>
+							<div className="relative flex-1">
+								<input
+									type="text"
+									placeholder="Tìm kiếm chỉ tiêu..."
+									className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white text-black text-left"
+									value={parameterSearchTerm}
+									onChange={(e) => setParameterSearchTerm(e.target.value)}
+									onKeyDown={(e) => {
+										if (e.key === 'Enter') {
+											// Immediately fetch parameters when Enter is pressed, even with empty value
+											fetchParameters(parameterSearchTerm);
+										}
+									}}
+								/>
+							</div>
 						</div>
 
 						{/* Deadline filter buttons */}
@@ -2349,7 +2813,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 											: 'bg-gray-100 text-black hover:bg-gray-200'
 									}`}
 								>
-									Chọn ngày
+									Chọn
 								</button>
 							</div>
 						</div>
@@ -2366,7 +2830,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									}`}
 									onClick={() => toggleSidebarSection('analysis')}
 								>
-									<h3 className="text-sm font-bold text-gray-800">CHỈ TIÊU</h3>
+									<div className="flex items-center space-x-2">
+										<h3 className="text-sm font-bold text-gray-800">CHỈ TIÊU</h3>
+									</div>
 									<div className="flex items-center space-x-2 pr-2">
 										<span className="sidebar-subtitle text-blue-800">{parametersData.analysis.length}</span>
 										<span className="text-gray-500">{sidebarExpandedSections.analysis ? '▼' : '▶'}</span>
@@ -2495,158 +2961,20 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									</div>
 								)}
 							</div>
-
-							{/* Technician Section */}
-							<div className="mb-1">
-								<div
-									className={`sidebar-section-header flex items-center justify-between py-2 cursor-pointer ${
-										sidebarExpandedSections.technician ? 'active' : ''
-									}`}
-									onClick={() => toggleSidebarSection('technician')}
-								>
-									<h3 className="text-sm font-bold text-gray-800">NGƯỜI THỰC HIỆN</h3>
-									<div className="flex items-center space-x-2 pr-2">
-										<span className="sidebar-subtitle text-purple-800">{parametersData.technician.length}</span>
-										<span className="text-gray-500">{sidebarExpandedSections.technician ? '▼' : '▶'}</span>
-									</div>
-								</div>
-								{sidebarExpandedSections.technician && (
-									<div className="ml-2 pr-2 space-y-1 max-h-[calc(100vh-350px)] overflow-y-auto overflow-x-hidden custom-scrollbar">
-										{parametersData.technician.map((technician) => {
-											const itemKey = `technician|${technician.technician_uid}`;
-											const isSelected = selectedParameter === itemKey;
-
-											// Find technician display name
-											const technicianData = technicians?.find(
-												(tech) => tech.identity_uid === technician.technician_uid,
-											);
-											const displayName = technicianData
-												? `${technicianData.identity_name}${technicianData.alias ? ` (${technicianData.alias})` : ''}`
-												: technician.technician_uid || 'Không có người thực hiện';
-
-											return (
-												<div
-													key={technician.technician_uid}
-													className={`sidebar-item py-1 cursor-pointer transition-all duration-200 flex items-center justify-between ${
-														isSelected ? 'text-purple-600 font-bold underline' : 'text-gray-700'
-													}`}
-													onClick={() => selectItem('technician', technician.technician_uid)}
-												>
-													<div className="flex-1 min-w-0 text-left">
-														<p className="text-xs font-medium text-left">
-															<span className="text-left">{displayName}</span>
-														</p>
-													</div>
-													<div className="item-count text-xs font-semibold text-gray-600">{technician.total}</div>
-												</div>
-											);
-										})}
-										{parametersData.technician.length === 0 && (
-											<div className="text-center py-4 text-gray-500 text-xs">Không có dữ liệu người thực hiện</div>
-										)}
-									</div>
-								)}
-							</div>
 						</div>
 					</div>
 				</div>
 			</div>
 			{/* Main content */}
-			<div className="transition-all w-full min-h-screen bg-white relative flex flex-col">
-				{/* Fixed Header with breadcrumb and action buttons */}
-				<div className="sticky top-0 z-30 bg-white p-4 shadow-sm">
-					<div className="flex justify-between items-center">
-						{/* Breadcrumb */}
-						<div className="flex items-center space-x-2 font-bold text-sm text-gray-500 cursor-pointer min-w-fit mr-2">
-							{sidebarCollapsed && (
-								<button
-									onClick={toggleSidebarCollapse}
-									className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors mr-2"
-									onMouseEnter={(e) => showTooltip(e, 'Mở rộng sidebar')}
-									onMouseLeave={hideTooltip}
-								>
-									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-									</svg>
-								</button>
-							)}
-							<span className="hover:underline" onClick={() => onNavigateToLab && onNavigateToLab('analysis')}>
-								PHÒNG THỬ NGHIỆM
-							</span>
-							<span>/</span>
-							<span className="text-blue-700 font-bold hover:underline">DANH SÁCH PHÉP THỬ</span>
-						</div>
-
-						<div className="flex items-center space-x-3 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-							{/* Action buttons */}
-							<div className="flex items-center space-x-2 flex-shrink-0">
-								{/* Selected items indicator */}
-								{selectedRows.size > 0 && (
-									<div
-										className="px-3 py-2 bg-yellow-100 text-yellow-800 rounded-md text-sm font-medium border border-yellow-200 cursor-pointer hover:bg-yellow-200 transition-colors"
-										onClick={clearAllFilters}
-										onMouseEnter={(e) => showTooltip(e, 'Click để xóa tất cả bộ lọc và bỏ chọn')}
-										onMouseLeave={hideTooltip}
-									>
-										<span>{selectedRows.size} mục đã chọn</span>
-									</div>
-								)}
-								{(filters.parameters.length > 0 || Object.keys(filters.headerFilters).length > 0) && (
-									<button
-										className="px-3 py-2 bg-white border-2 border-gray-400 text-gray-700 rounded-md text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm"
-										onClick={clearParameter}
-									>
-										<span>Xóa bộ lọc</span>
-									</button>
-								)}
-
-								<button
-									className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm ${
-										isFilterCreationMode
-											? 'bg-blue-500 border-blue-700 text-white hover:bg-blue-600'
-											: 'bg-white border-gray-400 text-gray-700 hover:bg-gray-50'
-									}`}
-									onClick={toggleFilterCreationMode}
-								>
-									<span>Tạo bộ lọc</span>
-								</button>
-
-								<button
-									className="px-3 py-2 bg-white border-2 border-gray-400 text-gray-700 rounded-md text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm"
-									onClick={openEditor}
-								>
-									<span>Lập biên bản</span>
-								</button>
-
-								<button
-									onClick={selectMyTasksFilter}
-									className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm my-tasks-btn ${
-										filters.headerFilters.technician_uid &&
-										Array.isArray(filters.headerFilters.technician_uid) &&
-										filters.headerFilters.technician_uid.includes(currentUser?.identity_uid)
-											? 'active'
-											: ''
-									}`}
-								>
-									<span>Chỉ tiêu của tôi</span>
-								</button>
-
-								{selectedRows.size > 0 && (
-									<button
-										className="px-3 py-2 bg-green-500 border-2 border-green-700 text-white rounded-md text-sm font-bold hover:bg-green-600 transition-colors shadow-sm"
-										onClick={handleBulkEditClick}
-									>
-										<span>Cập nhật hàng loạt ({selectedRows.size})</span>
-									</button>
-								)}
-							</div>
-						</div>
-					</div>
-				</div>
-
+			<div
+				className="transition-all w-full min-h-screen bg-white relative flex flex-col"
+				style={{
+					paddingTop: '55px',
+				}}
+			>
 				{/* Scrollable content area */}
 				<div className="flex-1 overflow-y-auto flex flex-col custom-scrollbar" ref={scrollContainerRef}>
-					<div className="flex-1 p-4 max-h-[calc(100vh-100px)] overflow-auto custom-scrollbar">
+					<div className="flex-1 p-4 overflow-auto custom-scrollbar">
 						{/* Table container without stretching rows */}
 						<div className="w-full">
 							<table className="w-full bg-white border-collapse min-w-[1050px] border-2 border-gray-300 rounded-lg overflow-hidden shadow-sm">
@@ -2739,7 +3067,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 											return (
 												<tr
 													key={row.id}
-													className={`cursor-pointer transition-colors ${
+													className={`cursor-pointer transition-colors  ${
 														isSelected
 															? 'selected-row bg-blue-100 border-l-4 border-blue-500'
 															: index % 2 === 0
@@ -2761,23 +3089,26 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																}`}
 															>
 																{column === 'sample_uid' ? (
-																	<div className="relative text-left w-full">
+																	<div
+																		className="relative text-left w-full cursor-pointer hover:bg-blue-50 p-1 rounded"
+																		onMouseEnter={(e) => {
+																			if (row.sample_uid) {
+																				showSampleTooltip(e, {
+																					sample_uid: row.sample_uid,
+																					sample_name: row.sample_name,
+																					sample_description: row.sample_description,
+																				});
+																			}
+																		}}
+																		onMouseLeave={hideSampleTooltip}
+																	>
 																		<span className="text-left">{row.sample_uid || ''}</span>
-																		{row.sample_uid && (
-																			<span
-																				className="ml-1 inline-flex items-center justify-center w-4 h-4 text-blue-800 border border-gray-400 rounded-full text-xs cursor-help font-bold"
-																				onMouseEnter={(e) =>
-																					showSampleTooltip(e, {
-																						sample_uid: row.sample_uid,
-																						sample_name: row.sample_name,
-																						sample_description: row.sample_description,
-																					})
-																				}
-																				onMouseLeave={hideSampleTooltip}
-																			>
-																				i
-																			</span>
-																		)}
+																	</div>
+																) : column === 'parameter_name' ? (
+																	<div
+																		className="relative text-left w-full p-1 rounded"
+																	>
+																		<span className="text-left">{row.parameter_name || ''}</span>
 																	</div>
 																) : column === 'protocol_source' ? (
 																	<div
@@ -2795,7 +3126,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																					onMouseDown={(e) => e.stopPropagation()}
 																					onFocus={(e) => e.stopPropagation()}
 																					onBlur={cancelProtocolSourceEdit}
-																					className="w-full h-full text-xs border border-blue-500 rounded px-2 py-1 bg-white text-black text-left focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none relative z-[1000]"
+																					className="w-full h-full text-xs border border-blue-500 rounded px-2 bg-white text-black text-left focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none relative z-[1000]"
 																					onClick={(e) => e.stopPropagation()}
 																					autoFocus
 																					style={{
@@ -2828,7 +3159,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																			</>
 																		) : (
 																			<div
-																				className="w-full h-full min-h-[30px] cursor-pointer hover:bg-blue-50 p-1 rounded text-xs text-black text-left border border-transparent hover:border-blue-200 flex items-center"
+																				className="w-full h-full min-h-[30px] cursor-pointer hover:bg-blue-50 p-1  rounded text-xs text-black text-left border border-transparent hover:border-blue-200 flex "
 																				onClick={(e) => {
 																					e.stopPropagation();
 																					handleProtocolSourceClick(row.id, row.protocol_source);
@@ -3021,10 +3352,15 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																		</span>
 																	) : null
 																) : column === 'technician_uid' ? (
-																	<div className="text-xs text-gray-900">{getTechnicianName(row.technician_uid)}</div>
+																	<div className="text-xs text-gray-900 p-1">{getTechnicianName(row.technician_uid)}</div>
 																) : column === 'deadline' ? (
-																	formatDate(row.deadline)
-																) : (
+																	<div
+																		className="relative text-left w-full p-1 rounded"
+																	>
+																		<span className="text-left">{formatDate(row.deadline) || ''}</span>
+																	</div>
+																)
+																:(
 																	row[column] || ''
 																)}
 															</td>

@@ -456,6 +456,7 @@ const CreateReceiptFromCRM = () => {
 				protocol_code: item.protocol_code || '',
 				matrix: item.matrix || sample.matrix || '',
 				field: item.field || '',
+				result_unit: item.result_unit || '',
 				// Keep any other properties that might be present
 				...item,
 			}));
@@ -785,6 +786,7 @@ const CreateReceiptFromCRM = () => {
 					matrix: param.matrix || updatedSamples[currentSampleIndex].matrix,
 					protocol_code: param.protocol_code,
 					protocol_source: param.protocol_source || 'IRDOP',
+					result_unit: param.result_unit || '',
 				})),
 			],
 		};
@@ -2403,6 +2405,7 @@ const CreateReceiptFromCRM = () => {
 																		<th className="p-1 text-start">Nguồn</th>
 																		<th className="p-1 text-start">Mã Phương pháp</th>
 																		<th className="p-1 text-start">Lĩnh vực</th>
+																		<th className="p-1 text-start">Đơn vị</th>
 																		<th className="p-1 text-start w-10">Xóa</th>
 																	</tr>
 																</thead>
@@ -2551,6 +2554,32 @@ const CreateReceiptFromCRM = () => {
 																						title="Nhấn để chỉnh sửa"
 																					>
 																						{item.field || '--'}
+																					</span>
+																				)}
+																			</td>
+																			<td className="p-1 text-start w-24">
+																				{editingAnalysis.sampleIndex === index &&
+																				editingAnalysis.analysisIndex === idx &&
+																				editingAnalysis.field === 'result_unit' ? (
+																					<input
+																						type="text"
+																						value={editAnalysisValue}
+																						onChange={handleAnalysisEditChange}
+																						onKeyDown={handleAnalysisKeyDown}
+																						onBlur={saveAnalysisEdit}
+																						autoFocus
+																						className="w-full border p-1 rounded bg-white"
+																						placeholder="Đơn vị"
+																					/>
+																				) : (
+																					<span
+																						className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
+																						onClick={() =>
+																							startEditingAnalysis(index, idx, 'result_unit', item.result_unit)
+																						}
+																						title="Nhấn để chỉnh sửa đơn vị"
+																					>
+																						{item.result_unit || '--'}
 																					</span>
 																				)}
 																			</td>

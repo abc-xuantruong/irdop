@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { FaFileAlt, FaEye, FaSearch, FaSync, FaUser, FaUsers, FaPlay, FaClock, FaTable, FaPrint } from 'react-icons/fa';
+import {
+	FaFileAlt,
+	FaEye,
+	FaSearch,
+	FaSync,
+	FaUser,
+	FaUsers,
+	FaPlay,
+	FaClock,
+	FaTable,
+	FaPrint,
+	FaDatabase,
+} from 'react-icons/fa';
 import { apiPost } from '../../contexts/helperFunctionCallAPI';
 import { GlobalContext } from '../../contexts/GlobalContext';
 import AnalysesExtract from './AnalysesExtract';
@@ -74,12 +86,14 @@ const LabDocument = () => {
 	const [lastSearchTerm, setLastSearchTerm] = useState(''); // Lưu search term đã được thực hiện
 	const [isLoading, setIsLoading] = useState(false);
 	const [isLoadingPreview, setIsLoadingPreview] = useState(false);
-	const [mode, setMode] = useState('personal'); // 'personal' or 'all'
+	const [mode, setMode] = useState('all'); // 'personal' or 'all'
 	const [showAnalysisExtract, setShowAnalysisExtract] = useState(false);
 	const [analysisExtractDocument, setAnalysisExtractDocument] = useState(null); // Separate state for analysis modal
 	const [identityNames, setIdentityNames] = useState({}); // Cache for identity names
 	const [reportCache, setReportCache] = useState({}); // Cache for loaded reports
 	const [pendingDocumentType, setPendingDocumentType] = useState('lab_reports'); // 'lab_reports' or 'documents'
+	const [showDocumentTypeDropdown, setShowDocumentTypeDropdown] = useState(false); // State cho dropdown
+	const [showExtractedData, setShowExtractedData] = useState(false); // State cho hiển thị dữ liệu trích xuất
 
 	// Load TinyMCE if not already loaded
 	useEffect(() => {
@@ -934,6 +948,23 @@ const LabDocument = () => {
 		setIsDraft(documentStatus === 'draft');
 	}, [documentStatus]);
 
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			if (showDocumentTypeDropdown && !event.target.closest('.relative')) {
+				setShowDocumentTypeDropdown(false);
+			}
+		};
+
+		if (showDocumentTypeDropdown) {
+			document.addEventListener('mousedown', handleClickOutside);
+		}
+
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside);
+		};
+	}, [showDocumentTypeDropdown]);
+
 	// Refresh data - SIMPLE VERSION
 	const refreshData = async () => {
 		setIsLoading(true);
@@ -1063,55 +1094,59 @@ const LabDocument = () => {
 				return;
 			}
 
-			// Create preview content từ document metadata - chỉ hiển thị mã mẫu thử
-			const metadata = document.metadata || {};
-			const sampleUIDs = metadata.sampleUIDs || [];
-
-			// Generate document preview content - chỉ hiển thị mã mẫu thử
+			// Bỏ documentPreviewContent - chỉ hiển thị nút và title
 			const documentPreviewContent = `
-				<div style="font-family: 'Times New Roman', serif; padding: 20px; line-height: 1.6;">
-					<!-- SAMPLE UIDs SECTION - Chỉ hiển thị mã mẫu thử -->
-					${
-						sampleUIDs.length > 0
-							? `
-					<div style="margin-bottom: 30px;">
-						<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DANH SÁCH MÃ MẪU THỬ</h4>
-						<div style="margin-top: 10px; padding: 15px; background: #f0f9ff; border-radius: 6px; border-left: 4px solid #3b82f6;">
-							<div style="display: flex; flex-wrap: wrap; gap: 8px;">
-								${sampleUIDs
-									.map(
-										(uid) => `
-									<span style="background: #1e40af; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">
-										${uid}
-									</span>
-								`,
-									)
-									.join('')}
-							</div>
-							<p style="margin: 10px 0 0 0; font-size: 12px; color: #6b7280;">
-								Tổng số mẫu thử: <strong>${sampleUIDs.length}</strong>
-							</p>
+				<div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; text-align: left;">
+					<div style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #3b82f6; text-align: center;">
+						<h4 style="margin: 0 0 15px 0; color: #1e40af; font-size: 16px;">${document.title || 'Tài liệu không có tên'}</h4>
+						<button 
+							onclick="window.toggleExtractedData && window.toggleExtractedData('${document.id}')"
+							style="
+								background: #059669; 
+								color: white; 
+								border: none; 
+								padding: 12px 24px; 
+								border-radius: 6px; 
+								cursor: pointer; 
+								font-size: 14px; 
+								font-weight: 600;
+								transition: background-color 0.2s ease;
+								box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+							"
+							onmouseover="this.style.background='#047857'"
+							onmouseout="this.style.background='#059669'"
+						>
+							📊 Xem dữ liệu trích xuất
+						</button>
+						<div id="extracted-data-container-${document.id}" style="display: none; margin-top: 20px; text-align: left;">
+							<div id="extracted-data-content-${document.id}"></div>
 						</div>
 					</div>
-					`
-							: `
-					<div style="margin-bottom: 30px;">
-						<h4 style="color: #1e40af; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DANH SÁCH MÃ MẪU THỬ</h4>
-						<div style="margin-top: 10px; padding: 15px; background: #f9f9ff; border-radius: 6px; border-left: 4px solid #f59e0b; text-align: center;">
-							<p style="margin: 0; color: #6b7280; font-style: italic;">Không có mã mẫu thử nào</p>
-						</div>
-					</div>
-					`
-					}
 				</div>
 			`;
 
 			setPreviewContent(documentPreviewContent);
 			console.log('Preview content generated for document:', currentDocumentId);
 
-			// Expose file preview function to window for use in HTML content
+			// Expose functions to window for use in HTML content
 			window.handleFilePreviewFromDocument = (fileId) => {
 				handleFilePreview(fileId);
+			};
+
+			// Expose toggle function for extracted data
+			window.toggleExtractedData = (docId) => {
+				const container = document.getElementById(`extracted-data-container-${docId}`);
+				const contentDiv = document.getElementById(`extracted-data-content-${docId}`);
+
+				if (container) {
+					const isHidden = container.style.display === 'none';
+					container.style.display = isHidden ? 'block' : 'none';
+
+					if (isHidden && contentDiv && !contentDiv.innerHTML.trim()) {
+						// Load extracted data when first opened
+						loadExtractedDataContent(docId, contentDiv);
+					}
+				}
 			};
 		} catch (error) {
 			console.error('Error loading preview:', error);
@@ -1119,6 +1154,530 @@ const LabDocument = () => {
 		} finally {
 			setIsLoadingPreview(false);
 		}
+	};
+
+	// Load and display extracted data content
+	const loadExtractedDataContent = (docId, contentDiv) => {
+		const document = selectedDocumentForPreview;
+		if (!document || !contentDiv) return;
+
+		const metadata = document.metadata || {};
+		const extractData = metadata.extractData || metadata; // Có thể nằm trong extractData hoặc trực tiếp trong metadata
+		const sampleUIDs = metadata.sampleUIDs || [];
+
+		// Helper function to render a value safely
+		const renderValue = (value, fallback = '') => {
+			if (value === null || value === undefined || value === '') return fallback;
+			if (typeof value === 'object') return JSON.stringify(value, null, 2);
+			return String(value);
+		};
+
+		// Helper function to check if data has meaningful content
+		const hasContent = (value) => {
+			if (!value) return false;
+			if (Array.isArray(value)) return value.length > 0;
+			if (typeof value === 'object') return Object.keys(value).length > 0;
+			return String(value).trim() !== '' && String(value) !== 'Không có dữ liệu';
+		};
+
+		// Helper function to render unmatched tests table (analyses without testId - ưu tiên hiển thị trên đầu)
+		const renderUnmatchedTestsTable = (analyses) => {
+			if (!Array.isArray(analyses) || analyses.length === 0) return '';
+
+			// Filter analyses that don't have testId
+			const unmatchedTests = analyses.filter((analysis) => !hasContent(analysis.testId));
+			if (unmatchedTests.length === 0) return '';
+
+			return `
+				<div style="margin-bottom: 20px;">
+					<h4 style="color: #dc2626; margin-bottom: 12px; text-align: left;">⚠️ Các phép thử không khớp được</h4>
+					<p style="color: #6b7280; font-size: 12px; margin-bottom: 8px; text-align: left;">Các phân tích không có mã chỉ tiêu (testId):</p>
+					<table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+						<thead>
+							<tr style="background: #fef2f2;">
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">STT</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Mã mẫu</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Tên chỉ tiêu</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Mã phương pháp</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Kết quả</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Đơn vị</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Tham chiếu</th>
+							</tr>
+						</thead>
+						<tbody>
+							${unmatchedTests
+								.map(
+									(analysis, index) => `
+								<tr style="${index % 2 === 0 ? 'background: #ffffff;' : 'background: #fef2f2;'}">
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${index + 1}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 500;">${
+										renderValue(analysis.sampleId) || '--'
+									}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${renderValue(analysis.testName) || '--'}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${
+										renderValue(analysis.testProtocolCode) || '--'
+									}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 500;">${
+										renderValue(analysis.testResult) || '--'
+									}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${renderValue(analysis.testUnit) || '--'}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${
+										renderValue(analysis.testReference) || '--'
+									}</td>
+								</tr>
+							`,
+								)
+								.join('')}
+						</tbody>
+					</table>
+				</div>
+			`;
+		};
+
+		// Helper function to render samples table
+		const renderSamplesTable = (samples) => {
+			if (!Array.isArray(samples) || samples.length === 0) return '';
+
+			return `
+				<div style="margin-bottom: 20px;">
+					<h4 style="color: #059669; margin-bottom: 12px; text-align: left;">🧪 Mẫu thử</h4>
+					<table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+						<thead>
+							<tr style="background: #f0fdf4;">
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">STT</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Mã mẫu</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Tên mẫu</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Mô tả</th>
+							</tr>
+						</thead>
+						<tbody>
+							${samples
+								.map(
+									(sample, index) => `
+								<tr style="${index % 2 === 0 ? 'background: #ffffff;' : 'background: #f9fafb;'}">
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${index + 1}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 500;">${
+										renderValue(sample.sampleId) || '--'
+									}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${renderValue(sample.sampleName) || '--'}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${
+										renderValue(sample.sampleDescription) || '--'
+									}</td>
+								</tr>
+							`,
+								)
+								.join('')}
+						</tbody>
+					</table>
+				</div>
+			`;
+		};
+
+		// Helper function to render analyses table (only analyses with testId)
+		const renderAnalysesTable = (analyses) => {
+			if (!Array.isArray(analyses) || analyses.length === 0) return '';
+
+			// Filter analyses that have testId
+			const matchedAnalyses = analyses.filter((analysis) => hasContent(analysis.testId));
+			if (matchedAnalyses.length === 0) return '';
+
+			return `
+				<div style="margin-bottom: 20px;">
+					<h4 style="color: #dc2626; margin-bottom: 12px; text-align: left;">📊 Phân tích & Kết quả</h4>
+					<table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+						<thead>
+							<tr style="background: #fef3f2;">
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">STT</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Mã chỉ tiêu</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Mã mẫu</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Tên chỉ tiêu</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Mã phương pháp</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Kết quả</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Đơn vị</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Tham chiếu</th>
+								<th style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 600;">Kết luận</th>
+							</tr>
+						</thead>
+						<tbody>
+							${matchedAnalyses
+								.map(
+									(analysis, index) => `
+								<tr style="${index % 2 === 0 ? 'background: #ffffff;' : 'background: #f9fafb;'}">
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${index + 1}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 500; color: #dc2626;">${
+										renderValue(analysis.testId) || '--'
+									}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 500;">${
+										renderValue(analysis.sampleId) || '--'
+									}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${renderValue(analysis.testName) || '--'}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${
+										renderValue(analysis.testProtocolCode) || '--'
+									}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left; font-weight: 500;">${
+										renderValue(analysis.testResult) || '--'
+									}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${renderValue(analysis.testUnit) || '--'}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${
+										renderValue(analysis.testReference) || '--'
+									}</td>
+									<td style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">${
+										renderValue(analysis.testConclusion) || '--'
+									}</td>
+								</tr>
+							`,
+								)
+								.join('')}
+						</tbody>
+					</table>
+				</div>
+			`;
+		};
+
+		// Helper function to build additional metadata sections (ẩn mặc định)
+		const buildAdditionalSections = () => {
+			let additionalSections = [];
+
+			// Document Reference Number
+			if (hasContent(extractData.documentRefNumber)) {
+				additionalSections.push(`
+					<div style="margin-bottom: 16px; padding: 12px; background: #f1f5f9; border-radius: 6px;">
+						<div style="text-align: left;">
+							<strong style="color: #1e40af;">📄 Mã số văn bản:</strong>
+							<span style="margin-left: 8px;">${renderValue(extractData.documentRefNumber)}</span>
+						</div>
+					</div>
+				`);
+			}
+
+			// Document Fingerprint
+			if (hasContent(extractData.documentFingerprint)) {
+				additionalSections.push(`
+					<div style="margin-bottom: 16px; padding: 12px; background: #f1f5f9; border-radius: 6px;">
+						<div style="text-align: left;">
+							<strong style="color: #1e40af;">🔖 Document Fingerprint:</strong>
+							<span style="margin-left: 8px;">${renderValue(extractData.documentFingerprint)}</span>
+						</div>
+					</div>
+				`);
+			}
+
+			// Sample UIDs (nếu có)
+			if (hasContent(sampleUIDs)) {
+				additionalSections.push(`
+					<div style="margin-bottom: 16px; padding: 12px; background: #f0f9ff; border-radius: 6px;">
+						<div style="text-align: left;">
+							<strong style="color: #1e40af;">🧪 Sample UIDs:</strong>
+							<div style="margin-top: 8px;">
+								${sampleUIDs
+									.map(
+										(uid) =>
+											`<span style="background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 12px; margin: 2px; display: inline-block; font-size: 12px;">${uid}</span>`,
+									)
+									.join('')}
+							</div>
+						</div>
+					</div>
+				`);
+			}
+
+			// Operation Info
+			if (hasContent(extractData.operationInfo)) {
+				additionalSections.push(`
+					<div style="margin-bottom: 16px; padding: 12px; background: #f0fdf4; border-radius: 6px;">
+						<div style="text-align: left;">
+							<strong style="color: #059669;">⚙️ Thông tin thực hiện:</strong>
+							<div style="margin-top: 8px;">
+								${
+									hasContent(extractData.operationInfo?.startTime)
+										? `<div><strong>Thời gian bắt đầu:</strong> ${renderValue(
+												extractData.operationInfo.startTime,
+										  )}</div>`
+										: ''
+								}
+								${
+									hasContent(extractData.operationInfo?.endTime)
+										? `<div><strong>Thời gian kết thúc:</strong> ${renderValue(
+												extractData.operationInfo.endTime,
+										  )}</div>`
+										: ''
+								}
+								${
+									hasContent(extractData.operationInfo?.technicanName)
+										? `<div><strong>Tên kỹ thuật viên:</strong> ${renderValue(
+												extractData.operationInfo.technicanName,
+										  )}</div>`
+										: ''
+								}
+								${
+									hasContent(extractData.operationInfo?.technicanTitle)
+										? `<div><strong>Chức danh kỹ thuật viên:</strong> ${renderValue(
+												extractData.operationInfo.technicanTitle,
+										  )}</div>`
+										: ''
+								}
+							</div>
+						</div>
+					</div>
+				`);
+			}
+
+			// Header Info
+			if (hasContent(extractData.header)) {
+				additionalSections.push(`
+					<div style="margin-bottom: 16px; padding: 12px; background: #fef3f2; border-radius: 6px;">
+						<div style="text-align: left;">
+							<strong style="color: #dc2626;">📋 Thông tin header:</strong>
+							<div style="margin-top: 8px;">
+								${
+									hasContent(extractData.header?.code)
+										? `<div><strong>Code:</strong> ${renderValue(extractData.header.code)}</div>`
+										: ''
+								}
+								${
+									hasContent(extractData.header?.title)
+										? `<div><strong>Title:</strong> ${renderValue(extractData.header.title)}</div>`
+										: ''
+								}
+								${
+									hasContent(extractData.header?.publishNo)
+										? `<div><strong>Publish No:</strong> ${renderValue(extractData.header.publishNo)}</div>`
+										: ''
+								}
+								${
+									hasContent(extractData.header?.publishDate)
+										? `<div><strong>Publish Date:</strong> ${renderValue(extractData.header.publishDate)}</div>`
+										: ''
+								}
+							</div>
+						</div>
+					</div>
+				`);
+			}
+
+			// Lab Equipments
+			if (hasContent(extractData.labEquipments)) {
+				additionalSections.push(`
+					<div style="margin-bottom: 16px; padding: 12px; background: #fffbeb; border-radius: 6px;">
+						<div style="text-align: left;">
+							<strong style="color: #d97706;">🔧 Thiết bị thí nghiệm:</strong>
+							<div style="margin-top: 8px;">
+								${extractData.labEquipments
+									.map(
+										(equipment, index) => `
+									<div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px; margin: 4px 0; background: white;">
+										<div style="font-weight: 600; color: #374151; text-align: left;">Thiết bị #${index + 1}</div>
+										${
+											hasContent(equipment.equipmentCode)
+												? `<div><strong>Mã thiết bị:</strong> ${renderValue(equipment.equipmentCode)}</div>`
+												: ''
+										}
+										${
+											hasContent(equipment.equipmentName)
+												? `<div><strong>Tên thiết bị:</strong> ${renderValue(equipment.equipmentName)}</div>`
+												: ''
+										}
+										${
+											hasContent(equipment.usageQuantity)
+												? `<div><strong>Số lượng sử dụng:</strong> ${renderValue(equipment.usageQuantity)}</div>`
+												: ''
+										}
+										${
+											hasContent(equipment.calibrationInfo)
+												? `<div><strong>Thông tin hiệu chuẩn:</strong> ${renderValue(equipment.calibrationInfo)}</div>`
+												: ''
+										}
+									</div>
+								`,
+									)
+									.join('')}
+							</div>
+						</div>
+					</div>
+				`);
+			}
+
+			// Chemicals
+			if (hasContent(extractData.chemicals)) {
+				additionalSections.push(`
+					<div style="margin-bottom: 16px; padding: 12px; background: #f0f9ff; border-radius: 6px;">
+						<div style="text-align: left;">
+							<strong style="color: #3730a3;">🧪 Hóa chất:</strong>
+							<div style="margin-top: 8px;">
+								${extractData.chemicals
+									.map(
+										(chemical, index) => `
+									<div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px; margin: 4px 0; background: white;">
+										<div style="font-weight: 600; color: #374151; text-align: left;">
+											Hóa chất #${index + 1} 
+											${
+												chemical.isStandard
+													? '<span style="background: #10b981; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 8px;">CHUẨN</span>'
+													: ''
+											}
+										</div>
+										${
+											hasContent(chemical.chemicalCode)
+												? `<div><strong>Mã hóa chất:</strong> ${renderValue(chemical.chemicalCode)}</div>`
+												: ''
+										}
+										${
+											hasContent(chemical.chemicalName)
+												? `<div><strong>Tên hóa chất:</strong> ${renderValue(chemical.chemicalName)}</div>`
+												: ''
+										}
+										${
+											hasContent(chemical.quantityUsedValue)
+												? `<div><strong>Số lượng sử dụng:</strong> ${renderValue(
+														chemical.quantityUsedValue,
+												  )} ${renderValue(chemical.quantityUsedUnit, '')}</div>`
+												: ''
+										}
+										${
+											hasContent(chemical.dilutionValue)
+												? `<div><strong>Độ pha loãng:</strong> ${renderValue(chemical.dilutionValue)} ${renderValue(
+														chemical.dilutionUnit,
+														'',
+												  )} (${renderValue(chemical.dilutionType)})</div>`
+												: ''
+										}
+										${
+											chemical.supplier && hasContent(chemical.supplier)
+												? `
+											<div style="margin-top: 4px; padding: 4px; background: #f9fafb; border-radius: 3px;">
+												${
+													hasContent(chemical.supplier.supplierName)
+														? `<strong>Nhà cung cấp:</strong> ${renderValue(chemical.supplier.supplierName)}<br>`
+														: ''
+												}
+												${hasContent(chemical.supplier.lotNumber) ? `<strong>Lô:</strong> ${renderValue(chemical.supplier.lotNumber)}<br>` : ''}
+												${
+													hasContent(chemical.supplier.lastCheckDate)
+														? `<strong>Ngày kiểm tra cuối:</strong> ${renderValue(chemical.supplier.lastCheckDate)}`
+														: ''
+												}
+											</div>
+										`
+												: ''
+										}
+									</div>
+								`,
+									)
+									.join('')}
+							</div>
+						</div>
+					</div>
+				`);
+			}
+
+			// Legibility
+			if (hasContent(extractData.legibility)) {
+				additionalSections.push(`
+					<div style="margin-bottom: 16px; padding: 12px; background: #f8fafc; border-radius: 6px;">
+						<div style="text-align: left;">
+							<strong style="color: #64748b;">👁️ Đánh giá độ rõ ràng chữ viết:</strong>
+							<div style="margin-top: 8px;">
+								${
+									hasContent(extractData.legibility?.legibilityScore)
+										? `<div><strong>Điểm số:</strong> ${renderValue(extractData.legibility.legibilityScore)}/5.0</div>`
+										: ''
+								}
+								${
+									hasContent(extractData.legibility?.legibilityComment)
+										? `<div><strong>Nhận xét:</strong> ${renderValue(extractData.legibility.legibilityComment)}</div>`
+										: ''
+								}
+							</div>
+						</div>
+					</div>
+				`);
+			}
+
+			return additionalSections;
+		};
+
+		// Build main content sections (hiển thị mặc định)
+		let mainSections = [];
+
+		// 1. Unmatched tests (ưu tiên hiển thị trên đầu)
+		const unmatchedTestsSection = renderUnmatchedTestsTable(extractData.analyses);
+		if (unmatchedTestsSection) {
+			mainSections.push(unmatchedTestsSection);
+		}
+
+		// 2. Samples (as table)
+		const samplesSection = renderSamplesTable(extractData.samples);
+		if (samplesSection) {
+			mainSections.push(samplesSection);
+		}
+
+		// 3. Analyses (as table) - chỉ những analyses có testId
+		const analysesSection = renderAnalysesTable(extractData.analyses);
+		if (analysesSection) {
+			mainSections.push(analysesSection);
+		}
+
+		// Build additional sections (ẩn mặc định)
+		const additionalSections = buildAdditionalSections();
+
+		// Generate unique ID for this document's additional content
+		const additionalContentId = `additional-content-${docId}`;
+
+		// Final content
+		const content = `
+			<div style="font-family: Arial, sans-serif; font-size: 13px; line-height: 1.5; text-align: left;">
+				${
+					mainSections.length > 0
+						? mainSections.join('')
+						: '<p style="text-align: center; color: #6b7280; font-style: italic; margin: 40px 0;">Không có dữ liệu trích xuất để hiển thị</p>'
+				}
+				
+				<!-- Additional content (hidden by default) -->
+				<div id="${additionalContentId}" style="display: none;">
+					${additionalSections.join('')}
+				</div>
+				
+				<!-- Show more button -->
+				${
+					additionalSections.length > 0
+						? `
+					<div style="text-align: center; margin: 20px 0;">
+						<button 
+							onclick="toggleAdditionalContent('${additionalContentId}', this)"
+							style="
+								background: #3b82f6; 
+								color: white; 
+								border: none; 
+								padding: 10px 20px; 
+								border-radius: 6px; 
+								cursor: pointer; 
+								font-size: 14px; 
+								font-weight: 500;
+								transition: background-color 0.2s ease;
+							"
+							onmouseover="this.style.background='#2563eb'"
+							onmouseout="this.style.background='#3b82f6'"
+						>
+							📊 Hiển thị thêm metadata
+						</button>
+					</div>
+				`
+						: ''
+				}
+			</div>
+		`;
+
+		contentDiv.innerHTML = content;
+
+		// Expose toggle function to window
+		window.toggleAdditionalContent = (contentId, button) => {
+			const content = document.getElementById(contentId);
+			if (content) {
+				const isHidden = content.style.display === 'none';
+				content.style.display = isHidden ? 'block' : 'none';
+				button.textContent = isHidden ? '📊 Ẩn metadata' : '📊 Hiển thị thêm metadata';
+			}
+		};
 	};
 
 	// Component ReportDetail - VERSION MỚI KHÔNG DÙNG REACT.MEMO
@@ -1333,11 +1892,8 @@ const LabDocument = () => {
 
 		// Render content
 		return (
-			<div className="border-t border-gray-200 pt-6">
-				<h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-					<FaPlay className="text-green-600" />
-					{isFilePreview ? 'File Preview' : 'Báo cáo chi tiết'}
-				</h4>
+			<div className="border-t border-gray-200">
+				{/* Ẩn tiêu đề "báo cáo chi tiết" - chỉ hiển thị nội dung */}
 				<div className="border border-gray-300 rounded-lg overflow-hidden">
 					{isFilePreview && filePreviewUrl ? (
 						<iframe
@@ -1496,17 +2052,60 @@ const LabDocument = () => {
 				<div className="w-1/3 flex flex-col gap-4 h-full min-w-[400px]">
 					<div className="bg-white rounded-xl shadow-sm border p-6 flex-1 flex flex-col min-h-0">
 						<div className="flex items-center justify-between mb-4 flex-shrink-0">
-							<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-								<FaClock className="text-blue-600" />
-								{documentStatus === 'published'
-									? 'Tài liệu đã phát hành'
-									: documentStatus === 'draft' && pendingDocumentType === 'lab_reports'
-									? 'Biên bản chờ duyệt'
-									: 'Tài liệu chờ duyệt'}
-								{isLoading && (
-									<div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-								)}
-							</h3>
+							{/* Title với dropdown cho chọn loại tài liệu khi ở trạng thái draft */}
+							{documentStatus === 'draft' ? (
+								<div className="relative">
+									<h3
+										className="text-lg font-semibold text-gray-900 flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors"
+										onClick={() => setShowDocumentTypeDropdown(!showDocumentTypeDropdown)}
+									>
+										<FaClock className="text-blue-600" />
+										{pendingDocumentType === 'lab_reports' ? 'Biên bản chờ duyệt' : 'Tài liệu chờ duyệt'}
+										<span className="text-sm text-gray-500">▼</span>
+										{isLoading && (
+											<div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+										)}
+									</h3>
+
+									{/* Dropdown menu */}
+									{showDocumentTypeDropdown && (
+										<div className="absolute top-full left-0 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[200px]">
+											<button
+												onClick={() => {
+													handlePendingDocumentTypeChange('lab_reports');
+													setShowDocumentTypeDropdown(false);
+												}}
+												className={`w-full text-left px-4 py-3 hover:bg-gray-50 first:rounded-t-lg ${
+													pendingDocumentType === 'lab_reports' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+												}`}
+											>
+												<FaClock className="inline mr-2 text-blue-600" />
+												Biên bản chờ duyệt
+											</button>
+											<button
+												onClick={() => {
+													handlePendingDocumentTypeChange('documents');
+													setShowDocumentTypeDropdown(false);
+												}}
+												className={`w-full text-left px-4 py-3 hover:bg-gray-50 last:rounded-b-lg ${
+													pendingDocumentType === 'documents' ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+												}`}
+											>
+												<FaFileAlt className="inline mr-2 text-green-600" />
+												Tài liệu chờ duyệt
+											</button>
+										</div>
+									)}
+								</div>
+							) : (
+								<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+									<FaClock className="text-blue-600" />
+									Tài liệu đã phát hành
+									{isLoading && (
+										<div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+									)}
+								</h3>
+							)}
 
 							{/* Document Status Toggle */}
 							<label className="relative inline-flex items-center cursor-pointer">
@@ -1547,21 +2146,7 @@ const LabDocument = () => {
 							</label>
 						</div>
 
-						{/* Pending Document Type Selection - Chỉ hiển thị khi ở trạng thái draft */}
-						{documentStatus === 'draft' && (
-							<div className="flex items-center justify-between mb-4 flex-shrink-0">
-								<span className="text-sm font-medium text-gray-700">Loại tài liệu:</span>
-								<select
-									value={pendingDocumentType}
-									onChange={(e) => handlePendingDocumentTypeChange(e.target.value)}
-									disabled={isLoading}
-									className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-								>
-									<option value="lab_reports">Biên bản chờ duyệt</option>
-									<option value="documents">Tài liệu chờ duyệt</option>
-								</select>
-							</div>
-						)}
+						{/* Pending Document Type Selection đã được chuyển lên title - XÓA PHẦN NÀY */}
 
 						<div className="flex-shrink-0">
 							<div className="relative mb-3">
@@ -1706,6 +2291,16 @@ const LabDocument = () => {
 							<div className="flex gap-3">
 								{selectedDocumentForPreview && (
 									<button
+										onClick={() => setShowExtractedData(!showExtractedData)}
+										className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+										title="Xem dữ liệu trích xuất từ metadata"
+									>
+										<FaDatabase className="w-3 h-3" />
+										Dữ liệu trích xuất
+									</button>
+								)}
+								{selectedDocumentForPreview && (
+									<button
 										onClick={() => handleShowAnalysisExtract(selectedDocumentForPreview)}
 										className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
 										title="Duyệt kết quả hoặc chỉnh sửa tài liệu"
@@ -1732,10 +2327,7 @@ const LabDocument = () => {
 						<div className="flex-1 p-4 overflow-auto custom-scrollbar min-h-0">
 							{selectedDocumentForPreview || previewContent ? (
 								<div className="bg-gray-50 rounded-lg p-4 h-full">
-									<div className="bg-white rounded-lg shadow-sm h-full overflow-auto custom-scrollbar space-y-6">
-										{/* Hiển thị preview mã mẫu thử */}
-										<div dangerouslySetInnerHTML={{ __html: previewContent }} />
-
+									<div className="bg-white rounded-lg shadow-sm h-full overflow-auto custom-scrollbar">
 										{/* Hiển thị báo cáo chi tiết từ API */}
 										{selectedDocumentForPreview && <ReportDetail document={selectedDocumentForPreview} />}
 									</div>
@@ -1777,6 +2369,40 @@ const LabDocument = () => {
 					editId={analysisExtractDocument.id}
 					onClose={handleCloseAnalysisExtract}
 				/>
+			)}
+
+			{/* Extracted Data Modal */}
+			{showExtractedData && selectedDocumentForPreview && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+					<div className="bg-white rounded-lg shadow-xl max-w-[95vw] w-full max-h-[95vh] overflow-hidden">
+						{/* Modal Header */}
+						<div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+							<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+								<FaDatabase className="text-purple-600" />
+								Dữ liệu trích xuất - {selectedDocumentForPreview.title}
+							</h3>
+							<button
+								onClick={() => setShowExtractedData(false)}
+								className="text-gray-400 hover:text-gray-600 transition-colors"
+							>
+								<span className="text-2xl">&times;</span>
+							</button>
+						</div>
+
+						{/* Modal Content */}
+						<div className="p-6 overflow-y-auto max-h-[calc(95vh-80px)]">
+							<div
+								dangerouslySetInnerHTML={{
+									__html: (() => {
+										const tempDiv = document.createElement('div');
+										loadExtractedDataContent(selectedDocumentForPreview.id, tempDiv);
+										return tempDiv.innerHTML;
+									})(),
+								}}
+							/>
+						</div>
+					</div>
+				</div>
 			)}
 		</>
 	);

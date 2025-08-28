@@ -1,260 +1,112 @@
-# IRDOP - Tổng hợp các cải tiến và tính năng mới
+# Tóm tắt các thay đổi
 
-## Tóm tắt dự án
+## Ngày: 28 tháng 8 năm 2025
 
-Dự án IRDOP là một hệ thống quản lý phân tích mẫu phòng thí nghiệm được xây dựng bằng React + Vite, với các tính năng chính bao gồm quản lý mẫu, phân tích kết quả, và báo cáo.
+### 1. Cải tiến giao diện và trải nghiệm người dùng
 
-## 🚀 Các cải tiến chính đã thực hiện
+#### Header cố định với dropdown kỹ thuật viên
 
-### 1. Content Change Detection Enhancement
+- Thêm header cố định ở phía trên cùng của trang ProcessingAnalysis
+- Tích hợp dropdown chọn kỹ thuật viên trực tiếp trong breadcrumb
+- Sidebar được di chuyển xuống dưới header để tối ưu hóa không gian
 
-#### Mô tả
+#### Cải thiện dropdown kỹ thuật viên
 
-Cải thiện các component `ProcessingAnalysis.jsx` và `ProcessingSample.jsx` để tránh gửi API update không cần thiết khi nội dung không thay đổi.
+- Tự động điều chỉnh vị trí dropdown để tránh tràn ra ngoài màn hình
+- Thêm validation cho technician_uid trước khi gửi API
+- Cải thiện xử lý lỗi và rollback khi cập nhật thất bại
 
-#### Các thay đổi chính
+### 2. Tính năng cập nhật hàng loạt (AnalyteBulkUpdate)
 
-##### Helper Functions
+#### Tạo component mới: AnalyteBulkUpdate.jsx
 
-- **`normalizeContent(content)`**: Chuẩn hóa nội dung để so sánh, loại bỏ thẻ HTML từ TinyMCE, xử lý `&nbsp;`
-- **`hasContentChanged()`**: So sánh thông minh nội dung mới với hiện tại
+- Cho phép cập nhật hàng loạt các chỉ tiêu được chọn
+- Hỗ trợ chỉnh sửa các trường: lĩnh vực, chứng nhận, nguồn, phương pháp, đơn vị, giá, kỹ thuật viên
+- Tích hợp TinyMCE cho chỉnh sửa định dạng hiển thị
+- Bảng xem trước thay đổi với highlight các trường sẽ được cập nhật
 
-##### Cập nhật Functions
+#### Tính năng chính:
 
-- **`updateAnalysisField()`**: Kiểm tra thay đổi trước khi gửi API
-- **`handleSaveContentV3()`**: Xử lý TinyMCE editor với validation
-- **`handleProtocolSourceChange()`**: Tránh API call khi chọn lại giá trị hiện tại
-- **`handleSaveEdit()`**: Legacy editing system với change detection
+- Validation thông minh chỉ cập nhật các trường có thay đổi thực sự
+- Xem trước tất cả thay đổi trước khi thực hiện
+- Hỗ trợ cập nhật định dạng hiển thị (mặc định và tiếng Anh)
+- Thông báo toast khi hoàn thành hoặc gặp lỗi
 
-#### Lợi ích
+### 3. Cải thiện xử lý dữ liệu và API
 
-- ✅ Giảm 70% API calls không cần thiết
-- ✅ Cải thiện performance và trải nghiệm người dùng
-- ✅ Xử lý TinyMCE content chính xác hơn
-- ✅ Thông báo rõ ràng khi không có thay đổi
+#### Nâng cao fetchAnalysisData
 
-### 2. Pagination Fix - ProcessingSample
+- Thêm logging chi tiết cho việc debug
+- Cải thiện xử lý filter với nhiều loại dữ liệu khác nhau
+- Hỗ trợ filter nâng cao cho deadline, doc_id, result_value
+- Tối ưu hóa debounce để giảm số lượng API calls không cần thiết
 
-#### Vấn đề ban đầu
+#### Cải thiện fetchParameters
 
-- Dữ liệu không hiển thị khi chuyển trang
-- Logic phân trang bị xung đột giữa frontend và backend
-- Rate limiting quá nghiêm ngặt
-- State update loop gây ra vòng lặp vô hạn
+- Lọc parameters theo context hiện tại (sample_uid, parameter_name, etc.)
+- Hỗ trợ filter theo nhiều tiêu chí cùng lúc
+- Cải thiện hiệu suất với caching và debounce
 
-#### Giải pháp
+### 4. Cải thiện validation và xử lý lỗi
 
-##### Loại bỏ Frontend Pagination Conflict
+#### Validation technician_uid
 
-```jsx
-// Trước: Double pagination (frontend + backend)
-const receiptsForCurrentPage = processingSample
-	? processingSample.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-	: [];
+- Kiểm tra tồn tại của technician_uid trong danh sách kỹ thuật viên
+- Thêm warning logs cho các UID không hợp lệ
+- Rollback state khi API call thất bại
 
-// Sau: API handles pagination
-const groupedSampleDataForPage = groupedSampleData;
-```
+#### Xử lý lỗi toàn diện
 
-##### Cải thiện Rate Limiting
+- Thêm try-catch blocks cho tất cả API calls
+- Thông báo lỗi chi tiết cho người dùng
+- Rollback UI state khi cần thiết
 
-- Giảm từ 1000ms xuống 500ms cho user interactions
-- Chỉ áp dụng rate limiting cho auto-refresh, không cho user actions
+### 5. Cải thiện hiệu suất
 
-##### Ngăn chặn State Loop
+#### Debouncing API calls
 
-- Chỉ update totalItems và totalPages từ API response
-- Không override currentPage/itemsPerPage đã được user set
-- Thêm isInitialLoad flag để quản lý initial state
+- Giảm số lượng API calls không cần thiết
+- Tối ưu hóa thời gian debounce (100ms cho filter, 300ms cho search)
+- Sử dụng refs để ngăn chặn multiple concurrent requests
 
-##### Force API Call After Pagination
+#### Memory management
 
-```jsx
-const handleNextPage = () => {
-	if (currentPage < totalPages) {
-		const newPage = currentPage + 1;
-		setCurrentPage(newPage);
-		setTimeout(() => {
-			fetchSampleData(false, filters);
-		}, 50);
-	}
-};
-```
+- Cleanup TinyMCE editors khi component unmount
+- Tối ưu hóa re-renders với useMemo và useCallback
 
-#### Kết quả
+### 6. Cải thiện UI/UX
 
-- ✅ Dữ liệu hiển thị đúng khi chuyển trang
-- ✅ Pagination hoạt động mượt mà
-- ✅ Giữ nguyên performance optimizations
-- ✅ Không có API call bị block
+#### Responsive design
 
-### 3. Document Preview Feature
+- Dropdown tự động điều chỉnh kích thước theo viewport
+- Grid layout cho technician selection
+- Scrollbars tùy chỉnh với thin design
 
-#### Mô tả
+#### Visual feedback
 
-Thêm chức năng preview document trực tiếp trong modal popup cho cả `ProcessingSample` và `ProcessingAnalysis`.
+- Highlight các trường sẽ thay đổi trong bảng xem trước
+- Loading states và progress indicators
+- Toast notifications cho user feedback
 
-#### API Integration
+### 7. Bug fixes và stability improvements
 
-```javascript
-POST https://red.irdop.org/v1/document/preview_doc
-Body: { "id": "document_id" }
-Response: HTML string content
-```
+#### Fix dropdown positioning
 
-#### Features
+- Tính toán vị trí dropdown để tránh overflow
+- Handle click outside để đóng dropdown
+- Prevent memory leaks từ event listeners
 
-##### Modal Preview System
+#### Improve data consistency
 
-- **Responsive Design**: 95vw x 95vh, max 1200x800px
-- **Loading Spinner**: Animation khi đang tải document
-- **Error Handling**: Thông báo lỗi khi không tải được
-- **Security**: iframe với sandbox restrictions
-
-##### UI/UX Improvements
-
-- **Icon Hover Effects**: Scale + color change animation
-- **Backdrop Blur**: Professional modal appearance
-- **Gradient Header**: Modern design
-- **Tooltip**: Hiển thị doc_id khi hover
-- **Keyboard Support**: ESC để đóng, click outside để đóng
-
-##### Technical Implementation
-
-```jsx
-// State management
-const [documentPreview, setDocumentPreview] = useState({
-	visible: false,
-	content: '',
-	loading: false,
-	docId: null,
-});
-
-// API call và modal display
-const handleDocumentPreview = async (docId) => {
-	// API call và error handling
-};
-
-// Security với iframe sandbox
-<iframe srcDoc={documentPreview.content} sandbox="allow-same-origin allow-scripts" />;
-```
-
-#### Cập nhật Components
-
-##### ProcessingSample.jsx
-
-- Thêm document preview state và functions
-- CSS styles inline cho modal
-- Click handler cho document icons
-
-##### ProcessingAnalysis.jsx
-
-- Tương tự ProcessingSample
-- CSS injection vào document head
-- Cleanup styles khi component unmount
-- Cập nhật `openDocument()` function để sử dụng modal preview
-
-#### Security & Performance
-
-- ✅ XSS Prevention với iframe sandbox
-- ✅ CSS cleanup khi unmount
-- ✅ Memory leak prevention
-- ✅ Error boundary handling
-
-## 🛠️ Technical Stack
-
-### Frontend
-
-- **React 18** với Hooks và Context API
-- **Vite** cho development và build
-- **TailwindCSS** cho styling
-- **TinyMCE** cho rich text editing
-- **React Toastify** cho notifications
-
-### Development Tools
-
-- **ESLint** cho code quality
-- **Prettier** cho code formatting
-- **PostCSS** cho CSS processing
-
-### APIs
-
-- **Analysis Update**: `https://black.irdop.org/trelw82ki/db/update/analysis`
-- **Document Preview**: `https://red.irdop.org/v1/document/preview_doc`
-- **Parameter Upsert**: `https://black.irdop.org/ha8i0uw2/db/upsert/parameter`
-
-## 📊 Performance Improvements
-
-### API Call Optimization
-
-- **Before**: ~100 unnecessary API calls per session
-- **After**: ~30 API calls per session (-70%)
-- **Load Time**: Giảm 40% thời gian loading
-- **User Experience**: Mượt mà hơn, ít loading spinner
-
-### Memory Management
-
-- CSS cleanup khi component unmount
-- TinyMCE editor instances properly destroyed
-- State management optimization
-
-### Network Traffic
-
-- Smart content comparison
-- Reduced redundant API calls
-- Better error handling và retry logic
-
-## 🔧 Code Quality Improvements
-
-### Consistent Patterns
-
-- Unified error handling across components
-- Standardized API response processing
-- Consistent state management patterns
-
-### Maintainability
-
-- Well-documented helper functions
-- Clear separation of concerns
-- Modular component architecture
-
-### Testing
-
-- Content comparison test cases
-- API integration tests
-- UI interaction tests
-
-## 🎯 Future Enhancements
-
-### Planned Features
-
-- [ ] Real-time collaboration
-- [ ] Advanced filtering system
-- [ ] Bulk operations improvement
-- [ ] Mobile responsiveness optimization
-
-### Technical Debt
-
-- [ ] TypeScript migration
-- [ ] Component library creation
-- [ ] API response caching
-- [ ] WebSocket integration for real-time updates
-
-## 📝 Development Notes
-
-### Git Workflow
-
-- Main branch: `main`
-- Feature branches với descriptive names
-- Regular commits với clear messages
-
-### Documentation
-
-- Code comments in Vietnamese và English
-- API documentation
-- Component prop documentation
-- Change logs trong markdown files
+- Validation dữ liệu trước khi gửi API
+- Consistent error handling patterns
+- Better state management cho complex interactions
 
 ---
 
-_Tài liệu này được cập nhật thường xuyên để phản ánh các thay đổi mới nhất trong dự án IRDOP._
+**Tác động tổng thể:**
+
+- Cải thiện đáng kể trải nghiệm người dùng trong việc quản lý chỉ tiêu và kỹ thuật viên
+- Giảm thời gian xử lý với tính năng cập nhật hàng loạt
+- Tăng độ ổn định và reliability của ứng dụng
+- Cải thiện hiệu suất với optimized API calls và debouncing

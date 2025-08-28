@@ -6,9 +6,10 @@ import { GlobalContext } from '../contexts/GlobalContext';
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 import { RiEdit2Line } from 'react-icons/ri';
 import { GiConfirmed, GiCancel, GiTrashCan } from 'react-icons/gi';
-import { FaSort, FaSortUp, FaSortDown, FaFilter } from 'react-icons/fa';
+import { FaSort, FaSortUp, FaSortDown, FaFilter, FaEdit, FaCheck, FaUndo } from 'react-icons/fa';
 import { MdFilterAlt, MdFilterAltOff } from 'react-icons/md';
 import { toast, ToastContainer } from 'react-toastify';
+import AnalyteBulkUpdate from './AnalyteBulkUpdate';
 import 'react-toastify/dist/ReactToastify.css';
 
 const AnalyteInfor = () => {
@@ -25,7 +26,7 @@ const AnalyteInfor = () => {
 		tat_expected: '1 day',
 		default_unit: '',
 		accreditation: '',
-		technician_uid: '',
+		technician_alias: 'K01',
 		protocol_code: '',
 		parameter_uid: '',
 		protocol_source: 'IRDOP',
@@ -69,9 +70,11 @@ const AnalyteInfor = () => {
 	const [fieldFilter, setFieldFilter] = useState('');
 	const [matrixFilter, setMatrixFilter] = useState('');
 	const [sourceFilter, setSourceFilter] = useState('');
+	const [technicianFilter, setTechnicianFilter] = useState('');
 	const [showFieldDropdown, setShowFieldDropdown] = useState(false);
 	const [showMatrixFilterDropdown, setShowMatrixFilterDropdown] = useState(false);
 	const [showSourceDropdown, setShowSourceDropdown] = useState(false);
+	const [showTechnicianFilterDropdown, setShowTechnicianFilterDropdown] = useState(false);
 	const [filteredAnalytes, setFilteredAnalytes] = useState([]);
 
 	// Add new API search states
@@ -95,6 +98,13 @@ const AnalyteInfor = () => {
 	const [techniciansList, setTechniciansList] = useState([]);
 	const [technicianDropdowns, setTechnicianDropdowns] = useState({});
 
+	// Add row selection states
+	const [selectedRows, setSelectedRows] = useState(new Set());
+	const [isDragging, setIsDragging] = useState(false);
+	const [dragStartRow, setDragStartRow] = useState(null);
+	const [showBulkUpdate, setShowBulkUpdate] = useState(false);
+	const [bulkUpdating, setBulkUpdating] = useState(false);
+
 	const protocolsPerPage = 5;
 	const analytesPerPage = 100;
 	let isFetch = false;
@@ -117,6 +127,7 @@ const AnalyteInfor = () => {
 				setShowFieldDropdown(false);
 				setShowMatrixFilterDropdown(false);
 				setShowSourceDropdown(false);
+				setShowTechnicianFilterDropdown(false);
 			}
 			// Close technician dropdowns when clicking outside
 			if (!event.target.closest('.technician-dropdown') && !event.target.closest('.technician-portal')) {
@@ -152,6 +163,14 @@ const AnalyteInfor = () => {
 		}
 	}, [technicians]);
 
+	// Add mouse up event listener for drag selection
+	useEffect(() => {
+		document.addEventListener('mouseup', handleMouseUp);
+		return () => {
+			document.removeEventListener('mouseup', handleMouseUp);
+		};
+	}, []);
+
 	// Add effect to apply filters
 	useEffect(() => {
 		let filtered = analytes;
@@ -168,8 +187,12 @@ const AnalyteInfor = () => {
 			filtered = filtered.filter((analyte) => analyte.protocol_source === sourceFilter);
 		}
 
+		if (technicianFilter) {
+			filtered = filtered.filter((analyte) => analyte.technician_alias === technicianFilter);
+		}
+
 		setFilteredAnalytes(filtered);
-	}, [analytes, fieldFilter, matrixFilter, sourceFilter]);
+	}, [analytes, fieldFilter, matrixFilter, sourceFilter, technicianFilter]);
 
 	// TinyMCE initialization function
 	const initTinyMCE = (selector, initialValue = '', onChange) => {
@@ -478,6 +501,18 @@ const AnalyteInfor = () => {
 	// Cleanup editors when component unmounts or editing ends
 	useEffect(() => {}, []);
 
+	// Handle global mouse events for drag selection
+	useEffect(() => {
+		const handleGlobalMouseUp = () => {
+			handleMouseUp();
+		};
+
+		document.addEventListener('mouseup', handleGlobalMouseUp);
+		return () => {
+			document.removeEventListener('mouseup', handleGlobalMouseUp);
+		};
+	}, []);
+
 	// Helper functions for display_style array management
 	const getDisplayStyleValue = (displayStyleArray, label) => {
 		if (!Array.isArray(displayStyleArray)) return '';
@@ -552,7 +587,7 @@ const AnalyteInfor = () => {
 					'display_style',
 					'price',
 					'accreditation',
-					'technician_uid',
+					'technician_alias',
 					'parameter_uid',
 				],
 				columnSort: sort,
@@ -781,6 +816,11 @@ const AnalyteInfor = () => {
 		setShowSourceDropdown(false);
 	};
 
+	const handleTechnicianFilter = (technician) => {
+		setTechnicianFilter(technicianFilter === technician ? '' : technician);
+		setShowTechnicianFilterDropdown(false);
+	};
+
 	// Add toggle handlers for header clicks
 	const toggleFieldDropdown = () => {
 		setShowFieldDropdown(!showFieldDropdown);
@@ -788,6 +828,7 @@ const AnalyteInfor = () => {
 		setShowSourceDropdown(false);
 		setShowProtocolCodeDropdown(false);
 		setShowUnitDropdown(false);
+		setShowTechnicianFilterDropdown(false);
 	};
 
 	const toggleMatrixDropdown = () => {
@@ -796,6 +837,7 @@ const AnalyteInfor = () => {
 		setShowSourceDropdown(false);
 		setShowProtocolCodeDropdown(false);
 		setShowUnitDropdown(false);
+		setShowTechnicianFilterDropdown(false);
 	};
 
 	const toggleProtocolDropdown = () => {
@@ -804,6 +846,7 @@ const AnalyteInfor = () => {
 		setShowMatrixFilterDropdown(false);
 		setShowSourceDropdown(false);
 		setShowUnitDropdown(false);
+		setShowTechnicianFilterDropdown(false);
 	};
 
 	const toggleUnitDropdown = () => {
@@ -812,12 +855,23 @@ const AnalyteInfor = () => {
 		setShowMatrixFilterDropdown(false);
 		setShowSourceDropdown(false);
 		setShowProtocolCodeDropdown(false);
+		setShowTechnicianFilterDropdown(false);
 	};
 
 	const toggleSourceDropdown = () => {
 		setShowSourceDropdown(!showSourceDropdown);
 		setShowFieldDropdown(false);
 		setShowMatrixFilterDropdown(false);
+		setShowProtocolCodeDropdown(false);
+		setShowUnitDropdown(false);
+		setShowTechnicianFilterDropdown(false);
+	};
+
+	const toggleTechnicianFilterDropdown = () => {
+		setShowTechnicianFilterDropdown(!showTechnicianFilterDropdown);
+		setShowFieldDropdown(false);
+		setShowMatrixFilterDropdown(false);
+		setShowSourceDropdown(false);
 		setShowProtocolCodeDropdown(false);
 		setShowUnitDropdown(false);
 	};
@@ -1067,8 +1121,54 @@ const AnalyteInfor = () => {
 	};
 
 	const getTechnicianDisplayName = (alias) => {
-		const tech = getTechnicianByAlias(alias);
-		return tech ? `${tech.alias}: ${tech.identity_name}` : '';
+		const techOptions = getTechnicianOptions();
+		const option = techOptions.find((opt) => opt.alias === alias);
+		if (option) {
+			// Hiển thị K01: identity_name (cho row)
+			const realTech = getTechnicianByAlias(alias);
+			if (realTech && realTech.identity_name) {
+				return `${option.alias}: ${realTech.identity_name}`;
+			}
+			return `${option.alias}: ${option.title}`;
+		}
+		return alias || '';
+	};
+
+	// Function riêng cho dropdown display
+	const getTechnicianDropdownDisplayName = (tech) => {
+		return `${tech.alias}: ${tech.title} - ${tech.identity_name || tech.title}`;
+	};
+
+	// Generate technician options K01-K12
+	const getTechnicianOptions = () => {
+		const technicianTitles = {
+			K01: 'Hóa lý 1',
+			K02: 'Hóa lý 2',
+			K03: 'Hóa lý 3',
+			K04: 'Hóa dược',
+			K05: 'UV-VIS',
+			K06: 'HPLC',
+			K07: 'GCMS',
+			K08: 'AAS',
+			K09: 'Sinh học',
+			K10: 'Kỹ thuật viên',
+			K11: 'Kỹ thuật viên',
+			K12: 'Kỹ thuật viên',
+		};
+
+		const options = [];
+		for (let i = 1; i <= 12; i++) {
+			const alias = `K${i.toString().padStart(2, '0')}`;
+			const tech = techniciansList.find((t) => t.alias === alias);
+			options.push({
+				alias: alias,
+				identity_name: tech ? tech.identity_name : technicianTitles[alias],
+				title: technicianTitles[alias],
+				identity_uid: tech ? tech.identity_uid : '',
+				email: tech ? tech.email : '',
+			});
+		}
+		return options;
 	};
 
 	const handleTechnicianDropdownToggle = (analyteId) => {
@@ -1083,7 +1183,7 @@ const AnalyteInfor = () => {
 			// Update local state immediately
 			const updatedAnalytes = analytes.map((analyte) => {
 				if (analyte.id === analyteId) {
-					return { ...analyte, technician_uid: technician.alias }; // Store alias instead of identity_uid
+					return { ...analyte, technician_alias: technician.alias }; // Store alias instead of identity_uid
 				}
 				return analyte;
 			});
@@ -1313,7 +1413,7 @@ const AnalyteInfor = () => {
 					tat_expected: '1 day',
 					default_unit: '',
 					accreditation: '',
-					technician_uid: techniciansList[0]?.alias || '',
+					technician_alias: 'K01',
 					protocol_code: '',
 					parameter_uid: '',
 					protocol_source: 'IRDOP',
@@ -1356,7 +1456,7 @@ const AnalyteInfor = () => {
 			tat_expected: '1 day',
 			default_unit: '',
 			accreditation: '',
-			technician_uid: techniciansList[0]?.alias || '',
+			technician_alias: 'K01',
 			protocol_code: '',
 			parameter_uid: '',
 			protocol_source: 'IRDOP',
@@ -1454,7 +1554,7 @@ const AnalyteInfor = () => {
 	const handleTechnicianChange = (id, value) => {
 		const updatedAnalytes = analytes.map((analyte) => {
 			if (analyte.id === id) {
-				return { ...analyte, technician_uid: value };
+				return { ...analyte, technician_alias: value };
 			}
 			return analyte;
 		});
@@ -1503,6 +1603,71 @@ const AnalyteInfor = () => {
 
 	const handleRowClick = (id) => {
 		setExpandedRow(expandedRow === id ? null : id);
+	};
+
+	// Row selection handlers
+	const handleRowSelection = (rowId, event) => {
+		event.stopPropagation();
+
+		const newSelectedRows = new Set(selectedRows);
+		if (newSelectedRows.has(rowId)) {
+			newSelectedRows.delete(rowId);
+		} else {
+			newSelectedRows.add(rowId);
+		}
+		setSelectedRows(newSelectedRows);
+	};
+
+	const handleRowMouseDown = (rowId, event) => {
+		if (event.ctrlKey || event.metaKey) return; // Skip if modifier keys are pressed
+
+		setIsDragging(true);
+		setDragStartRow(rowId);
+	};
+
+	const handleRowMouseEnter = (rowId) => {
+		if (!isDragging || !dragStartRow) return;
+
+		// Select range from dragStartRow to current row
+		const currentAnalytes = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
+		const startIndex = currentAnalytes.findIndex((item) => item.id === dragStartRow);
+		const endIndex = currentAnalytes.findIndex((item) => item.id === rowId);
+
+		if (startIndex === -1 || endIndex === -1) return;
+
+		const minIndex = Math.min(startIndex, endIndex);
+		const maxIndex = Math.max(startIndex, endIndex);
+
+		const newSelectedRows = new Set(selectedRows);
+		for (let i = minIndex; i <= maxIndex; i++) {
+			newSelectedRows.add(currentAnalytes[i].id);
+		}
+		setSelectedRows(newSelectedRows);
+	};
+
+	const handleMouseUp = () => {
+		setIsDragging(false);
+		setDragStartRow(null);
+	};
+
+	const handleSelectAll = () => {
+		const currentAnalytes = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
+		const allIds = new Set(currentAnalytes.map((item) => item.id));
+		setSelectedRows(allIds);
+	};
+
+	const handleDeselectAll = () => {
+		setSelectedRows(new Set());
+	};
+
+	const handleBulkUpdateClick = () => {
+		setShowBulkUpdate(true);
+	};
+
+	const handleBulkUpdateComplete = () => {
+		setSelectedRows(new Set());
+		// Refresh data
+		fetchAnalytes(pagination.currentPage, pagination.itemsPerPage, searchTerm, columnFilters, columnSort, sortBy);
 	};
 
 	// Update pagination logic to use API pagination
@@ -1681,28 +1846,94 @@ const AnalyteInfor = () => {
 							Thêm mới
 						</button>
 						{/* Search Box moved below Thêm mới */}
-						<div className="relative">
-							<input
-								type="text"
-								placeholder="Tìm kiếm..."
-								value={searchTerm}
-								onChange={(e) => setSearchTerm(e.target.value)}
-								onKeyDown={(e) => {
-									if (e.key === 'Enter') {
+						<div className="flex gap-2 items-center">
+							{/* Technician Filter Dropdown */}
+							<div className="relative filter-dropdown">
+								<button
+									className={`px-3 py-2 border rounded-lg bg-white text-sm font-medium flex items-center gap-2 ${
+										technicianFilter ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+									}`}
+									onClick={toggleTechnicianFilterDropdown}
+								>
+									{technicianFilter ? getTechnicianDisplayName(technicianFilter) : 'Lọc theo KTV'}
+									<span className="text-xs">▼</span>
+								</button>
+								{showTechnicianFilterDropdown && (
+									<div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-50 min-w-64 max-h-60 overflow-y-auto">
+										<div
+											className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+											onClick={() => handleTechnicianFilter('')}
+										>
+											Tất cả
+										</div>
+										{getTechnicianOptions().map((tech, index) => (
+											<div
+												key={index}
+												className={`p-2 hover:bg-gray-100 cursor-pointer text-sm text-left ${
+													technicianFilter === tech.alias ? 'bg-blue-50' : ''
+												}`}
+												onClick={() => handleTechnicianFilter(tech.alias)}
+											>
+												{getTechnicianDropdownDisplayName(tech)}
+											</div>
+										))}
+									</div>
+								)}
+							</div>
+
+							{/* Search Input */}
+							<div className="relative">
+								<input
+									type="text"
+									placeholder="Tìm kiếm..."
+									value={searchTerm}
+									onChange={(e) => setSearchTerm(e.target.value)}
+									onKeyDown={(e) => {
+										if (e.key === 'Enter') {
+											handleSearch(e.target.value, 1);
+										}
+									}}
+									onBlur={(e) => {
 										handleSearch(e.target.value, 1);
-									}
-								}}
-								onBlur={(e) => {
-									handleSearch(e.target.value, 1);
-								}}
-								className="w-64 px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-							/>
-							{loading && (
-								<div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-600">
-									<span className="text-xs">Đang tìm...</span>
-								</div>
-							)}
+									}}
+									className="w-64 px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+								/>
+								{loading && (
+									<div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-600">
+										<span className="text-xs">Đang tìm...</span>
+									</div>
+								)}
+							</div>
 						</div>
+
+						{/* Selection and Bulk Update Controls */}
+						{selectedRows.size > 0 && (
+							<div className="flex gap-2 items-center">
+								<span className="text-sm text-gray-600">{selectedRows.size} mục được chọn</span>
+								<button
+									className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors flex items-center gap-1"
+									onClick={() => setShowBulkUpdate(true)}
+									disabled={bulkUpdating}
+								>
+									<FaEdit size={12} />
+									Cập nhật hàng loạt
+								</button>
+								<button
+									className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors flex items-center gap-1"
+									onClick={handleSelectAll}
+								>
+									<FaCheck size={12} />
+									Chọn tất cả
+								</button>
+								<button
+									className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600 transition-colors flex items-center gap-1"
+									onClick={handleDeselectAll}
+								>
+									<FaUndo size={12} />
+									Hủy chọn
+								</button>
+							</div>
+						)}
 					</div>
 				</div>
 
@@ -1742,7 +1973,7 @@ const AnalyteInfor = () => {
 								)}
 								{renderColumnHeader('price', 'Giá thành', 'py-2 text-start pl-2 min-w-32 w-32', 'no-action')}
 								{renderColumnHeader('accreditation', 'Chứng nhận', 'py-2 text-start pl-2 min-w-28 w-28', 'no-action')}
-								{renderColumnHeader('technician_uid', 'KTV', 'py-2 text-start pl-2 min-w-28 w-28', 'sort-only')}
+								{renderColumnHeader('technician_alias', 'KTV', 'py-2 text-start pl-2 min-w-28 w-28', 'sort-only')}
 								{renderColumnHeader('actions', 'Thao tác', 'py-2 text-start pl-2 min-w-24 w-24', 'no-action')}
 							</tr>
 						</thead>
@@ -2130,7 +2361,7 @@ const AnalyteInfor = () => {
 											className="w-full border px-2 py-1 rounded bg-white cursor-pointer min-h-[2.5rem] flex items-center"
 											onClick={() => handleTechnicianDropdownToggle('new')}
 										>
-											{getTechnicianDisplayName(newAnalyte.technician_uid) || 'Chọn kỹ thuật viên'}
+											{getTechnicianDisplayName(newAnalyte.technician_alias) || 'Chọn kỹ thuật viên'}
 										</div>
 										{technicianDropdowns['new'] &&
 											createPortal(
@@ -2145,17 +2376,16 @@ const AnalyteInfor = () => {
 															document.getElementById(`technician-new`)?.getBoundingClientRect().left + window.scrollX,
 													}}
 												>
-													{techniciansList.map((tech, index) => (
+													{getTechnicianOptions().map((tech, index) => (
 														<div
 															key={index}
 															className="p-2 flex cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
 															onClick={() => {
-																handleNewAnalyteChange('technician_uid', tech.alias);
+																handleNewAnalyteChange('technician_alias', tech.alias);
 																setTechnicianDropdowns((prev) => ({ ...prev, new: false }));
 															}}
 														>
-															<div className="text-sm font-bold">{tech.alias}:</div>
-															<div className="text-sm">{tech.identity_name}</div>
+															<div className="text-sm w-full text-left">{getTechnicianDropdownDisplayName(tech)}</div>
 														</div>
 													))}
 												</div>,
@@ -2182,9 +2412,27 @@ const AnalyteInfor = () => {
 								<tr
 									key={index}
 									className={`border-t ${editingRow === analyte.id ? 'bg-blue-50' : ''} ${
-										expandedRow === analyte.id ? '' : 'hover:bg-gray-100'
-									}`}
-									onClick={() => handleRowClick(analyte.id)}
+										selectedRows.has(analyte.id) ? 'bg-blue-100 border-blue-300' : ''
+									} ${expandedRow === analyte.id ? '' : 'hover:bg-gray-100'} ${
+										selectedRows.has(analyte.id) ? 'hover:bg-blue-200' : ''
+									} cursor-pointer`}
+									onClick={(e) => {
+										if (editingRow !== analyte.id) {
+											handleRowSelection(analyte.id, e);
+										} else {
+											handleRowClick(analyte.id);
+										}
+									}}
+									onMouseDown={(e) => {
+										if (editingRow !== analyte.id) {
+											handleRowMouseDown(analyte.id, e);
+										}
+									}}
+									onMouseEnter={() => {
+										if (editingRow !== analyte.id) {
+											handleRowMouseEnter(analyte.id);
+										}
+									}}
 								>
 									<td className="p-1 text-start">
 										<span
@@ -2699,7 +2947,7 @@ const AnalyteInfor = () => {
 												handleTechnicianDropdownToggle(analyte.id);
 											}}
 										>
-											{getTechnicianDisplayName(analyte.technician_uid) || 'Chọn kỹ thuật viên'}
+											{getTechnicianDisplayName(analyte.technician_alias) || 'Chọn kỹ thuật viên'}
 										</div>
 										{technicianDropdowns[analyte.id] &&
 											createPortal(
@@ -2716,7 +2964,7 @@ const AnalyteInfor = () => {
 															window.scrollX,
 													}}
 												>
-													{techniciansList.map((tech, techIndex) => (
+													{getTechnicianOptions().map((tech, techIndex) => (
 														<div
 															key={techIndex}
 															className="p-2 flex cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
@@ -2725,8 +2973,7 @@ const AnalyteInfor = () => {
 																handleTechnicianSelect(analyte.id, tech);
 															}}
 														>
-															<div className="text-sm font-bold">{tech.alias}:</div>
-															<div className="text-sm">{tech.identity_name}</div>
+															<div className="text-sm w-full text-left">{getTechnicianDropdownDisplayName(tech)}</div>
 														</div>
 													))}
 												</div>,
@@ -2806,6 +3053,17 @@ const AnalyteInfor = () => {
 					</div>
 				</div>
 			</div>
+
+			{/* Bulk Update Modal */}
+			<AnalyteBulkUpdate
+				isOpen={showBulkUpdate}
+				onClose={() => setShowBulkUpdate(false)}
+				selectedRows={selectedRows}
+				selectedData={analytes.filter((item) => selectedRows.has(item.id))}
+				onUpdateComplete={handleBulkUpdateComplete}
+				updating={bulkUpdating}
+				setUpdating={setBulkUpdating}
+			/>
 		</div>
 	);
 };

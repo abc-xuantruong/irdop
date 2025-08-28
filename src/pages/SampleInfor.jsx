@@ -1211,11 +1211,34 @@ const SampleInfor = () => {
 						if (analysis.deadline) {
 							analysis.deadline = adjustTimezoneForDisplay(analysis.deadline);
 						}
+						// Ensure technician_uid is properly set and valid
+						if (analysis.technician_uid) {
+							// Validate that the technician_uid exists in the technicians list
+							const techExists = technicians.find((tech) => tech.identity_uid === analysis.technician_uid);
+							if (!techExists) {
+								console.warn(
+									`Technician UID ${analysis.technician_uid} not found in technicians list for analysis ${analysis.id}`,
+								);
+								// Optionally set to null if technician doesn't exist
+								// analysis.technician_uid = null;
+							}
+						}
 					}
 				}
 				setSample(response.data);
 				setCurrentSample(response.data);
 				setListAnalytes(response.data.analysis);
+
+				// Debug log to check technician_uid data
+				console.log(
+					'Sample analysis data loaded:',
+					response.data.analysis?.map((analysis) => ({
+						id: analysis.id,
+						parameter_name: analysis.parameter_name,
+						technician_uid: analysis.technician_uid,
+						has_technician: !!analysis.technician_uid,
+					})),
+				);
 
 				// Store original sample values for comparison
 				setOriginalSampleValues({
@@ -1918,8 +1941,19 @@ const SampleInfor = () => {
 	};
 
 	const technician = (param) => {
+		// Kiểm tra nếu technician_uid có tồn tại và hợp lệ
+		if (!param.technician_uid || param.technician_uid.trim() === '') {
+			return null;
+		}
+
 		const iden = technicians.find((identity) => identity.identity_uid === param.technician_uid);
-		const ktv = iden ? iden.identity_name + ' (' + iden.alias + ')' : null;
+		if (!iden) {
+			// Nếu không tìm thấy technician, log warning và return null
+			console.warn(`Technician with UID ${param.technician_uid} not found in technicians list`);
+			return null;
+		}
+
+		const ktv = iden.identity_name + ' (' + iden.alias + ')';
 		return ktv;
 	};
 
@@ -1932,9 +1966,25 @@ const SampleInfor = () => {
 	const toggleTechnicianDropdown = (index, event) => {
 		const buttonRect = event.target.getBoundingClientRect(); // Lấy vị trí button trên màn hình
 		onUpdateAnalysis;
+
+		// Tính toán vị trí để dropdown không bị tràn ra ngoài màn hình
+		const viewportWidth = window.innerWidth;
+		const dropdownWidth = Math.min(600, viewportWidth - 40); // Chiều rộng thực tế của dropdown
+		let leftPosition = buttonRect.left + window.scrollX;
+
+		// Nếu dropdown sẽ tràn ra ngoài màn hình bên phải, đặt nó bên trái
+		if (leftPosition + dropdownWidth > viewportWidth - 20) {
+			leftPosition = viewportWidth - dropdownWidth - 20; // Để lại 20px margin
+		}
+
+		// Đảm bảo dropdown không bị tràn ra ngoài màn hình bên trái
+		if (leftPosition < 20) {
+			leftPosition = 20;
+		}
+
 		setDropdownPosition({
 			top: buttonRect.bottom + window.scrollY + 4, // Display below the button with 4px gap
-			left: buttonRect.left + window.scrollX, // Căn theo button
+			left: leftPosition, // Vị trí đã được điều chỉnh
 		});
 
 		setTechnicianDropdownVisible(technicianDropdownVisible === index ? null : index);
@@ -1942,6 +1992,20 @@ const SampleInfor = () => {
 	};
 
 	const handleTechnicianChange = async (index, identity_uid) => {
+		// Validate the technician_uid before proceeding
+		const selectedTechnician = technicians.find((tech) => tech.identity_uid === identity_uid);
+		if (!selectedTechnician) {
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Không tìm thấy thông tin kỹ thuật viên được chọn',
+			});
+			return;
+		}
+
+		// Store original state for rollback if needed
+		const originalAnalytes = [...listAnalytes];
+
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
 				return { ...item, technician_uid: identity_uid };
@@ -1949,13 +2013,11 @@ const SampleInfor = () => {
 			return item;
 		});
 
-		// Update the state
+		// Update the state immediately for better UX
 		setListAnalytes(updatedAnalytes);
 
-		// Close the dropdown after a small delay to ensure the change is processed
-		setTimeout(() => {
-			setTechnicianDropdownVisible(null);
-		}, 50);
+		// Close the dropdown
+		setTechnicianDropdownVisible(null);
 
 		// Find the updated analysis item
 		const analysis = updatedAnalytes.find((item) => item.id === index);
@@ -1975,8 +2037,10 @@ const SampleInfor = () => {
 			});
 
 			if (response.status === 200) {
-				// Only show toast after successful API response - not added here since it would be too frequent
+				showToast(`Đã gán ${selectedTechnician.identity_name} (${selectedTechnician.alias}) thực hiện`);
 			} else {
+				// Rollback the state on error
+				setListAnalytes(originalAnalytes);
 				Swal.fire({
 					icon: 'error',
 					title: 'Lỗi',
@@ -1984,7 +2048,9 @@ const SampleInfor = () => {
 				});
 			}
 		} catch (error) {
-			console.error('Error updating analysis:', error);
+			console.error('Error updating technician:', error);
+			// Rollback the state on error
+			setListAnalytes(originalAnalytes);
 			Swal.fire({
 				icon: 'error',
 				title: 'Lỗi',
@@ -3168,6 +3234,7 @@ const SampleInfor = () => {
 								protocol_source: matchedAnalysis.protocol_source || analyte.protocol_source,
 								field: matchedAnalysis.field || analyte.field,
 								display_style: matchedAnalysis.display_style || analyte.display_style,
+								technician_uid: matchedAnalysis.technician_uid || analyte.technician_uid,
 							};
 						}
 					}
@@ -4458,6 +4525,7 @@ const SampleInfor = () => {
 													technicianDropdownVisible === order.id && 'border border-slate-200'
 												} p-1 rounded bg-white text-left h-fit`}
 												onClick={(event) => toggleTechnicianDropdown(order.id, event)}
+												title={order.technician_uid ? `Người thực hiện: ${technician(order)}` : 'Chọn người thực hiện'}
 											>
 												{technician(order) || 'Chọn KTV'}
 											</button>
@@ -4471,12 +4539,12 @@ const SampleInfor = () => {
 														top: dropdownPosition.top + 'px',
 														left: dropdownPosition.left + 'px',
 														position: 'absolute',
-														minWidth: '500px',
-														maxWidth: '800px',
+														minWidth: '400px',
+														maxWidth: Math.min(600, window.innerWidth - 40) + 'px',
 														width: 'max-content',
 													}}
 												>
-													<div className="grid grid-cols-4 gap-3 max-h-96">
+													<div className="grid grid-cols-3 md:grid-cols-4 gap-3 max-h-96 overflow-y-auto">
 														{technicians.map((identity) => (
 															<div
 																key={identity.alias}
