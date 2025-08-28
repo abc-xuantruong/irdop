@@ -1131,7 +1131,7 @@ export default function MultiPageEditor() {
 		const knParagraph = showKN
 			? `
 			<p style="font-weight: bold; text-align: left; font-size: 12px; margin: 0 0 8px 0; padding: 0;">
-				Kết quả thử nghiệm
+				Kết quả thử nghiệm:
 			</p>
 		`
 			: '';
