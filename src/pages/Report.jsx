@@ -22,13 +22,14 @@ export default function MultiPageEditor() {
 	// Add state to track if we're in read-only mode (when a ppt_uid is in the URL)
 	const [isReadOnly, setIsReadOnly] = useState(false);
 
-	// Add new toggle states for VLAS, COMMENT, REFERENCE, ENGLISH, REPLACE, and SIGN
+	// Add new toggle states for VLAS, COMMENT, REFERENCE, ENGLISH, REPLACE, SIGN, and KN
 	const [showVlas, setShowVlas] = useState(false);
 	const [showComment, setShowComment] = useState(false);
 	const [showReference, setShowReference] = useState(false);
 	const [showEnglish, setShowEnglish] = useState(false);
 	const [showReplace, setShowReplace] = useState(false);
 	const [showSign, setShowSign] = useState(false);
+	const [showKN, setShowKN] = useState(false);
 
 	// State for section HTML content
 	const [headerHTML, setHeaderHTML] = useState('');
@@ -596,7 +597,7 @@ export default function MultiPageEditor() {
 		setCommentSectionHTML(updatedCommentSection);
 
 		// Set notes and signature sections
-		setNotesSectionHTML(notesSection);
+		setNotesSectionHTML(generateNotesSection());
 		setSignatureSectionHTML(generateSignatureSection());
 
 		// Use the generateCombinedContent helper function to ensure consistent content generation
@@ -605,7 +606,7 @@ export default function MultiPageEditor() {
 			updatedSampleInfo,
 			updatedAnalysisSection,
 			updatedCommentSection,
-			notesSection,
+			generateNotesSection(),
 			generateSignatureSection(),
 		); // Update the editor content
 		setContent(updatedContent);
@@ -622,7 +623,7 @@ export default function MultiPageEditor() {
 			sampleInfoSection: updatedSampleInfo,
 			analysisSection: updatedAnalysisSection,
 			commentSection: updatedCommentSection,
-			notesSection: notesSection,
+			notesSection: generateNotesSection(),
 			signatureSection: generateSignatureSection(),
 		});
 	};
@@ -790,7 +791,7 @@ export default function MultiPageEditor() {
 	<div style="padding: 5pt 8pt;; flex-grow: 1; position: relative;">
 		<div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
 			<p style="font-size: 11px; line-height: 1.2; margin: 0; text-align: left;">
-				Thông tin mẫu thử / Sample information:
+				Thông tin mẫu thử nghiệm / Sample information:
 			</p>
 			<p style="font-size: 11px; line-height: 1.4; margin: 0; text-align: left;">
 				${sampleId}
@@ -1122,9 +1123,23 @@ export default function MultiPageEditor() {
 				</tr>`;
 		}
 
+		// Dynamic result column header based on showKN state
+		const resultHeader = showKN ? 'Kết quả kiểm nghiệm' : 'Kết quả';
+		const resultHeaderEng = showKN ? '/ Inspection result' : '/ Test result';
+
+		// Add paragraph above table when showKN is true
+		const knParagraph = showKN
+			? `
+			<p style="font-weight: bold; text-align: left; font-size: 12px; margin: 0 0 8px 0; padding: 0;">
+				Kết quả thử nghiệm
+			</p>
+		`
+			: '';
+
 		// Create full table HTML
 		const tableHTML = `
 <div style="margin:0; padding:0;">
+	${knParagraph}
 	<table style="width: auto; min-width: 100% ; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px; line-height:1.4;">
 		<thead>
 			<tr>
@@ -1135,7 +1150,7 @@ export default function MultiPageEditor() {
 					<strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444;">/ Tests</span>
 				</th>
 				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:100px; text-align:left; font-size:12px; box-sizing: border-box;">
-					<strong>Kết quả</strong> <br> <span style="font-size: 12px; color: #444444;">/ Test result</span>
+					<strong>${resultHeader}</strong> <br> <span style="font-size: 12px; color: #444444;">${resultHeaderEng}</span>
 				</th>
 				<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; min-width:60px; text-align:left; font-size:12px;box-sizing: border-box;">
 					<strong>Đơn vị </strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
@@ -1207,8 +1222,13 @@ export default function MultiPageEditor() {
 </div>`;
 	};
 
-	// Add notes and signature sections as constants with standardized styling
-	const notesSection = `
+	// Add notes and signature sections as functions with standardized styling
+	const generateNotesSection = () => {
+		const sampleInfoText = showKN
+			? 'Thông tin mẫu kiểm nghiệm do khách hàng cung cấp / Sample information provided by the customer.'
+			: 'Thông tin mẫu thử nghiệm do khách hàng cung cấp / Sample information provided by the customer.';
+
+		return `
 <div style="padding-top: 0; display: flex; flex-direction: column; border: 1px solid #000000; margin:0;">
 	<div style="padding: 5pt 8pt; flex-grow: 1; position: relative;">
 		<div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -1227,13 +1247,14 @@ export default function MultiPageEditor() {
 				EX: Chỉ tiêu được thực hiện bởi nhà thầu phụ / Parameters conducted by subcontractors.<br>
 				VS: Chỉ tiêu được công nhận ISO/IEC 17025:2017 / Accredited per ISO/IEC 17025:2017.<br>
 				TĐC: Chỉ tiêu được công nhận đánh giá sự phù hợp theo NĐ 107/2016/NĐ-CP / Accredited per Decree 107/2016/ND-CP.<br>
-				Thông tin mẫu thử do khách hàng cung cấp / Sample information provided by the customer.<br>
+				${sampleInfoText}<br>
 				Kết quả chỉ có giá trị với mẫu thử / The results are only valid for the tested sample(s).
 			</p>
 		</div>
 		
 	</div>
 </div>`;
+	};
 
 	// Add new function to generate signature section
 	const generateSignatureSection = () => {
@@ -1267,7 +1288,7 @@ export default function MultiPageEditor() {
 	const initialCommentSection = showComment ? generateCommentSection() : '';
 	const initialCommentSpacing = showComment ? spacing : '';
 
-	const initialContent = `${generateCustomerSection()}${spacing}${spacing}${spacing}${initialCommentSection}${initialCommentSpacing}${notesSection}${spacing}${generateSignatureSection()}`;
+	const initialContent = `${generateCustomerSection()}${spacing}${spacing}${spacing}${initialCommentSection}${initialCommentSpacing}${generateNotesSection()}${spacing}${generateSignatureSection()}`;
 
 	const [content, setContent] = useState(initialContent);
 	const [header, setHeader] = useState(`
@@ -1353,7 +1374,7 @@ export default function MultiPageEditor() {
 		sampleInfoSection: '',
 		analysisSection: '',
 		commentSection: showComment ? generateCommentSection() : '',
-		notesSection: notesSection,
+		notesSection: generateNotesSection(),
 		signatureSection: generateSignatureSection(),
 	});
 
@@ -3700,7 +3721,7 @@ export default function MultiPageEditor() {
 		// Store current reference state for comparison on next render
 		ref.current = showReference;
 
-		// Update header when VLAS state changes
+		// Update header when VLAS and KN state changes
 		const updateVlasVisibility = () => {
 			// Create a temporary container to avoid direct string manipulation
 			const tempDiv = document.createElement('div');
@@ -3716,18 +3737,24 @@ export default function MultiPageEditor() {
 				} else {
 					vlasIcon.style.display = 'none'; // Hide the element
 				}
+			}
 
-				// Update the header state with the modified HTML
-				setHeader(tempDiv.innerHTML);
+			// Find and update the main title based on showKN state
+			const titleElement = tempDiv.querySelector('.content-header-title');
+			if (titleElement) {
+				titleElement.textContent = showKN ? 'PHIẾU KẾT QUẢ KIỂM NGHIỆM' : 'PHIẾU KẾT QUẢ THỬ NGHIỆM';
+			}
 
-				// If we're in the editor, also update the TinyMCE content
-				if (window.tinymce) {
-					const headerElements = document.getElementsByClassName('header-editable');
-					if (headerElements.length > 0 && headerElements[0].id) {
-						const headerEditor = window.tinymce.get(headerElements[0].id);
-						if (headerEditor) {
-							headerEditor.setContent(tempDiv.innerHTML);
-						}
+			// Update the header state with the modified HTML
+			setHeader(tempDiv.innerHTML);
+
+			// If we're in the editor, also update the TinyMCE content
+			if (window.tinymce) {
+				const headerElements = document.getElementsByClassName('header-editable');
+				if (headerElements.length > 0 && headerElements[0].id) {
+					const headerEditor = window.tinymce.get(headerElements[0].id);
+					if (headerEditor) {
+						headerEditor.setContent(tempDiv.innerHTML);
 					}
 				}
 			}
@@ -3735,7 +3762,7 @@ export default function MultiPageEditor() {
 
 		// Call the function to update VLAS visibility
 		updateVlasVisibility();
-	}, [showVlas, showComment, showReference, sampleData]);
+	}, [showVlas, showComment, showReference, showKN, sampleData]);
 
 	// Custom function to show notifications with SweetAlert instead of alert
 	const showNotification = (message, type = 'success') => {
@@ -3899,7 +3926,7 @@ export default function MultiPageEditor() {
 							}`}
 							disabled={isReadOnly}
 						>
-							COMMENT
+							CMT
 						</button>
 
 						<button
@@ -3941,6 +3968,18 @@ export default function MultiPageEditor() {
 							disabled={isReadOnly}
 						>
 							ENG
+						</button>
+
+						<button
+							onClick={() => !isReadOnly && setShowKN((prev) => !prev)}
+							className={`${
+								showKN ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
+							} px-3 py-1 w-24 ml-2 focus:outline-none border-2 border-gray-500 rounded-lg ${
+								isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
+							}`}
+							disabled={isReadOnly}
+						>
+							KN
 						</button>
 
 						<button

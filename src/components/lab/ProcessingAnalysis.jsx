@@ -489,6 +489,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	// State to track if this is the initial load
 	const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+	// State to prevent debounce useEffect from running during initial load
+	const [isInitialDataLoading, setIsInitialDataLoading] = useState(false);
+
 	// Technician dropdown state for sidebar header
 	const [technicianDropdownOpen, setTechnicianDropdownOpen] = useState(false);
 	const [selectedTechnicianName, setSelectedTechnicianName] = useState('TOÀN BỘ');
@@ -598,6 +601,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// Load initial data function
 	const loadInitialData = async () => {
+		console.log('🚀 loadInitialData started');
+		setIsInitialDataLoading(true);
 		const searchParams = new URLSearchParams(location.search);
 
 		// Check if there are any filter-related query params
@@ -674,6 +679,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		if (newItemsPerPage !== itemsPerPage) setItemsPerPage(newItemsPerPage);
 		if (JSON.stringify(newSortConfig) !== JSON.stringify(sortConfig)) setSortConfig(newSortConfig);
 		if (JSON.stringify(newFilters) !== JSON.stringify(filters)) setFilters(newFilters);
+
+		setIsInitialDataLoading(false);
+		console.log('✅ loadInitialData completed');
 	};
 
 	// Update URL parameters when filters change
@@ -760,7 +768,12 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		customCurrentPage = null,
 		customItemsPerPage = null,
 	) => {
-		console.log('🔄 fetchAnalysisData called', { preserveScroll, customFilters: !!customFilters });
+		console.log('🔄 fetchAnalysisData called', {
+			preserveScroll,
+			customFilters: !!customFilters,
+			isInitialDataLoading,
+			caller: new Error().stack.split('\n')[2].trim(),
+		});
 
 		// Save current scroll position if preserving scroll
 		if (preserveScroll && scrollContainerRef.current) {
@@ -956,7 +969,12 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// Fetch parameters list
 	const fetchParameters = async (searchTerm = '', customFilters = null) => {
-		console.log('🔍 fetchParameters called', { searchTerm, customFilters: !!customFilters });
+		console.log('🔍 fetchParameters called', {
+			searchTerm,
+			customFilters: !!customFilters,
+			isInitialDataLoading,
+			caller: new Error().stack.split('\n')[2].trim(),
+		});
 
 		try {
 			const useFilters = customFilters || filters;
@@ -1237,7 +1255,15 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// Simple effect with debounce to prevent rapid API calls
 	useEffect(() => {
-		if (isInitialLoad) return;
+		if (isInitialLoad || isInitialDataLoading) {
+			console.log(
+				'⏸️ Debounce useEffect skipped - isInitialLoad:',
+				isInitialLoad,
+				'isInitialDataLoading:',
+				isInitialDataLoading,
+			);
+			return;
+		}
 
 		console.log('🔄 Filter/pagination changed, debouncing fetch...');
 
@@ -1263,6 +1289,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		filters.columnSort,
 		filters.sortBy,
 		isInitialLoad,
+		isInitialDataLoading, // Add this dependency
 		// Only trigger on filter content changes, not object reference changes
 		JSON.stringify(filters.parameters),
 		JSON.stringify(filters.protocols),
@@ -1271,8 +1298,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// Search parameters with debounce (only for search box, doesn't update URL)
 	useEffect(() => {
-		// Don't fetch during initial load
-		if (!isInitialLoad && lastSearchTermRef.current !== parameterSearchTerm) {
+		// Don't fetch during initial load or initial data loading
+		if (!isInitialLoad && !isInitialDataLoading && lastSearchTermRef.current !== parameterSearchTerm) {
 			lastSearchTermRef.current = parameterSearchTerm;
 
 			console.log('🔍 Search term changed, debouncing fetchParameters...');
@@ -1286,7 +1313,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 			return () => clearTimeout(timeoutId);
 		}
-	}, [parameterSearchTerm, isInitialLoad]); // Search filter values with debounce
+	}, [parameterSearchTerm, isInitialLoad, isInitialDataLoading]); // Add isInitialDataLoading dependency
 	useEffect(() => {
 		if (activeFilterColumn) {
 			// For special filter columns, don't fetch from API
@@ -1306,21 +1333,34 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		}
 	}, [activeFilterColumn, filterSearchTerm]);
 
+	// Helper function to check if any filters are active
+	const hasActiveFilters = useMemo(() => {
+		const hasParameterFilters = filters.parameters && filters.parameters.length > 0;
+		const hasProtocolFilters = filters.protocols && filters.protocols.length > 0;
+		const hasHeaderFilters = filters.headerFilters && Object.keys(filters.headerFilters).length > 0;
+		const hasSearchTerm = parameterSearchTerm && parameterSearchTerm.trim().length > 0;
+
+		return hasParameterFilters || hasProtocolFilters || hasHeaderFilters || hasSearchTerm;
+	}, [filters.parameters, filters.protocols, filters.headerFilters, parameterSearchTerm]);
+
 	// Auto-refresh data every 60 seconds
 	useEffect(() => {
-		if (!isInitialLoad) {
+		if (!isInitialLoad && !isInitialDataLoading) {
 			const autoRefreshInterval = setInterval(() => {
-				// Only prevent auto-refresh when actively editing a cell or currently fetching
+				// Only prevent auto-refresh when actively editing a cell, currently fetching, or when filters are active
 				if (
 					!updating &&
 					!editingCell &&
 					!editableCell.analysisId &&
 					!editingProtocolSource &&
-					!isCurrentlyFetchingRef.current
+					!isCurrentlyFetchingRef.current &&
+					!hasActiveFilters // Thêm điều kiện để không auto-refresh khi có filter
 				) {
 					console.log('🔄 Auto-refresh triggered');
 					// Use current state instead of parsing URL to maintain filters
 					fetchAnalysisData(true, filters, currentPage, itemsPerPage);
+				} else if (hasActiveFilters) {
+					console.log('⏸️ Auto-refresh skipped - filters are active');
 				}
 			}, 60000); // 60 seconds
 
@@ -1328,6 +1368,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		}
 	}, [
 		isInitialLoad, // Only depend on isInitialLoad to avoid unnecessary re-creation of interval
+		isInitialDataLoading, // Add isInitialDataLoading dependency
+		hasActiveFilters, // Add hasActiveFilters as dependency to update interval behavior
 	]);
 
 	// Close technician dropdown when clicking outside
@@ -3105,10 +3147,12 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																		<span className="text-left">{row.sample_uid || ''}</span>
 																	</div>
 																) : column === 'parameter_name' ? (
-																	<div
-																		className="relative text-left w-full p-1 rounded"
-																	>
+																	<div className="relative text-left w-full p-1 rounded">
 																		<span className="text-left">{row.parameter_name || ''}</span>
+																	</div>
+																): column === 'matrix' ? (
+																	<div className="relative text-left w-full p-1 rounded">
+																		<span className="text-left">{row.matrix || ''}</span>
 																	</div>
 																) : column === 'protocol_source' ? (
 																	<div
@@ -3352,15 +3396,14 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																		</span>
 																	) : null
 																) : column === 'technician_uid' ? (
-																	<div className="text-xs text-gray-900 p-1">{getTechnicianName(row.technician_uid)}</div>
+																	<div className="text-xs text-gray-900 p-1">
+																		{getTechnicianName(row.technician_uid)}
+																	</div>
 																) : column === 'deadline' ? (
-																	<div
-																		className="relative text-left w-full p-1 rounded"
-																	>
+																	<div className="relative text-left w-full p-1 rounded">
 																		<span className="text-left">{formatDate(row.deadline) || ''}</span>
 																	</div>
-																)
-																:(
+																) : (
 																	row[column] || ''
 																)}
 															</td>

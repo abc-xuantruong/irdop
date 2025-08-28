@@ -14,6 +14,9 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 	const [availableCameras, setAvailableCameras] = useState([]);
 	const [selectedCamera, setSelectedCamera] = useState('');
 	const [showCameraSelector, setShowCameraSelector] = useState(false);
+	const [useIPWebcam, setUseIPWebcam] = useState(false);
+	const [ipWebcamUrl, setIpWebcamUrl] = useState('192.168.1.186:8080');
+	const [ipCapturedImage, setIpCapturedImage] = useState('');
 	const videoRef = useRef(null);
 	const canvasRef = useRef(null);
 	const dropdownRef = useRef(null);
@@ -86,6 +89,7 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 
 	// Open camera function
 	const openCamera = async (deviceId = selectedCamera) => {
+		setUseIPWebcam(false); // Ensure IP webcam mode is off
 		try {
 			const constraints = {
 				video: {
@@ -93,7 +97,7 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 					height: { ideal: 2160, min: 1080 },
 					facingMode: isMobile ? 'environment' : undefined,
 					deviceId: deviceId ? { exact: deviceId } : undefined,
-					focusMode: 'continuous'
+					focusMode: 'continuous',
 				},
 			};
 
@@ -115,6 +119,19 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 		}
 	};
 
+	// Open IP Webcam function
+	const openIPWebcam = () => {
+		setUseIPWebcam(true);
+		setIsCameraOpen(true);
+		setShowOptions(false); // Close dropdown
+		setShowCameraSelector(false); // Close camera selector
+		// Clear any existing streams
+		if (stream) {
+			stream.getTracks().forEach((track) => track.stop());
+			setStream(null);
+		}
+	};
+
 	// Close camera function
 	const closeCamera = () => {
 		if (stream) {
@@ -124,11 +141,17 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 		setIsCameraOpen(false);
 		setCapturedPhoto(null);
 		setShowCameraSelector(false);
+		setUseIPWebcam(false);
+		setIpCapturedImage('');
 	};
 
 	// Capture photo function
 	const capturePhoto = () => {
-		if (videoRef.current && canvasRef.current) {
+		if (useIPWebcam) {
+			// Capture from IP Webcam
+			captureFromIPWebcam();
+		} else if (videoRef.current && canvasRef.current) {
+			// Capture from local camera
 			const canvas = canvasRef.current;
 			const video = videoRef.current;
 			const context = canvas.getContext('2d');
@@ -160,11 +183,44 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 		}
 	};
 
+	// Capture from IP Webcam function
+	const captureFromIPWebcam = async () => {
+		try {
+			const url = `http://${ipWebcamUrl}/shot.jpg`;
+			const timestamp = new Date().getTime();
+			const imageUrl = `${url}?${timestamp}`; // Add timestamp to avoid cache
+
+			// Fetch the image as blob
+			const response = await fetch(imageUrl);
+			if (response.ok) {
+				const blob = await response.blob();
+				const file = new File([blob], 'ip-webcam-capture.jpg', { type: 'image/jpeg' });
+				setSelectedFile(file);
+
+				// Create preview URL
+				const reader = new FileReader();
+				reader.onload = (e) => {
+					const dataUrl = e.target.result;
+					setIpCapturedImage(dataUrl);
+					setCapturedPhoto(dataUrl);
+					setPreviewUrl(dataUrl);
+				};
+				reader.readAsDataURL(blob);
+			} else {
+				throw new Error('Failed to capture image from IP Webcam');
+			}
+		} catch (error) {
+			console.error('Error capturing from IP Webcam:', error);
+			alert('Không thể chụp ảnh từ IP Webcam. Vui lòng kiểm tra kết nối.');
+		}
+	};
+
 	// Retake photo function
 	const retakePhoto = () => {
 		setCapturedPhoto(null);
 		setPreviewUrl(null);
 		setSelectedFile(null);
+		setIpCapturedImage('');
 	};
 
 	const handleConfirm = async () => {
@@ -245,6 +301,7 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 		setPreviewUrl(null);
 		setCapturedPhoto(null);
 		setShowCameraSelector(false);
+		setIpCapturedImage('');
 		closeCamera();
 	};
 
@@ -298,7 +355,7 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 						</div>
 
 						{/* Camera selector for desktop */}
-						{!isMobile && availableCameras.length > 1 && (
+						{!isMobile && !useIPWebcam && availableCameras.length > 1 && (
 							<div className="camera-selector p-4 border-b border-gray-200">
 								<label className="block text-sm font-medium text-gray-700 mb-2">Chọn camera:</label>
 								<select
@@ -319,6 +376,21 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 										</option>
 									))}
 								</select>
+							</div>
+						)}
+
+						{/* IP Webcam URL input */}
+						{useIPWebcam && (
+							<div className="ip-webcam-config p-4 border-b border-gray-200">
+								<label className="block text-sm font-medium text-gray-700 mb-2">IP Webcam URL:</label>
+								<input
+									type="text"
+									value={ipWebcamUrl}
+									onChange={(e) => setIpWebcamUrl(e.target.value)}
+									placeholder="192.168.1.186:8080"
+									className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+								/>
+								<p className="text-xs text-gray-500 mt-1">Định dạng: địa_chỉ_ip:cổng (ví dụ: 192.168.1.186:8080)</p>
 							</div>
 						)}
 
@@ -360,7 +432,30 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 							) : (
 								/* Live camera view */
 								<div className="camera-container bg-black rounded-lg overflow-hidden">
-									<video ref={videoRef} autoPlay playsInline className="w-full h-auto" style={{ maxHeight: '65vh' }} />
+									{useIPWebcam ? (
+										/* IP Webcam live stream */
+										<div className="ip-webcam-container">
+											<h4 className="text-white text-center p-2 bg-gray-700">Live Camera Stream - IP Webcam</h4>
+											<img
+												src={`http://${ipWebcamUrl}/video`}
+												alt="Live IP Webcam Stream"
+												className="w-full h-auto"
+												style={{ maxHeight: '60vh' }}
+												onError={() =>
+													alert('Không thể kết nối đến IP Webcam. Vui lòng kiểm tra địa chỉ IP và kết nối mạng.')
+												}
+											/>
+										</div>
+									) : (
+										/* Local camera stream */
+										<video
+											ref={videoRef}
+											autoPlay
+											playsInline
+											className="w-full h-auto"
+											style={{ maxHeight: '65vh' }}
+										/>
+									)}
 									<canvas ref={canvasRef} className="hidden" />
 									<div className="camera-controls p-4 bg-gray-800 flex justify-center gap-3">
 										<button
@@ -427,6 +522,17 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 							<FaImage size={12} /> Thư viện
 						</label>
 					</div>
+
+					{/* IP Webcam option */}
+					<div>
+						<button
+							onClick={openIPWebcam}
+							className="mb-1 font-medium text-sm text-left flex items-center gap-1 cursor-pointer hover:text-purple-800 text-purple-600 mt-2 border border-slate-600 border-dashed px-1 py-2 rounded"
+							title="IP Webcam"
+						>
+							<FaCamera size={12} /> IP Webcam
+						</button>
+					</div>
 				</div>
 			) : (
 				// Desktop interface with dropdown
@@ -485,6 +591,16 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 									Chụp từ camera
 								</button>
 							)}
+
+							<hr className="border-gray-200" />
+							{/* IP Webcam option */}
+							<button
+								onClick={openIPWebcam}
+								className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2 text-purple-600"
+							>
+								<FaCamera size={12} />
+								IP Webcam
+							</button>
 
 							<hr className="border-gray-200" />
 							<label

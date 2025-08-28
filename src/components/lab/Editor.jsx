@@ -1693,7 +1693,7 @@ const Editor = () => {
 				showAutoHideMessage('Lỗi khi tìm kiếm mẫu', 'error');
 			}
 			setTemplateSearchLoading(false);
-		}, 300);
+		}, 500);
 	};
 
 	const handleTemplateSearchInputChange = (value) => {
