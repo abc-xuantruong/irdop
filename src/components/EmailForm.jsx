@@ -3,7 +3,20 @@ const { useState, useEffect, useRef } = React;
 import Swal from 'sweetalert2';
 import { apiPost } from '../contexts/helperFunctionCallAPI';
 
-const EmailForm = ({ from, to, subject, body, attachments, foreignKeyUIDs, isVisible, onClose, onSubmit }) => {
+const EmailForm = ({
+	from,
+	to,
+	subject,
+	body,
+	attachments,
+	foreignKeyUIDs,
+	isVisible,
+	onClose,
+	onSubmit,
+	emailIndex,
+	totalEmails,
+	title = 'Thông Báo Tiếp Nhận ',
+}) => {
 	const [isSendingEmail, setIsSendingEmail] = useState(false);
 	const contentEditableRef = useRef(null);
 
@@ -353,7 +366,11 @@ const EmailForm = ({ from, to, subject, body, attachments, foreignKeyUIDs, isVis
 	return (
 		<div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50">
 			<div className="bg-white p-6 rounded-lg w-4/5 max-w-4xl max-h-[90vh] overflow-y-auto">
-				<h2 className="text-2xl font-semibold mb-4">Gửi Email Thông Báo Tiếp Nhận</h2>
+				<h2 className="text-2xl font-semibold mb-4">
+					{totalEmails && totalEmails > 1
+						? `Gửi Email ${title} (${emailIndex + 1}/${totalEmails})`
+						: `Gửi Email ${title}`}
+				</h2>
 
 				<div className="mb-6 grid grid-cols-[120px_1fr] gap-4 items-start">
 					<label className="text-sm font-medium text-gray-700 pt-2 text-left">From:</label>

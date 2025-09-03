@@ -1,112 +1,115 @@
 # Tóm tắt các thay đổi
 
-## Ngày: 28 tháng 8 năm 2025
+## Ngày: 3 tháng 9 năm 2025
 
-### 1. Cải tiến giao diện và trải nghiệm người dùng
+### Phiên bản V 2.60 (28/8/2025)
 
-#### Header cố định với dropdown kỹ thuật viên
+#### Cải tiến giao diện và trải nghiệm người dùng
 
-- Thêm header cố định ở phía trên cùng của trang ProcessingAnalysis
-- Tích hợp dropdown chọn kỹ thuật viên trực tiếp trong breadcrumb
-- Sidebar được di chuyển xuống dưới header để tối ưu hóa không gian
+- **Header cố định với dropdown kỹ thuật viên**: Thêm header cố định ở phía trên cùng của trang ProcessingAnalysis, tích hợp dropdown chọn kỹ thuật viên trực tiếp trong breadcrumb, di chuyển sidebar xuống dưới để tối ưu hóa không gian.
 
-#### Cải thiện dropdown kỹ thuật viên
+- **Cải thiện dropdown kỹ thuật viên**: Tự động điều chỉnh vị trí dropdown để tránh tràn ra ngoài màn hình, thêm validation cho technician_uid trước khi gửi API, cải thiện xử lý lỗi và rollback khi cập nhật thất bại.
 
-- Tự động điều chỉnh vị trí dropdown để tránh tràn ra ngoài màn hình
-- Thêm validation cho technician_uid trước khi gửi API
-- Cải thiện xử lý lỗi và rollback khi cập nhật thất bại
+#### Tính năng cập nhật hàng loạt (AnalyteBulkUpdate)
 
-### 2. Tính năng cập nhật hàng loạt (AnalyteBulkUpdate)
+- **Tạo component mới: AnalyteBulkUpdate.jsx**: Cho phép cập nhật hàng loạt các chỉ tiêu được chọn, hỗ trợ chỉnh sửa các trường: lĩnh vực, chứng nhận, nguồn, phương pháp, đơn vị, giá, kỹ thuật viên.
 
-#### Tạo component mới: AnalyteBulkUpdate.jsx
+- **Tích hợp TinyMCE**: Cho chỉnh sửa định dạng hiển thị.
 
-- Cho phép cập nhật hàng loạt các chỉ tiêu được chọn
-- Hỗ trợ chỉnh sửa các trường: lĩnh vực, chứng nhận, nguồn, phương pháp, đơn vị, giá, kỹ thuật viên
-- Tích hợp TinyMCE cho chỉnh sửa định dạng hiển thị
-- Bảng xem trước thay đổi với highlight các trường sẽ được cập nhật
+- **Bảng xem trước thay đổi**: Với highlight các trường sẽ được cập nhật.
 
-#### Tính năng chính:
+- **Tính năng chính**: Validation thông minh chỉ cập nhật các trường có thay đổi thực sự, xem trước tất cả thay đổi trước khi thực hiện, hỗ trợ cập nhật định dạng hiển thị (mặc định và tiếng Anh), thông báo toast khi hoàn thành hoặc gặp lỗi.
 
-- Validation thông minh chỉ cập nhật các trường có thay đổi thực sự
-- Xem trước tất cả thay đổi trước khi thực hiện
-- Hỗ trợ cập nhật định dạng hiển thị (mặc định và tiếng Anh)
-- Thông báo toast khi hoàn thành hoặc gặp lỗi
+#### Cải thiện xử lý dữ liệu và API
 
-### 3. Cải thiện xử lý dữ liệu và API
+- **Nâng cao fetchAnalysisData**: Thêm logging chi tiết cho debug, cải thiện xử lý filter với nhiều loại dữ liệu khác nhau, hỗ trợ filter nâng cao cho deadline, doc_id, result_value, tối ưu hóa debounce để giảm số lượng API calls không cần thiết.
 
-#### Nâng cao fetchAnalysisData
+- **Cải thiện fetchParameters**: Lọc parameters theo context hiện tại (sample_uid, parameter_name, etc.), hỗ trợ filter theo nhiều tiêu chí cùng lúc, cải thiện hiệu suất với caching và debounce.
 
-- Thêm logging chi tiết cho việc debug
-- Cải thiện xử lý filter với nhiều loại dữ liệu khác nhau
-- Hỗ trợ filter nâng cao cho deadline, doc_id, result_value
-- Tối ưu hóa debounce để giảm số lượng API calls không cần thiết
+#### Cải thiện validation và xử lý lỗi
 
-#### Cải thiện fetchParameters
+- **Validation technician_uid**: Kiểm tra tồn tại của technician_uid trong danh sách kỹ thuật viên, thêm warning logs cho các UID không hợp lệ, rollback state khi API call thất bại.
 
-- Lọc parameters theo context hiện tại (sample_uid, parameter_name, etc.)
-- Hỗ trợ filter theo nhiều tiêu chí cùng lúc
-- Cải thiện hiệu suất với caching và debounce
+- **Xử lý lỗi toàn diện**: Thêm try-catch blocks cho tất cả API calls, thông báo lỗi chi tiết cho người dùng, rollback UI state khi cần thiết.
 
-### 4. Cải thiện validation và xử lý lỗi
+#### Cải thiện hiệu suất
 
-#### Validation technician_uid
+- **Debouncing API calls**: Giảm số lượng API calls không cần thiết, tối ưu hóa thời gian debounce (100ms cho filter, 300ms cho search), sử dụng refs để ngăn chặn multiple concurrent requests.
 
-- Kiểm tra tồn tại của technician_uid trong danh sách kỹ thuật viên
-- Thêm warning logs cho các UID không hợp lệ
-- Rollback state khi API call thất bại
+- **Memory management**: Cleanup TinyMCE editors khi component unmount, tối ưu hóa re-renders với useMemo và useCallback.
 
-#### Xử lý lỗi toàn diện
+#### Cải thiện UI/UX
 
-- Thêm try-catch blocks cho tất cả API calls
-- Thông báo lỗi chi tiết cho người dùng
-- Rollback UI state khi cần thiết
+- **Responsive design**: Dropdown tự động điều chỉnh kích thước theo viewport, grid layout cho technician selection, scrollbars tùy chỉnh với thin design.
 
-### 5. Cải thiện hiệu suất
+- **Visual feedback**: Highlight các trường sẽ thay đổi trong bảng xem trước, loading states và progress indicators, toast notifications cho user feedback.
 
-#### Debouncing API calls
+#### Bug fixes và stability improvements
 
-- Giảm số lượng API calls không cần thiết
-- Tối ưu hóa thời gian debounce (100ms cho filter, 300ms cho search)
-- Sử dụng refs để ngăn chặn multiple concurrent requests
+- **Fix dropdown positioning**: Tính toán vị trí dropdown để tránh overflow, handle click outside để đóng dropdown, prevent memory leaks từ event listeners.
 
-#### Memory management
+- **Improve data consistency**: Validation dữ liệu trước khi gửi API, consistent error handling patterns, better state management cho complex interactions.
 
-- Cleanup TinyMCE editors khi component unmount
-- Tối ưu hóa re-renders với useMemo và useCallback
+### Phiên bản V2.5 (25/8/2025)
 
-### 6. Cải thiện UI/UX
+#### Tổ chức lại cấu trúc components
 
-#### Responsive design
+- **Di chuyển components vào folder lab/**: Di chuyển các components liên quan đến lab như Editor.jsx, LabDocument.jsx, ProcessingAnalysis.jsx, ProcessingSample.jsx vào thư mục src/components/lab/ để tổ chức tốt hơn.
 
-- Dropdown tự động điều chỉnh kích thước theo viewport
-- Grid layout cho technician selection
-- Scrollbars tùy chỉnh với thin design
+- **Thêm các components mới**: lab/AnalysesExtract.jsx, lab/LabBulkUpdate.jsx, lab/DocumentEditor.jsx.
 
-#### Visual feedback
+#### Thêm tính năng mới
 
-- Highlight các trường sẽ thay đổi trong bảng xem trước
-- Loading states và progress indicators
-- Toast notifications cho user feedback
+- **DOCUMENT_PREVIEW_FEATURE.md**: Thêm tài liệu mô tả tính năng preview document.
 
-### 7. Bug fixes và stability improvements
+- **PAGINATION_FIX.md**: Thêm tài liệu về fix pagination.
 
-#### Fix dropdown positioning
+- **Report.jsx**: Thêm component Report với nhiều cải tiến.
 
-- Tính toán vị trí dropdown để tránh overflow
-- Handle click outside để đóng dropdown
-- Prevent memory leaks từ event listeners
+- **EnvironmentSwitcher.jsx**: Thêm component để chuyển đổi môi trường.
 
-#### Improve data consistency
+#### Cập nhật và cải thiện components hiện có
 
-- Validation dữ liệu trước khi gửi API
-- Consistent error handling patterns
-- Better state management cho complex interactions
+- **Dashboard.jsx**: Cập nhật với các thay đổi mới.
+
+- **SampleInfor.jsx**: Cải thiện thông tin mẫu.
+
+- **ReceiptInfor.jsx**: Cập nhật thông tin biên nhận.
+
+- **FileInfor.jsx**: Sửa lỗi call API.
+
+#### Xóa các files không sử dụng
+
+- Xóa các files backup và test như DocumentEditor_backup.jsx, public/ProcessingAnalysis.js, test_column_width_buttons.html, etc.
+
+- Di chuyển assets như IRDOP-LOGO.png vào src/assets/.
+
+### Các phiên bản trước
+
+#### V2.30 (1/8/2025)
+
+- Các cải tiến liên quan đến file và xử lý.
+
+#### V2.10 (26/7/2025)
+
+- FileInfo: fix call API.
+
+- Tích hợp Gemini.
+
+#### v2.0 (3/7/2025)
+
+- Tính năng file và Gemini.
+
+- Email functionality.
+
+- Các fixes khác.
 
 ---
 
 **Tác động tổng thể:**
 
-- Cải thiện đáng kể trải nghiệm người dùng trong việc quản lý chỉ tiêu và kỹ thuật viên
-- Giảm thời gian xử lý với tính năng cập nhật hàng loạt
-- Tăng độ ổn định và reliability của ứng dụng
-- Cải thiện hiệu suất với optimized API calls và debouncing
+- Cải thiện đáng kể trải nghiệm người dùng trong việc quản lý chỉ tiêu và kỹ thuật viên.
+- Giảm thời gian xử lý với tính năng cập nhật hàng loạt.
+- Tăng độ ổn định và reliability của ứng dụng.
+- Cải thiện hiệu suất với optimized API calls và debouncing.
+- Tổ chức lại cấu trúc code để dễ bảo trì hơn.

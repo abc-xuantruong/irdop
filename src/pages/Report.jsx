@@ -101,6 +101,7 @@ export default function MultiPageEditor() {
 					}
 
 					const pptData = response.data || [];
+					console.log(pptData);
 					setPptList(pptData);
 
 					// If there are reports available

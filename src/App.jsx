@@ -21,6 +21,7 @@ import Result from './components/Analysis_result';
 import PrintSampleTag from './components/PrintSampleTag';
 import FileInfor from './pages/FileInfor';
 import Editor from './components/lab/Editor';
+import ExperimentLog from './components/lab/ExperimentLog';
 import AuthGuard from './components/AuthGuard';
 
 const App = () => {
@@ -55,6 +56,7 @@ const App = () => {
 										<Route path="/login" element={<Login />} />
 										<Route path="library/client" element={<ClientInfor />} />
 										<Route path="/files" element={<FileInfor />} />
+										<Route path="/experiment-log" element={<ExperimentLog />} />
 									</Routes>
 								</div>
 								<Footer />

@@ -17,6 +17,7 @@ import {
 } from 'react-icons/fa';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import EmailForm from '../components/EmailForm';
 
 const FileInfor = () => {
 	const { setCurrentTitlePage, getIdenByUid, currentUser } = useContext(GlobalContext);
@@ -66,10 +67,49 @@ const FileInfor = () => {
 	const [selectedFiles, setSelectedFiles] = useState(new Set());
 	const [processing, setProcessing] = useState(false);
 	const [initialized, setInitialized] = useState(false);
+	const [selectedUserTags, setSelectedUserTags] = useState([]);
+	const [showUserTagDropdown, setShowUserTagDropdown] = useState(false);
+
+	// Email related states
+	const [emailList, setEmailList] = useState([]);
+	const [showEmailModal, setShowEmailModal] = useState(false);
+	const [currentEmailIndex, setCurrentEmailIndex] = useState(0);
+	const [emailFormData, setEmailFormData] = useState({
+		from: '',
+		to: '',
+		subject: '',
+		body: '',
+		attachments: [],
+	});
 
 	// Add refs to prevent multiple API calls
 	const isLoadingRef = useRef(false);
 	const lastFetchParamsRef = useRef(null);
+
+	// LocalStorage keys
+	const STORAGE_KEYS = {
+		CURRENT_MODE: 'fileInfor_currentMode',
+		SELECTED_USER_TAGS: 'fileInfor_selectedUserTags',
+	};
+
+	// Utility functions for localStorage
+	const saveToLocalStorage = (key, value) => {
+		try {
+			localStorage.setItem(key, JSON.stringify(value));
+		} catch (error) {
+			console.error('Error saving to localStorage:', error);
+		}
+	};
+
+	const loadFromLocalStorage = (key, defaultValue) => {
+		try {
+			const item = localStorage.getItem(key);
+			return item ? JSON.parse(item) : defaultValue;
+		} catch (error) {
+			console.error('Error loading from localStorage:', error);
+			return defaultValue;
+		}
+	};
 
 	// Function to fetch identity names for files without identityName
 	const fetchIdentityNames = async (files) => {
@@ -103,6 +143,13 @@ const FileInfor = () => {
 	useEffect(() => {
 		setCurrentTitlePage('Danh sách File');
 
+		// Load from localStorage
+		const savedMode = loadFromLocalStorage(STORAGE_KEYS.CURRENT_MODE, 'personal');
+		const savedUserTags = loadFromLocalStorage(STORAGE_KEYS.SELECTED_USER_TAGS, []);
+
+		setCurrentMode(savedMode);
+		setSelectedUserTags(savedUserTags);
+
 		// Handle URL search parameter on mount
 		const urlParams = new URLSearchParams(location.search);
 		const searchFromUrl = urlParams.get('searchTerm');
@@ -114,6 +161,19 @@ const FileInfor = () => {
 
 		setInitialized(true);
 	}, [setCurrentTitlePage]); // Only run once on mount
+
+	// Save to localStorage when state changes
+	useEffect(() => {
+		if (initialized) {
+			saveToLocalStorage(STORAGE_KEYS.CURRENT_MODE, currentMode);
+		}
+	}, [currentMode, initialized]);
+
+	useEffect(() => {
+		if (initialized) {
+			saveToLocalStorage(STORAGE_KEYS.SELECTED_USER_TAGS, selectedUserTags);
+		}
+	}, [selectedUserTags, initialized]);
 
 	// Main effect to handle data fetching - ONLY ONE useEffect for data fetching
 	useEffect(() => {
@@ -130,6 +190,7 @@ const FileInfor = () => {
 			currentSort,
 			currentStatus,
 			fileNameInclude: filters.fileNameInclude,
+			selectedUserTags,
 		});
 
 		// Prevent duplicate calls with same parameters
@@ -166,6 +227,7 @@ const FileInfor = () => {
 		currentSort,
 		currentStatus,
 		filters.fileNameInclude,
+		selectedUserTags,
 	]);
 
 	// Function to fetch trash files
@@ -212,6 +274,17 @@ const FileInfor = () => {
 		setCurrentPage(1);
 		// Reset fetch params to allow new fetch
 		lastFetchParamsRef.current = null;
+	};
+
+	// Function to handle user tags selection change
+	const handleUserTagChange = (tag, isChecked) => {
+		setSelectedUserTags((prev) => {
+			const newTags = isChecked ? [...prev, tag] : prev.filter((t) => t !== tag);
+			setCurrentPage(1);
+			// Reset fetch params to allow new fetch
+			lastFetchParamsRef.current = null;
+			return newTags;
+		});
 	};
 
 	// Function to handle column header click for sorting
@@ -308,6 +381,11 @@ const FileInfor = () => {
 				requestBody.fileNameInclude = filters.fileNameInclude;
 			}
 
+			// Add selected user tags if any
+			if (selectedUserTags.length > 0) {
+				requestBody.userTags = selectedUserTags;
+			}
+
 			const response = await apiPost('https://red.irdop.org/v1/file/get_by_page', requestBody);
 
 			if (response.status === 200 && response.data) {
@@ -326,7 +404,7 @@ const FileInfor = () => {
 		} finally {
 			setLoading(false);
 		}
-	}, [currentMode, currentPage, filesPerPage, currentSort, currentStatus, filters.fileNameInclude]);
+	}, [currentMode, currentPage, filesPerPage, currentSort, currentStatus, filters.fileNameInclude, selectedUserTags]);
 
 	// Function to handle search
 	const handleSearch = useCallback(
@@ -356,6 +434,11 @@ const FileInfor = () => {
 				// Add fileNameInclude filter if selected
 				if (filters.fileNameInclude) {
 					requestBody.fileNameInclude = filters.fileNameInclude;
+				}
+
+				// Add selected user tags if any
+				if (selectedUserTags.length > 0) {
+					requestBody.userTags = selectedUserTags;
 				}
 
 				const response = await apiPost('https://red.irdop.org/v1/file/get_by_page', requestBody);
@@ -394,6 +477,7 @@ const FileInfor = () => {
 			currentSort,
 			currentStatus,
 			filters.fileNameInclude,
+			selectedUserTags,
 			location.search,
 			navigate,
 		],
@@ -474,7 +558,9 @@ const FileInfor = () => {
 				event.target.closest('th') ||
 				event.target.closest('input[type="checkbox"]') ||
 				event.target.closest('select') ||
-				event.target.closest('input[type="text"]');
+				event.target.closest('input[type="text"]') ||
+				event.target.closest('.user-tag-dropdown') ||
+				event.target.closest('.user-tag-button');
 
 			if (!isClickInsideFilter) {
 				setShowFilters({
@@ -485,6 +571,7 @@ const FileInfor = () => {
 					fileNameInclude: false,
 				});
 				setShowSortMenu(false);
+				setShowUserTagDropdown(false);
 			}
 		};
 
@@ -504,6 +591,16 @@ const FileInfor = () => {
 		'Phiếu phân tích',
 		'Biên bản bàn giao',
 		'Specification / COA',
+	];
+
+	const userTagOptions = [
+		'Đơn hàng',
+		'Phiếu gửi mẫu',
+		'Nhật ký thử nghiệm',
+		'Biên bản thử nghiệm',
+		'Ảnh mẫu',
+		'Phiếu kết quả thử nghiệm',
+		'Tài liệu khác',
 	];
 
 	// Function to handle file actions (view/download)
@@ -979,34 +1076,99 @@ const FileInfor = () => {
 		}
 	};
 
-	// Function to process selected files
-	const handleProcessFiles = async () => {
+	// Function to send email for selected files
+	const handleSendEmail = async () => {
 		if (selectedFiles.size === 0) {
-			toast.error('Vui lòng chọn file để xử lý');
+			toast.error('Vui lòng chọn file để gửi email');
 			return;
 		}
 
 		setProcessing(true);
 		try {
-			const response = await apiPost('https://red.irdop.org/v1/file/process_file', {
+			const response = await apiPost('https://red.irdop.org/v1/receipt/send_file', {
 				fileIds: Array.from(selectedFiles),
 			});
 
-			if (response.status === 200) {
-				toast.success(`Đã gửi ${selectedFiles.size} file để xử lý`);
-				setSelectedFiles(new Set());
-
-				// Refresh file list
-				refreshCurrentData();
+			if (response.status === 200 && Array.isArray(response.data) && response.data.length > 0) {
+				// Set email list and show first email
+				setEmailList(response.data);
+				setCurrentEmailIndex(0);
+				setEmailFormData({
+					from: response.data[0].from || 'kiemnghiem@irdop.org',
+					to: response.data[0].to || '',
+					subject: response.data[0].subject || '',
+					body: response.data[0].body || '',
+					attachments: response.data[0].attachments || [],
+				});
+				setShowEmailModal(true);
 			} else {
-				toast.error('Lỗi khi xử lý file');
+				toast.error('Lỗi khi tạo email');
 			}
 		} catch (error) {
-			console.error('Process files error:', error);
-			toast.error('Lỗi kết nối khi xử lý file');
+			console.error('Send email error:', error);
+			toast.error('Lỗi kết nối khi tạo email');
 		} finally {
 			setProcessing(false);
 		}
+	};
+
+	// Function to send individual email
+	const handleSendIndividualEmail = async (emailData) => {
+		try {
+			const response = await apiPost('https://red.irdop.org/v1/mail/send/receipt', {
+				from: emailData.from,
+				to: emailData.to,
+				subject: emailData.subject,
+				body: emailData.body,
+				attachments: emailData.attachments,
+				isHtml: emailData.isHtml,
+			});
+
+			if (response.status === 200) {
+				toast.success(`Email ${currentEmailIndex + 1}/${emailList.length} đã được gửi thành công`);
+
+				// Check if there are more emails to send
+				if (currentEmailIndex < emailList.length - 1) {
+					// Move to next email
+					const nextIndex = currentEmailIndex + 1;
+					setCurrentEmailIndex(nextIndex);
+					setEmailFormData({
+						from: emailList[nextIndex].from || 'kiemnghiem@irdop.org',
+						to: emailList[nextIndex].to || '',
+						subject: emailList[nextIndex].subject || '',
+						body: emailList[nextIndex].body || '',
+						attachments: emailList[nextIndex].attachments || [],
+					});
+				} else {
+					// All emails sent, close modal
+					toast.success('Tất cả email đã được gửi thành công!');
+					setShowEmailModal(false);
+					setSelectedFiles(new Set());
+					refreshCurrentData();
+				}
+			} else {
+				toast.error(`Lỗi khi gửi email ${currentEmailIndex + 1}`);
+			}
+		} catch (error) {
+			console.error('Send individual email error:', error);
+			toast.error(`Lỗi kết nối khi gửi email ${currentEmailIndex + 1}`);
+		}
+	};
+
+	// Function to close email modal
+	const handleCloseEmailModal = () => {
+		setShowEmailModal(false);
+		setEmailList([]);
+		setCurrentEmailIndex(0);
+		setEmailFormData({
+			from: '',
+			to: '',
+			subject: '',
+			body: '',
+			attachments: [],
+		});
+		setSelectedFiles(new Set());
+		refreshCurrentData();
 	};
 
 	return (
@@ -1112,6 +1274,49 @@ const FileInfor = () => {
 									<span>{currentMode === 'personal' ? 'Cá nhân' : 'Toàn bộ'}</span>
 								</button>
 
+								{/* User Tags Filter */}
+								<div className="flex items-center gap-1 whitespace-nowrap relative">
+									<label className="text-sm text-gray-600 shrink-0">Danh mục:</label>
+									<button
+										onClick={() => setShowUserTagDropdown(!showUserTagDropdown)}
+										className="px-3 py-1 h-8 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm whitespace-nowrap flex items-center gap-2 user-tag-button"
+									>
+										<span>{selectedUserTags.length > 0 ? `${selectedUserTags.length} đã chọn` : 'Chọn danh mục'}</span>
+										<FaFilter size={12} />
+									</button>
+									{showUserTagDropdown && (
+										<div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto z-10 user-tag-dropdown mt-1">
+											<div className="p-2">
+												{userTagOptions.map((tag) => (
+													<label key={tag} className="flex items-center py-1 px-1 hover:bg-gray-100 cursor-pointer">
+														<input
+															type="checkbox"
+															checked={selectedUserTags.includes(tag)}
+															onChange={(e) => handleUserTagChange(tag, e.target.checked)}
+															className="mr-2"
+														/>
+														<span className="text-sm">{tag}</span>
+													</label>
+												))}
+												{selectedUserTags.length > 0 && (
+													<div className="border-t border-gray-200 mt-2 pt-2">
+														<button
+															onClick={() => {
+																setSelectedUserTags([]);
+																setCurrentPage(1);
+																lastFetchParamsRef.current = null;
+															}}
+															className="w-full text-left text-sm text-red-600 hover:text-red-800 py-1 px-1"
+														>
+															Xóa tất cả
+														</button>
+													</div>
+												)}
+											</div>
+										</div>
+									)}
+								</div>
+
 								{/* Action Buttons */}
 								<button
 									onClick={toggleSelectColumn}
@@ -1127,7 +1332,7 @@ const FileInfor = () => {
 
 								{showSelectColumn && (
 									<button
-										onClick={handleProcessFiles}
+										onClick={handleSendEmail}
 										disabled={selectedFiles.size === 0 || processing}
 										className={`max-w-28 px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${
 											selectedFiles.size > 0 && !processing
@@ -1137,7 +1342,7 @@ const FileInfor = () => {
 									>
 										{processing && <FaSync className="animate-spin" size={12} />}
 										{!processing && <FaSync size={12} />}
-										Xử lý file ({selectedFiles.size})
+										Gửi email ({selectedFiles.size})
 									</button>
 								)}
 								<div className="flex items-center gap-1 whitespace-nowrap">
@@ -1322,16 +1527,25 @@ const FileInfor = () => {
 									<tr>
 										{showSelectColumn && (
 											<th className="py-1 px-2 border text-left w-12">
-												<input
-													type="checkbox"
-													checked={
-														selectedFiles.size > 0 &&
-														selectedFiles.size ===
-															(isTrashMode ? trashFiles : isSearchMode ? searchResults : fileList).length
-													}
-													onChange={handleSelectAll}
-													className="cursor-pointer"
-												/>
+												<div
+													className="cursor-pointer hover:bg-gray-50 p-1 rounded"
+													onClick={(e) => {
+														// Prevent event bubbling when clicking on checkbox
+														if (e.target.type === 'checkbox') return;
+														handleSelectAll();
+													}}
+												>
+													<input
+														type="checkbox"
+														checked={
+															selectedFiles.size > 0 &&
+															selectedFiles.size ===
+																(isTrashMode ? trashFiles : isSearchMode ? searchResults : fileList).length
+														}
+														onChange={handleSelectAll}
+														className="cursor-pointer"
+													/>
+												</div>
 											</th>
 										)}
 										<th className="py-1 px-2 border text-left max-w-[430px]">
@@ -1442,7 +1656,7 @@ const FileInfor = () => {
 											{showFilters.userTags && (
 												<div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded mt-1 shadow-lg max-h-60 overflow-y-auto z-10 filter-dropdown">
 													<div className="p-2">
-														{categoryOptions.map((category) => (
+														{userTagOptions.map((category) => (
 															<label
 																key={category}
 																className="flex items-center py-1 px-1 hover:bg-gray-100 cursor-pointer"
@@ -1479,7 +1693,14 @@ const FileInfor = () => {
 											paginatedFiles.map((file, index) => (
 												<tr key={index}>
 													{showSelectColumn && (
-														<td className="py-1 px-2 border text-left w-12">
+														<td
+															className="py-1 px-2 border text-left w-12 cursor-pointer hover:bg-gray-50"
+															onClick={(e) => {
+																// Prevent event bubbling when clicking on checkbox
+																if (e.target.type === 'checkbox') return;
+																handleFileSelectCheckbox(file.id, !selectedFiles.has(file.id));
+															}}
+														>
 															<input
 																type="checkbox"
 																checked={selectedFiles.has(file.id)}
@@ -1603,7 +1824,7 @@ const FileInfor = () => {
 													<td className="py-1 px-2 border text-left">
 														{editingFile === file.id ? (
 															<div className="flex flex-wrap gap-1">
-																{categoryOptions.map((category) => (
+																{userTagOptions.map((category) => (
 																	<label key={category} className="flex items-center text-xs">
 																		<input
 																			type="checkbox"
@@ -1857,7 +2078,7 @@ const FileInfor = () => {
 						<div className="mb-4">
 							<label className="block text-sm font-medium text-gray-700 mb-2">Danh mục</label>
 							<div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2">
-								{categoryOptions.map((category) => (
+								{userTagOptions.map((category) => (
 									<label key={category} className="flex items-center py-1 px-1 hover:bg-gray-100 cursor-pointer">
 										<input
 											type="checkbox"
@@ -1905,6 +2126,22 @@ const FileInfor = () => {
 					</div>
 				</div>
 			)}
+
+			{/* EmailForm Component */}
+			<EmailForm
+				from={emailFormData.from}
+				to={emailFormData.to}
+				subject={emailFormData.subject}
+				body={emailFormData.body}
+				attachments={emailFormData.attachments}
+				foreignKeyUIDs={selectedFiles.size > 0 ? Array.from(selectedFiles) : []}
+				isVisible={showEmailModal}
+				onClose={handleCloseEmailModal}
+				onSubmit={handleSendIndividualEmail}
+				emailIndex={currentEmailIndex}
+				totalEmails={emailList.length}
+				title="Phiếu Kết Quả Thử Nghiệm"
+			/>
 		</div>
 	);
 };

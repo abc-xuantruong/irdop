@@ -130,8 +130,8 @@ const SampleInfor = () => {
 	const [editingMatrixField, setEditingMatrixField] = useState(null); // Add state to track which matrix field is being edited
 	const [editingProtocolField, setEditingProtocolField] = useState(null); // Add state to track which protocol field is being edited
 	const [sampleDropdownVisible, setSampleDropdownVisible] = useState(false);
+	const [refreshTrigger, setRefreshTrigger] = useState(0);
 	const [isBulkDeadlineVisible, setIsBulkDeadlineVisible] = useState(false);
-	const [bulkDeadlineDate, setBulkDeadlineDate] = useState(new Date());
 
 	// Add new state variables for unique lists and dropdowns
 	const [uniqueParameterNames, setUniqueParameterNames] = useState([]);
@@ -404,6 +404,16 @@ const SampleInfor = () => {
 				receipt_id: analysis.receipt_id,
 				field: newValue,
 				modified_by_uid: currentUser.identity_uid,
+				display_style: analysis.display_style || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
 			};
 
 			// Send the update to the server
@@ -726,6 +736,16 @@ const SampleInfor = () => {
 				receipt_id: analysis.receipt_id,
 				modified_by_uid: currentUser.identity_uid,
 				...changedFields,
+				display_style: analysis.display_style || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
 			};
 
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
@@ -776,6 +796,16 @@ const SampleInfor = () => {
 				receipt_id: analysis.receipt_id,
 				modified_by_uid: currentUser.identity_uid,
 				...fieldBeingUpdated,
+				display_style: analysis.display_style || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
 			};
 
 			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
@@ -1292,7 +1322,8 @@ const SampleInfor = () => {
 		navigate(`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sampleUid}`);
 	};
 	const handleResultValueClick = (order) => {
-		const fieldKey = `result_value-${order.sample_id}-${order.id}`;
+		if (!order) return;
+		const fieldKey = `result_value-${order.id}`;
 		setEditingField(fieldKey);
 		const originalValue = order.result_value ? String(order.result_value) : '';
 		setInputValue(originalValue);
@@ -1305,7 +1336,7 @@ const SampleInfor = () => {
 	};
 
 	const handleResultUnitClick = (order) => {
-		const fieldKey = `result_unit-${order.sample_id}-${order.id}`;
+		const fieldKey = `result_unit-${order.id}`;
 		setEditingField(fieldKey);
 		const originalValue = order.result_unit ? String(order.result_unit) : '';
 		setInputValue(originalValue);
@@ -1320,8 +1351,8 @@ const SampleInfor = () => {
 		const currentField = editingField;
 		const fieldParts = currentField.split('-');
 		const fieldType = fieldParts[0];
-		const analysisId = parseInt(fieldParts[2]);
-
+		const analysisId = fieldParts[1]; // Keep as string to handle both numeric and text IDs
+		console.log(newValue, currentField, analysisId);
 		// Get original value for comparison
 		const originalValue = originalValues[currentField] || '';
 
@@ -1341,7 +1372,8 @@ const SampleInfor = () => {
 
 		setInputValue(newValue);
 		const updatedAnalytes = listAnalytes.map((item) => {
-			if (item.id === analysisId) {
+			if (item.id == analysisId) {
+				// Use loose equality to handle both string and number comparisons
 				if (fieldType === 'result_value') {
 					return { ...item, result_value: newValue };
 				} else if (fieldType === 'result_unit') {
@@ -1357,7 +1389,7 @@ const SampleInfor = () => {
 		setEditingField(null);
 
 		try {
-			const analysis = updatedAnalytes.find((item) => item.id === analysisId);
+			const analysis = updatedAnalytes.find((item) => item.id == analysisId); // Use loose equality
 
 			// Create minimal update object with only required fields
 			const updateData = {
@@ -1365,6 +1397,16 @@ const SampleInfor = () => {
 				sample_id: analysis.sample_id,
 				receipt_id: analysis.receipt_id,
 				modified_by_uid: currentUser.identity_uid,
+				display_style: analysis.display_style || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
 			};
 			// Add only the field being updated
 			if (fieldType === 'result_value') {
@@ -1942,14 +1984,23 @@ const SampleInfor = () => {
 
 	const technician = (param) => {
 		// Kiểm tra nếu technician_uid có tồn tại và hợp lệ
-		if (!param.technician_uid || param.technician_uid.trim() === '') {
+		if (!param || !param.technician_uid || param.technician_uid.trim() === '') {
+			return null;
+		}
+
+		// Kiểm tra nếu technicians array có dữ liệu
+		if (!technicians || technicians.length === 0) {
+			console.warn('Technicians list is empty or not loaded');
 			return null;
 		}
 
 		const iden = technicians.find((identity) => identity.identity_uid === param.technician_uid);
 		if (!iden) {
 			// Nếu không tìm thấy technician, log warning và return null
-			console.warn(`Technician with UID ${param.technician_uid} not found in technicians list`);
+			console.warn(
+				`Technician with UID ${param.technician_uid} not found in technicians list. Available technicians:`,
+				technicians.map((t) => ({ uid: t.identity_uid, name: t.identity_name, alias: t.alias })),
+			);
 			return null;
 		}
 
@@ -1958,15 +2009,14 @@ const SampleInfor = () => {
 	};
 
 	const handleTechnicianClick = (order) => {
-		setEditingField(`technician_uid-${order.sample_id}-${order.id}`);
+		if (!order) return;
+		setEditingField(`technician_uid-${order.id}`);
 		setInputValue(order.technician_uid || '');
 		setIsEditorVisible(true);
 	};
 
 	const toggleTechnicianDropdown = (index, event) => {
 		const buttonRect = event.target.getBoundingClientRect(); // Lấy vị trí button trên màn hình
-		onUpdateAnalysis;
-
 		// Tính toán vị trí để dropdown không bị tràn ra ngoài màn hình
 		const viewportWidth = window.innerWidth;
 		const dropdownWidth = Math.min(600, viewportWidth - 40); // Chiều rộng thực tế của dropdown
@@ -2007,7 +2057,8 @@ const SampleInfor = () => {
 		const originalAnalytes = [...listAnalytes];
 
 		const updatedAnalytes = listAnalytes.map((item) => {
-			if (item.id === index) {
+			if (item.id == index) {
+				// Use loose equality to handle both string and number comparisons
 				return { ...item, technician_uid: identity_uid };
 			}
 			return item;
@@ -2020,7 +2071,7 @@ const SampleInfor = () => {
 		setTechnicianDropdownVisible(null);
 
 		// Find the updated analysis item
-		const analysis = updatedAnalytes.find((item) => item.id === index);
+		const analysis = updatedAnalytes.find((item) => item.id == index); // Use loose equality
 		try {
 			// Create minimal update object with only required fields
 			const updateData = {
@@ -2029,6 +2080,16 @@ const SampleInfor = () => {
 				receipt_id: analysis.receipt_id,
 				technician_uid: identity_uid,
 				modified_by_uid: currentUser.identity_uid,
+				display_style: analysis.display_style || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
 			};
 
 			// Send the update to the server
@@ -2148,6 +2209,16 @@ const SampleInfor = () => {
 				receipt_id: analysis.receipt_id,
 				deadline: newDeadline,
 				modified_by_uid: currentUser.identity_uid,
+				display_style: analysis.display_style || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
 			};
 
 			// Send the update to the server
@@ -2191,7 +2262,8 @@ const SampleInfor = () => {
 		if (
 			event.target.closest('.dropdown-button') ||
 			event.target.closest('.dropdown-item') ||
-			event.target.closest('.react-datepicker')
+			event.target.closest('.react-datepicker') ||
+			event.target.closest('.technician-dropdown')
 		) {
 			return;
 		}
@@ -2432,6 +2504,16 @@ const SampleInfor = () => {
 				receipt_id: analysis.receipt_id,
 				protocol_code: analysis.protocol_code || '',
 				modified_by_uid: currentUser.identity_uid,
+				display_style: analysis.display_style || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
 			};
 
 			// Send the update directly to the analysis API
@@ -2490,6 +2572,16 @@ const SampleInfor = () => {
 				receipt_id: analysis.receipt_id,
 				protocol_source: newValue,
 				modified_by_uid: currentUser.identity_uid,
+				display_style: analysis.display_style || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
 			};
 
 			// Send the update to the server
@@ -2604,6 +2696,16 @@ const SampleInfor = () => {
 				receipt_id: analysis.receipt_id,
 				ex_info: exInfo,
 				modified_by_uid: currentUser.identity_uid,
+				display_style: analysis.display_style || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
 			};
 
 			// Send the update to the server
@@ -2822,6 +2924,16 @@ const SampleInfor = () => {
 						receipt_id: analyte.receipt_id,
 						technician_uid: selectedTechnician,
 						modified_by_uid: currentUser.identity_uid,
+						display_style: analyte.display_style || [
+							{
+								label: 'default',
+								value: '',
+							},
+							{
+								label: 'eng',
+								value: '',
+							},
+						],
 					};
 
 					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
@@ -3046,6 +3158,16 @@ const SampleInfor = () => {
 							receipt_id: analyte.receipt_id,
 							field: field,
 							modified_by_uid: currentUser.identity_uid,
+							display_style: analyte.display_style || [
+								{
+									label: 'default',
+									value: '',
+								},
+								{
+									label: 'eng',
+									value: '',
+								},
+							],
 						};
 
 						await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
@@ -3107,6 +3229,16 @@ const SampleInfor = () => {
 						receipt_id: analyte.receipt_id,
 						deadline: newDeadline,
 						modified_by_uid: currentUser.identity_uid,
+						display_style: analyte.display_style || [
+							{
+								label: 'default',
+								value: '',
+							},
+							{
+								label: 'eng',
+								value: '',
+							},
+						],
 					};
 
 					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
@@ -3225,7 +3357,7 @@ const SampleInfor = () => {
 							(item) => item.parameter_name === analyte.parameter_name && item.matrix === analyte.matrix,
 						);
 						if (matchedAnalysis) {
-							return {
+							const updatedAnalyte = {
 								...analyte, // Keep all original properties
 								parameter_name: matchedAnalysis.parameter_name,
 								parameter_uid: matchedAnalysis.parameter_uid || analyte.parameter_uid,
@@ -3236,6 +3368,16 @@ const SampleInfor = () => {
 								display_style: matchedAnalysis.display_style || analyte.display_style,
 								technician_uid: matchedAnalysis.technician_uid || analyte.technician_uid,
 							};
+
+							// Debug logging for technician_uid update
+							console.log(`Updating analysis ${analyte.id}:`, {
+								old_technician_uid: analyte.technician_uid,
+								new_technician_uid: matchedAnalysis.technician_uid,
+								final_technician_uid: updatedAnalyte.technician_uid,
+								technician_found: technicians.find((tech) => tech.identity_uid === updatedAnalyte.technician_uid),
+							});
+
+							return updatedAnalyte;
 						}
 					}
 					return analyte;
@@ -3243,6 +3385,9 @@ const SampleInfor = () => {
 
 				// Update the UI first for better UX
 				setListAnalytes(updatedAnalytes);
+
+				// Force re-render to ensure technician display updates
+				setRefreshTrigger((prev) => prev + 1);
 
 				// Now update each analysis in the database
 				let successCount = 0;
@@ -3262,6 +3407,7 @@ const SampleInfor = () => {
 								protocol_source: analyte.protocol_source || '',
 								field: analyte.field || '',
 								matrix: analyte.matrix || '',
+								technician_uid: analyte.technician_uid || '',
 								modified_by_uid: currentUser.identity_uid,
 								// Ensure display_style from analyte API match is properly included
 								display_style: analyte.display_style || [
@@ -4330,8 +4476,10 @@ const SampleInfor = () => {
 									</td>{' '}
 									<td className="p-1 border relative align-top" onClick={() => handleResultValueClick(order)}>
 										<div className="hover:border-purple-500 hover:border rounded text-center">
-											{editingField === `result_value-${order.sample_id}-${order.id}` && isEditorVisible ? (
-												<TinyMceInput value={inputValue || ''} onUpdate={handleSaveContent} onKey={handleKeyDown} />
+											{editingField === `result_value-${order.id}` && isEditorVisible ? (
+												order && (
+													<TinyMceInput value={inputValue || ''} onUpdate={handleSaveContent} onKey={handleKeyDown} />
+												)
 											) : (
 												<div
 													dangerouslySetInnerHTML={{
@@ -4343,42 +4491,45 @@ const SampleInfor = () => {
 										</div>
 									</td>{' '}
 									<td className="p-1 border relative align-top">
-										{editingField === `result_unit-${order.sample_id}-${order.id}` ? (
+										{editingField === `result_unit-${order.id}` ? (
 											<>
-												<input
-													type="text"
-													id={`result-unit-${order.id}`}
-													className="w-full bg-white border rounded py-0 px-1 text-left"
-													placeholder="Đơn vị"
-													value={inputValue || ''}
-													onChange={(e) => {
-														const newValue = e.target.value;
-														setInputValue(newValue);
-														setUnitInput(newValue);
-														setUnitPage(1);
-														setShowUnitDropdown(newValue.length >= 1); // Show dropdown with at least 1 character for units
-													}}
-													onBlur={() => {
-														// Use a global variable to store the timeout, so we can clear it if needed
-														window.unitBlurTimeout = setTimeout(() => {
-															setShowUnitDropdown(false);
-															// Only save if we haven't already saved from dropdown selection
-															if (!window.unitSavedFromDropdown) {
+												{order && (
+													<input
+														type="text"
+														id={`result-unit-${order.id}`}
+														className="w-full bg-white border rounded py-0 px-1 text-left"
+														placeholder="Đơn vị"
+														value={inputValue || ''}
+														onChange={(e) => {
+															const newValue = e.target.value;
+															setInputValue(newValue);
+															setUnitInput(newValue);
+															setUnitPage(1);
+															setShowUnitDropdown(newValue.length >= 1); // Show dropdown with at least 1 character for units
+														}}
+														onBlur={() => {
+															// Use a global variable to store the timeout, so we can clear it if needed
+															window.unitBlurTimeout = setTimeout(() => {
+																setShowUnitDropdown(false);
+																// Only save if we haven't already saved from dropdown selection
+																if (!window.unitSavedFromDropdown) {
+																	handleSaveContent(inputValue);
+																}
+																window.unitSavedFromDropdown = false;
+															}, 200);
+														}}
+														onKeyDown={(e) => {
+															if (e.key === 'Enter') {
+																e.preventDefault();
 																handleSaveContent(inputValue);
 															}
-															window.unitSavedFromDropdown = false;
-														}, 200);
-													}}
-													onKeyDown={(e) => {
-														if (e.key === 'Enter') {
-															e.preventDefault();
-															handleSaveContent(inputValue);
-														}
-													}}
-													autoFocus
-												/>{' '}
+														}}
+														autoFocus
+													/>
+												)}
 												{showUnitDropdown &&
 													getPaginatedUnits(unitInput).length > 0 &&
+													order &&
 													createPortal(
 														<div
 															className="absolute bg-white border rounded shadow-lg z-[9999]"
@@ -4436,7 +4587,8 @@ const SampleInfor = () => {
 											<div
 												className="hover:border-purple-500 hover:border rounded"
 												onClick={() => {
-													const fieldKey = `result_unit-${order.sample_id}-${order.id}`;
+													if (!order) return;
+													const fieldKey = `result_unit-${order.id}`;
 													setEditingField(fieldKey);
 													const originalValue = order.result_unit || '';
 													setInputValue(originalValue);
@@ -4534,7 +4686,7 @@ const SampleInfor = () => {
 										{technicianDropdownVisible === order.id &&
 											createPortal(
 												<div
-													className="fixed bg-white border rounded shadow-lg z-[99] p-4"
+													className="fixed bg-white border rounded shadow-lg z-[99] p-4 technician-dropdown"
 													style={{
 														top: dropdownPosition.top + 'px',
 														left: dropdownPosition.left + 'px',

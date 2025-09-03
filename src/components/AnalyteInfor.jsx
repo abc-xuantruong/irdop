@@ -19,22 +19,22 @@ const AnalyteInfor = () => {
 	const [editingRow, setEditingRow] = useState(null);
 	const [isAddingNew, setIsAddingNew] = useState(false);
 	const [newAnalyte, setNewAnalyte] = useState({
-		parameter_name: '',
-		field: 'Hóa lý',
+		parameterName: '',
+		scientificField: 'Hóa lý',
 		matrix: '',
-		product_type: '',
+		_deprecated_productType: '',
 		tat_expected: '1 day',
-		default_unit: '',
+		defaultUnit: '',
 		accreditation: '',
-		technician_alias: 'K01',
-		protocol_code: '',
-		parameter_uid: '',
-		protocol_source: 'IRDOP',
-		display_style: [
+		technicianAlias: 'K01',
+		protocolCode: '',
+		parameterId: '',
+		protocolSource: 'IRDOP',
+		displayStyle: [
 			{ label: 'default', value: '' },
 			{ label: 'eng', value: '' },
 		],
-		price: 0,
+		fee: 0,
 	});
 	const [protocolSearch, setProtocolSearch] = useState('');
 
@@ -86,7 +86,7 @@ const AnalyteInfor = () => {
 		totalPages: 0,
 	});
 	const [loading, setLoading] = useState(false);
-	const [columnSort, setColumnSort] = useState('parameter_name');
+	const [columnSort, setColumnSort] = useState('parameterName');
 	const [sortBy, setSortBy] = useState('ASC');
 	const [columnFilters, setColumnFilters] = useState({});
 
@@ -155,7 +155,7 @@ const AnalyteInfor = () => {
 	useEffect(() => {
 		if (technicians.length > 0 && !isFetch) {
 			isFetch = true;
-			fetchAnalytes(1, 100, '', {}, 'parameter_name', 'ASC');
+			fetchAnalytes(1, 100, '', {}, 'parameterName', 'ASC');
 			fetchMatricesList();
 			fetchProtocolSourcesList();
 			fetchUnitsList();
@@ -176,7 +176,7 @@ const AnalyteInfor = () => {
 		let filtered = analytes;
 
 		if (fieldFilter) {
-			filtered = filtered.filter((analyte) => analyte.field === fieldFilter);
+			filtered = filtered.filter((analyte) => analyte.scientificField === fieldFilter);
 		}
 
 		if (matrixFilter) {
@@ -184,11 +184,11 @@ const AnalyteInfor = () => {
 		}
 
 		if (sourceFilter) {
-			filtered = filtered.filter((analyte) => analyte.protocol_source === sourceFilter);
+			filtered = filtered.filter((analyte) => analyte.protocolSource === sourceFilter);
 		}
 
 		if (technicianFilter) {
-			filtered = filtered.filter((analyte) => analyte.technician_alias === technicianFilter);
+			filtered = filtered.filter((analyte) => analyte.technicianAlias === technicianFilter);
 		}
 
 		setFilteredAnalytes(filtered);
@@ -407,7 +407,7 @@ const AnalyteInfor = () => {
 	useEffect(() => {
 		if (editingRow !== null) {
 			const analyte = analytes.find((a) => a.id === editingRow);
-			const displayStyleArray = initializeDisplayStyle(analyte?.display_style);
+			const displayStyleArray = initializeDisplayStyle(analyte?.displayStyle);
 
 			const initEditors = () => {
 				const defaultElement = document.getElementById(`tinymce-${editingRow}-default`);
@@ -417,19 +417,19 @@ const AnalyteInfor = () => {
 					const defaultValue = getDisplayStyleValue(displayStyleArray, 'default');
 					initTinyMCE(`tinymce-${editingRow}-default`, defaultValue, (content) => {
 						const currentAnalyte = analytes.find((a) => a.id === editingRow);
-						const currentDisplayStyle = initializeDisplayStyle(currentAnalyte?.display_style);
+						const currentDisplayStyle = initializeDisplayStyle(currentAnalyte?.displayStyle);
 						const updatedDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'default', content);
-						handleInputChange(editingRow, 'display_style', updatedDisplayStyle);
+						handleInputChange(editingRow, 'displayStyle', updatedDisplayStyle);
 					});
 				}
 
 				if (engElement && window.tinymce) {
 					const engValue = getDisplayStyleValue(displayStyleArray, 'eng');
-					initTinyMCE(`tinymce-${editingRow}-eng`, engValue, (content) => {
+					initTinyMCE(`tinymce-${editingRow}-default`, engValue, (content) => {
 						const currentAnalyte = analytes.find((a) => a.id === editingRow);
-						const currentDisplayStyle = initializeDisplayStyle(currentAnalyte?.display_style);
+						const currentDisplayStyle = initializeDisplayStyle(currentAnalyte?.displayStyle);
 						const updatedDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'eng', content);
-						handleInputChange(editingRow, 'display_style', updatedDisplayStyle);
+						handleInputChange(editingRow, 'displayStyle', updatedDisplayStyle);
 					});
 				}
 
@@ -463,18 +463,18 @@ const AnalyteInfor = () => {
 				const engElement = document.getElementById('tinymce-new-eng');
 
 				if (defaultElement && window.tinymce) {
-					const defaultValue = getDisplayStyleValue(newAnalyte.display_style, 'default');
+					const defaultValue = getDisplayStyleValue(newAnalyte.displayStyle, 'default');
 					initTinyMCE('tinymce-new-default', defaultValue, (content) => {
-						const updatedDisplayStyle = setDisplayStyleValue(newAnalyte.display_style, 'default', content);
-						handleNewAnalyteChange('display_style', updatedDisplayStyle);
+						const updatedDisplayStyle = setDisplayStyleValue(newAnalyte.displayStyle, 'default', content);
+						handleNewAnalyteChange('displayStyle', updatedDisplayStyle);
 					});
 				}
 
 				if (engElement && window.tinymce) {
-					const engValue = getDisplayStyleValue(newAnalyte.display_style, 'eng');
+					const engValue = getDisplayStyleValue(newAnalyte.displayStyle, 'eng');
 					initTinyMCE('tinymce-new-eng', engValue, (content) => {
-						const updatedDisplayStyle = setDisplayStyleValue(newAnalyte.display_style, 'eng', content);
-						handleNewAnalyteChange('display_style', updatedDisplayStyle);
+						const updatedDisplayStyle = setDisplayStyleValue(newAnalyte.displayStyle, 'eng', content);
+						handleNewAnalyteChange('displayStyle', updatedDisplayStyle);
 					});
 				}
 
@@ -513,7 +513,7 @@ const AnalyteInfor = () => {
 		};
 	}, []);
 
-	// Helper functions for display_style array management
+	// Helper functions for displayStyle array management
 	const getDisplayStyleValue = (displayStyleArray, label) => {
 		if (!Array.isArray(displayStyleArray)) return '';
 		const item = displayStyleArray.find((item) => item.label === label);
@@ -566,7 +566,7 @@ const AnalyteInfor = () => {
 		itemsPerPage = 100,
 		searchValue = '',
 		filters = {},
-		sort = 'parameter_name',
+		sort = 'parameterName',
 		sortDirection = 'ASC',
 	) => {
 		try {
@@ -578,17 +578,17 @@ const AnalyteInfor = () => {
 				page: page,
 				columns: [
 					'id',
-					'parameter_name',
-					'field',
+					'parameterName',
+					'scientificField',
 					'matrix',
-					'protocol_source',
-					'protocol_code',
-					'default_unit',
-					'display_style',
-					'price',
+					'protocolSource',
+					'protocolCode',
+					'defaultUnit',
+					'displayStyle',
+					'fee',
 					'accreditation',
-					'technician_alias',
-					'parameter_uid',
+					'technicianAlias',
+					'parameterId',
 				],
 				columnSort: sort,
 				sortBy: sortDirection,
@@ -690,8 +690,8 @@ const AnalyteInfor = () => {
 
 	// Function to extract unique lists from data
 	const extractUniqueLists = (data) => {
-		const parameterNames = [...new Set(data.map((item) => item.parameter_name || '').filter(Boolean))];
-		const protocolCodes = [...new Set(data.map((item) => item.protocol_code || '').filter(Boolean))];
+		const parameterNames = [...new Set(data.map((item) => item.parameterName || '').filter(Boolean))];
+		const protocolCodes = [...new Set(data.map((item) => item.protocolCode || '').filter(Boolean))];
 
 		setUniqueParameterNames(parameterNames);
 		setUniqueProtocolCodes(protocolCodes);
@@ -700,7 +700,7 @@ const AnalyteInfor = () => {
 	// Add filter helper functions
 	const getUniqueFields = () => {
 		const currentList = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
-		return [...new Set(currentList.map((analyte) => analyte.field).filter(Boolean))];
+		return [...new Set(currentList.map((analyte) => analyte.scientificField).filter(Boolean))];
 	};
 
 	const getUniqueMatricesFromCurrent = () => {
@@ -710,17 +710,17 @@ const AnalyteInfor = () => {
 
 	const getUniqueSourcesFromCurrent = () => {
 		const currentList = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
-		return [...new Set(currentList.map((analyte) => analyte.protocol_source).filter(Boolean))];
+		return [...new Set(currentList.map((analyte) => analyte.protocolSource).filter(Boolean))];
 	};
 
 	const getUniqueProtocolCodesFromCurrent = () => {
 		const currentList = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
-		return [...new Set(currentList.map((analyte) => analyte.protocol_code).filter(Boolean))];
+		return [...new Set(currentList.map((analyte) => analyte.protocolCode).filter(Boolean))];
 	};
 
 	const getUniqueUnitsFromCurrent = () => {
 		const currentList = filteredAnalytes.length > 0 ? filteredAnalytes : analytes;
-		return [...new Set(currentList.map((analyte) => analyte.default_unit).filter(Boolean))];
+		return [...new Set(currentList.map((analyte) => analyte.defaultUnit).filter(Boolean))];
 	};
 
 	// Add scroll to top function
@@ -1000,9 +1000,9 @@ const AnalyteInfor = () => {
 	// Handle selection from dropdowns
 	const handleParameterNameSelect = (name) => {
 		if (editingRow !== null) {
-			handleInputChange(editingRow, 'parameter_name', name);
+			handleInputChange(editingRow, 'parameterName', name);
 		} else if (isAddingNew) {
-			handleNewAnalyteChange('parameter_name', name);
+			handleNewAnalyteChange('parameterName', name);
 		}
 		setShowParameterNameDropdown(false);
 	};
@@ -1018,18 +1018,18 @@ const AnalyteInfor = () => {
 
 	const handleProtocolCodeSelect = (code) => {
 		if (editingRow !== null) {
-			handleInputChange(editingRow, 'protocol_code', code);
+			handleInputChange(editingRow, 'protocolCode', code);
 		} else if (isAddingNew) {
-			handleNewAnalyteChange('protocol_code', code);
+			handleNewAnalyteChange('protocolCode', code);
 		}
 		setShowProtocolCodeDropdown(false);
 	};
 
 	const handleUnitSelect = (unit) => {
 		if (editingRow !== null) {
-			handleInputChange(editingRow, 'default_unit', unit);
+			handleInputChange(editingRow, 'defaultUnit', unit);
 		} else if (isAddingNew) {
-			handleNewAnalyteChange('default_unit', unit);
+			handleNewAnalyteChange('defaultUnit', unit);
 		}
 		setShowUnitDropdown(false);
 	};
@@ -1039,10 +1039,10 @@ const AnalyteInfor = () => {
 		setParameterNameInput(value);
 		setParameterNamePage(1);
 		if (editingRow !== null) {
-			handleInputChange(id, 'parameter_name', value);
+			handleInputChange(id, 'parameterName', value);
 			setEditingParameterName(id);
 		} else {
-			handleNewAnalyteChange('parameter_name', value);
+			handleNewAnalyteChange('parameterName', value);
 		}
 		// Reset page when input changes and always show dropdown
 		setParameterNamePage(1);
@@ -1067,10 +1067,10 @@ const AnalyteInfor = () => {
 		setProtocolCodeInput(value);
 		setProtocolCodePage(1);
 		if (editingRow !== null) {
-			handleInputChange(id, 'protocol_code', value);
+			handleInputChange(id, 'protocolCode', value);
 			setEditingProtocolCode(id);
 		} else {
-			handleNewAnalyteChange('protocol_code', value);
+			handleNewAnalyteChange('protocolCode', value);
 		}
 		// Reset page when input changes and always show dropdown
 		setProtocolCodePage(1);
@@ -1081,10 +1081,10 @@ const AnalyteInfor = () => {
 		setUnitInput(value);
 		setUnitPage(1);
 		if (editingRow !== null) {
-			handleInputChange(id, 'default_unit', value);
+			handleInputChange(id, 'defaultUnit', value);
 			setEditingUnit(id);
 		} else {
-			handleNewAnalyteChange('default_unit', value);
+			handleNewAnalyteChange('defaultUnit', value);
 		}
 		const filteredUnits = filterUnits(value);
 		setShowUnitDropdown(true); // Always show dropdown when typing
@@ -1183,7 +1183,7 @@ const AnalyteInfor = () => {
 			// Update local state immediately
 			const updatedAnalytes = analytes.map((analyte) => {
 				if (analyte.id === analyteId) {
-					return { ...analyte, technician_alias: technician.alias }; // Store alias instead of identity_uid
+					return { ...analyte, technicianAlias: technician.alias }; // Store alias instead of identity_uid
 				}
 				return analyte;
 			});
@@ -1228,7 +1228,7 @@ const AnalyteInfor = () => {
 				setListProtocol(response.data || []);
 			}
 			const filteredProtocols = listProtocol.filter(
-				(protocol) => protocol && protocol.protocol_code && protocol.protocol_code.includes(searchTerm || ''),
+				(protocol) => protocol && protocol.protocolCode && protocol.protocolCode.includes(searchTerm || ''),
 			);
 			setProtocols(filteredProtocols || []);
 		} catch (error) {
@@ -1251,7 +1251,7 @@ const AnalyteInfor = () => {
 		const engEditorId = `tinymce-${id}-eng`;
 
 		const updatedAnalyte = analytes.find((analyte) => analyte.id === id);
-		let currentDisplayStyle = initializeDisplayStyle(updatedAnalyte.display_style);
+		let currentDisplayStyle = initializeDisplayStyle(updatedAnalyte.displayStyle);
 
 		if (window.tinymce && window.tinymce.get(defaultEditorId)) {
 			const defaultContent = window.tinymce.get(defaultEditorId).getContent();
@@ -1263,11 +1263,11 @@ const AnalyteInfor = () => {
 			currentDisplayStyle = setDisplayStyleValue(currentDisplayStyle, 'eng', engContent);
 		}
 
-		// Update the display_style with the final array
-		handleInputChange(id, 'display_style', currentDisplayStyle);
+		// Update the displayStyle with the final array
+		handleInputChange(id, 'displayStyle', currentDisplayStyle);
 
 		const { tat_expected, ...analyteWithoutTat } = updatedAnalyte;
-		const finalAnalyte = { ...analyteWithoutTat, display_style: currentDisplayStyle };
+		const finalAnalyte = { ...analyteWithoutTat, displayStyle: currentDisplayStyle };
 
 		try {
 			finalAnalyte.modified_by_uid = currentUser.identity_uid;
@@ -1328,7 +1328,7 @@ const AnalyteInfor = () => {
 	const handleDeleteClick = async (id) => {
 		const analyte = analytes.find((analyte) => analyte.id === id);
 		setSelectedAnalyteId(analyte.id);
-		const confirmed = window.confirm(`Bạn chắc chắn muốn xóa chỉ tiêu: ${analyte.parameter_name} (ID: ${analyte.id})?`);
+		const confirmed = window.confirm(`Bạn chắc chắn muốn xóa chỉ tiêu: ${analyte.parameterName} (ID: ${analyte.id})?`);
 		if (confirmed) {
 			try {
 				const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/delete/parameter', {
@@ -1365,7 +1365,7 @@ const AnalyteInfor = () => {
 
 	const handleNewAnalyteChange = (field, value) => {
 		setNewAnalyte({ ...newAnalyte, [field]: value });
-		if (field === 'protocol_code' && value.length >= 5) {
+		if (field === 'protocolCode' && value.length >= 5) {
 			fetchProtocols(value);
 			setIsProtocolDropdownVisible(true);
 		} else {
@@ -1375,7 +1375,7 @@ const AnalyteInfor = () => {
 
 	const handleSaveNewAnalyte = async () => {
 		// Get content from TinyMCE editors before saving
-		let currentDisplayStyle = [...newAnalyte.display_style];
+		let currentDisplayStyle = [...newAnalyte.displayStyle];
 
 		if (window.tinymce && window.tinymce.get('tinymce-new-default')) {
 			const defaultContent = window.tinymce.get('tinymce-new-default').getContent();
@@ -1388,7 +1388,7 @@ const AnalyteInfor = () => {
 		}
 
 		const { tat_expected, ...analyteWithoutTat } = newAnalyte;
-		const finalAnalyte = { ...analyteWithoutTat, display_style: currentDisplayStyle };
+		const finalAnalyte = { ...analyteWithoutTat, displayStyle: currentDisplayStyle };
 
 		finalAnalyte.created_by_uid = currentUser.identity_uid;
 		finalAnalyte.modified_by_uid = currentUser.identity_uid;
@@ -1406,22 +1406,22 @@ const AnalyteInfor = () => {
 
 				setIsAddingNew(false);
 				setNewAnalyte({
-					parameter_name: '',
-					field: 'Hóa lý',
+					parameterName: '',
+					scientificField: 'Hóa lý',
 					matrix: 'Đất',
-					product_type: '',
+					_deprecated_productType: '',
 					tat_expected: '1 day',
-					default_unit: '',
+					defaultUnit: '',
 					accreditation: '',
-					technician_alias: 'K01',
-					protocol_code: '',
-					parameter_uid: '',
-					protocol_source: 'IRDOP',
-					display_style: [
+					technicianAlias: 'K01',
+					protocolCode: '',
+					parameterId: '',
+					protocolSource: 'IRDOP',
+					displayStyle: [
 						{ label: 'default', value: '' },
 						{ label: 'eng', value: '' },
 					],
-					price: '',
+					fee: '',
 				});
 
 				// Fetch fresh data from server to ensure consistency
@@ -1449,22 +1449,22 @@ const AnalyteInfor = () => {
 
 		setIsAddingNew(false);
 		setNewAnalyte({
-			parameter_name: '',
-			field: 'Hóa lý',
+			parameterName: '',
+			scientificField: 'Hóa lý',
 			matrix: 'Đất',
-			product_type: '',
+			_deprecated_productType: '',
 			tat_expected: '1 day',
-			default_unit: '',
+			defaultUnit: '',
 			accreditation: '',
-			technician_alias: 'K01',
-			protocol_code: '',
-			parameter_uid: '',
-			protocol_source: 'IRDOP',
-			display_style: [
+			technicianAlias: 'K01',
+			protocolCode: '',
+			parameterId: '',
+			protocolSource: 'IRDOP',
+			displayStyle: [
 				{ label: 'default', value: '' },
 				{ label: 'eng', value: '' },
 			],
-			price: '',
+			fee: '',
 		});
 	};
 
@@ -1506,7 +1506,7 @@ const AnalyteInfor = () => {
 
 	const handleProtocolSearchChange = (id, value) => {
 		setProtocolSearch(value);
-		handleInputChange(id, 'protocol_code', value);
+		handleInputChange(id, 'protocolCode', value);
 		if (value.length >= 5) {
 			fetchProtocols(value);
 			setIsProtocolDropdownVisible(true);
@@ -1519,7 +1519,7 @@ const AnalyteInfor = () => {
 	const handleProtocolSelect = (id, protocol) => {
 		const updatedAnalytes = analytes.map((analyte) => {
 			if (analyte.id === id) {
-				return { ...analyte, protocol_id: protocol.id, protocol_code: protocol.protocol_code };
+				return { ...analyte, protocol_id: protocol.id, protocolCode: protocol.protocolCode };
 			}
 			return analyte;
 		});
@@ -1529,14 +1529,14 @@ const AnalyteInfor = () => {
 	};
 
 	const handleNewProtocolSelect = (protocol) => {
-		setNewAnalyte({ ...newAnalyte, protocol_code: protocol.protocol_code, protocol_id: protocol.id });
+		setNewAnalyte({ ...newAnalyte, protocolCode: protocol.protocolCode, protocol_id: protocol.id });
 		setIsProtocolDropdownVisible(false);
 	};
 
 	const handleProtocolSourceChange = (id, value) => {
 		const updatedAnalytes = analytes.map((analyte) => {
 			if (analyte.id === id) {
-				return { ...analyte, protocol_source: value };
+				return { ...analyte, protocolSource: value };
 			}
 			return analyte;
 		});
@@ -1544,7 +1544,7 @@ const AnalyteInfor = () => {
 	};
 
 	const handleNewProtocolSourceChange = (value) => {
-		setNewAnalyte({ ...newAnalyte, protocol_source: value });
+		setNewAnalyte({ ...newAnalyte, protocolSource: value });
 	};
 
 	const handleProtocolPageChange = (pageNumber) => {
@@ -1554,7 +1554,7 @@ const AnalyteInfor = () => {
 	const handleTechnicianChange = (id, value) => {
 		const updatedAnalytes = analytes.map((analyte) => {
 			if (analyte.id === id) {
-				return { ...analyte, technician_alias: value };
+				return { ...analyte, technicianAlias: value };
 			}
 			return analyte;
 		});
@@ -1941,15 +1941,15 @@ const AnalyteInfor = () => {
 					<table className="min-w-screen-xl bg-white text-sm">
 						<thead className="border-b-2">
 							<tr>
-								{renderColumnHeader('parameter_uid', 'UID', 'py-2 text-start pl-2 min-w-16 w-16', 'no-filter')}
+								{renderColumnHeader('parameterId', 'UID', 'py-2 text-start pl-2 min-w-16 w-16', 'no-filter')}
 								{renderColumnHeader(
-									'parameter_name',
+									'parameterName',
 									'Tên chỉ tiêu',
 									'py-2 text-start pl-2 min-w-48 w-1/5',
 									'sort-only',
 								)}
 								{renderColumnHeader(
-									'field',
+									'scientificField',
 									'Lĩnh vực',
 									'py-2 text-start pl-2 min-w-24 w-24',
 									'select-filter',
@@ -1957,23 +1957,23 @@ const AnalyteInfor = () => {
 								)}
 								{renderColumnHeader('matrix', 'Nền mẫu', 'py-2 text-start pl-2 min-w-44 w-1/5', 'input-filter')}
 								{renderColumnHeader(
-									'protocol_source',
+									'protocolSource',
 									'Nguồn',
 									'py-2 text-start pl-2 min-w-24 w-24',
 									'select-filter',
 									getUniqueSourcesFromCurrent(),
 								)}
-								{renderColumnHeader('protocol_code', 'Code', 'py-2 text-start pl-2 min-w-44 w-44', 'sort-only')}
-								{renderColumnHeader('default_unit', 'Đơn vị', 'py-2 text-start pl-2 min-w-20 w-20', 'no-action')}
+								{renderColumnHeader('protocolCode', 'Code', 'py-2 text-start pl-2 min-w-44 w-44', 'sort-only')}
+								{renderColumnHeader('defaultUnit', 'Đơn vị', 'py-2 text-start pl-2 min-w-20 w-20', 'no-action')}
 								{renderColumnHeader(
-									'display_style',
+									'displayStyle',
 									'Định dạng hiển thị',
 									'py-2 text-start pl-2 min-w-56 w-56',
 									'no-action',
 								)}
-								{renderColumnHeader('price', 'Giá thành', 'py-2 text-start pl-2 min-w-32 w-32', 'no-action')}
+								{renderColumnHeader('fee', 'Giá thành', 'py-2 text-start pl-2 min-w-32 w-32', 'no-action')}
 								{renderColumnHeader('accreditation', 'Chứng nhận', 'py-2 text-start pl-2 min-w-28 w-28', 'no-action')}
-								{renderColumnHeader('technician_alias', 'KTV', 'py-2 text-start pl-2 min-w-28 w-28', 'sort-only')}
+								{renderColumnHeader('technicianAlias', 'KTV', 'py-2 text-start pl-2 min-w-28 w-28', 'sort-only')}
 								{renderColumnHeader('actions', 'Thao tác', 'py-2 text-start pl-2 min-w-24 w-24', 'no-action')}
 							</tr>
 						</thead>
@@ -1981,14 +1981,14 @@ const AnalyteInfor = () => {
 							{isAddingNew && (
 								<tr className="border-t bg-blue-50">
 									<td className="p-1 text-start">
-										<p className="font-medium text-primary">{newAnalyte.parameter_uid}</p>
+										<p className="font-medium text-primary">{newAnalyte.parameterId}</p>
 									</td>
 									<td className="p-1 text-start relative">
 										<textarea
 											id="param-name-new"
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
-											value={newAnalyte.parameter_name}
+											value={newAnalyte.parameterName}
 											onChange={(e) => handleParameterNameInput('new', e.target.value)}
 										/>
 										{showParameterNameDropdown &&
@@ -2045,8 +2045,8 @@ const AnalyteInfor = () => {
 									<td className="p-1 text-start">
 										<select
 											className="w-full border p-2 rounded bg-white"
-											value={newAnalyte.field || 'Hóa lý'}
-											onChange={(e) => handleNewAnalyteChange('field', e.target.value)}
+											value={newAnalyte.scientificField || 'Hóa lý'}
+											onChange={(e) => handleNewAnalyteChange('scientificField', e.target.value)}
 										>
 											<option value="Hóa lý">Hóa lý</option>
 											<option value="Vi sinh">Vi sinh</option>
@@ -2107,7 +2107,7 @@ const AnalyteInfor = () => {
 									<td className="p-1 text-start">
 										<select
 											className="w-full border p-2 px-0.5 rounded bg-white"
-											value={newAnalyte.protocol_source}
+											value={newAnalyte.protocolSource}
 											onChange={(e) => handleNewProtocolSourceChange(e.target.value)}
 										>
 											{protocolSources.map((source, index) => (
@@ -2122,7 +2122,7 @@ const AnalyteInfor = () => {
 											id="protocol-code-new"
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
-											value={newAnalyte.protocol_code}
+											value={newAnalyte.protocolCode}
 											onChange={(e) => handleProtocolCodeInputChange('new', e.target.value)}
 										/>
 										{showProtocolCodeDropdown &&
@@ -2197,10 +2197,10 @@ const AnalyteInfor = () => {
 															onClick={() => handleNewProtocolSelect(protocol)}
 														>
 															<p>{protocol.protocol_name}</p>
-															<p className="text-sm text-gray-500">{protocol.protocol_code}</p>
+															<p className="text-sm text-gray-500">{protocol.protocolCode}</p>
 														</div>
 													))}
-													{protocols.filter((protocol) => protocol.protocol_code?.includes(protocolSearch)).length >
+													{protocols.filter((protocol) => protocol.protocolCode?.includes(protocolSearch)).length >
 														protocolsPerPage && (
 														<div className="flex justify-between p-2">
 															<button
@@ -2234,7 +2234,7 @@ const AnalyteInfor = () => {
 											id="unit-new"
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
-											value={newAnalyte.default_unit || ''}
+											value={newAnalyte.defaultUnit || ''}
 											onChange={(e) => handleUnitInput('new', e.target.value)}
 										/>
 										{showUnitDropdown &&
@@ -2291,14 +2291,14 @@ const AnalyteInfor = () => {
 															id="tinymce-new-default"
 															className="w-full h-full border-0 resize-none text-xs"
 															style={{ borderRadius: '0' }}
-															value={getDisplayStyleValue(newAnalyte.display_style, 'default')}
+															value={getDisplayStyleValue(newAnalyte.displayStyle, 'default')}
 															onChange={(e) => {
 																const updatedDisplayStyle = setDisplayStyleValue(
-																	newAnalyte.display_style,
+																	newAnalyte.displayStyle,
 																	'default',
 																	e.target.value,
 																);
-																handleNewAnalyteChange('display_style', updatedDisplayStyle);
+																handleNewAnalyteChange('displayStyle', updatedDisplayStyle);
 															}}
 														/>
 													</div>
@@ -2310,14 +2310,14 @@ const AnalyteInfor = () => {
 															id="tinymce-new-eng"
 															className="w-full h-full border-0 resize-none text-xs"
 															style={{ borderRadius: '0' }}
-															value={getDisplayStyleValue(newAnalyte.display_style, 'eng')}
+															value={getDisplayStyleValue(newAnalyte.displayStyle, 'eng')}
 															onChange={(e) => {
 																const updatedDisplayStyle = setDisplayStyleValue(
-																	newAnalyte.display_style,
+																	newAnalyte.displayStyle,
 																	'eng',
 																	e.target.value,
 																);
-																handleNewAnalyteChange('display_style', updatedDisplayStyle);
+																handleNewAnalyteChange('displayStyle', updatedDisplayStyle);
 															}}
 														/>
 													</div>
@@ -2329,8 +2329,8 @@ const AnalyteInfor = () => {
 										<textarea
 											className="w-full border px-2 py-1 rounded bg-white resize-none"
 											rows={2}
-											value={newAnalyte.price || ''}
-											onChange={(e) => handleNewAnalyteChange('price', e.target.value)}
+											value={newAnalyte.fee || ''}
+											onChange={(e) => handleNewAnalyteChange('fee', e.target.value)}
 										/>
 									</td>
 									<td className="p-1 text-start">
@@ -2361,7 +2361,7 @@ const AnalyteInfor = () => {
 											className="w-full border px-2 py-1 rounded bg-white cursor-pointer min-h-[2.5rem] flex items-center"
 											onClick={() => handleTechnicianDropdownToggle('new')}
 										>
-											{getTechnicianDisplayName(newAnalyte.technician_alias) || 'Chọn kỹ thuật viên'}
+											{getTechnicianDisplayName(newAnalyte.technicianAlias) || 'Chọn kỹ thuật viên'}
 										</div>
 										{technicianDropdowns['new'] &&
 											createPortal(
@@ -2381,7 +2381,7 @@ const AnalyteInfor = () => {
 															key={index}
 															className="p-2 flex cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
 															onClick={() => {
-																handleNewAnalyteChange('technician_alias', tech.alias);
+																handleNewAnalyteChange('technicianAlias', tech.alias);
 																setTechnicianDropdowns((prev) => ({ ...prev, new: false }));
 															}}
 														>
@@ -2439,7 +2439,7 @@ const AnalyteInfor = () => {
 											className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
 											style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 										>
-											{analyte.parameter_uid}
+											{analyte.parameterId}
 										</span>
 									</td>
 									<td className="p-1 text-start relative">
@@ -2449,7 +2449,7 @@ const AnalyteInfor = () => {
 													id={`param-name-${analyte.id}`}
 													className="w-full border px-2 py-1 rounded bg-white resize-none"
 													rows={2}
-													value={analyte.parameter_name}
+													value={analyte.parameterName}
 													onChange={(e) => handleParameterNameInput(analyte.id, e.target.value)}
 												/>
 												{showParameterNameDropdown &&
@@ -2510,7 +2510,7 @@ const AnalyteInfor = () => {
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
 												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 											>
-												{analyte.parameter_name}
+												{analyte.parameterName}
 											</span>
 										)}
 									</td>
@@ -2518,8 +2518,8 @@ const AnalyteInfor = () => {
 										{editingRow === analyte.id ? (
 											<select
 												className="w-full border p-2 rounded bg-white"
-												value={analyte.field || 'Hóa lý'}
-												onChange={(e) => handleInputChange(analyte.id, 'field', e.target.value)}
+												value={analyte.scientificField || 'Hóa lý'}
+												onChange={(e) => handleInputChange(analyte.id, 'scientificField', e.target.value)}
 											>
 												<option value="Hóa lý">Hóa lý</option>
 												<option value="Vi sinh">Vi sinh</option>
@@ -2529,7 +2529,7 @@ const AnalyteInfor = () => {
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
 												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 											>
-												{analyte.field || 'Hóa lý'}
+												{analyte.scientificField || 'Hóa lý'}
 											</span>
 										)}
 									</td>
@@ -2607,7 +2607,7 @@ const AnalyteInfor = () => {
 										{editingRow === analyte.id ? (
 											<select
 												className="w-full border p-2 px-0.5 rounded bg-white"
-												value={analyte.protocol_source || ''}
+												value={analyte.protocolSource || ''}
 												onChange={(e) => handleProtocolSourceChange(analyte.id, e.target.value)}
 											>
 												{protocolSources.map((source, index) => (
@@ -2621,7 +2621,7 @@ const AnalyteInfor = () => {
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
 												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 											>
-												{analyte.protocol_source || ''}
+												{analyte.protocolSource || ''}
 											</span>
 										)}
 									</td>
@@ -2632,7 +2632,7 @@ const AnalyteInfor = () => {
 													id={`protocol-code-${analyte.id}`}
 													className="w-full border px-2 py-1 rounded bg-white resize-none"
 													rows={2}
-													value={analyte.protocol_code}
+													value={analyte.protocolCode}
 													onChange={(e) => handleProtocolCodeInputChange(analyte.id, e.target.value)}
 												/>
 												{showProtocolCodeDropdown &&
@@ -2693,7 +2693,7 @@ const AnalyteInfor = () => {
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
 												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 											>
-												{analyte.protocol_code}
+												{analyte.protocolCode}
 											</span>
 										)}
 										{isProtocolDropdownVisible &&
@@ -2718,10 +2718,10 @@ const AnalyteInfor = () => {
 															onClick={() => handleProtocolSelect(analyte.id, protocol)}
 														>
 															<p>{protocol.protocol_name}</p>
-															<p className="text-sm text-gray-500">{protocol.protocol_code}</p>
+															<p className="text-sm text-gray-500">{protocol.protocolCode}</p>
 														</div>
 													))}
-													{protocols.filter((protocol) => protocol.protocol_code?.includes(protocolSearch)).length >
+													{protocols.filter((protocol) => protocol.protocolCode?.includes(protocolSearch)).length >
 														protocolsPerPage && (
 														<div className="flex justify-between p-2">
 															<button
@@ -2757,7 +2757,7 @@ const AnalyteInfor = () => {
 													id={`unit-${analyte.id}`}
 													className="w-full border px-2 py-1 rounded bg-white resize-none"
 													rows={2}
-													value={analyte.default_unit || ''}
+													value={analyte.defaultUnit || ''}
 													onChange={(e) => handleUnitInput(analyte.id, e.target.value)}
 												/>
 												{showUnitDropdown &&
@@ -2814,7 +2814,7 @@ const AnalyteInfor = () => {
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
 												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 											>
-												{analyte.default_unit}
+												{analyte.defaultUnit}
 											</span>
 										)}
 									</td>
@@ -2829,15 +2829,15 @@ const AnalyteInfor = () => {
 																id={`tinymce-${analyte.id}-default`}
 																className="w-full h-full text-xs"
 																style={{ borderRadius: '0' }}
-																value={getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'default')}
+																value={getDisplayStyleValue(initializeDisplayStyle(analyte.displayStyle), 'default')}
 																onChange={(e) => {
-																	const currentDisplayStyle = initializeDisplayStyle(analyte.display_style);
+																	const currentDisplayStyle = initializeDisplayStyle(analyte.displayStyle);
 																	const updatedDisplayStyle = setDisplayStyleValue(
 																		currentDisplayStyle,
 																		'default',
 																		e.target.value,
 																	);
-																	handleInputChange(analyte.id, 'display_style', updatedDisplayStyle);
+																	handleInputChange(analyte.id, 'displayStyle', updatedDisplayStyle);
 																}}
 															/>
 														</div>
@@ -2849,15 +2849,15 @@ const AnalyteInfor = () => {
 																id={`tinymce-${analyte.id}-eng`}
 																className="w-full h-full text-xs"
 																style={{ borderRadius: '0' }}
-																value={getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'eng')}
+																value={getDisplayStyleValue(initializeDisplayStyle(analyte.displayStyle), 'eng')}
 																onChange={(e) => {
-																	const currentDisplayStyle = initializeDisplayStyle(analyte.display_style);
+																	const currentDisplayStyle = initializeDisplayStyle(analyte.displayStyle);
 																	const updatedDisplayStyle = setDisplayStyleValue(
 																		currentDisplayStyle,
 																		'eng',
 																		e.target.value,
 																	);
-																	handleInputChange(analyte.id, 'display_style', updatedDisplayStyle);
+																	handleInputChange(analyte.id, 'displayStyle', updatedDisplayStyle);
 																}}
 															/>
 														</div>
@@ -2873,7 +2873,7 @@ const AnalyteInfor = () => {
 														style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}
 														dangerouslySetInnerHTML={{
 															__html:
-																getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'default') || '',
+																getDisplayStyleValue(initializeDisplayStyle(analyte.displayStyle), 'default') || '',
 														}}
 													/>
 												</div>
@@ -2883,7 +2883,7 @@ const AnalyteInfor = () => {
 														className="block overflow-hidden text-ellipsis whitespace-pre-wrap max-h-6 text-xs flex-1"
 														style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}
 														dangerouslySetInnerHTML={{
-															__html: getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'eng') || '',
+															__html: getDisplayStyleValue(initializeDisplayStyle(analyte.displayStyle), 'eng') || '',
 														}}
 													/>
 												</div>
@@ -2895,15 +2895,15 @@ const AnalyteInfor = () => {
 											<textarea
 												className="w-full h-10 border px-2 py-1 rounded bg-white resize-none"
 												rows={2}
-												value={analyte.price || ''}
-												onChange={(e) => handleInputChange(analyte.id, 'price', e.target.value)}
+												value={analyte.fee || ''}
+												onChange={(e) => handleInputChange(analyte.id, 'fee', e.target.value)}
 											/>
 										) : (
 											<span
 												className="block overflow-hidden text-ellipsis whitespace-pre-wrap"
 												style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
 											>
-												{analyte.price || ''}
+												{analyte.fee || ''}
 											</span>
 										)}
 									</td>
@@ -2947,7 +2947,7 @@ const AnalyteInfor = () => {
 												handleTechnicianDropdownToggle(analyte.id);
 											}}
 										>
-											{getTechnicianDisplayName(analyte.technician_alias) || 'Chọn kỹ thuật viên'}
+											{getTechnicianDisplayName(analyte.technicianAlias) || 'Chọn kỹ thuật viên'}
 										</div>
 										{technicianDropdowns[analyte.id] &&
 											createPortal(
