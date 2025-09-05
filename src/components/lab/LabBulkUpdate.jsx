@@ -39,8 +39,19 @@ const LabBulkUpdate = ({
 	// Helper function to check if a field has changes
 	const hasFieldChanged = (field, currentValue, newValue) => {
 		if (!newValue && newValue !== 0) return false; // No new value provided
-		const normalizedCurrentValue = currentValue || '';
-		const normalizedNewValue = newValue || '';
+
+		let normalizedCurrentValue = currentValue || '';
+		let normalizedNewValue = newValue || '';
+
+		// Special handling for HTML content fields
+		if (field === 'result_value' || field === 'result_unit') {
+			// Remove HTML tags and normalize whitespace for comparison
+			const cleanCurrent = normalizedCurrentValue.replace(/<[^>]*>/g, '').trim();
+			const cleanNew = normalizedNewValue.replace(/<[^>]*>/g, '').trim();
+			normalizedCurrentValue = cleanCurrent;
+			normalizedNewValue = cleanNew;
+		}
+
 		return normalizedNewValue !== normalizedCurrentValue;
 	};
 
@@ -56,8 +67,8 @@ const LabBulkUpdate = ({
 		const updates = [];
 
 		// Prepare updates for all selected analyses
-		Array.from(selectedRows).forEach((rowId) => {
-			const analysisId = parseInt(rowId);
+		const selectedIds = Array.isArray(selectedRows) ? selectedRows : Array.from(selectedRows);
+		selectedIds.forEach((analysisId) => {
 			const currentAnalysis = selectedData.find((item) => item.id === analysisId);
 
 			if (!currentAnalysis) return;
@@ -70,21 +81,36 @@ const LabBulkUpdate = ({
 				const newValue = bulkEditValues[field];
 				const currentValue = currentAnalysis[field];
 
-				// Only include fields that have values and are different from current values
-				if (newValue !== '' && newValue !== null && newValue !== undefined) {
-					// Compare values, considering null/undefined/empty as equivalent
-					const normalizedCurrentValue = currentValue || '';
-					const normalizedNewValue = newValue || '';
+				// Skip if no new value provided
+				if (newValue === '' || newValue === null || newValue === undefined) {
+					return;
+				}
 
-					if (normalizedNewValue !== normalizedCurrentValue) {
+				// Special handling for HTML content fields
+				let normalizedCurrentValue = currentValue || '';
+				let normalizedNewValue = newValue || '';
+
+				if (field === 'result_value' || field === 'result_unit') {
+					// Remove HTML tags and normalize whitespace for comparison
+					const cleanCurrent = normalizedCurrentValue.replace(/<[^>]*>/g, '').trim();
+					const cleanNew = normalizedNewValue.replace(/<[^>]*>/g, '').trim();
+					normalizedCurrentValue = cleanCurrent;
+					normalizedNewValue = cleanNew;
+				}
+
+				// Compare normalized values
+				if (normalizedNewValue !== normalizedCurrentValue) {
+					// For HTML fields, keep original HTML content
+					if (field === 'result_value' || field === 'result_unit') {
 						updateData[field] = newValue;
-						hasChanges = true;
+					} else {
+						updateData[field] = newValue;
 					}
+					hasChanges = true;
 				}
 			});
 
 			if (hasChanges && Object.keys(updateData).length > 1) {
-				// More than just id and has actual changes
 				updates.push(updateData);
 			}
 		});
@@ -136,7 +162,9 @@ const LabBulkUpdate = ({
 				<div className="flex items-center justify-between mb-4">
 					<h2 className="text-xl font-bold">
 						Chỉnh sửa hàng loạt
-						<span className="text-sm font-normal text-gray-600 ml-2">({selectedRows.size} chỉ tiêu được chọn)</span>
+						<span className="text-sm font-normal text-gray-600 ml-2">
+							({Array.isArray(selectedRows) ? selectedRows.length : selectedRows.size} chỉ tiêu được chọn)
+						</span>
 					</h2>
 					<button onClick={handleClose} className="text-gray-500 hover:text-gray-700 text-xl">
 						<FaTimes />
@@ -251,7 +279,9 @@ const LabBulkUpdate = ({
 
 				{/* Preview table showing all selected analyses */}
 				<div className="mb-6">
-					<h3 className="text-md font-semibold mb-3">Xem trước thay đổi ({selectedRows.size} mục)</h3>
+					<h3 className="text-md font-semibold mb-3">
+						Xem trước thay đổi ({Array.isArray(selectedRows) ? selectedRows.length : selectedRows.size} mục)
+					</h3>
 					<div className="max-h-[300px] overflow-auto border border-gray-300 rounded-md">
 						<table className="w-full border-collapse">
 							<thead className="bg-gray-100 sticky top-0">
@@ -357,7 +387,9 @@ const LabBulkUpdate = ({
 						className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
 						disabled={Object.keys(bulkEditValues).length === 0 || updating}
 					>
-						{updating ? 'Đang cập nhật...' : `Cập nhật (${selectedRows.size} mục)`}
+						{updating
+							? 'Đang cập nhật...'
+							: `Cập nhật (${Array.isArray(selectedRows) ? selectedRows.length : selectedRows.size} mục)`}
 					</button>
 				</div>
 

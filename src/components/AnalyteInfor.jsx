@@ -187,12 +187,13 @@ const AnalyteInfor = () => {
 			filtered = filtered.filter((analyte) => analyte.protocolSource === sourceFilter);
 		}
 
-		if (technicianFilter) {
-			filtered = filtered.filter((analyte) => analyte.technicianAlias === technicianFilter);
-		}
+		// Technician filter is now handled by API, so no local filtering needed
+		// if (technicianFilter) {
+		//     filtered = filtered.filter((analyte) => analyte.technicianAlias === technicianFilter);
+		// }
 
 		setFilteredAnalytes(filtered);
-	}, [analytes, fieldFilter, matrixFilter, sourceFilter, technicianFilter]);
+	}, [analytes, fieldFilter, matrixFilter, sourceFilter]);
 
 	// TinyMCE initialization function
 	const initTinyMCE = (selector, initialValue = '', onChange) => {
@@ -817,8 +818,29 @@ const AnalyteInfor = () => {
 	};
 
 	const handleTechnicianFilter = (technician) => {
-		setTechnicianFilter(technicianFilter === technician ? '' : technician);
+		const newTechnician = technicianFilter === technician ? '' : technician;
+		setTechnicianFilter(newTechnician);
 		setShowTechnicianFilterDropdown(false);
+
+		// Update columnFilters for API call
+		const newFilters = { ...columnFilters };
+		if (newTechnician) {
+			newFilters.technicianAlias = newTechnician;
+		} else {
+			delete newFilters.technicianAlias;
+		}
+		setColumnFilters(newFilters);
+
+		// Fetch data with new filter
+		fetchAnalytes(
+			1, // Reset to first page when filtering
+			pagination.itemsPerPage,
+			searchTerm,
+			newFilters,
+			columnSort,
+			sortBy,
+		);
+		scrollToTop(); // Scroll to top when filtering
 	};
 
 	// Add toggle handlers for header clicks

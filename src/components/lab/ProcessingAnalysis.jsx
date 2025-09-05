@@ -189,7 +189,6 @@ table td {
 	white-space: nowrap;
 	pointer-events: none;
 	z-index: 10000;
-	transform: translateX(-50%) translateY(-100%);
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	opacity: 0;
 	transition: opacity 0.2s ease-in-out;
@@ -202,11 +201,19 @@ table td {
 .custom-tooltip::after {
 	content: '';
 	position: absolute;
-	top: 100%;
 	left: 50%;
 	transform: translateX(-50%);
 	border: 5px solid transparent;
+}
+
+.custom-tooltip.above::after {
+	top: 100%;
 	border-top-color: rgba(0, 0, 0, 0.9);
+}
+
+.custom-tooltip.below::after {
+	bottom: 100%;
+	border-bottom-color: rgba(0, 0, 0, 0.9);
 }
 
 /* Sample Tooltip Styles */
@@ -218,38 +225,49 @@ table td {
 	border-radius: 8px;
 	padding: 12px;
 	font-size: 12px;
-	white-space: nowrap;
+	white-space: normal;
+	word-wrap: break-word;
 	pointer-events: none;
 	z-index: 10001;
-	transform: translateX(-50%) translateY(-100%);
 	opacity: 0;
 	transition: opacity 0.2s ease-in-out;
 	min-width: 200px;
+	max-width: 300px;
 }
 
 .sample-tooltip.visible {
 	opacity: 1;
 }
 
-.sample-tooltip::after {
-	content: '';
-	position: absolute;
-	top: 100%;
-	left: 50%;
-	transform: translateX(-50%);
-	border: 6px solid transparent;
-	border-top-color: white;
-}
-
+.sample-tooltip::after,
 .sample-tooltip::before {
 	content: '';
 	position: absolute;
-	top: 100%;
 	left: 50%;
 	transform: translateX(-50%);
-	border: 7px solid transparent;
+	border: 6px solid transparent;
+}
+
+.sample-tooltip.above::after {
+	top: 100%;
+	border-top-color: white;
+}
+
+.sample-tooltip.above::before {
+	top: 100%;
 	border-top-color: #d1d5db;
 	margin-top: 1px;
+}
+
+.sample-tooltip.below::after {
+	bottom: 100%;
+	border-bottom-color: white;
+}
+
+.sample-tooltip.below::before {
+	bottom: 100%;
+	border-bottom-color: #d1d5db;
+	margin-bottom: 1px;
 }
 
 @keyframes pulse {
@@ -927,6 +945,11 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 			// Debug log to check if sources filter is added
 			if (requestBody.sources) {
+			}
+
+			// Add search term if present
+			if (parameterSearchTerm) {
+				requestBody.searchTerm = parameterSearchTerm;
 			}
 
 			const response = await apiPost(API_ENDPOINT, requestBody);
@@ -1727,7 +1750,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	// Update analysis field
 	const updateAnalysisField = async (rowId, column, value) => {
 		// Check if content has actually changed
-		if (!hasContentChanged(value, data, parseInt(rowId), column)) {
+		if (!hasContentChanged(value, data, rowId, column)) {
 			// Still clear editing state
 			setEditingCell(null);
 			setEditValue('');
@@ -1738,7 +1761,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		try {
 			const body = {
 				analysis: {
-					id: parseInt(rowId),
+					id: rowId,
 					[column]: value,
 				},
 			};
@@ -1747,9 +1770,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 			if (response && response.status >= 200 && response.status < 300) {
 				// Update local data
-				setData((prevData) =>
-					prevData.map((item) => (item.id === parseInt(rowId) ? { ...item, [column]: value } : item)),
-				);
+				setData((prevData) => prevData.map((item) => (item.id === rowId ? { ...item, [column]: value } : item)));
 
 				// Show success notification
 				showSuccessNotification('Cập nhật thành công');
@@ -1777,7 +1798,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		const { rowId, column } = editingCell;
 
 		// Check if content has actually changed
-		if (!hasContentChanged(editValue, data, parseInt(rowId), column)) {
+		if (!hasContentChanged(editValue, data, rowId, column)) {
 			// Still clear editing state
 			setEditingCell(null);
 			setEditValue('');
@@ -2541,11 +2562,19 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
 		const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
+		// Check if there's enough space above the element (at least 100px)
+		const spaceAbove = rect.top;
+		const tooltipHeight = 40; // Approximate tooltip height
+		const shouldShowBelow = spaceAbove < tooltipHeight + 20; // 20px buffer
+
 		setTooltip({
 			visible: true,
 			content,
 			x: rect.left + scrollLeft + rect.width / 2,
-			y: rect.top + scrollTop - 10,
+			y: shouldShowBelow
+				? rect.bottom + scrollTop + 10 // Show below
+				: rect.top + scrollTop - 10, // Show above
+			position: shouldShowBelow ? 'below' : 'above',
 		});
 	};
 
@@ -2555,6 +2584,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			content: '',
 			x: 0,
 			y: 0,
+			position: 'above',
 		});
 	};
 
@@ -2564,11 +2594,19 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
 		const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
+		// Check if there's enough space above the element (at least 120px for sample tooltip)
+		const spaceAbove = rect.top;
+		const tooltipHeight = 80; // Approximate sample tooltip height
+		const shouldShowBelow = spaceAbove < tooltipHeight + 20; // 20px buffer
+
 		setSampleTooltip({
 			visible: true,
 			content: sampleData,
-			x: rect.left + scrollLeft + rect.width / 2,
-			y: rect.top + scrollTop - 10,
+			x: rect.right + scrollLeft + 5, // Position to the right of the element
+			y: shouldShowBelow
+				? rect.bottom + scrollTop + 10 // Show below
+				: rect.top + scrollTop - 10, // Show above
+			position: shouldShowBelow ? 'below' : 'above',
 		});
 	};
 
@@ -2578,6 +2616,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			content: null,
 			x: 0,
 			y: 0,
+			position: 'above',
 		});
 	};
 
@@ -2712,14 +2751,14 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 						{/* Action buttons */}
 						<div className="flex items-center space-x-2 flex-shrink-0">
 							{/* Selected items indicator */}
-							{selectedRows.size > 0 && (
+							{(selectedRows?.size || 0) > 0 && (
 								<div
 									className="px-3 py-2 bg-yellow-100 text-yellow-800 rounded-md text-sm font-medium border border-yellow-200 cursor-pointer hover:bg-yellow-200 transition-colors"
 									onClick={clearAllFilters}
 									onMouseEnter={(e) => showTooltip(e, 'Click để xóa tất cả bộ lọc và bỏ chọn')}
 									onMouseLeave={hideTooltip}
 								>
-									<span>{selectedRows.size} mục đã chọn</span>
+									<span>{selectedRows?.size || 0} mục đã chọn</span>
 								</div>
 							)}
 							{(filters.parameters.length > 0 || Object.keys(filters.headerFilters).length > 0) && (
@@ -2762,12 +2801,12 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								<span>Chỉ tiêu của tôi</span>
 							</button>
 
-							{selectedRows.size > 0 && (
+							{(selectedRows?.size || 0) > 0 && (
 								<button
 									className="px-3 py-2 bg-green-500 border-2 border-green-700 text-white rounded-md text-sm font-bold hover:bg-green-600 transition-colors shadow-sm"
 									onClick={handleBulkEditClick}
 								>
-									<span>Cập nhật hàng loạt ({selectedRows.size})</span>
+									<span>Cập nhật hàng loạt ({selectedRows?.size || 0})</span>
 								</button>
 							)}
 						</div>
@@ -3150,7 +3189,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																	<div className="relative text-left w-full p-1 rounded">
 																		<span className="text-left">{row.parameter_name || ''}</span>
 																	</div>
-																): column === 'matrix' ? (
+																) : column === 'matrix' ? (
 																	<div className="relative text-left w-full p-1 rounded">
 																		<span className="text-left">{row.matrix || ''}</span>
 																	</div>
@@ -3693,7 +3732,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			{tooltip.visible &&
 				createPortal(
 					<div
-						className={`custom-tooltip ${tooltip.visible ? 'visible' : ''}`}
+						className={`custom-tooltip ${tooltip.visible ? 'visible' : ''} ${tooltip.position || 'above'}`}
 						style={{
 							left: `${tooltip.x}px`,
 							top: `${tooltip.y}px`,
@@ -3708,7 +3747,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			{sampleTooltip.visible &&
 				createPortal(
 					<div
-						className={`sample-tooltip ${sampleTooltip.visible ? 'visible' : ''}`}
+						className={`sample-tooltip ${sampleTooltip.visible ? 'visible' : ''} ${sampleTooltip.position || 'above'}`}
 						style={{
 							left: `${sampleTooltip.x}px`,
 							top: `${sampleTooltip.y}px`,

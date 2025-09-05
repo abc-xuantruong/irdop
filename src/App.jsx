@@ -23,6 +23,7 @@ import FileInfor from './pages/FileInfor';
 import Editor from './components/lab/Editor';
 import ExperimentLog from './components/lab/ExperimentLog';
 import AuthGuard from './components/AuthGuard';
+import AccountantDashboard from './pages/AccountantDashboard';
 
 const App = () => {
 	return (
@@ -48,6 +49,7 @@ const App = () => {
 										<Route path="/intra-h1y25-c1" element={<Event />} />
 										<Route path="/dashboard" element={<Dashboard />} />
 										<Route path="/" element={<Dashboard />} />
+										<Route path="/accountant" element={<AccountantDashboard />} />
 										<Route path="/report" element={<Report />} />
 										<Route path="/result" element={<Result />} />
 										<Route path="/dashboard/receipt" element={<ReceiptInfor />} />

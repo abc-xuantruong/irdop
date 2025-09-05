@@ -1265,7 +1265,14 @@ export default function MultiPageEditor() {
 
         <div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; height:2.7cm;">
             <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-                <!-- Phần bên trái để trống -->
+                ${
+									!showSign
+										? `
+                <strong style="font-size:12px; line-height:1.2; margin:0;">TRƯỞNG PHÒNG KIỂM NGHIỆM<br>PHÒNG ĐẢM BẢO CHẤT LƯỢNG / Quality Assurance Manager</strong>
+                <p style="font-size:12px; margin:0; line-height:1.4;">Nguyễn Công Phúc</p>
+                `
+										: '<!-- Phần bên trái để trống -->'
+								}
             </div>
             <div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
                 <strong style="font-size:12px; line-height:1.2; margin:0;">KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President</strong>
@@ -1293,7 +1300,7 @@ export default function MultiPageEditor() {
 
 	const [content, setContent] = useState(initialContent);
 	const [header, setHeader] = useState(`
-<div class=" content_page_header_box" id="thead" style="position:relative; height: fit-content; font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+<div class=" content_page_header_box" id="thead" style="position:relative; height: fit-content; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
 	<div class=" " style="position:relative; display:flex;  overflow:visible;">
 		<div>
 			<img src="https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg" 
@@ -1302,16 +1309,16 @@ export default function MultiPageEditor() {
 				 style="width:4cm;">
 		</div>
 		<div style="text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;">
-			<p class="nunito-700" 
-			style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 700; font-size:14.4px; color:#0058A3; margin-bottom: 0; line-height: 17.6px; letter-spacing: 0.04em; word-spacing: 0.04em;">
+			<p class="inter-700" 
+			style="font-family: 'Inter', Arial, sans-serif; font-weight: 700; font-size:14.4px; color:#0058A3; margin-bottom: 0; line-height: 17.6px; letter-spacing: 0.04em; word-spacing: 0.04em;">
 				Viện nghiên cứu và phát triển Sản phẩm thiên nhiên
 			</p>
-			<p class="nunito-400" 
-			style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400; font-size:11.2px; margin: 0; line-height: 12px; letter-spacing: 0.04em; word-spacing: 0.04em;">
+			<p class="inter-400" 
+			style="font-family: 'Inter', Arial, sans-serif; font-weight: 400; font-size:11.2px; margin: 0; line-height: 12px; letter-spacing: 0.04em; word-spacing: 0.04em;">
 				/ Institute for Research and Development of Organic Products
 			</p>
-			<span class="nunito-400" 
-				style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400; font-size:11.2px; border-bottom:1px solid rgba(128,128,128,0.5); 
+			<span class="inter-400" 
+				style="font-family: 'Inter', Arial, sans-serif; font-weight: 400; font-size:11.2px; border-bottom:1px solid rgba(128,128,128,0.5); 
 						width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px; letter-spacing: 0.04em; word-spacing: 0.04em;">
 				Phòng Phân tích - Kiểm nghiệm / Analysis and Testing Dept.
 			</span>
@@ -1321,24 +1328,24 @@ export default function MultiPageEditor() {
 	<div class=" " 
 		 style="padding-top:5mm; position:relative; ">
 		<div style="position:relative; text-align:left;">
-			<p contenteditable="true" class="nunito-840 content-header-title" 
-			   style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 840; font-size:24pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
+			<p contenteditable="true" class="inter-840 content-header-title" 
+			   style="font-family: 'Inter', Arial, sans-serif; font-weight: 840; font-size:24pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
 				PHIẾU KẾT QUẢ THỬ NGHIỆM
 			</p>
-			<p class="nunito-820 content-header-title_eng" 
-			   style="font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 820; font-size:21pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
+			<p class="inter-820 content-header-title_eng" 
+			   style="font-family: 'Inter', Arial, sans-serif; font-weight: 820; font-size:21pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
 				/ Certificate of Analysis
 			</p>
-			<div class="nunito-400 display-flex" 
-				 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400; margin-top: 0px;; height: 28px;">
-				<span class="nunito-400 std_ref-title">Xuất bản / ref.:</span>
+			<div class="inter-400 display-flex" 
+				 style="display: flex; align-items: center; gap: 2mm; font-size:12px; font-family: 'Inter', Arial, sans-serif; font-weight: 400; margin-top: 0px;; height: 28px;">
+				<span class="inter-400 std_ref-title">Xuất bản / ref.:</span>
 				<p contenteditable="true" 
-				   class="nunito-400 ref_code" 
-				   style="min-width:5pt; margin: 0; margin-right: 2mm; font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400;">
+				   class="inter-400 ref_code" 
+				   style="min-width:5pt; margin: 0; margin-right: 2mm; font-family: 'Inter', Arial, sans-serif; font-weight: 400;">
 					SƠ BỘ / DRAFT
 				</p>
-				<span class="nunito-400 published_date" 
-					  style="min-width:5pt; margin: 0; font-family: 'Nunito Sans', Arial, sans-serif; font-weight: 400;">
+				<span class="inter-400 published_date" 
+					  style="min-width:5pt; margin: 0; font-family: 'Inter', Arial, sans-serif; font-weight: 400;">
 					  Ngày / Date: ${formatDate(new Date())}
 				</span>
 			</div>
@@ -1382,13 +1389,29 @@ export default function MultiPageEditor() {
 	const editorRef = useRef(null);
 	const contentRef = useRef(null);
 
-	// Add font loading effect to ensure Nunito Sans is available
+	// Add font loading effect to ensure Inter and Nunito Sans are available
 	useEffect(() => {
 		// Create a style element for font-face declarations and Google Fonts link
 		const fontStyle = document.createElement('style');
 		fontStyle.textContent = `
+			/* Inter Google Fonts */
+			@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+			
 			/* Nunito Sans Google Fonts */
 			@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+			
+			/* Font weight classes for Inter */
+			.inter-200 { font-family: "Inter", Arial, sans-serif; font-weight: 200; font-style: normal; }
+			.inter-300 { font-family: "Inter", Arial, sans-serif; font-weight: 300; font-style: normal; }
+			.inter-400 { font-family: "Inter", Arial, sans-serif; font-weight: 400; font-style: normal; }
+			.inter-500 { font-family: "Inter", Arial, sans-serif; font-weight: 500; font-style: normal; }
+			.inter-600 { font-family: "Inter", Arial, sans-serif; font-weight: 600; font-style: normal; }
+			.inter-700 { font-family: "Inter", Arial, sans-serif; font-weight: 700; font-style: normal; }
+			.inter-760 { font-family: "Inter", Arial, sans-serif; font-weight: 760; font-style: normal; }
+			.inter-800 { font-family: "Inter", Arial, sans-serif; font-weight: 800; font-style: normal; }
+			.inter-820 { font-family: "Inter", Arial, sans-serif; font-weight: 820; font-style: normal; }
+			.inter-840 { font-family: "Inter", Arial, sans-serif; font-weight: 840; font-style: normal; }
+			.inter-900 { font-family: "Inter", Arial, sans-serif; font-weight: 900; font-style: normal; }
 			
 			/* Font weight classes for Nunito Sans */
 			.nunito-200 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 200; font-style: normal; }
@@ -1397,14 +1420,17 @@ export default function MultiPageEditor() {
 			.nunito-500 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 500; font-style: normal; }
 			.nunito-600 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 600; font-style: normal; }
 			.nunito-700 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 700; font-style: normal; }
-			.nunito-760 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 760; font-style: normal; }
 			.nunito-800 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 800; font-style: normal; }
-			.nunito-820 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 820; font-style: normal; }
-			.nunito-840 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 840; font-style: normal; }
 			.nunito-900 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 900; font-style: normal; }
 			
-			body, .editable, .header-editable, .content-editable, .footer-editable {
+			/* Default font for content and footer editors */
+			body, .editable, .content-editable, .footer-editable {
 				font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+			}
+			
+			/* Override for header editor to use Inter */
+			.header-editable {
+				font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 			}
 			`;
 		document.head.appendChild(fontStyle);
@@ -1432,10 +1458,10 @@ export default function MultiPageEditor() {
 		// Wait for font to load
 		document.fonts.ready
 			.then(() => {
-				console.log('Nunito Sans font loaded successfully');
+				console.log('Inter and Nunito Sans fonts loaded successfully');
 			})
 			.catch((err) => {
-				console.error('Error loading Nunito Sans font:', err);
+				console.error('Error loading Inter or Nunito Sans fonts:', err);
 			});
 
 		return () => {
@@ -1485,8 +1511,24 @@ export default function MultiPageEditor() {
 			extended_valid_elements: 'span[style]',
 			charmap: [[8727, 'multiplication sign (∗)']],
 			content_style: `
+				/* Inter Google Fonts */
+				@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+				
 				/* Nunito Sans Google Fonts */
 				@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+				
+				/* Font weight classes for Inter */
+				.inter-200 { font-family: "Inter", Arial, sans-serif; font-weight: 200; font-style: normal; }
+				.inter-300 { font-family: "Inter", Arial, sans-serif; font-weight: 300; font-style: normal; }
+				.inter-400 { font-family: "Inter", Arial, sans-serif; font-weight: 400; font-style: normal; }
+				.inter-500 { font-family: "Inter", Arial, sans-serif; font-weight: 500; font-style: normal; }
+				.inter-600 { font-family: "Inter", Arial, sans-serif; font-weight: 600; font-style: normal; }
+				.inter-700 { font-family: "Inter", Arial, sans-serif; font-weight: 700; font-style: normal; }
+				.inter-760 { font-family: "Inter", Arial, sans-serif; font-weight: 760; font-style: normal; }
+				.inter-800 { font-family: "Inter", Arial, sans-serif; font-weight: 800; font-style: normal; }
+				.inter-820 { font-family: "Inter", Arial, sans-serif; font-weight: 820; font-style: normal; }
+				.inter-840 { font-family: "Inter", Arial, sans-serif; font-weight: 840; font-style: normal; }
+				.inter-900 { font-family: "Inter", Arial, sans-serif; font-weight: 900; font-style: normal; }
 				
 				/* Font weight classes for Nunito Sans */
 				.nunito-200 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 200; font-style: normal; }
@@ -1495,14 +1537,17 @@ export default function MultiPageEditor() {
 				.nunito-500 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 500; font-style: normal; }
 				.nunito-600 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 600; font-style: normal; }
 				.nunito-700 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 700; font-style: normal; }
-				.nunito-760 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 760; font-style: normal; }
 				.nunito-800 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 800; font-style: normal; }
-				.nunito-820 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 820; font-style: normal; }
-				.nunito-840 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 840; font-style: normal; }
 				.nunito-900 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 900; font-style: normal; }
 				
+				/* Default font for content and footer editors */
 				body, *[contenteditable="true"] {
 					font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+				}
+				
+				/* Override for header editor to use Inter */
+				.header-editable *[contenteditable="true"] {
+					font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 				}
 				
 				${isReadOnly ? '.editable { cursor: default !important; }' : ''}
@@ -2622,10 +2667,26 @@ export default function MultiPageEditor() {
 		// Get paginated content
 		const paginationResult = paginateContent();
 
-		// Prepare custom font support for print window with Nunito Sans
+		// Prepare custom font support for print window with Inter and Nunito Sans
 		const fontFaces = `
+			/* Inter Google Fonts */
+			@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+			
 			/* Nunito Sans Google Fonts */
 			@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+			
+			/* Font weight classes for Inter */
+			.inter-200 { font-family: "Inter", Arial, sans-serif; font-weight: 200; font-style: normal; }
+			.inter-300 { font-family: "Inter", Arial, sans-serif; font-weight: 300; font-style: normal; }
+			.inter-400 { font-family: "Inter", Arial, sans-serif; font-weight: 400; font-style: normal; }
+			.inter-500 { font-family: "Inter", Arial, sans-serif; font-weight: 500; font-style: normal; }
+			.inter-600 { font-family: "Inter", Arial, sans-serif; font-weight: 600; font-style: normal; }
+			.inter-700 { font-family: "Inter", Arial, sans-serif; font-weight: 700; font-style: normal; }
+			.inter-760 { font-family: "Inter", Arial, sans-serif; font-weight: 760; font-style: normal; }
+			.inter-800 { font-family: "Inter", Arial, sans-serif; font-weight: 800; font-style: normal; }
+			.inter-820 { font-family: "Inter", Arial, sans-serif; font-weight: 820; font-style: normal; }
+			.inter-840 { font-family: "Inter", Arial, sans-serif; font-weight: 840; font-style: normal; }
+			.inter-900 { font-family: "Inter", Arial, sans-serif; font-weight: 900; font-style: normal; }
 			
 			/* Font weight classes for Nunito Sans */
 			.nunito-200 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 200; font-style: normal; }
@@ -2634,10 +2695,7 @@ export default function MultiPageEditor() {
 			.nunito-500 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 500; font-style: normal; }
 			.nunito-600 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 600; font-style: normal; }
 			.nunito-700 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 700; font-style: normal; }
-			.nunito-760 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 760; font-style: normal; }
 			.nunito-800 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 800; font-style: normal; }
-			.nunito-820 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 820; font-style: normal; }
-			.nunito-840 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 840; font-style: normal; }
 			.nunito-900 { font-family: "Nunito Sans", Arial, sans-serif; font-weight: 900; font-style: normal; }
 		`;
 
@@ -2742,7 +2800,7 @@ export default function MultiPageEditor() {
 							width: calc(100% - ${2 * A4.sideMargin * 3.78}px);
 							box-sizing: border-box;
 							padding-bottom: ${A4.headerSpacing * 3.78}px !important;
-							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+							font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							overflow: visible !important; /* Allow header content to overflow */
 						}
 						
@@ -2857,7 +2915,7 @@ export default function MultiPageEditor() {
 							width: calc(100% - ${2 * A4.sideMargin * 3.78}px);
 							box-sizing: border-box;
 							padding-top: 0 !important;
-							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+							font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 						}
 						
 						/* Footer typography */
@@ -2896,7 +2954,7 @@ export default function MultiPageEditor() {
 								background-color: white;
 								-webkit-print-color-adjust: exact;
 								print-color-adjust: exact;
-								font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+								font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 							}
 							
 							/* Ensure anchor styling is maintained in print */
@@ -2946,6 +3004,7 @@ export default function MultiPageEditor() {
 								margin: 0 !important;
 								padding: 0 !important;
 								line-height: 1.2 !important;
+								font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 								font-size: 12px !important;
 							}
 							
@@ -3821,7 +3880,7 @@ export default function MultiPageEditor() {
 			z-index: 10;
 			opacity: 0.15;
 			transform: rotate(-45deg);
-			font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+			font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 		">
 			<div style="
 				font-size: 90px;
@@ -4027,7 +4086,7 @@ ft chat bubble for Ghi chú/Note */}
 						className="bg-white flex flex-col"
 						style={{
 							fontFamily:
-								"'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+								"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 							width: '718px',
 							margin: '0 auto',
 						}}
@@ -4072,62 +4131,62 @@ ft chat bubble for Ghi chú/Note */}
 			</div>
 
 			<style jsx>{`
-				/* Nunito Sans Google Fonts */
-				@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+				/* Inter Google Fonts */
+				@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 
-				/* Font weight classes for Nunito Sans */
-				.nunito-200 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				/* Font weight classes for Inter */
+				.inter-200 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 200;
 					font-style: normal;
 				}
-				.nunito-300 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				.inter-300 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 300;
 					font-style: normal;
 				}
-				.nunito-400 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				.inter-400 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 400;
 					font-style: normal;
 				}
-				.nunito-500 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				.inter-500 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 500;
 					font-style: normal;
 				}
-				.nunito-600 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				.inter-600 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 600;
 					font-style: normal;
 				}
-				.nunito-700 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				.inter-700 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 700;
 					font-style: normal;
 				}
-				.nunito-760 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				.inter-760 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 760;
 					font-style: normal;
 				}
-				.nunito-800 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				.inter-800 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 800;
 					font-style: normal;
 				}
-				.nunito-820 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				.inter-820 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 820;
 					font-style: normal;
 				}
-				.nunito-840 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				.inter-840 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 840;
 					font-style: normal;
 				}
-				.nunito-900 {
-					font-family: 'Nunito Sans', Arial, sans-serif;
+				.inter-900 {
+					font-family: 'Inter', Arial, sans-serif;
 					font-weight: 900;
 					font-style: normal;
 				}
@@ -4139,14 +4198,12 @@ ft chat bubble for Ghi chú/Note */}
 				@media print {
 					body * {
 						visibility: hidden;
-						font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-							sans-serif !important;
+						font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 					}
 					.print-content,
 					.print-content * {
 						visibility: visible;
-						font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-							sans-serif !important;
+						font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 					}
 					.print-content {
 						position: absolute;

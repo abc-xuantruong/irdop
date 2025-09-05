@@ -78,11 +78,13 @@ const ExperimentLog = () => {
 		totalItems: 0,
 		totalPages: 1,
 	});
+	const [showDetailModal, setShowDetailModal] = useState(false);
+	const [selectedDetailDocument, setSelectedDetailDocument] = useState(null);
 
 	// Debounce timeout for search
 	const [searchTimeout, setSearchTimeout] = useState(null);
 
-	// API constants - sử dụng classifierCode cho nhật ký thí nghiệm
+	// API constants - sử dụng classifierCode cho nhật ký Thử nghiệm
 	const DRAFT_DOCS_API_ENDPOINT = 'https://red.irdop.org/v1/editor/lab_result_report/get_editor';
 	const PUBLISHED_DOCS_API_ENDPOINT = 'https://red.irdop.org/v1/document/get_doc';
 
@@ -179,7 +181,7 @@ const ExperimentLog = () => {
 		}
 	};
 
-	// Load documents from API - chỉ load nhật ký thí nghiệm
+	// Load documents from API - chỉ load nhật ký Thử nghiệm
 	const loadDocuments = async (searchTermToUse = '', page = 1, currentMode = mode, status = documentStatus) => {
 		try {
 			setIsLoading(true);
@@ -202,7 +204,7 @@ const ExperimentLog = () => {
 					page: page,
 					mode: finalMode,
 					sended: status,
-					classifierCode: ['NHAT_KY_THU_NGHIEM'], // Chỉ lấy nhật ký thí nghiệm
+					classifierCode: ['NHAT_KY_THU_NGHIEM'], // Chỉ lấy nhật ký Thử nghiệm
 				};
 			} else {
 				apiEndpoint = DRAFT_DOCS_API_ENDPOINT;
@@ -211,7 +213,7 @@ const ExperimentLog = () => {
 					page: page,
 					mode: finalMode,
 					status: 'submitted',
-					classifierCode: ['NHAT_KY_THU_NGHIEM'], // Chỉ lấy nhật ký thí nghiệm
+					classifierCode: ['NHAT_KY_THU_NGHIEM'], // Chỉ lấy nhật ký Thử nghiệm
 				};
 			}
 
@@ -225,7 +227,7 @@ const ExperimentLog = () => {
 
 				const transformedDocuments = (result.result || []).map((doc) => ({
 					id: doc.id,
-					title: doc.metadata?.header?.title || doc.metadata?.templateName || 'Nhật ký thí nghiệm không có tên',
+					title: doc.metadata?.header?.title || doc.metadata?.templateName || 'Nhật ký Thử nghiệm không có tên',
 					templateCode: doc.metadata?.templateId || 'N/A',
 					lastModified: formatDateTimeGMT7(doc.modifiedAt),
 					author: doc.metadata?.modifiedBy || doc.metadata?.authorName || 'N/A',
@@ -419,450 +421,16 @@ const ExperimentLog = () => {
 		}
 	};
 
-	// ExtractedDataView Component
+	// Handle document click for detail modal
+	const handleDocumentClickForDetail = async (doc) => {
+		console.log('🖱️ Document clicked for detail:', doc.id);
+		setSelectedDetailDocument(doc);
+		setShowDetailModal(true);
+	};
+
+	// ExtractedDataView Component - No longer used, replaced with modal
 	const ExtractedDataView = ({ document }) => {
-		const [analyses, setAnalyses] = useState([]);
-		const [isEditing, setIsEditing] = useState(false);
-		const [isSaving, setIsSaving] = useState(false);
-		const [editableCell, setEditableCell] = useState({ analysisId: null, column: null });
-		const [inputValue, setInputValue] = useState('');
-
-		// Initialize analyses from document metadata
-		useEffect(() => {
-			if (document && document.metadata) {
-				const extractData = document.metadata.extractData || document.metadata;
-				const initialAnalyses = extractData.analyses || [];
-				setAnalyses(
-					initialAnalyses.map((analysis, index) => ({
-						id: index,
-						testId: analysis.testId || '',
-						sampleId: analysis.sampleId || '',
-						testName: analysis.testName || '',
-						testProtocolCode: analysis.testProtocolCode || '',
-						testResult: analysis.testResult || '',
-						testUnit: analysis.testUnit || '',
-					})),
-				);
-			}
-		}, [document]);
-
-		if (!document || !document.metadata) {
-			return (
-				<div className="text-center text-gray-500 p-8">
-					<p>Không có dữ liệu để hiển thị</p>
-				</div>
-			);
-		}
-
-		// Handle cell value change
-		const handleCellChange = (rowIndex, field, value) => {
-			const newAnalyses = [...analyses];
-			newAnalyses[rowIndex] = {
-				...newAnalyses[rowIndex],
-				[field]: value,
-			};
-			setAnalyses(newAnalyses);
-		};
-
-		// Handle cell click with auto-save for previous cell
-		const handleCellClickWithAutoSave = async (analysisId, column, currentValue) => {
-			if (editableCell.analysisId && (editableCell.analysisId !== analysisId || editableCell.column !== column)) {
-				try {
-					// Auto-save previous cell if TinyMCE is active
-					const activeEditor = window.tinymce?.activeEditor;
-					if (activeEditor && editableCell.column === 'testResult') {
-						const prevContent = activeEditor.getContent();
-						handleCellChange(editableCell.analysisId, editableCell.column, prevContent);
-					}
-				} catch (e) {
-					console.warn('Auto-save previous cell failed:', e);
-				}
-			}
-
-			// Open new cell
-			setEditableCell({ analysisId, column });
-			setInputValue(currentValue || '');
-
-			// Focus the new editor after a short delay
-			setTimeout(() => {
-				if (column === 'testResult') {
-					const editor = document.querySelector(`[data-edit-id="${analysisId}-${column}"] .mce-content-body`);
-					if (editor) editor.focus();
-				} else {
-					const input = document.querySelector(`input[data-field="${analysisId}-${column}"]`);
-					if (input) input.focus();
-				}
-			}, 100);
-		};
-
-		// Handle save content for TinyMCE
-		const handleSaveContent = (content, column, analysisId) => {
-			handleCellChange(analysisId, column, content);
-			// Close editing state for this specific cell
-			setEditableCell((prev) => {
-				if (prev.analysisId === analysisId && prev.column === column) {
-					return { analysisId: null, column: null };
-				}
-				return prev;
-			});
-		};
-
-		// Handle key down in TinyMCE
-		const handleKeyDown = (e, content, column, analysisId) => {
-			if (e.key === 'Enter' && !e.shiftKey) {
-				e.preventDefault();
-				handleSaveContent(content, column, analysisId);
-			} else if (e.key === 'Escape') {
-				setEditableCell({ analysisId: null, column: null });
-			}
-		};
-
-		// Add new row
-		const addNewRow = () => {
-			const newRow = {
-				id: analyses.length,
-				testId: '',
-				sampleId: '',
-				testName: '',
-				testProtocolCode: '',
-				testResult: '',
-				testUnit: '',
-			};
-			setAnalyses([...analyses, newRow]);
-		};
-
-		// Remove row
-		const removeRow = (rowIndex) => {
-			if (analyses.length > 0) {
-				const newAnalyses = analyses.filter((_, index) => index !== rowIndex);
-				setAnalyses(newAnalyses);
-			}
-		};
-
-		// Save changes to metadata
-		const saveChanges = async () => {
-			setIsSaving(true);
-			try {
-				// Auto-save current editing cell before saving
-				if (editableCell.analysisId && editableCell.column === 'testResult') {
-					const activeEditor = window.tinymce?.activeEditor;
-					if (activeEditor) {
-						const content = activeEditor.getContent();
-						handleCellChange(editableCell.analysisId, editableCell.column, content);
-					}
-				}
-
-				// Prepare the updated metadata
-				const updatedMetadata = {
-					...document.metadata,
-					extractData: {
-						...document.metadata.extractData,
-						analyses: analyses.map((analysis) => ({
-							testId: analysis.testId,
-							sampleId: analysis.sampleId,
-							testName: analysis.testName,
-							testProtocolCode: analysis.testProtocolCode,
-							testResult: analysis.testResult,
-							testUnit: analysis.testUnit,
-						})),
-					},
-				};
-
-				// Call API to update document metadata
-				const response = await apiPostLocal('https://red.irdop.org/v1/editor/lab_result_report/update_metadata', {
-					documentId: document.id,
-					metadata: updatedMetadata,
-				});
-
-				if (response.status === 200) {
-					showAutoHideMessage('Đã lưu thay đổi thành công!', 'success');
-					setIsEditing(false);
-					setEditableCell({ analysisId: null, column: null });
-					// Update the document in parent component if needed
-					if (selectedDocumentForPreview) {
-						setSelectedDocumentForPreview({
-							...selectedDocumentForPreview,
-							metadata: updatedMetadata,
-						});
-					}
-				} else {
-					throw new Error('Không thể lưu thay đổi');
-				}
-			} catch (error) {
-				console.error('Error saving changes:', error);
-				showAutoHideMessage('Lỗi khi lưu thay đổi: ' + error.message, 'error');
-			} finally {
-				setIsSaving(false);
-			}
-		};
-
-		// Cancel editing
-		const cancelEditing = () => {
-			// Reset to original data
-			const extractData = document.metadata.extractData || document.metadata;
-			const originalAnalyses = extractData.analyses || [];
-			setAnalyses(
-				originalAnalyses.map((analysis, index) => ({
-					id: index,
-					testId: analysis.testId || '',
-					sampleId: analysis.sampleId || '',
-					testName: analysis.testName || '',
-					testProtocolCode: analysis.testProtocolCode || '',
-					testResult: analysis.testResult || '',
-					testUnit: analysis.testUnit || '',
-				})),
-			);
-			setIsEditing(false);
-			setEditableCell({ analysisId: null, column: null });
-		};
-
-		// Restore row to original values
-		const restoreRow = (index) => {
-			// For now, we'll just reset to empty values
-			// In a real application, you would store original values to restore
-			const newAnalyses = [...analyses];
-			newAnalyses[index] = {
-				...newAnalyses[index],
-				sampleId: '',
-				testName: '',
-				testProtocolCode: '',
-				testResult: '',
-				testUnit: '',
-			};
-			setAnalyses(newAnalyses);
-		};
-
-		// Render editable cell
-		const renderEditableCell = (value, rowIndex, field, className = '') => {
-			if (isEditing) {
-				// Special handling for testResult field with TinyMCE
-				if (field === 'testResult') {
-					const isActive = editableCell.analysisId === rowIndex && editableCell.column === field;
-
-					if (isActive) {
-						return (
-							<div className="table-cell-editor min-h-[40px]" data-edit-id={`${rowIndex}-${field}`}>
-								<TinyMceInput
-									value={value || ''}
-									onUpdate={(content) => handleSaveContent(content, field, rowIndex)}
-									onKey={(e, content) => handleKeyDown(e, content, field, rowIndex)}
-								/>
-							</div>
-						);
-					} else {
-						return (
-							<div
-								className={`min-h-[40px] cursor-pointer hover:bg-blue-50 p-2 rounded border border-transparent hover:border-blue-300 ${className}`}
-								onClick={() => handleCellClickWithAutoSave(rowIndex, field, value)}
-								dangerouslySetInnerHTML={{
-									__html: value || '<span class="text-gray-400 italic">Click để chỉnh sửa...</span>',
-								}}
-							/>
-						);
-					}
-				}
-
-				// Regular input for other fields
-				return (
-					<input
-						type="text"
-						value={value}
-						onChange={(e) => handleCellChange(rowIndex, field, e.target.value)}
-						data-field={`${rowIndex}-${field}`}
-						className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white ${className}`}
-					/>
-				);
-			}
-
-			// Display mode - render HTML for testResult, plain text for others
-			if (field === 'testResult') {
-				return <div className={`min-h-[20px] ${className}`} dangerouslySetInnerHTML={{ __html: value || '--' }} />;
-			}
-
-			return <span className={className}>{value || '--'}</span>;
-		};
-
-		return (
-			<div className="space-y-4">
-				{/* Header with document info and controls */}
-				<div className="border-b border-gray-200 pb-4">
-					<div className="flex items-center justify-between mb-2">
-						<h3 className="text-xl font-bold text-gray-900">{document.title}</h3>
-						<div className="flex items-center gap-2">
-							{!isEditing ? (
-								<button
-									onClick={() => setIsEditing(true)}
-									className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-								>
-									✏️ Chỉnh sửa
-								</button>
-							) : (
-								<>
-									<button
-										onClick={saveChanges}
-										disabled={isSaving}
-										className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50"
-									>
-										{isSaving ? '💾 Đang lưu...' : '💾 Lưu'}
-									</button>
-									<button
-										onClick={cancelEditing}
-										disabled={isSaving}
-										className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm disabled:opacity-50"
-									>
-										❌ Hủy
-									</button>
-								</>
-							)}
-						</div>
-					</div>
-					<div className="flex items-center gap-4 text-sm text-gray-600">
-						<span>ID: {document.id}</span>
-						<span>Người tạo: {getIdentityName(document)}</span>
-						<span>Cập nhật: {document.lastModified}</span>
-					</div>
-				</div>
-
-				{/* Analyses Table */}
-				<div className="space-y-4">
-					<div className="flex items-center justify-between">
-						<h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-							📊 Phân tích & Kết quả ({analyses.length})
-						</h4>
-						{isEditing && (
-							<button
-								onClick={addNewRow}
-								className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors"
-							>
-								➕ Thêm hàng
-							</button>
-						)}
-					</div>
-
-					<div className="overflow-x-auto">
-						<table className="w-full border-collapse border border-gray-300">
-							<thead>
-								<tr className="bg-gray-50">
-									<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 min-w-[50px]">
-										STT
-									</th>
-									<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 min-w-[100px]">
-										Mã chỉ tiêu
-									</th>
-									<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 min-w-[100px]">
-										Mã mẫu
-									</th>
-									<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 min-w-[150px]">
-										Tên chỉ tiêu
-									</th>
-									<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 min-w-[120px]">
-										Phương pháp
-									</th>
-									<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 min-w-[100px]">
-										Kết quả
-									</th>
-									<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 min-w-[80px]">
-										Đơn vị
-									</th>
-									{isEditing && (
-										<th className="border border-gray-300 px-3 py-2 text-center font-semibold text-gray-700 min-w-[80px]">
-											Thao tác
-										</th>
-									)}
-								</tr>
-							</thead>
-							<tbody>
-								{analyses.length === 0 ? (
-									<tr>
-										<td
-											colSpan={isEditing ? 8 : 7}
-											className="border border-gray-300 px-3 py-8 text-center text-gray-500"
-										>
-											Không có dữ liệu phân tích
-											{isEditing && (
-												<div className="mt-2">
-													<button
-														onClick={addNewRow}
-														className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
-													>
-														➕ Thêm hàng đầu tiên
-													</button>
-												</div>
-											)}
-										</td>
-									</tr>
-								) : (
-									analyses.map((analysis, index) => (
-										<tr key={analysis.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-											<td className="border border-gray-300 px-3 py-2 text-center">{index + 1}</td>
-											<td className="border border-gray-300 px-3 py-2">
-												{isEditing ? (
-													<span className="font-medium text-red-600 bg-gray-100 px-2 py-1 rounded">
-														{analysis.testId || '--'}
-													</span>
-												) : (
-													<span className="font-medium text-red-600">{analysis.testId || '--'}</span>
-												)}
-											</td>
-											<td className="border border-gray-300 px-3 py-2">
-												{renderEditableCell(analysis.sampleId, index, 'sampleId', 'font-medium text-blue-600')}
-											</td>
-											<td className="border border-gray-300 px-3 py-2">
-												{renderEditableCell(analysis.testName, index, 'testName')}
-											</td>
-											<td className="border border-gray-300 px-3 py-2">
-												{renderEditableCell(analysis.testProtocolCode, index, 'testProtocolCode')}
-											</td>
-											<td className="border border-gray-300 px-3 py-2 align-top">
-												{renderEditableCell(analysis.testResult, index, 'testResult', 'font-medium')}
-											</td>
-											<td className="border border-gray-300 px-3 py-2">
-												{renderEditableCell(analysis.testUnit, index, 'testUnit')}
-											</td>
-											{isEditing && (
-												<td className="border border-gray-300 px-3 py-2 text-center">
-													<div className="flex justify-center space-x-1">
-														<button
-															onClick={() => restoreRow(index)}
-															className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
-															title="Khôi phục giá trị gốc"
-														>
-															<FaUndo size={14} />
-														</button>
-														<button
-															onClick={() => removeRow(index)}
-															className="p-1 text-red-600 hover:text-red-800 transition-colors"
-															title="Xóa hàng"
-														>
-															<FaTrash size={14} />
-														</button>
-													</div>
-												</td>
-											)}
-										</tr>
-									))
-								)}
-							</tbody>
-						</table>
-					</div>
-
-					{isEditing && analyses.length > 0 && (
-						<div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-							<p>
-								<strong>Hướng dẫn:</strong>
-							</p>
-							<ul className="list-disc list-inside mt-1 space-y-1">
-								<li>Click vào ô để chỉnh sửa giá trị</li>
-								<li>Sử dụng nút "➕ Thêm hàng" để thêm dòng mới</li>
-								<li>Sử dụng nút "🗑️" để xóa dòng</li>
-								<li>Nhấn "💾 Lưu" để lưu tất cả thay đổi vào metadata</li>
-								<li>Nhấn "❌ Hủy" để bỏ qua các thay đổi</li>
-							</ul>
-						</div>
-					)}
-				</div>
-			</div>
-		);
+		return null;
 	};
 
 	// Generate smart pagination numbers
@@ -904,6 +472,242 @@ const ExperimentLog = () => {
 		await loadDocuments(lastSearchTerm, newPage, mode, documentStatus);
 	};
 
+	// Detail Modal Component
+	const DetailModal = ({ document, isOpen, onClose }) => {
+		const [isEditing, setIsEditing] = useState(false);
+		const [editedAnalyses, setEditedAnalyses] = useState([]);
+
+		// Initialize edited analyses when document changes
+		useEffect(() => {
+			if (document?.metadata?.analyses) {
+				setEditedAnalyses(JSON.parse(JSON.stringify(document.metadata.analyses)));
+			}
+		}, [document]);
+
+		const handleEditToggle = () => {
+			if (isEditing) {
+				// Cancel editing - reset to original data
+				setEditedAnalyses(JSON.parse(JSON.stringify(document.metadata.analyses || [])));
+			}
+			setIsEditing(!isEditing);
+		};
+
+		const handleSaveChanges = () => {
+			// Here you would typically save the changes to the backend
+			showAutoHideMessage('Đã lưu thay đổi thành công!', 'success');
+			setIsEditing(false);
+		};
+
+		const handleAnalysisChange = (index, field, value) => {
+			const updatedAnalyses = [...editedAnalyses];
+			updatedAnalyses[index] = { ...updatedAnalyses[index], [field]: value };
+			setEditedAnalyses(updatedAnalyses);
+		};
+
+		if (!isOpen || !document) return null;
+
+		const analyses = isEditing ? editedAnalyses : document.metadata?.analyses || [];
+		const samples = document.metadata?.samples || [];
+		const sampleUIDs = samples.map((s) => s.sampleId);
+
+		return (
+			<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+				<div className="bg-white rounded-lg shadow-xl max-w-full w-full mx-2 max-h-[95vh] overflow-hidden">
+					<div className="flex items-center justify-between px-6 py-2 border-b">
+						<h2 className="text-xl font-bold text-gray-900 text-left">
+							{document.metadata?.header?.title || document.title} - Chi tiết nhật ký thử nghiệm
+						</h2>
+						<div className="flex items-center gap-2">
+							{isEditing ? (
+								<>
+									<button
+										onClick={handleSaveChanges}
+										className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium transition-colors"
+									>
+										Lưu
+									</button>
+									<button
+										onClick={handleEditToggle}
+										className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium transition-colors"
+									>
+										Hủy
+									</button>
+								</>
+							) : (
+								<button
+									onClick={handleEditToggle}
+									className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium transition-colors"
+								>
+									Sửa
+								</button>
+							)}
+							<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl py-1 px-4">
+								×
+							</button>
+						</div>
+					</div>
+					<div className="p-6 overflow-y-auto max-h-[calc(95vh-60px)]">
+						<div className="mb-6">
+							<h3 className="font-semibold text-gray-900 mb-4 text-left">Thông tin cơ bản</h3>
+							<div className="grid grid-cols-3 gap-6 text-left">
+								<div className="space-y-3 text-sm">
+									<p>
+										<strong>Mã:</strong> {document.id}
+									</p>
+									<p>
+										<strong>Người tạo:</strong> {getIdentityName(document)}
+									</p>
+								</div>
+								<div className="space-y-3 text-sm">
+									<p>
+										<strong>Cập nhật:</strong> {document.lastModified}
+									</p>
+									<p>
+										<strong>Trạng thái:</strong> {document.status === 'draft' ? 'Chờ duyệt' : 'Đã phát hành'}
+									</p>
+								</div>
+								<div className="space-y-3 text-sm">
+									<p>
+										<strong>Số lượng mẫu:</strong> {samples.length}
+									</p>
+									<p>
+										<strong>Số lượng phân tích:</strong> {analyses.length}
+									</p>
+								</div>
+							</div>
+						</div>
+
+						<div className="mb-6">
+							<h3 className="font-semibold text-gray-900 mb-4 text-left">Danh sách Sample UIDs</h3>
+							<div className="flex flex-wrap gap-2 justify-start">
+								{sampleUIDs.map((uid, index) => (
+									<span key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm text-left">
+										{uid}
+									</span>
+								))}
+							</div>
+						</div>
+
+						<div>
+							<div className="flex items-center justify-between mb-4">
+								<h3 className="font-semibold text-gray-900 text-left">Danh sách phân tích</h3>
+								{isEditing && (
+									<span className="text-sm text-blue-600 font-medium">
+										Đang chỉnh sửa - Nhấp vào các ô để sửa giá trị
+									</span>
+								)}
+							</div>
+							<div className="overflow-x-auto">
+								<table className="w-full border-collapse border border-gray-300 text-left">
+									<thead>
+										<tr className="bg-gray-50">
+											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">STT</th>
+											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">Mã mẫu</th>
+											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">
+												Mã chỉ tiêu
+											</th>
+											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">
+												Tên chỉ tiêu
+											</th>
+											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">
+												Kết quả
+											</th>
+											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">Đơn vị</th>
+											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">
+												Phương pháp
+											</th>
+										</tr>
+									</thead>
+									<tbody>
+										{analyses.length === 0 ? (
+											<tr>
+												<td colSpan="7" className="border border-gray-300 px-3 py-4 text-left text-gray-500">
+													Không có dữ liệu phân tích
+												</td>
+											</tr>
+										) : (
+											analyses.map((analysis, index) => (
+												<tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+													<td className="border border-gray-300 px-3 py-2 text-left">{index + 1}</td>
+													<td className="border border-gray-300 px-3 py-2 font-medium text-blue-600 text-left">
+														{isEditing ? (
+															<input
+																type="text"
+																value={analysis.sampleId || ''}
+																onChange={(e) => handleAnalysisChange(index, 'sampleId', e.target.value)}
+																className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+																placeholder="Nhập mã mẫu..."
+															/>
+														) : (
+															analysis.sampleId || '--'
+														)}
+													</td>
+													<td className="border border-gray-300 px-3 py-2 text-left">{analysis.testId || '--'}</td>
+													<td className="border border-gray-300 px-3 py-2 text-left">
+														{isEditing ? (
+															<input
+																type="text"
+																value={analysis.testName || ''}
+																onChange={(e) => handleAnalysisChange(index, 'testName', e.target.value)}
+																className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+																placeholder="Nhập tên chỉ tiêu..."
+															/>
+														) : (
+															analysis.testName || '--'
+														)}
+													</td>
+													<td className="border border-gray-300 px-3 py-2 text-left">
+														{isEditing ? (
+															<input
+																type="text"
+																value={analysis.testResult || ''}
+																onChange={(e) => handleAnalysisChange(index, 'testResult', e.target.value)}
+																className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+																placeholder="Nhập kết quả..."
+															/>
+														) : (
+															<span dangerouslySetInnerHTML={{ __html: analysis.testResult || '--' }} />
+														)}
+													</td>
+													<td className="border border-gray-300 px-3 py-2 text-left">
+														{isEditing ? (
+															<input
+																type="text"
+																value={analysis.testUnit || ''}
+																onChange={(e) => handleAnalysisChange(index, 'testUnit', e.target.value)}
+																className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+																placeholder="Nhập đơn vị..."
+															/>
+														) : (
+															analysis.testUnit || '--'
+														)}
+													</td>
+													<td className="border border-gray-300 px-3 py-2 text-left">
+														{isEditing ? (
+															<input
+																type="text"
+																value={analysis.testProtocolCode || ''}
+																onChange={(e) => handleAnalysisChange(index, 'testProtocolCode', e.target.value)}
+																className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+																placeholder="Nhập phương pháp..."
+															/>
+														) : (
+															analysis.testProtocolCode || '--'
+														)}
+													</td>
+												</tr>
+											))
+										)}
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		);
+	};
+
 	return (
 		<>
 			<style>
@@ -923,250 +727,205 @@ const ExperimentLog = () => {
 					.custom-scrollbar::-webkit-scrollbar-thumb:hover {
 						background: #94a3b8;
 					}
-					
-					/* TinyMCE in table cells */
-					.mce-content-body {
-						min-height: 30px !important;
-						padding: 4px !important;
-						margin: 0 !important;
-						font-size: 14px !important;
-						line-height: 1.4 !important;
-					}
-					
-					.mce-edit-focus {
-						outline: 2px solid #3b82f6 !important;
-						outline-offset: -2px !important;
-						border-radius: 4px !important;
-					}
-					
-					/* Ensure TinyMCE doesn't overflow table cells */
-					.table-cell-editor {
-						position: relative;
-						z-index: 1;
-					}
-					
-					.table-cell-editor .mce-tinymce {
-						border: 1px solid #d1d5db !important;
-						border-radius: 4px !important;
-					}
 				`}
 			</style>
 
-			<div className="w-full flex gap-6" style={{ height: 'calc(100vh - 140px)', minHeight: '600px' }}>
-				{/* Cột trái: Danh sách nhật ký thí nghiệm (Sidebar) */}
-				<div className="w-1/3 flex flex-col gap-4 h-full min-w-[400px]">
-					<div className="bg-white rounded-xl shadow-sm border p-6 flex-1 flex flex-col min-h-0">
-						<div className="flex items-center justify-between mb-4 flex-shrink-0">
-							<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-								<FaClock className="text-blue-600" />
-								{documentStatus === 'draft' ? 'Nhật ký chờ duyệt' : 'Nhật ký đã phát hành'}
-								{isLoading && (
-									<div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-								)}
-							</h3>
+			{/* Detail Modal */}
+			<DetailModal
+				document={selectedDetailDocument}
+				isOpen={showDetailModal}
+				onClose={() => setShowDetailModal(false)}
+			/>
 
-							{/* Document Status Toggle */}
-							<label className="relative inline-flex items-center cursor-pointer">
-								<input
-									type="checkbox"
-									checked={isDraft}
-									onChange={handleToggleChange}
-									className="sr-only"
-									disabled={isLoading}
-								/>
-								<div className="w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
-									<div
-										className={`absolute top-0 h-full w-1/2 bg-blue-500 rounded-full transition-all duration-300 ease-in-out
-											${isDraft ? 'left-0' : 'left-1/2'}`}
-									></div>
-									<div className="absolute left-0 w-1/2 h-full flex items-center justify-center">
-										<span
-											className={`text-xs font-medium transition-all duration-300 ease-in-out
-												${isDraft ? 'text-white' : 'text-gray-600'}`}
-										>
-											PENDING
-										</span>
-									</div>
-									<div className="absolute right-0 w-1/2 h-full flex items-center justify-center">
-										<span
-											className={`text-xs font-medium transition-all duration-300 ease-in-out
-												${!isDraft ? 'text-white' : 'text-gray-600'}`}
-										>
-											PUBLISHED
-										</span>
-									</div>
+			<div className="w-full flex flex-col">
+				{/* Header */}
+				<div className="rounded-xl shadow-sm border p-6 mb-4 flex-shrink-0">
+					<div className="flex items-center justify-between">
+						<h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+							<FaClock className="text-blue-600" />
+							Nhật ký Thử nghiệm
+							{isLoading && (
+								<div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+							)}
+						</h2>
+
+						{/* Document Status Toggle */}
+						<label className="relative inline-flex items-center cursor-pointer">
+							<input
+								type="checkbox"
+								checked={isDraft}
+								onChange={handleToggleChange}
+								className="sr-only"
+								disabled={isLoading}
+							/>
+							<div className="w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
+								<div
+									className={`absolute top-0 h-full w-1/2 bg-blue-500 rounded-full transition-all duration-300 ease-in-out
+										${isDraft ? 'left-0' : 'left-1/2'}`}
+								></div>
+								<div className="absolute left-0 w-1/2 h-full flex items-center justify-center">
+									<span
+										className={`text-xs font-medium transition-all duration-300 ease-in-out
+											${isDraft ? 'text-white' : 'text-gray-600'}`}
+									>
+										PENDING
+									</span>
 								</div>
-							</label>
-						</div>
-
-						<div className="flex-shrink-0">
-							<div className="relative mb-3">
-								<FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-								<input
-									type="text"
-									placeholder="Tìm nhật ký... (Nhấn Enter để tìm kiếm)"
-									value={searchTerm}
-									onChange={(e) => handleSearchInputChange(e.target.value)}
-									onKeyPress={handleSearchKeyPress}
-									className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-								/>
+								<div className="absolute right-0 w-1/2 h-full flex items-center justify-center">
+									<span
+										className={`text-xs font-medium transition-all duration-300 ease-in-out
+											${!isDraft ? 'text-white' : 'text-gray-600'}`}
+									>
+										PUBLISHED
+									</span>
+								</div>
 							</div>
+						</label>
+					</div>
 
-							{/* Pagination */}
-							{pagination.totalPages > 1 && (
-								<div className="flex items-center justify-center pb-2">
-									<div className="flex items-center gap-1 flex-wrap justify-center">
-										<button
-											onClick={() => handlePageChange(pagination.currentPage - 1)}
-											disabled={pagination.currentPage === 1}
-											className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-										>
-											Trước
-										</button>
-										{getSmartPaginationNumbers(pagination.currentPage, pagination.totalPages).map((page, index) => (
-											<span key={index}>
-												{page === '...' ? (
-													<span className="px-2 py-1 text-xs text-gray-500">...</span>
-												) : (
-													<button
-														onClick={() => handlePageChange(page)}
-														className={`px-2 py-1 text-xs border rounded ${
-															page === pagination.currentPage
-																? 'bg-blue-500 text-white border-blue-500'
-																: 'border-gray-300 hover:bg-gray-50'
-														}`}
-													>
-														{page}
-													</button>
-												)}
-											</span>
-										))}
-										<button
-											onClick={() => handlePageChange(pagination.currentPage + 1)}
-											disabled={pagination.currentPage === pagination.totalPages}
-											className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-										>
-											Sau
-										</button>
-									</div>
-								</div>
-							)}
-						</div>
+					{/* Search and Pagination */}
+					<div className="mt-4 flex items-center justify-between">
+						{/* Pagination - Bên trái */}
+						{pagination.totalPages > 1 && (
+							<div className="flex items-center gap-1">
+								<button
+									onClick={() => handlePageChange(pagination.currentPage - 1)}
+									disabled={pagination.currentPage === 1}
+									className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									Trước
+								</button>
+								{getSmartPaginationNumbers(pagination.currentPage, pagination.totalPages).map((page, index) => (
+									<span key={index}>
+										{page === '...' ? (
+											<span className="px-2 py-1 text-sm text-gray-500">...</span>
+										) : (
+											<button
+												onClick={() => handlePageChange(page)}
+												className={`px-3 py-1 text-sm border rounded ${
+													page === pagination.currentPage
+														? 'bg-blue-500 text-white border-blue-500'
+														: 'border-gray-300 hover:bg-gray-50'
+												}`}
+											>
+												{page}
+											</button>
+										)}
+									</span>
+								))}
+								<button
+									onClick={() => handlePageChange(pagination.currentPage + 1)}
+									disabled={pagination.currentPage === pagination.totalPages}
+									className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									Sau
+								</button>
+							</div>
+						)}
 
-						<div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
-							{isLoading ? (
-								<div className="flex justify-center items-center h-32">
-									<div className="text-gray-500">Đang tải...</div>
-								</div>
-							) : documents.length === 0 ? (
-								<div className="flex flex-col items-center justify-center h-32 text-gray-500">
-									<FaFileAlt className="w-8 h-8 mb-2 text-gray-300" />
-									<div className="text-sm">
-										{documentStatus === 'published'
-											? mode === 'personal'
-												? 'Không có nhật ký đã phát hành cá nhân nào'
-												: 'Không có nhật ký đã phát hành nào'
-											: mode === 'personal'
-											? 'Không có nhật ký chờ duyệt cá nhân nào'
-											: 'Không có nhật ký chờ duyệt nào'}
-									</div>
-									<div className="text-xs mt-1">Nhấn Enter để tìm kiếm với từ khóa mới</div>
-								</div>
-							) : (
-								<div className="space-y-3">
-									{documents.map((doc) => (
-										<div
-											key={doc.id}
-											onClick={() => handleDocumentClick(doc)}
-											className={`p-4 pb-3 border rounded-lg cursor-pointer transition-all hover:shadow-md hover:border-green-300 ${
-												selectedDocument?.id === doc.id ? 'border-green-500 bg-green-50' : 'border-gray-200'
-											}`}
-										>
-											<div className="relative">
-												{/* Header info section */}
-												<div className="flex items-center justify-between text-xs text-start mb-2">
-													<div className="text-gray-600 px-2 py-1 rounded">Mã: {doc.id}</div>
-													<div className="text-gray-500">{getIdentityName(doc)}</div>
-													<div className="text-gray-500">{doc.lastModified}</div>
-												</div>
-												{/* Title Section */}
-												<div className="flex items-center gap-2 mb-2">
-													<FaFileAlt className="text-gray-500 flex-shrink-0" />
-													<span className="font-medium text-gray-900 text-sm leading-tight text-start">
-														{doc.metadata?.header?.title || doc.title}
-													</span>
-												</div>
-												{/* Sample UIDs Section */}
-												{doc.metadata?.sampleUIDs && doc.metadata.sampleUIDs.length > 0 && (
-													<div className="mb-0">
-														<div className="flex flex-wrap gap-1">
-															{doc.metadata.sampleUIDs.slice(0, 5).map((uid, index) => (
-																<span
-																	key={index}
-																	className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium"
-																>
-																	{uid}
-																</span>
-															))}
-															{doc.metadata.sampleUIDs.length > 5 && (
-																<span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">
-																	+{doc.metadata.sampleUIDs.length - 5}
-																</span>
-															)}
-														</div>
-													</div>
-												)}
-											</div>
-										</div>
-									))}
-								</div>
-							)}
+						{/* Search - Bên phải */}
+						<div className="relative max-w-md">
+							<FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+							<input
+								type="text"
+								placeholder="Tìm nhật ký... (Nhấn Enter để tìm kiếm)"
+								value={searchTerm}
+								onChange={(e) => handleSearchInputChange(e.target.value)}
+								onKeyPress={handleSearchKeyPress}
+								className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+							/>
 						</div>
 					</div>
 				</div>
 
-				{/* Cột phải: Dữ liệu trích xuất */}
-				<div className="flex-1 flex flex-col h-full min-h-0" style={{ minWidth: '500px' }}>
-					<div className="bg-white rounded-xl shadow-sm border h-full flex flex-col min-h-0">
-						{/* Header */}
-						<div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
-							<h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-								<FaDatabase className="text-purple-600" />
-								Dữ liệu trích xuất
-							</h3>
+				{/* Grid Layout */}
+				<div className="flex-1 overflow-auto custom-scrollbar">
+					{isLoading ? (
+						<div className="flex justify-center items-center h-64">
+							<div className="text-gray-500">Đang tải...</div>
 						</div>
+					) : documents.length === 0 ? (
+						<div className="flex flex-col items-center justify-center h-64 text-gray-500">
+							<FaFileAlt className="w-12 h-12 mb-4 text-gray-300" />
+							<div className="text-lg font-medium mb-2">
+								{documentStatus === 'published'
+									? mode === 'personal'
+										? 'Không có nhật ký đã phát hành cá nhân nào'
+										: 'Không có nhật ký đã phát hành nào'
+									: mode === 'personal'
+									? 'Không có nhật ký chờ duyệt cá nhân nào'
+									: 'Không có nhật ký chờ duyệt nào'}
+							</div>
+							<div className="text-sm">Nhấn Enter để tìm kiếm với từ khóa mới</div>
+						</div>
+					) : (
+						<div className="grid grid-cols-5 gap-4 p-4">
+							{/* Header Row */}
+							<div className="col-span-5 grid grid-cols-5 gap-4 mb-4">
+								<div className="p-3 text-left font-semibold text-gray-700">Mã & Thời gian</div>
+								<div className="p-3 text-left font-semibold text-gray-700">Tiêu đề</div>
+								<div className="p-3 text-left font-semibold text-gray-700">Số lượng Sample</div>
+								<div className="p-3 text-left font-semibold text-gray-700">Số lượng Analyses</div>
+								<div className="p-3 text-left font-semibold text-gray-700">Sample UIDs</div>
+							</div>
 
-						{/* Nội dung dữ liệu trích xuất */}
-						<div className="flex-1 p-4 overflow-auto custom-scrollbar min-h-0">
-							{selectedDocumentForPreview ? (
-								<div className="bg-gray-50 rounded-lg p-4 h-full">
-									<div className="bg-white rounded-lg shadow-sm h-full overflow-auto custom-scrollbar">
-										<div
-											className="w-full h-full p-4 bg-white overflow-auto custom-scrollbar text-start"
-											style={{
-												fontFamily: "'Arial', sans-serif",
-												fontSize: '14px',
-												lineHeight: '1.5',
-											}}
-										>
-											{/* Hiển thị dữ liệu trích xuất */}
-											<ExtractedDataView document={selectedDocumentForPreview} />
+							{/* Data Rows */}
+							{documents.map((doc) => {
+								const analyses = doc.metadata?.analyses || [];
+								const samples = doc.metadata?.samples || [];
+								const sampleUIDs = samples.map((s) => s.sampleId);
+
+								return (
+									<div
+										key={doc.id}
+										className="col-span-5 grid grid-cols-5 gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
+										onClick={() => handleDocumentClickForDetail(doc)}
+									>
+										{/* Column 1: Mã & Thời gian */}
+										<div className="flex flex-col items-start justify-start text-left">
+											<div className="font-semibold text-blue-600 text-sm mb-1">{doc.id}</div>
+											<div className="text-xs text-gray-500">{doc.lastModified}</div>
+										</div>
+
+										{/* Column 2: Tiêu đề */}
+										<div className="flex items-start justify-start text-left">
+											<span className="font-medium text-gray-900 text-sm leading-tight">
+												{doc.metadata?.header?.title || doc.title}
+											</span>
+										</div>
+
+										{/* Column 3: Số lượng Samples */}
+										<div className="flex items-start justify-start text-left">
+											<span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+												{samples.length}
+											</span>
+										</div>
+
+										{/* Column 4: Số lượng Analyses */}
+										<div className="flex items-start justify-start text-left">
+											<span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+												{analyses.length}
+											</span>
+										</div>
+
+										{/* Column 5: Sample UIDs (tối đa 5) */}
+										<div className="flex flex-wrap gap-1 justify-start items-start text-left">
+											{sampleUIDs.slice(0, 5).map((uid, index) => (
+												<span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+													{uid}
+												</span>
+											))}
+											{sampleUIDs.length > 5 && (
+												<span className="bg-gray-200 text-gray-600 px-2 py-1 rounded text-xs">
+													+{sampleUIDs.length - 5}
+												</span>
+											)}
 										</div>
 									</div>
-								</div>
-							) : (
-								<div className="flex items-center justify-center h-full text-gray-500">
-									<div className="text-center">
-										<FaDatabase className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-										<p className="text-lg font-medium mb-2">Chưa chọn tài liệu</p>
-										<p className="text-sm">
-											Vui lòng chọn một tài liệu từ danh sách bên trái để xem dữ liệu trích xuất
-										</p>
-									</div>
-								</div>
-							)}
+								);
+							})}
 						</div>
-					</div>
+					)}
 				</div>
 			</div>
 		</>

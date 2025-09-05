@@ -132,6 +132,7 @@ const SampleInfor = () => {
 	const [sampleDropdownVisible, setSampleDropdownVisible] = useState(false);
 	const [refreshTrigger, setRefreshTrigger] = useState(0);
 	const [isBulkDeadlineVisible, setIsBulkDeadlineVisible] = useState(false);
+	const [bulkDeadlineDate, setBulkDeadlineDate] = useState(new Date());
 
 	// Add new state variables for unique lists and dropdowns
 	const [uniqueParameterNames, setUniqueParameterNames] = useState([]);
@@ -1246,11 +1247,8 @@ const SampleInfor = () => {
 							// Validate that the technician_uid exists in the technicians list
 							const techExists = technicians.find((tech) => tech.identity_uid === analysis.technician_uid);
 							if (!techExists) {
-								console.warn(
-									`Technician UID ${analysis.technician_uid} not found in technicians list for analysis ${analysis.id}`,
-								);
-								// Optionally set to null if technician doesn't exist
-								// analysis.technician_uid = null;
+								// Set to null if technician doesn't exist
+								analysis.technician_uid = null;
 							}
 						}
 					}

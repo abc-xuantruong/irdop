@@ -15,7 +15,7 @@ const AnalyteBulkUpdate = ({
 	const [bulkEditValues, setBulkEditValues] = useState({});
 	const defaultEditorRef = useRef(null);
 	const engEditorRef = useRef(null);
-    const [selectedAnalytes, setSelectedAnalytes] = useState(selectedRows);
+	const [selectedAnalytes, setSelectedAnalytes] = useState(selectedRows);
 
 	// Helper functions for display_style array management
 	const getDisplayStyleValue = (displayStyleArray, label) => {
@@ -182,7 +182,7 @@ const AnalyteBulkUpdate = ({
 			// Clear previous editors first
 			cleanupTinyMCE('bulk-tinymce-default');
 			cleanupTinyMCE('bulk-tinymce-eng');
-			
+
 			setTimeout(() => {
 				const defaultElement = document.getElementById('bulk-tinymce-default');
 				const engElement = document.getElementById('bulk-tinymce-eng');
@@ -214,18 +214,19 @@ const AnalyteBulkUpdate = ({
 
 	// Reset editors when selectedAnalytes changes
 	useEffect(() => {
-		if (isOpen && selectedAnalytes.length > 0) {
-			// Reset bulk edit values to empty state
+		if (isOpen && selectedRows.size > 0) {
+			// Reset bulk edit values to empty state (undefined means not set)
 			setBulkEditValues({
-				field_unit: '',
-				source: '',
-				phuong_phap: '',
-				don_vi: '',
-				gia: '',
-				technician_alias: '',
-				display_style: []
+				field: undefined,
+				accreditation: undefined,
+				protocol_source: undefined,
+				protocol_code: undefined,
+				default_unit: undefined,
+				price: undefined,
+				technician_alias: undefined,
+				display_style: undefined,
 			});
-			
+
 			// Update TinyMCE content if editors are available
 			setTimeout(() => {
 				if (window.tinymce && window.tinymce.get('bulk-tinymce-default')) {
@@ -236,20 +237,26 @@ const AnalyteBulkUpdate = ({
 				}
 			}, 100);
 		}
-	}, [selectedAnalytes, isOpen]);
+	}, [selectedRows, isOpen]);
 
 	// Handle bulk edit value changes
 	const handleBulkEditChange = (field, value) => {
+		// If user selects "-- Không thay đổi --", set to undefined
+		const processedValue = value === '' ? undefined : value;
+
 		setBulkEditValues((prev) => ({
 			...prev,
-			[field]: value,
+			[field]: processedValue,
 		}));
 	};
 
 	// Handle display style changes
 	const handleDisplayStyleChange = (label, content) => {
 		// Normalize to check if effectively empty
-		const plainText = content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, '').trim();
+		const plainText = content
+			.replace(/<[^>]*>/g, '')
+			.replace(/&nbsp;/g, '')
+			.trim();
 		if (plainText === '') {
 			// Remove if empty
 			setBulkEditValues((prev) => ({
@@ -266,43 +273,55 @@ const AnalyteBulkUpdate = ({
 	};
 
 	// Helper function to check if a field has changes
-	const hasFieldChanged = (field, currentValue, newValue) => {
-		if (!newValue && newValue !== 0) return false; // No new value provided
-		
+	const hasFieldChanged = (formField, currentValue, newValue) => {
+		if (newValue === undefined) return false; // No new value provided
+
+		// Map form fields to data fields
+		const fieldMapping = {
+			field: 'scientificField',
+			accreditation: 'accreditation',
+			protocol_source: 'protocolSource',
+			protocol_code: 'protocolCode',
+			default_unit: 'defaultUnit',
+			price: 'fee',
+			technician_alias: 'technicianAlias',
+			display_style: 'displayStyle',
+		};
+
 		// Special handling for display_style
-		if (field === 'display_style') {
+		if (formField === 'display_style') {
 			if (!Array.isArray(newValue)) return false;
-			
+
 			const currentDisplayStyle = initializeDisplayStyle(currentValue);
 			const newDisplayStyle = newValue;
-			
+
 			// Check if any value has changed
 			return newDisplayStyle.some((newItem) => {
-				const currentItem = currentDisplayStyle.find(item => item.label === newItem.label);
+				const currentItem = currentDisplayStyle.find((item) => item.label === newItem.label);
 				return currentItem?.value !== newItem.value;
 			});
 		}
-		
-		const normalizedCurrentValue = currentValue || '';
-		const normalizedNewValue = newValue || '';
+
+		const normalizedCurrentValue = currentValue ?? '';
+		const normalizedNewValue = newValue ?? '';
 		return normalizedNewValue !== normalizedCurrentValue;
 	};
 
 	// Generate technician options K01-K12
 	const getTechnicianOptions = () => {
 		const technicianTitles = {
-			'K01': 'Hóa lý 1',
-			'K02': 'Hóa lý 2', 
-			'K03': 'Hóa lý 3',
-			'K04': 'Hóa dược',
-			'K05': 'UV-VIS',
-			'K06': 'HPLC',
-			'K07': 'GCMS',
-			'K08': 'AAS',
-			'K09': 'Sinh học',
-			'K10': 'Kỹ thuật viên',
-			'K11': 'Kỹ thuật viên',
-			'K12': 'Kỹ thuật viên'
+			K01: 'Hóa lý 1',
+			K02: 'Hóa lý 2',
+			K03: 'Hóa lý 3',
+			K04: 'Hóa dược',
+			K05: 'UV-VIS',
+			K06: 'HPLC',
+			K07: 'GCMS',
+			K08: 'AAS',
+			K09: 'Sinh học',
+			K10: 'Kỹ thuật viên',
+			K11: 'Kỹ thuật viên',
+			K12: 'Kỹ thuật viên',
 		};
 
 		const options = [];
@@ -319,7 +338,7 @@ const AnalyteBulkUpdate = ({
 	// Get technician display name
 	const getTechnicianDisplayName = (alias) => {
 		const techOptions = getTechnicianOptions();
-		const option = techOptions.find(opt => opt.alias === alias);
+		const option = techOptions.find((opt) => opt.alias === alias);
 		return option ? `${option.alias}: ${option.title}` : alias || '';
 	};
 
@@ -327,25 +346,64 @@ const AnalyteBulkUpdate = ({
 	const handleBulkUpdate = async () => {
 		const updates = [];
 
+		// Debug logging
+		console.log('Bulk edit values:', bulkEditValues);
+		console.log('Selected rows:', Array.from(selectedRows));
+		console.log('Selected data:', selectedData);
+		console.log(
+			'Selected data IDs:',
+			selectedData.map((item) => item.id),
+		);
+
 		// Prepare updates for all selected analytes
 		Array.from(selectedRows).forEach((rowId) => {
-			const analyteId = parseInt(rowId);
+			// Handle both string and number rowIds
+			let analyteId;
+			if (typeof rowId === 'string') {
+				// If it's a string ID like "HL0965", use it directly
+				analyteId = rowId;
+			} else if (typeof rowId === 'number') {
+				analyteId = rowId;
+			} else {
+				console.warn(`Invalid rowId type: ${typeof rowId}, value: ${rowId}`);
+				return;
+			}
+
 			const currentAnalyte = selectedData.find((item) => item.id === analyteId);
 
-			if (!currentAnalyte) return;
+			if (!currentAnalyte) {
+				console.warn(
+					`Analyte with id ${analyteId} not found in selectedData. Available IDs:`,
+					selectedData.map((item) => item.id),
+				);
+				return;
+			}
 
 			const updateData = { id: analyteId };
 			let hasChanges = false;
 
-			// Check each field for actual changes
-			Object.keys(bulkEditValues).forEach((field) => {
-				const newValue = bulkEditValues[field];
-				const currentValue = currentAnalyte[field];
+			// Map form fields to data fields
+			const fieldMapping = {
+				field: 'scientificField',
+				accreditation: 'accreditation',
+				protocol_source: 'protocolSource',
+				protocol_code: 'protocolCode',
+				default_unit: 'defaultUnit',
+				price: 'fee',
+				technician_alias: 'technicianAlias',
+				display_style: 'displayStyle',
+			};
 
-				// Only include fields that have values and are different from current values
-				if (newValue !== '' && newValue !== null && newValue !== undefined) {
+			// Check each field for actual changes
+			Object.keys(bulkEditValues).forEach((formField) => {
+				const newValue = bulkEditValues[formField];
+				const dataField = fieldMapping[formField] || formField;
+				const currentValue = currentAnalyte[dataField];
+
+				// Only include fields that have been explicitly set (including empty strings)
+				if (newValue !== undefined) {
 					// Special handling for display_style
-					if (field === 'display_style') {
+					if (formField === 'display_style') {
 						const newValueArr = Array.isArray(newValue) ? newValue : [];
 						const currentDisplayStyle = initializeDisplayStyle(currentValue);
 						const hasStyleChanges = newValueArr.some((newItem) => {
@@ -358,17 +416,21 @@ const AnalyteBulkUpdate = ({
 							newValueArr.forEach((item) => {
 								updatedDisplayStyle = setDisplayStyleValue(updatedDisplayStyle, item.label, item.value);
 							});
-							updateData[field] = updatedDisplayStyle;
+							updateData[dataField] = updatedDisplayStyle;
 							hasChanges = true;
+							console.log(`Display style change for analyte ${analyteId}:`, updatedDisplayStyle);
 						}
 					} else {
-						// Regular field comparison
-						const normalizedCurrentValue = currentValue || '';
-						const normalizedNewValue = newValue || '';
+						// Regular field comparison - allow empty strings and null values
+						const normalizedCurrentValue = currentValue ?? '';
+						const normalizedNewValue = newValue ?? '';
 
 						if (normalizedNewValue !== normalizedCurrentValue) {
-							updateData[field] = newValue;
+							updateData[dataField] = newValue;
 							hasChanges = true;
+							console.log(
+								`Field ${dataField} change for analyte ${analyteId}: "${normalizedCurrentValue}" -> "${normalizedNewValue}"`,
+							);
 						}
 					}
 				}
@@ -377,8 +439,11 @@ const AnalyteBulkUpdate = ({
 			if (hasChanges && Object.keys(updateData).length > 1) {
 				// More than just id and has actual changes
 				updates.push(updateData);
+				console.log(`Update data for analyte ${analyteId}:`, updateData);
 			}
 		});
+
+		console.log('Final updates array:', updates);
 
 		if (updates.length === 0) {
 			toast.warning('Không có thay đổi nào để cập nhật. Tất cả giá trị đã giống với dữ liệu hiện tại.');
@@ -413,7 +478,16 @@ const AnalyteBulkUpdate = ({
 	};
 
 	const handleClose = () => {
-		setBulkEditValues({});
+		setBulkEditValues({
+			field: undefined,
+			accreditation: undefined,
+			protocol_source: undefined,
+			protocol_code: undefined,
+			default_unit: undefined,
+			price: undefined,
+			technician_alias: undefined,
+			display_style: undefined,
+		});
 		cleanupTinyMCE('bulk-tinymce-default');
 		cleanupTinyMCE('bulk-tinymce-eng');
 		onClose();
@@ -553,7 +627,7 @@ const AnalyteBulkUpdate = ({
 									/>
 								</div>
 							</div>
-							
+
 							{/* English Display Style */}
 							<div>
 								<label className="block text-xs font-medium text-gray-600 mb-1">Tiếng Anh</label>
@@ -591,16 +665,16 @@ const AnalyteBulkUpdate = ({
 							<tbody>
 								{selectedData.map((analyte) => (
 									<tr key={analyte.id} className="hover:bg-gray-50">
-										<td className="border border-gray-300 p-2 text-sm text-start">{analyte.parameter_name}</td>
+										<td className="border border-gray-300 p-2 text-sm text-start">{analyte.parameterName}</td>
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<span
 												className={
-													hasFieldChanged('field', analyte.field, bulkEditValues.field)
+													hasFieldChanged('field', analyte.scientificField, bulkEditValues.field)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 											>
-												{bulkEditValues.field || analyte.field || '--'}
+												{bulkEditValues.field || analyte.scientificField || '--'}
 											</span>
 										</td>
 										<td className="border border-gray-300 p-2 text-sm text-start">
@@ -617,27 +691,29 @@ const AnalyteBulkUpdate = ({
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<div
 												className={
-													hasFieldChanged('display_style', analyte.display_style, bulkEditValues.display_style)
+													hasFieldChanged('display_style', analyte.displayStyle, bulkEditValues.display_style)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 											>
 												{/* Default display */}
-												<div 
+												<div
 													dangerouslySetInnerHTML={{
-														__html: getDisplayStyleValue(bulkEditValues.display_style, 'default') ||
-															getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'default') || '--'
+														__html:
+															getDisplayStyleValue(bulkEditValues.display_style, 'default') ||
+															getDisplayStyleValue(initializeDisplayStyle(analyte.displayStyle), 'default') ||
+															'--',
 													}}
 												/>
 												{/* English display */}
 												{(getDisplayStyleValue(bulkEditValues.display_style, 'eng') ||
-													getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'eng')
-												) && (
-													<div 
+													getDisplayStyleValue(initializeDisplayStyle(analyte.displayStyle), 'eng')) && (
+													<div
 														className="mt-1 text-gray-600 text-xs"
 														dangerouslySetInnerHTML={{
-															__html: getDisplayStyleValue(bulkEditValues.display_style, 'eng') ||
-																getDisplayStyleValue(initializeDisplayStyle(analyte.display_style), 'eng')
+															__html:
+																getDisplayStyleValue(bulkEditValues.display_style, 'eng') ||
+																getDisplayStyleValue(initializeDisplayStyle(analyte.displayStyle), 'eng'),
 														}}
 													/>
 												)}
@@ -646,58 +722,58 @@ const AnalyteBulkUpdate = ({
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<span
 												className={
-													hasFieldChanged('protocol_source', analyte.protocol_source, bulkEditValues.protocol_source)
+													hasFieldChanged('protocol_source', analyte.protocolSource, bulkEditValues.protocol_source)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 											>
-												{bulkEditValues.protocol_source || analyte.protocol_source || '--'}
+												{bulkEditValues.protocol_source || analyte.protocolSource || '--'}
 											</span>
 										</td>
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<span
 												className={
-													hasFieldChanged('protocol_code', analyte.protocol_code, bulkEditValues.protocol_code)
+													hasFieldChanged('protocol_code', analyte.protocolCode, bulkEditValues.protocol_code)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 											>
-												{bulkEditValues.protocol_code || analyte.protocol_code || '--'}
+												{bulkEditValues.protocol_code || analyte.protocolCode || '--'}
 											</span>
 										</td>
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<span
 												className={
-													hasFieldChanged('default_unit', analyte.default_unit, bulkEditValues.default_unit)
+													hasFieldChanged('default_unit', analyte.defaultUnit, bulkEditValues.default_unit)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 											>
-												{bulkEditValues.default_unit || analyte.default_unit || '--'}
+												{bulkEditValues.default_unit || analyte.defaultUnit || '--'}
 											</span>
 										</td>
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<span
 												className={
-													hasFieldChanged('price', analyte.price, bulkEditValues.price)
+													hasFieldChanged('price', analyte.fee, bulkEditValues.price)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 											>
-												{bulkEditValues.price || analyte.price || '--'}
+												{bulkEditValues.price || analyte.fee || '--'}
 											</span>
 										</td>
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<span
 												className={
-													hasFieldChanged('technician_alias', analyte.technician_alias, bulkEditValues.technician_alias)
+													hasFieldChanged('technician_alias', analyte.technicianAlias, bulkEditValues.technician_alias)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 											>
 												{bulkEditValues.technician_alias
 													? getTechnicianDisplayName(bulkEditValues.technician_alias)
-													: getTechnicianDisplayName(analyte.technician_alias)}
+													: getTechnicianDisplayName(analyte.technicianAlias)}
 											</span>
 										</td>
 									</tr>
@@ -718,7 +794,7 @@ const AnalyteBulkUpdate = ({
 					<button
 						onClick={handleBulkUpdate}
 						className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-						disabled={Object.keys(bulkEditValues).length === 0 || updating}
+						disabled={Object.values(bulkEditValues).every((value) => value === undefined) || updating}
 					>
 						{updating ? 'Đang cập nhật...' : `Cập nhật (${selectedRows.size} mục)`}
 					</button>
