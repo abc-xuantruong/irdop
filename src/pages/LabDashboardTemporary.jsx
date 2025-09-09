@@ -10,13 +10,15 @@ import {
 	FaEdit,
 	FaFileAlt,
 	FaVial,
+	FaMicroscope,
+	FaDatabase,
 } from 'react-icons/fa';
-import {MdEditDocument} from 'react-icons/md';
+import { MdEditDocument } from 'react-icons/md';
 import { FaBoxesPacking } from 'react-icons/fa6';
 import ProcessingAnalysis from '../components/lab/ProcessingAnalysis';
 import ProcessingSample from '../components/lab/ProcessingSample';
 import DocumentEditor from '../components/lab/DocumentEditor';
-import LabDocument from '../components/lab/LabDocument';
+import ExperimentLog from '../components/lab/ExperimentLog';
 import { GlobalContext } from '../contexts/GlobalContext';
 import Cookies from 'js-cookie';
 
@@ -125,10 +127,10 @@ const LabDashboardTemporary = () => {
 			isAction: true,
 		},
 		{
-			action: () => handleViewChange('document'),
-			icon: FaFileAlt,
-			label: 'Tài liệu',
-			isActive: currentView === 'document',
+			action: () => handleViewChange('experiment'),
+			icon: FaDatabase,
+			label: 'Dữ liệu thử nghiệm',
+			isActive: currentView === 'experiment',
 			isAction: true,
 		},
 	];
@@ -310,10 +312,10 @@ const LabDashboardTemporary = () => {
 							<DocumentEditor />
 						</div>
 					</div>
-				) : currentView === 'document' ? (
+				) : currentView === 'experiment' ? (
 					<div className="h-full flex flex-col">
 						<div className="flex-1 overflow-hidden p-4">
-							<LabDocument />
+							<ExperimentLog />
 						</div>
 					</div>
 				) : currentView === 'sample' ? (

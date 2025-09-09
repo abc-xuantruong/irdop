@@ -3295,10 +3295,10 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																) : column === 'result_value' ? (
 																	<div className="w-full h-full min-h-[30px]" onClick={(e) => e.stopPropagation()}>
 																		<div
-																			className={`editable-cell border rounded transition-all duration-200 cursor-pointer h-full ${
+																			className={`editable-cell border rounded transition-all duration-200 cursor-not-allowed h-full ${
 																				editableCell.analysisId === row.id && editableCell.column === 'result_value'
 																					? 'editing-active border-purple-500'
-																					: 'border-transparent hover:border-purple-300'
+																					: 'border-transparent'
 																			}`}
 																		>
 																			{editableCell.analysisId === row.id && editableCell.column === 'result_value' ? (
@@ -3323,36 +3323,21 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																				</div>
 																			) : (
 																				<div
-																					className="w-full h-full p-1 text-xs text-black text-left cursor-pointer hover:bg-blue-50 rounded min-h-[30px] flex items-center group"
+																					className="w-full h-full p-1 text-xs text-black text-left cursor-not-allowed rounded min-h-[30px] flex items-center"
 																					onClick={(e) => {
 																						e.stopPropagation();
-																						handleCellClickV3(row.id, 'result_value', row.result_value);
+																						showErrorNotification(
+																							'Phần nhập kết quả chuyển qua dữ liệu thử nghiệm, liên hệ IT để biết thêm thông tin!',
+																						);
 																					}}
-																					onMouseEnter={(e) => showTooltip(e, 'Nhấp để chỉnh sửa kết quả')}
+																					onMouseEnter={(e) => showTooltip(e, 'Đã khóa chỉnh sửa')}
 																					onMouseLeave={hideTooltip}
 																				>
 																					{row.result_value ? (
 																						<div dangerouslySetInnerHTML={{ __html: row.result_value }} />
 																					) : (
-																						<span className="result-cell-placeholder group-hover:text-gray-600">
-																							Nhấp để nhập kết quả...
-																						</span>
+																						<span className="result-cell-placeholder">Nhấp để nhập kết quả...</span>
 																					)}
-																					<div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-																						<svg
-																							className="w-3 h-3 text-purple-500"
-																							fill="none"
-																							stroke="currentColor"
-																							viewBox="0 0 24 24"
-																						>
-																							<path
-																								strokeLinecap="round"
-																								strokeLinejoin="round"
-																								strokeWidth="2"
-																								d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-																							/>
-																						</svg>
-																					</div>
 																				</div>
 																			)}
 																		</div>

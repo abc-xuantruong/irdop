@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useContext, useCallback, memo } from 'react';
-import { FaFileAlt, FaEye, FaSearch, FaSync, FaClock, FaPrint, FaDatabase, FaUndo, FaTrash } from 'react-icons/fa';
+import React, { useState, useEffect, useContext, useCallback, memo, useRef } from 'react';
+import ReactDOM from 'react-dom';
+import { FaFileAlt, FaSearch, FaClock, FaDownload, FaTimes } from 'react-icons/fa';
 import { apiPost } from '../../contexts/helperFunctionCallAPI';
 import { GlobalContext } from '../../contexts/GlobalContext';
 import TinyMceInput from '../Input';
+import ExperimentDetail from './ExperimentDetail';
 
 const ExperimentLog = () => {
 	const { currentUser, getIdenByUid } = useContext(GlobalContext);
@@ -70,8 +72,9 @@ const ExperimentLog = () => {
 	const [mode, setMode] = useState('all');
 	const [identityNames, setIdentityNames] = useState({});
 	const [documents, setDocuments] = useState([]);
-	const [documentStatus, setDocumentStatus] = useState('draft');
-	const [isDraft, setIsDraft] = useState(true);
+	const [status, setStatus] = useState('all'); // 'all', 'pending', 'approved'
+	const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 	const [pagination, setPagination] = useState({
 		currentPage: 1,
 		itemsPerPage: 10,
@@ -81,8 +84,52 @@ const ExperimentLog = () => {
 	const [showDetailModal, setShowDetailModal] = useState(false);
 	const [selectedDetailDocument, setSelectedDetailDocument] = useState(null);
 
+	// Preview file states
+	const [previewFile, setPreviewFile] = useState(null);
+	const [previewUrl, setPreviewUrl] = useState('');
+
 	// Debounce timeout for search
 	const [searchTimeout, setSearchTimeout] = useState(null);
+
+	// Ref for status dropdown positioning
+	const statusButtonRef = useRef(null);
+	const statusDropdownRef = useRef(null);
+
+	// Refs for column width calculation
+	const titleHeaderRef = useRef(null);
+	const samplesHeaderRef = useRef(null);
+	const [actualColumnWidths, setActualColumnWidths] = useState({
+		title: null,
+		samples: null,
+	});
+
+	// Tooltip states
+	const [showTooltip, setShowTooltip] = useState(null); // 'analyses' | 'samples' | null
+	const [tooltipData, setTooltipData] = useState(null);
+	const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+	const tooltipRef = useRef(null);
+
+	// URL Query Params management
+	const updateUrlParams = (params) => {
+		const url = new URL(window.location);
+		Object.keys(params).forEach((key) => {
+			if (params[key] && params[key] !== 'all' && params[key] !== '') {
+				url.searchParams.set(key, params[key]);
+			} else {
+				url.searchParams.delete(key);
+			}
+		});
+		window.history.pushState({}, '', url);
+	};
+
+	const getUrlParams = () => {
+		const url = new URL(window.location);
+		return {
+			searchTerm: url.searchParams.get('search') || '',
+			page: parseInt(url.searchParams.get('page')) || 1,
+			status: url.searchParams.get('status') || 'all',
+		};
+	};
 
 	// API constants - sử dụng classifierCode cho nhật ký Thử nghiệm
 	const DRAFT_DOCS_API_ENDPOINT = 'https://red.irdop.org/v1/editor/lab_result_report/get_editor';
@@ -182,7 +229,7 @@ const ExperimentLog = () => {
 	};
 
 	// Load documents from API - chỉ load nhật ký Thử nghiệm
-	const loadDocuments = async (searchTermToUse = '', page = 1, currentMode = mode, status = documentStatus) => {
+	const loadDocuments = async (searchTermToUse = '', page = 1, currentMode = mode, currentStatus = status) => {
 		try {
 			setIsLoading(true);
 
@@ -193,28 +240,21 @@ const ExperimentLog = () => {
 				status,
 			});
 
-			const finalMode = isAdmin() ? currentMode : 'personal';
+			const finalMode = 'all';
 
 			let apiEndpoint, requestBody;
 
-			if (status === 'published') {
-				apiEndpoint = PUBLISHED_DOCS_API_ENDPOINT;
-				requestBody = {
-					searchTerm: searchTermToUse,
-					page: page,
-					mode: finalMode,
-					sended: status,
-					classifierCode: ['NHAT_KY_THU_NGHIEM'], // Chỉ lấy nhật ký Thử nghiệm
-				};
-			} else {
-				apiEndpoint = DRAFT_DOCS_API_ENDPOINT;
-				requestBody = {
-					searchTerm: searchTermToUse,
-					page: page,
-					mode: finalMode,
-					status: 'submitted',
-					classifierCode: ['NHAT_KY_THU_NGHIEM'], // Chỉ lấy nhật ký Thử nghiệm
-				};
+			apiEndpoint = PUBLISHED_DOCS_API_ENDPOINT;
+			requestBody = {
+				searchTerm: searchTermToUse,
+				page: page,
+				mode: finalMode,
+				classifierCode: ['NHAT_KY_THU_NGHIEM', 'BIEN_BAN_THU_NGHIEM'], // Lấy nhật ký Thử nghiệm và biên bản thử nghiệm
+			};
+
+			// Only add status if not 'all'
+			if (currentStatus !== 'all') {
+				requestBody.status = currentStatus;
 			}
 
 			const response = await apiPostLocal(apiEndpoint, requestBody);
@@ -227,21 +267,51 @@ const ExperimentLog = () => {
 
 				const transformedDocuments = (result.result || []).map((doc) => ({
 					id: doc.id,
-					title: doc.metadata?.header?.title || doc.metadata?.templateName || 'Nhật ký Thử nghiệm không có tên',
+					title:
+						doc.jsonContent?.header?.title ||
+						doc.metadata?.header?.title ||
+						doc.metadata?.templateName ||
+						'Nhật ký Thử nghiệm không có tên',
 					templateCode: doc.metadata?.templateId || 'N/A',
 					lastModified: formatDateTimeGMT7(doc.modifiedAt),
+					identityUID: doc.identityUID || 'N/A',
 					author: doc.metadata?.modifiedBy || doc.metadata?.authorName || 'N/A',
-					status: status,
+					status: currentStatus,
 					createdAt: doc.createdAt,
 					modifiedAt: doc.modifiedAt,
 					authorName: doc.metadata?.authorName,
 					modifiedBy: doc.metadata?.modifiedBy,
 					metadata: doc.metadata || {},
+					jsonContent: doc.jsonContent || {},
 					fileId: doc.fileId,
 					originalData: doc,
 				}));
 
-				setDocuments(transformedDocuments);
+				// Update documents incrementally instead of replacing all
+				setDocuments((prevDocuments) => {
+					const updatedDocuments = [...prevDocuments];
+					const newDocuments = [];
+					const existingIds = new Set(prevDocuments.map((doc) => doc.id));
+
+					transformedDocuments.forEach((newDoc) => {
+						const existingIndex = updatedDocuments.findIndex((doc) => doc.id === newDoc.id);
+						if (existingIndex !== -1) {
+							// Update existing document
+							updatedDocuments[existingIndex] = newDoc;
+						} else {
+							// Add new document
+							newDocuments.push(newDoc);
+						}
+					});
+
+					// Remove documents that are no longer in the result
+					const newIds = new Set(transformedDocuments.map((doc) => doc.id));
+					const filteredDocuments = updatedDocuments.filter((doc) => newIds.has(doc.id));
+
+					// Add new documents at the end
+					return [...filteredDocuments, ...newDocuments];
+				});
+
 				setLastSearchTerm(searchTermToUse);
 
 				if (selectedDocument) {
@@ -307,13 +377,14 @@ const ExperimentLog = () => {
 
 	// Load data on component mount
 	useEffect(() => {
-		const initialMode = isAdmin() ? mode : 'personal';
-		if (initialMode !== mode) {
-			setMode(initialMode);
-		}
+		const urlParams = getUrlParams();
+		setSearchTerm(urlParams.searchTerm);
+		setLastSearchTerm(urlParams.searchTerm);
+		setStatus(urlParams.status);
+		setPagination((prev) => ({ ...prev, currentPage: urlParams.page }));
 
-		loadDocuments('', 1, initialMode, documentStatus);
-		console.log('Component mounted, loading documents with mode:', initialMode);
+		loadDocuments(urlParams.searchTerm, urlParams.page, 'all', urlParams.status);
+		console.log('Component mounted, loading documents with URL params:', urlParams);
 
 		return () => {
 			if (searchTimeout) {
@@ -322,24 +393,196 @@ const ExperimentLog = () => {
 		};
 	}, [currentUser]);
 
+	// Reset modal states on component mount
 	useEffect(() => {
-		return () => {
-			if (searchTimeout) {
-				clearTimeout(searchTimeout);
+		setShowDetailModal(false);
+		setSelectedDetailDocument(null);
+		setIsCreateModalOpen(false);
+		setSelectedDocument(null);
+		setSelectedDocumentForPreview(null);
+		setPreviewFile(null);
+		setPreviewUrl('');
+		console.log('Modal states reset on component mount');
+	}, []);
+
+	// Debug modal state changes
+	useEffect(() => {
+		console.log('🔄 isCreateModalOpen changed:', isCreateModalOpen);
+	}, [isCreateModalOpen]);
+
+	useEffect(() => {
+		console.log('🔄 showDetailModal changed:', showDetailModal);
+	}, [showDetailModal]);
+
+	// Handle click outside for status dropdown
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			if (
+				showStatusDropdown &&
+				statusButtonRef.current &&
+				statusDropdownRef.current &&
+				!statusButtonRef.current.contains(event.target) &&
+				!statusDropdownRef.current.contains(event.target)
+			) {
+				setShowStatusDropdown(false);
 			}
 		};
-	}, [searchTimeout]);
 
-	// Keep isDraft in sync with documentStatus
+		if (showStatusDropdown) {
+			document.addEventListener('mousedown', handleClickOutside);
+		}
+
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside);
+		};
+	}, [showStatusDropdown]);
+
+	// Silent refresh function for auto-refresh (no loading indicator)
+	const silentRefreshDocuments = async (searchTermToUse = '', page = 1, currentMode = mode, currentStatus = status) => {
+		try {
+			console.log('📚 Silent refresh experiment logs:', {
+				searchTermToUse,
+				page,
+				currentMode,
+				currentStatus,
+			});
+
+			const finalMode = 'all';
+
+			let apiEndpoint, requestBody;
+
+			apiEndpoint = PUBLISHED_DOCS_API_ENDPOINT;
+			requestBody = {
+				searchTerm: searchTermToUse,
+				page: page,
+				mode: finalMode,
+				classifierCode: ['NHAT_KY_THU_NGHIEM', 'BIEN_BAN_THU_NGHIEM'],
+			};
+
+			// Only add status if not 'all'
+			if (currentStatus !== 'all') {
+				requestBody.status = currentStatus;
+			}
+
+			const response = await apiPostLocal(apiEndpoint, requestBody);
+
+			if (response.status === 200 && response.data) {
+				const result = response.data;
+				if (result.error) {
+					throw new Error(result.error);
+				}
+
+				const transformedDocuments = (result.result || []).map((doc) => ({
+					id: doc.id,
+					title:
+						doc.jsonContent?.header?.title ||
+						doc.metadata?.header?.title ||
+						doc.metadata?.templateName ||
+						'Nhật ký Thử nghiệm không có tên',
+					templateCode: doc.metadata?.templateId || 'N/A',
+					lastModified: formatDateTimeGMT7(doc.modifiedAt),
+					identityUID: doc.identityUID || 'N/A',
+					author: doc.metadata?.modifiedBy || doc.metadata?.authorName || 'N/A',
+					status: currentStatus,
+					createdAt: doc.createdAt,
+					modifiedAt: doc.modifiedAt,
+					authorName: doc.metadata?.authorName,
+					modifiedBy: doc.metadata?.modifiedBy,
+					metadata: doc.metadata || {},
+					jsonContent: doc.jsonContent || {},
+					fileId: doc.fileId,
+					originalData: doc,
+				}));
+
+				// Update documents silently
+				setDocuments(transformedDocuments);
+
+				// Update pagination if needed
+				setPagination((prevPagination) => ({
+					...prevPagination,
+					totalItems: result.pagination?.totalItems || transformedDocuments.length,
+					totalPages: result.pagination?.totalPages || Math.ceil(transformedDocuments.length / 10),
+				}));
+
+				// Update identity names for new UIDs
+				const uniqueUIDs = [
+					...new Set(
+						transformedDocuments
+							.flatMap((doc) => [
+								doc.metadata?.submittedByUID,
+								doc.metadata?.identityUID,
+								doc.metadata?.authorUID,
+								doc.metadata?.createdByUID,
+								doc.metadata?.modifiedByUID,
+								doc.identityUID,
+								doc.authorUID,
+								doc.createdByUID,
+								doc.modifiedByUID,
+							])
+							.filter((uid) => uid && !identityNames[uid]),
+					),
+				];
+
+				if (uniqueUIDs.length > 0) {
+					uniqueUIDs.forEach(async (uid) => {
+						await fetchIdentityName(uid);
+					});
+				}
+			}
+		} catch (error) {
+			console.error('Error during silent refresh:', error);
+			// Don't show error to user during silent refresh
+		}
+	};
+
+	// Auto-refresh data every minute
 	useEffect(() => {
-		setIsDraft(documentStatus === 'draft');
-	}, [documentStatus]);
+		const interval = setInterval(() => {
+			// Get current URL params for silent refresh
+			const urlParams = getUrlParams();
+			silentRefreshDocuments(urlParams.searchTerm, urlParams.page, mode, urlParams.status);
+		}, 60000); // 60 seconds
+
+		return () => clearInterval(interval);
+	}, [mode, status, lastSearchTerm, pagination.currentPage]);
+
+	// Calculate actual column widths
+	useEffect(() => {
+		const calculateColumnWidths = () => {
+			if (titleHeaderRef.current && samplesHeaderRef.current) {
+				const titleWidth = titleHeaderRef.current.getBoundingClientRect().width;
+				const samplesWidth = samplesHeaderRef.current.getBoundingClientRect().width;
+
+				setActualColumnWidths({
+					title: titleWidth,
+					samples: samplesWidth,
+				});
+			}
+		};
+
+		// Calculate on mount and when window resizes
+		calculateColumnWidths();
+
+		const handleResize = () => {
+			calculateColumnWidths();
+		};
+
+		window.addEventListener('resize', handleResize);
+
+		// Also recalculate when documents change (layout might change)
+		const timeoutId = setTimeout(calculateColumnWidths, 100);
+
+		return () => {
+			window.removeEventListener('resize', handleResize);
+			clearTimeout(timeoutId);
+		};
+	}, [documents]);
 
 	// Refresh data
 	const refreshData = async () => {
 		setIsLoading(true);
 		try {
-			await loadDocuments(lastSearchTerm, pagination.currentPage, mode, documentStatus);
+			await loadDocuments(lastSearchTerm, pagination.currentPage, mode, status);
 		} catch (error) {
 			console.error('Error refreshing data:', error);
 		} finally {
@@ -347,34 +590,21 @@ const ExperimentLog = () => {
 		}
 	};
 
-	// Handle document status change
-	const handleDocumentStatusChange = async (newStatus) => {
-		if (newStatus === documentStatus) return;
+	// Handle status change
+	const handleStatusChange = async (newStatus) => {
+		if (newStatus === status) return;
 
-		setDocumentStatus(newStatus);
+		setStatus(newStatus);
 		setPagination((prev) => ({ ...prev, currentPage: 1 }));
+
+		// Update URL params
+		updateUrlParams({
+			search: lastSearchTerm,
+			page: 1,
+			status: newStatus,
+		});
+
 		await loadDocuments(lastSearchTerm, 1, mode, newStatus);
-	};
-
-	// Handle toggle switch change
-	const handleToggleChange = () => {
-		const newIsDraft = !isDraft;
-		setIsDraft(newIsDraft);
-		const newStatus = newIsDraft ? 'draft' : 'published';
-		handleDocumentStatusChange(newStatus);
-	};
-
-	// Handle mode change
-	const handleModeChange = async (newMode) => {
-		if (!isAdmin()) {
-			return;
-		}
-
-		if (newMode === mode) return;
-
-		setMode(newMode);
-		setPagination((prev) => ({ ...prev, currentPage: 1 }));
-		await loadDocuments(lastSearchTerm, 1, newMode, documentStatus);
 	};
 
 	// Handle search input changes
@@ -396,7 +626,16 @@ const ExperimentLog = () => {
 	const executeSearch = async () => {
 		if (searchTerm !== lastSearchTerm) {
 			console.log('🚀 Performing search with term:', searchTerm);
-			await loadDocuments(searchTerm, 1, mode, documentStatus);
+			setPagination((prev) => ({ ...prev, currentPage: 1 }));
+
+			// Update URL params
+			updateUrlParams({
+				search: searchTerm,
+				page: 1,
+				status: status,
+			});
+
+			await loadDocuments(searchTerm, 1, mode, status);
 		}
 	};
 
@@ -426,6 +665,151 @@ const ExperimentLog = () => {
 		console.log('🖱️ Document clicked for detail:', doc.id);
 		setSelectedDetailDocument(doc);
 		setShowDetailModal(true);
+	};
+
+	// Handle close detail modal
+	const handleCloseDetailModal = () => {
+		console.log('❌ Closing detail modal');
+		setShowDetailModal(false);
+		setSelectedDetailDocument(null);
+
+		// Silent refresh to update data after closing modal
+		const urlParams = getUrlParams();
+		silentRefreshDocuments(urlParams.searchTerm, urlParams.page, mode, urlParams.status);
+	};
+
+	// Handle tooltip show
+	const handleTooltipShow = (event, type, data) => {
+		event.stopPropagation();
+		const rect = event.target.getBoundingClientRect();
+		setTooltipPosition({
+			x: rect.left + window.scrollX,
+			y: rect.bottom + window.scrollY + 5,
+		});
+		setTooltipData(data);
+		setShowTooltip(type);
+	};
+
+	// Handle tooltip hide
+	const handleTooltipHide = () => {
+		setShowTooltip(null);
+		setTooltipData(null);
+	};
+
+	// Format tooltip content
+	const formatTooltipContent = (data, type) => {
+		if (!data || !Array.isArray(data)) return <div className="text-sm">Không có dữ liệu</div>;
+
+		// Define column order and labels
+		const columnConfig = {
+			analyses: {
+				title: 'Thông tin phép thử',
+				order: ['testId', 'testName', 'testResult', 'testUnit', 'testprotocolCode'],
+				labels: {
+					testId: 'Mã chỉ tiêu',
+					testName: 'Tên chỉ tiêu',
+					testResult: 'Kết quả',
+					testUnit: 'Đơn vị',
+					testprotocolCode: 'Phương pháp thử',
+				},
+			},
+			samples: {
+				title: 'Thông tin mẫu thử',
+				order: ['sampleId', 'sampleName', 'sampleDescription'],
+				labels: {
+					sampleId: 'Mã mẫu thử',
+					sampleName: 'Tên mẫu thử',
+					sampleDescription: 'Mô tả mẫu',
+				},
+			},
+		};
+
+		const config = columnConfig[type];
+		if (!config) return <div className="text-sm">Không có dữ liệu</div>;
+
+		return (
+			<table className="w-full text-sm">
+				<thead>
+					<tr className="border-b border-gray-600">
+						{config.order.map((key, index) => (
+							<th key={index} className="text-left py-1 px-2 font-medium text-gray-200">
+								{config.labels[key] || key}
+							</th>
+						))}
+					</tr>
+				</thead>
+				<tbody>
+					{data.map((item, rowIndex) => (
+						<tr key={rowIndex} className="border-b border-gray-700 last:border-b-0">
+							{config.order.map((key, colIndex) => (
+								<td key={colIndex} className="py-1 px-2 text-gray-100">
+									{key === 'testResult' || key === 'testUnit' ? (
+										<span dangerouslySetInnerHTML={{ __html: item[key] || 'N/A' }} />
+									) : (
+										item[key] || 'N/A'
+									)}
+								</td>
+							))}
+						</tr>
+					))}
+				</tbody>
+			</table>
+		);
+	};
+
+	// Handle close create modal
+	const handleCloseCreateModal = () => {
+		console.log('❌ Closing create modal - BEFORE:', isCreateModalOpen);
+		setIsCreateModalOpen(false);
+		console.log('❌ Closing create modal - AFTER: should be false');
+
+		// Silent refresh to update data after closing modal
+		const urlParams = getUrlParams();
+		silentRefreshDocuments(urlParams.searchTerm, urlParams.page, mode, urlParams.status);
+
+		// Force re-render check
+		setTimeout(() => {
+			console.log('❌ Closing create modal - TIMEOUT CHECK:', isCreateModalOpen);
+		}, 100);
+	};
+
+	// Handle file preview
+	const handleFileAction = async (fileRecord, mode) => {
+		try {
+			const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
+				expiry: 60 * 10,
+				mode: mode,
+				fileRecord: fileRecord,
+			});
+
+			if (response.status === 200 && response.data) {
+				if (mode === 'view') {
+					// Hiển thị preview trong popup
+					setPreviewFile(fileRecord);
+					setPreviewUrl(response.data);
+				} else if (mode === 'download') {
+					// Download file using blob
+					const downloadResponse = await fetch(response.data);
+					const blob = await downloadResponse.blob();
+					const url = window.URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = fileRecord.originInfo?.fileName || 'download';
+					document.body.appendChild(a);
+					a.click();
+					window.URL.revokeObjectURL(url);
+					document.body.removeChild(a);
+				}
+			}
+		} catch (error) {
+			console.error(`${mode} failed:`, error);
+		}
+	};
+
+	// Handle close preview
+	const handleClosePreview = () => {
+		setPreviewFile(null);
+		setPreviewUrl('');
 	};
 
 	// ExtractedDataView Component - No longer used, replaced with modal
@@ -469,239 +853,84 @@ const ExperimentLog = () => {
 	// Page change handler
 	const handlePageChange = async (newPage) => {
 		setPagination((prev) => ({ ...prev, currentPage: newPage }));
-		await loadDocuments(lastSearchTerm, newPage, mode, documentStatus);
+
+		// Update URL params
+		updateUrlParams({
+			search: lastSearchTerm,
+			page: newPage,
+			status: status,
+		});
+
+		await loadDocuments(lastSearchTerm, newPage, mode, status);
 	};
 
-	// Detail Modal Component
-	const DetailModal = ({ document, isOpen, onClose }) => {
-		const [isEditing, setIsEditing] = useState(false);
-		const [editedAnalyses, setEditedAnalyses] = useState([]);
-
-		// Initialize edited analyses when document changes
-		useEffect(() => {
-			if (document?.metadata?.analyses) {
-				setEditedAnalyses(JSON.parse(JSON.stringify(document.metadata.analyses)));
-			}
-		}, [document]);
-
-		const handleEditToggle = () => {
-			if (isEditing) {
-				// Cancel editing - reset to original data
-				setEditedAnalyses(JSON.parse(JSON.stringify(document.metadata.analyses || [])));
-			}
-			setIsEditing(!isEditing);
+	// FilePreview Component
+	const FilePreview = ({ url, fileName, onClose, isVisible }) => {
+		const getFileExtension = (filename) => {
+			return filename?.split('.').pop()?.toLowerCase() || '';
 		};
 
-		const handleSaveChanges = () => {
-			// Here you would typically save the changes to the backend
-			showAutoHideMessage('Đã lưu thay đổi thành công!', 'success');
-			setIsEditing(false);
+		const isImage = (filename) => {
+			const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp'];
+			return imageExtensions.includes(getFileExtension(filename));
 		};
 
-		const handleAnalysisChange = (index, field, value) => {
-			const updatedAnalyses = [...editedAnalyses];
-			updatedAnalyses[index] = { ...updatedAnalyses[index], [field]: value };
-			setEditedAnalyses(updatedAnalyses);
+		const isPdf = (filename) => {
+			return getFileExtension(filename) === 'pdf';
 		};
 
-		if (!isOpen || !document) return null;
+		const isVideo = (filename) => {
+			const videoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'];
+			return videoExtensions.includes(getFileExtension(filename));
+		};
 
-		const analyses = isEditing ? editedAnalyses : document.metadata?.analyses || [];
-		const samples = document.metadata?.samples || [];
-		const sampleUIDs = samples.map((s) => s.sampleId);
+		const isAudio = (filename) => {
+			const audioExtensions = ['mp3', 'wav', 'ogg', 'aac', 'flac'];
+			return audioExtensions.includes(getFileExtension(filename));
+		};
+
+		const isText = (filename) => {
+			const textExtensions = ['txt', 'csv', 'json', 'xml', 'log'];
+			return textExtensions.includes(getFileExtension(filename));
+		};
+
+		if (!isVisible || !url) return null;
 
 		return (
-			<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-				<div className="bg-white rounded-lg shadow-xl max-w-full w-full mx-2 max-h-[95vh] overflow-hidden">
-					<div className="flex items-center justify-between px-6 py-2 border-b">
-						<h2 className="text-xl font-bold text-gray-900 text-left">
-							{document.metadata?.header?.title || document.title} - Chi tiết nhật ký thử nghiệm
-						</h2>
-						<div className="flex items-center gap-2">
-							{isEditing ? (
-								<>
-									<button
-										onClick={handleSaveChanges}
-										className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium transition-colors"
-									>
-										Lưu
-									</button>
-									<button
-										onClick={handleEditToggle}
-										className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium transition-colors"
-									>
-										Hủy
-									</button>
-								</>
-							) : (
-								<button
-									onClick={handleEditToggle}
-									className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium transition-colors"
-								>
-									Sửa
-								</button>
-							)}
-							<button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl py-1 px-4">
-								×
-							</button>
-						</div>
+			<div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-[60]" onClick={onClose}>
+				<div
+					className="bg-white rounded-lg max-w-[95vw] max-h-[95vh] w-[95vw] h-[95vh] overflow-hidden flex flex-col"
+					onClick={(e) => e.stopPropagation()}
+				>
+					{/* Header */}
+					<div className="flex justify-between items-center p-4 border-b bg-gray-50">
+						<h3 className="text-lg font-semibold text-black truncate max-w-[80%]">{fileName}</h3>
+						<button
+							onClick={onClose}
+							className="text-gray-500 hover:text-gray-700 text-xl font-bold min-w-[24px] h-6 flex items-center justify-center"
+						>
+							<FaTimes />
+						</button>
 					</div>
-					<div className="p-6 overflow-y-auto max-h-[calc(95vh-60px)]">
-						<div className="mb-6">
-							<h3 className="font-semibold text-gray-900 mb-4 text-left">Thông tin cơ bản</h3>
-							<div className="grid grid-cols-3 gap-6 text-left">
-								<div className="space-y-3 text-sm">
-									<p>
-										<strong>Mã:</strong> {document.id}
-									</p>
-									<p>
-										<strong>Người tạo:</strong> {getIdentityName(document)}
-									</p>
-								</div>
-								<div className="space-y-3 text-sm">
-									<p>
-										<strong>Cập nhật:</strong> {document.lastModified}
-									</p>
-									<p>
-										<strong>Trạng thái:</strong> {document.status === 'draft' ? 'Chờ duyệt' : 'Đã phát hành'}
-									</p>
-								</div>
-								<div className="space-y-3 text-sm">
-									<p>
-										<strong>Số lượng mẫu:</strong> {samples.length}
-									</p>
-									<p>
-										<strong>Số lượng phân tích:</strong> {analyses.length}
-									</p>
-								</div>
-							</div>
-						</div>
 
-						<div className="mb-6">
-							<h3 className="font-semibold text-gray-900 mb-4 text-left">Danh sách Sample UIDs</h3>
-							<div className="flex flex-wrap gap-2 justify-start">
-								{sampleUIDs.map((uid, index) => (
-									<span key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm text-left">
-										{uid}
-									</span>
-								))}
-							</div>
-						</div>
+					{/* Content */}
+					<div className="flex-1 overflow-hidden bg-gray-100">
+						<iframe src={url} className="w-full h-full border-0" title={fileName} style={{ minHeight: '100%' }} />
+					</div>
 
-						<div>
-							<div className="flex items-center justify-between mb-4">
-								<h3 className="font-semibold text-gray-900 text-left">Danh sách phân tích</h3>
-								{isEditing && (
-									<span className="text-sm text-blue-600 font-medium">
-										Đang chỉnh sửa - Nhấp vào các ô để sửa giá trị
-									</span>
-								)}
-							</div>
-							<div className="overflow-x-auto">
-								<table className="w-full border-collapse border border-gray-300 text-left">
-									<thead>
-										<tr className="bg-gray-50">
-											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">STT</th>
-											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">Mã mẫu</th>
-											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">
-												Mã chỉ tiêu
-											</th>
-											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">
-												Tên chỉ tiêu
-											</th>
-											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">
-												Kết quả
-											</th>
-											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">Đơn vị</th>
-											<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">
-												Phương pháp
-											</th>
-										</tr>
-									</thead>
-									<tbody>
-										{analyses.length === 0 ? (
-											<tr>
-												<td colSpan="7" className="border border-gray-300 px-3 py-4 text-left text-gray-500">
-													Không có dữ liệu phân tích
-												</td>
-											</tr>
-										) : (
-											analyses.map((analysis, index) => (
-												<tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-													<td className="border border-gray-300 px-3 py-2 text-left">{index + 1}</td>
-													<td className="border border-gray-300 px-3 py-2 font-medium text-blue-600 text-left">
-														{isEditing ? (
-															<input
-																type="text"
-																value={analysis.sampleId || ''}
-																onChange={(e) => handleAnalysisChange(index, 'sampleId', e.target.value)}
-																className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-																placeholder="Nhập mã mẫu..."
-															/>
-														) : (
-															analysis.sampleId || '--'
-														)}
-													</td>
-													<td className="border border-gray-300 px-3 py-2 text-left">{analysis.testId || '--'}</td>
-													<td className="border border-gray-300 px-3 py-2 text-left">
-														{isEditing ? (
-															<input
-																type="text"
-																value={analysis.testName || ''}
-																onChange={(e) => handleAnalysisChange(index, 'testName', e.target.value)}
-																className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-																placeholder="Nhập tên chỉ tiêu..."
-															/>
-														) : (
-															analysis.testName || '--'
-														)}
-													</td>
-													<td className="border border-gray-300 px-3 py-2 text-left">
-														{isEditing ? (
-															<input
-																type="text"
-																value={analysis.testResult || ''}
-																onChange={(e) => handleAnalysisChange(index, 'testResult', e.target.value)}
-																className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-																placeholder="Nhập kết quả..."
-															/>
-														) : (
-															<span dangerouslySetInnerHTML={{ __html: analysis.testResult || '--' }} />
-														)}
-													</td>
-													<td className="border border-gray-300 px-3 py-2 text-left">
-														{isEditing ? (
-															<input
-																type="text"
-																value={analysis.testUnit || ''}
-																onChange={(e) => handleAnalysisChange(index, 'testUnit', e.target.value)}
-																className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-																placeholder="Nhập đơn vị..."
-															/>
-														) : (
-															analysis.testUnit || '--'
-														)}
-													</td>
-													<td className="border border-gray-300 px-3 py-2 text-left">
-														{isEditing ? (
-															<input
-																type="text"
-																value={analysis.testProtocolCode || ''}
-																onChange={(e) => handleAnalysisChange(index, 'testProtocolCode', e.target.value)}
-																className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-																placeholder="Nhập phương pháp..."
-															/>
-														) : (
-															analysis.testProtocolCode || '--'
-														)}
-													</td>
-												</tr>
-											))
-										)}
-									</tbody>
-								</table>
-							</div>
-						</div>
+					{/* Footer */}
+					<div className="p-4 border-t bg-gray-50 flex justify-end">
+						<a
+							href={url}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 mr-2 inline-flex items-center gap-2"
+						>
+							<FaDownload /> Tải xuống
+						</a>
+						<button onClick={onClose} className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+							Đóng
+						</button>
 					</div>
 				</div>
 			</div>
@@ -727,119 +956,295 @@ const ExperimentLog = () => {
 					.custom-scrollbar::-webkit-scrollbar-thumb:hover {
 						background: #94a3b8;
 					}
+
+					/* Difference indicators styles */
+					.difference-indicator {
+						color: #ff6b6b;
+						font-weight: bold;
+						cursor: pointer;
+						margin-right: 6px;
+						background-color: #fff3cd;
+						border: 1px solid #ffc107;
+						padding: 2px 4px;
+						border-radius: 3px;
+						display: inline-block;
+						position: relative;
+					}
+					
+					.difference-indicator:hover {
+						background-color: #ffecb3;
+						border-color: #ff9800;
+					}
+					
+					.difference-indicator .tooltip {
+						visibility: hidden;
+						background-color: #fff3cd;
+						border: 2px solid #ffc107;
+						color: #856404;
+						text-align: left;
+						border-radius: 6px;
+						padding: 8px 12px;
+						position: absolute;
+						z-index: 10001;
+						bottom: 125%;
+						left: 50%;
+						margin-left: -100px;
+						width: 200px;
+						box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+						font-size: 11px;
+						line-height: 1.3;
+					}
+					
+					.difference-indicator .tooltip::after {
+						content: "";
+						position: absolute;
+						top: 100%;
+						left: 50%;
+						margin-left: -5px;
+						border-width: 5px;
+						border-style: solid;
+						border-color: #ffc107 transparent transparent transparent;
+					}
+					
+					.difference-indicator:hover .tooltip {
+						visibility: visible;
+					}
+					
+					.difference-tag {
+						background-color: #fff3cd;
+						border: 2px solid #ffc107;
+						border-radius: 4px;
+						padding: 4px 8px;
+						margin-top: 4px;
+						font-size: 0.75rem;
+						color: #856404;
+						display: block;
+						width: 100%;
+						box-sizing: border-box;
+						word-wrap: break-word;
+						white-space: normal;
+						overflow-wrap: break-word;
+						hyphens: auto;
+					}
 				`}
 			</style>
 
+			{/* Debug Info */}
+			{console.log('🔍 ExperimentLog render - Modal states:', {
+				showDetailModal,
+				selectedDetailDocument: selectedDetailDocument?.id,
+				isCreateModalOpen,
+				documentsCount: documents.length,
+			})}
+
 			{/* Detail Modal */}
-			<DetailModal
-				document={selectedDetailDocument}
-				isOpen={showDetailModal}
-				onClose={() => setShowDetailModal(false)}
+			<ExperimentDetail docCopy={selectedDetailDocument} isOpen={showDetailModal} onClose={handleCloseDetailModal} />
+
+			{/* File Preview Popup */}
+			<FilePreview
+				url={previewUrl}
+				fileName={previewFile?.originInfo?.fileName}
+				isVisible={!!previewFile}
+				onClose={handleClosePreview}
 			/>
 
 			<div className="w-full flex flex-col">
 				{/* Header */}
-				<div className="rounded-xl shadow-sm border p-6 mb-4 flex-shrink-0">
+				<div className="rounded-xl p-2 mb-4 flex-shrink-0">
 					<div className="flex items-center justify-between">
 						<h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-							<FaClock className="text-blue-600" />
-							Nhật ký Thử nghiệm
+							Dữ liệu thử nghiệm
 							{isLoading && (
 								<div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
 							)}
 						</h2>
 
-						{/* Document Status Toggle */}
-						<label className="relative inline-flex items-center cursor-pointer">
+						{/* Search */}
+						<div className="relative flex-1 max-w-2xl">
+							<FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
 							<input
-								type="checkbox"
-								checked={isDraft}
-								onChange={handleToggleChange}
-								className="sr-only"
-								disabled={isLoading}
+								type="text"
+								placeholder="Tìm dữ liệu thử nghiệm... (Nhấn Enter để tìm kiếm)"
+								value={searchTerm}
+								onChange={(e) => handleSearchInputChange(e.target.value)}
+								onKeyPress={handleSearchKeyPress}
+								className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
 							/>
-							<div className="w-40 h-8 bg-gray-200 rounded-full transition-all duration-300 ease-in-out relative border border-gray-300 overflow-hidden">
-								<div
-									className={`absolute top-0 h-full w-1/2 bg-blue-500 rounded-full transition-all duration-300 ease-in-out
-										${isDraft ? 'left-0' : 'left-1/2'}`}
-								></div>
-								<div className="absolute left-0 w-1/2 h-full flex items-center justify-center">
-									<span
-										className={`text-xs font-medium transition-all duration-300 ease-in-out
-											${isDraft ? 'text-white' : 'text-gray-600'}`}
-									>
-										PENDING
-									</span>
-								</div>
-								<div className="absolute right-0 w-1/2 h-full flex items-center justify-center">
-									<span
-										className={`text-xs font-medium transition-all duration-300 ease-in-out
-											${!isDraft ? 'text-white' : 'text-gray-600'}`}
-									>
-										PUBLISHED
-									</span>
-								</div>
-							</div>
-						</label>
+						</div>
 					</div>
 
 					{/* Search and Pagination */}
 					<div className="mt-4 flex items-center justify-between">
 						{/* Pagination - Bên trái */}
-						{pagination.totalPages > 1 && (
-							<div className="flex items-center gap-1">
-								<button
-									onClick={() => handlePageChange(pagination.currentPage - 1)}
-									disabled={pagination.currentPage === 1}
-									className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									Trước
-								</button>
-								{getSmartPaginationNumbers(pagination.currentPage, pagination.totalPages).map((page, index) => (
-									<span key={index}>
-										{page === '...' ? (
-											<span className="px-2 py-1 text-sm text-gray-500">...</span>
-										) : (
-											<button
-												onClick={() => handlePageChange(page)}
-												className={`px-3 py-1 text-sm border rounded ${
-													page === pagination.currentPage
-														? 'bg-blue-500 text-white border-blue-500'
-														: 'border-gray-300 hover:bg-gray-50'
-												}`}
-											>
-												{page}
-											</button>
-										)}
-									</span>
-								))}
-								<button
-									onClick={() => handlePageChange(pagination.currentPage + 1)}
-									disabled={pagination.currentPage === pagination.totalPages}
-									className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									Sau
-								</button>
-							</div>
-						)}
-
-						{/* Search - Bên phải */}
-						<div className="relative max-w-md">
-							<FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-							<input
-								type="text"
-								placeholder="Tìm nhật ký... (Nhấn Enter để tìm kiếm)"
-								value={searchTerm}
-								onChange={(e) => handleSearchInputChange(e.target.value)}
-								onKeyPress={handleSearchKeyPress}
-								className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-							/>
+						<div className="flex items-center gap-1">
+							{pagination.totalPages > 1 && (
+								<>
+									<button
+										onClick={() => handlePageChange(pagination.currentPage - 1)}
+										disabled={pagination.currentPage === 1}
+										className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										Trước
+									</button>
+									{getSmartPaginationNumbers(pagination.currentPage, pagination.totalPages).map((page, index) => (
+										<span key={index}>
+											{page === '...' ? (
+												<span className="px-2 py-1 text-sm text-gray-500">...</span>
+											) : (
+												<button
+													onClick={() => handlePageChange(page)}
+													className={`px-3 py-1 text-sm border rounded ${
+														page === pagination.currentPage
+															? 'bg-blue-500 text-white border-blue-500'
+															: 'border-gray-300 hover:bg-gray-50'
+													}`}
+												>
+													{page}
+												</button>
+											)}
+										</span>
+									))}
+									<button
+										onClick={() => handlePageChange(pagination.currentPage + 1)}
+										disabled={pagination.currentPage === pagination.totalPages}
+										className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										Sau
+									</button>
+								</>
+							)}
 						</div>
+
+						{/* Add New Experiment Log Button - luôn hiển thị bên phải */}
+						<button
+							onClick={() => {
+								console.log('➕ Opening create modal - BEFORE:', isCreateModalOpen);
+								setIsCreateModalOpen(true);
+								console.log('➕ Opening create modal - AFTER: should be true');
+							}}
+							className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors flex items-center gap-2"
+							disabled={isLoading}
+						>
+							<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+								></path>
+							</svg>
+							Thêm dữ liệu thử nghiệm
+						</button>
 					</div>
 				</div>
 
 				{/* Grid Layout */}
 				<div className="flex-1 overflow-auto custom-scrollbar">
+					{/* Header Row - Always visible */}
+					<div className="w-full" style={{ minWidth: '1100px' }}>
+						<div
+							className="grid mb-2 p-2 bg-white border-b-2 border-gray-300"
+							style={{
+								gridTemplateColumns: '165px minmax(200px, 17%) 100px minmax(200px, 1fr) 120px 130px',
+								gap: '16px',
+							}}
+						>
+							<div id="col-code-time" className="p-3 text-left font-semibold text-gray-700" style={{ width: '165px' }}>
+								Mã & Thời gian
+							</div>
+							<div
+								id="col-title"
+								ref={titleHeaderRef}
+								className="p-3 text-left font-semibold text-gray-700"
+								style={{ minWidth: '200px', maxWidth: '400px' }}
+							>
+								Tiêu đề
+							</div>
+							<div id="col-tests" className="p-3 text-left font-semibold text-gray-700" style={{ width: '100px' }}>
+								Phép thử
+							</div>
+							<div
+								id="col-samples"
+								ref={samplesHeaderRef}
+								className="p-3 text-left font-semibold text-gray-700"
+								style={{ minWidth: '200px' }}
+							>
+								Mã mẫu thử
+							</div>
+							<div id="col-file" className="p-3 text-left font-semibold text-gray-700" style={{ width: '120px' }}>
+								File
+							</div>
+							<div
+								id="col-status"
+								className="p-3 text-left font-semibold text-gray-700 relative"
+								style={{ width: '130px' }}
+							>
+								<button
+									ref={statusButtonRef}
+									className="flex items-center gap-1 hover:bg-gray-100 px-2 py-1 rounded"
+									onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+								>
+									{status === 'all' ? 'Trạng thái' : status === 'pending' ? 'Chưa duyệt' : 'Đã duyệt'}
+									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+									</svg>
+								</button>
+
+								{/* Status Dropdown */}
+								{showStatusDropdown &&
+									ReactDOM.createPortal(
+										<div
+											ref={statusDropdownRef}
+											className="absolute bg-white border border-gray-300 rounded-md shadow-lg z-[9999] w-40"
+											style={{
+												top: statusButtonRef.current
+													? statusButtonRef.current.getBoundingClientRect().bottom + window.scrollY
+													: 'auto',
+												left: statusButtonRef.current
+													? statusButtonRef.current.getBoundingClientRect().left + window.scrollX
+													: 'auto',
+											}}
+										>
+											<button
+												className={`w-full text-left px-3 py-2 hover:bg-gray-100 ${
+													status === 'all' ? 'bg-blue-100 font-medium' : ''
+												}`}
+												onClick={() => {
+													handleStatusChange('all');
+													setShowStatusDropdown(false);
+												}}
+											>
+												Tất cả
+											</button>
+											<button
+												className={`w-full text-left px-3 py-2 hover:bg-gray-100 ${
+													status === 'pending' ? 'bg-blue-100 font-medium' : ''
+												}`}
+												onClick={() => {
+													handleStatusChange('pending');
+													setShowStatusDropdown(false);
+												}}
+											>
+												Chưa duyệt
+											</button>
+											<button
+												className={`w-full text-left px-3 py-2 hover:bg-gray-100 ${
+													status === 'approved' ? 'bg-blue-100 font-medium' : ''
+												}`}
+												onClick={() => {
+													handleStatusChange('approved');
+													setShowStatusDropdown(false);
+												}}
+											>
+												Đã duyệt
+											</button>
+										</div>,
+										document.body,
+									)}
+							</div>
+						</div>
+					</div>
+
 					{isLoading ? (
 						<div className="flex justify-center items-center h-64">
 							<div className="text-gray-500">Đang tải...</div>
@@ -848,86 +1253,168 @@ const ExperimentLog = () => {
 						<div className="flex flex-col items-center justify-center h-64 text-gray-500">
 							<FaFileAlt className="w-12 h-12 mb-4 text-gray-300" />
 							<div className="text-lg font-medium mb-2">
-								{documentStatus === 'published'
-									? mode === 'personal'
-										? 'Không có nhật ký đã phát hành cá nhân nào'
-										: 'Không có nhật ký đã phát hành nào'
-									: mode === 'personal'
-									? 'Không có nhật ký chờ duyệt cá nhân nào'
-									: 'Không có nhật ký chờ duyệt nào'}
+								{status === 'approved' ? 'Không có nhật ký đã duyệt nào' : 'Không có nhật ký nháp nào'}
 							</div>
 							<div className="text-sm">Nhấn Enter để tìm kiếm với từ khóa mới</div>
 						</div>
 					) : (
-						<div className="grid grid-cols-5 gap-4 p-4">
-							{/* Header Row */}
-							<div className="col-span-5 grid grid-cols-5 gap-4 mb-4">
-								<div className="p-3 text-left font-semibold text-gray-700">Mã & Thời gian</div>
-								<div className="p-3 text-left font-semibold text-gray-700">Tiêu đề</div>
-								<div className="p-3 text-left font-semibold text-gray-700">Số lượng Sample</div>
-								<div className="p-3 text-left font-semibold text-gray-700">Số lượng Analyses</div>
-								<div className="p-3 text-left font-semibold text-gray-700">Sample UIDs</div>
-							</div>
-
+						<div className="">
 							{/* Data Rows */}
-							{documents.map((doc) => {
-								const analyses = doc.metadata?.analyses || [];
-								const samples = doc.metadata?.samples || [];
-								const sampleUIDs = samples.map((s) => s.sampleId);
+							<div className="w-full" style={{ minWidth: '1100px' }}>
+								{documents.map((doc) => {
+									const analyses = doc.metadata?.qualifiedAnalyses || doc.jsonContent?.analyses || [];
+									const samples = doc.jsonContent?.samples || doc.metadata?.samples || [];
+									const sampleUIDs = samples.map((s) => s.sampleId);
+									const identityUID = doc.metadata?.submitBy || doc.identityUID || 'N/A';
 
-								return (
-									<div
-										key={doc.id}
-										className="col-span-5 grid grid-cols-5 gap-4 p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
-										onClick={() => handleDocumentClickForDetail(doc)}
-									>
-										{/* Column 1: Mã & Thời gian */}
-										<div className="flex flex-col items-start justify-start text-left">
-											<div className="font-semibold text-blue-600 text-sm mb-1">{doc.id}</div>
-											<div className="text-xs text-gray-500">{doc.lastModified}</div>
-										</div>
+									return (
+										<div
+											key={doc.id}
+											className="p-2 mb-2 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
+											onClick={(e) => {
+												console.log('📋 Document row clicked:', doc.id);
+												handleDocumentClickForDetail(doc);
+											}}
+										>
+											<div className="flex" style={{ gap: '16px' }}>
+												{/* Column 1: Mã & Thời gian */}
+												<div
+													className="p-3 flex flex-col items-start justify-start text-left"
+													data-col="col-code-time"
+													style={{ width: '165px', flexShrink: 0 }}
+												>
+													<div className="font-semibold text-blue-600 text-sm mb-1">{doc.id}</div>
+													<div className="text-xs text-gray-500 mb-1">{doc.lastModified}</div>
+													<div className="text-xs text-gray-400">Người tạo: {getIdentityName(doc)}</div>
+												</div>
 
-										{/* Column 2: Tiêu đề */}
-										<div className="flex items-start justify-start text-left">
-											<span className="font-medium text-gray-900 text-sm leading-tight">
-												{doc.metadata?.header?.title || doc.title}
-											</span>
-										</div>
+												{/* Column 2: Tiêu đề */}
+												<div
+													className="p-3 flex items-start justify-start text-left overflow-hidden"
+													data-col="col-title"
+													style={{
+														width: actualColumnWidths.title ? `${actualColumnWidths.title}px` : 'auto',
+														minWidth: '200px',
+														maxWidth: '400px',
+														flexShrink: 0,
+													}}
+												>
+													<span className="font-medium text-gray-900 text-sm leading-tight truncate">
+														{doc.jsonContent?.header?.title || doc.metadata?.header?.title || doc.title}
+													</span>
+												</div>
 
-										{/* Column 3: Số lượng Samples */}
-										<div className="flex items-start justify-start text-left">
-											<span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-												{samples.length}
-											</span>
-										</div>
+												{/* Column 3: Số lượng Phép thử */}
+												<div
+													className="p-3 flex items-start justify-start text-left"
+													data-col="col-tests"
+													style={{ width: '100px', flexShrink: 0 }}
+													onMouseEnter={(e) => analyses.length > 0 && handleTooltipShow(e, 'analyses', analyses)}
+													onMouseLeave={handleTooltipHide}
+												>
+													<span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium cursor-help">
+														{analyses.length}
+													</span>
+												</div>
 
-										{/* Column 4: Số lượng Analyses */}
-										<div className="flex items-start justify-start text-left">
-											<span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-												{analyses.length}
-											</span>
-										</div>
+												{/* Column 4: Sample UIDs */}
+												<div
+													className="p-3 flex flex-wrap gap-1 justify-start items-start text-left overflow-hidden"
+													data-col="col-samples"
+													style={{
+														width: actualColumnWidths.samples ? `${actualColumnWidths.samples}px` : 'auto',
+														minWidth: '200px',
+														flexShrink: 0,
+													}}
+													onMouseEnter={(e) => samples.length > 0 && handleTooltipShow(e, 'samples', samples)}
+													onMouseLeave={handleTooltipHide}
+												>
+													{sampleUIDs.slice(0, 5).map((uid, index) => (
+														<span
+															key={index}
+															className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs cursor-help"
+														>
+															{uid}
+														</span>
+													))}
+													{sampleUIDs.length > 5 && (
+														<span className="bg-gray-200 text-gray-600 px-2 py-1 rounded text-xs cursor-help">
+															+{sampleUIDs.length - 5}
+														</span>
+													)}
+												</div>
 
-										{/* Column 5: Sample UIDs (tối đa 5) */}
-										<div className="flex flex-wrap gap-1 justify-start items-start text-left">
-											{sampleUIDs.slice(0, 5).map((uid, index) => (
-												<span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-													{uid}
-												</span>
-											))}
-											{sampleUIDs.length > 5 && (
-												<span className="bg-gray-200 text-gray-600 px-2 py-1 rounded text-xs">
-													+{sampleUIDs.length - 5}
-												</span>
-											)}
+												{/* Column 5: File */}
+												<div
+													className="p-3 flex items-start justify-start text-left"
+													data-col="col-file"
+													style={{ width: '120px', flexShrink: 0 }}
+												>
+													{doc.fileId ? (
+														<button
+															onClick={(e) => {
+																e.stopPropagation();
+																handleFileAction({ id: doc.fileId }, 'view');
+															}}
+															className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 transition-colors"
+														>
+															Xem
+														</button>
+													) : (
+														<span className="text-gray-400 text-sm">N/A</span>
+													)}
+												</div>
+
+												{/* Column 6: Trạng thái */}
+												<div
+													className="p-3 flex items-start justify-start text-left"
+													data-col="col-status"
+													style={{ width: '130px', flexShrink: 0 }}
+												>
+													<span
+														className={`px-3 py-1 rounded-full text-sm font-medium ${
+															doc.metadata?.status === 'approved'
+																? 'bg-green-100 text-green-800'
+																: 'bg-yellow-100 text-yellow-800'
+														}`}
+													>
+														{doc.metadata?.status === 'approved' ? 'Đã duyệt' : 'Chưa xử lý'}
+													</span>
+												</div>
+											</div>
 										</div>
-									</div>
-								);
-							})}
+									);
+								})}
+							</div>
 						</div>
 					)}
 				</div>
 			</div>
+
+			{/* Tooltips */}
+			{showTooltip &&
+				tooltipData &&
+				ReactDOM.createPortal(
+					<div
+						ref={tooltipRef}
+						className="absolute bg-gray-800 text-white p-4 rounded-lg shadow-lg z-[9999] min-w-96 max-w-2xl"
+						style={{
+							top: tooltipPosition.y,
+							left: tooltipPosition.x,
+						}}
+					>
+						<div className="text-sm font-semibold mb-3">
+							{showTooltip === 'analyses' ? 'Thông tin phép thử:' : 'Thông tin mẫu thử:'}
+						</div>
+						<div className="max-h-80 overflow-y-auto overflow-x-auto">
+							{formatTooltipContent(tooltipData, showTooltip)}
+						</div>
+					</div>,
+					document.body,
+				)}
+
+			{/* Create Modal */}
+			<ExperimentDetail docCopy={null} isOpen={isCreateModalOpen} onClose={handleCloseCreateModal} />
 		</>
 	);
 };

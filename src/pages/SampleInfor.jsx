@@ -42,7 +42,7 @@ const SampleInfor = () => {
 		date.setHours(date.getHours() + 7);
 		return date.toISOString();
 	};
-
+	console.log(document)
 	const adjustDateForApiSubmission = (dateValue) => {
 		if (!dateValue) return null;
 
