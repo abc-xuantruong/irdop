@@ -1111,7 +1111,6 @@ const Editor = () => {
 
 			if (response.status === 200 && response.data) {
 				showAutoHideMessage('Đã tạo preview thành công!', 'success');
-				console.log(documentMetadata);
 				// Show popup instead of new tab
 				const htmlResponse = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
 				showPreviewPopup(htmlResponse, {
@@ -1154,18 +1153,15 @@ const Editor = () => {
 		// Update document information state - Author info
 		if (createdAt) {
 			const date = new Date(createdAt).toLocaleDateString('vi-VN');
-			console.log('Processing author info:', { createdAt, identityUID, date });
 			if (identityUID) {
 				try {
 					const author = await getUserName(identityUID);
-					console.log('Got author name:', author);
 					setAuthor(author);
 				} catch (error) {
 					console.error('Error getting author name:', error);
 					setAuthor('-');
 				}
 			} else {
-				console.log('No identityUID, setting author to -');
 				setAuthor('-'); // Default value if no identityUID
 			}
 			setAuthorAt(date);
@@ -1174,18 +1170,15 @@ const Editor = () => {
 		// Update document information state - Modifier info
 		if (modifiedAt) {
 			const date = new Date(modifiedAt).toLocaleDateString('vi-VN');
-			console.log('Processing modifier info:', { modifiedAt, modifiedByUID, date });
 			if (modifiedByUID) {
 				try {
 					const modifier = await getUserName(modifiedByUID);
-					console.log('Got modifier name:', modifier);
 					setLastModified(modifier);
 				} catch (error) {
 					console.error('Error getting modifier name:', error);
 					setLastModified('-');
 				}
 			} else {
-				console.log('No modifiedByUID, setting lastModified to -');
 				setLastModified('-'); // Default value if no modifiedByUID
 			}
 			setLastModifiedAt(date);
@@ -1196,7 +1189,6 @@ const Editor = () => {
 		// Check if popup already exists to prevent multiple instances
 		const existingOverlay = document.getElementById('parameterSelectionOverlay');
 		if (existingOverlay) {
-			console.log('Popup already exists, not creating new one');
 			return;
 		}
 
@@ -1274,7 +1266,6 @@ const Editor = () => {
 				const currentAnalysisIdsString = JSON.stringify(currentAnalysisIds.sort());
 
 				if (newAnalysisIdsString !== currentAnalysisIdsString) {
-					console.log('Analysis IDs changed, updating...');
 					setAnalysisIds(newAnalysisIds);
 
 					// Also update global for backward compatibility
@@ -1296,7 +1287,6 @@ const Editor = () => {
 
 					// No auto save, user will save manually when needed
 				} else {
-					console.log('Analysis IDs unchanged, no update needed');
 				}
 
 				// Close popup
@@ -1332,7 +1322,6 @@ const Editor = () => {
 			// After popup is closed, check if we need to load table info
 			setTimeout(() => {
 				if (analysisIds && analysisIds.length > 0 && !isLoadingTableInfo.current) {
-					console.log('Popup closed, loading table info if needed');
 					loadTableInfo();
 				}
 			}, 200);
@@ -1369,7 +1358,6 @@ const Editor = () => {
 
 			if (response.status === 200 && response.data) {
 				const editData = response.data;
-				console.log('Scan response data:', editData);
 
 				// Cập nhật các giá trị từ dữ liệu quét được
 				if (editData.metadata) {
@@ -2101,16 +2089,13 @@ const Editor = () => {
 				// Process extracted data from API response
 				if (metadata && metadata.extractData) {
 					const { analyses = [] } = metadata.extractData;
-					console.log('Extracted data:', { analyses });
 					showSubmitResultModal(analyses, []);
 				} else {
-					console.log('No extractData found in metadata:', metadata);
 					// Show modal with empty data for testing
 					showSubmitResultModal([], []);
 				}
 
 				// Log response for debugging
-				console.log('Submit response:', responseData);
 
 				// Note: Editor remains editable after submission, only auto-save is disabled for submitted documents
 			} else {
@@ -2270,7 +2255,6 @@ const Editor = () => {
 
 	// Show submit result modal with analyses and nonconformity data - with editing capability
 	const showSubmitResultModal = (analyses, nonconformityAnalyses) => {
-		console.log('showSubmitResultModal called with:', { analyses, nonconformityAnalyses });
 
 		// Create a document-like object for the analysis data popup
 		const documentData = {
@@ -2293,12 +2277,10 @@ const Editor = () => {
 	// Reload editor data from server
 	const reloadEditorData = async () => {
 		if (!currentEditId) {
-			console.log('No editId available for reloading');
 			return false;
 		}
 
 		try {
-			console.log('Reloading editor data for editId:', currentEditId);
 
 			const response = await apiPost('https://red.irdop.org/v1/editor/lab_result_report/get_editor', {
 				id: currentEditId,
@@ -2308,7 +2290,6 @@ const Editor = () => {
 
 			if (response.status === 200 && response.data) {
 				const document = response.data;
-				console.log('Reloaded document data:', document);
 
 				if (document && document.metadata) {
 					const metadata = document.metadata;
@@ -2338,7 +2319,6 @@ const Editor = () => {
 
 					// Update editor content
 					if (document.content && editorRef.current) {
-						console.log('Reloading editor content, documentStatus:', documentStatus);
 						editorRef.current.setContent(document.content);
 						setEditorContent(document.content);
 					}
@@ -2359,7 +2339,6 @@ const Editor = () => {
 						document.modifiedByUID, // Modified by UID
 					);
 
-					console.log('Successfully reloaded editor data');
 					return true;
 				}
 			}
@@ -2375,7 +2354,6 @@ const Editor = () => {
 	// Handle bulk update confirmation
 	const handleBulkUpdateConfirm = async () => {
 		try {
-			console.log('Confirming bulk update with analyses:', submitResultData.analyses);
 
 			const response = await apiPost('https://red.irdop.org/v1/analysis/update_bulk', {
 				analyses: submitResultData.analyses,
@@ -2401,13 +2379,11 @@ const Editor = () => {
 		// Load data from last submit response into current state
 		if (lastSubmitResponse) {
 			try {
-				console.log('Loading data from submit response:', lastSubmitResponse);
 
 				// Reload the latest data from server to get the updated metadata
 				const reloadSuccess = await reloadEditorData();
 
 				if (reloadSuccess) {
-					console.log('Data reloaded successfully');
 					showAutoHideMessage('Đã cập nhật dữ liệu từ kết quả submit', 'success');
 				} else {
 					showAutoHideMessage('Lỗi khi tải lại dữ liệu từ server', 'error');

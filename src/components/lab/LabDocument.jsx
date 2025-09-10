@@ -58,15 +58,12 @@ const LabDocument = () => {
 		}
 
 		try {
-			console.log('Calling getIdenByUid for:', identityUID);
 			const identity = await getIdenByUid(identityUID);
-			console.log('getIdenByUid response:', identity);
 			if (identity && identity.identity_name) {
 				setIdentityNames((prev) => ({
 					...prev,
 					[identityUID]: identity.identity_name,
 				}));
-				console.log('Successfully cached identity name:', identity.identity_name);
 				return identity.identity_name;
 			}
 		} catch (error) {
@@ -361,13 +358,10 @@ const LabDocument = () => {
 							JSON.stringify(foundPreviewDoc.metadata) !== JSON.stringify(selectedDocumentForPreview.metadata) ||
 							foundPreviewDoc.fileId !== selectedDocumentForPreview.fileId;
 						if (hasMetadataChanges) {
-							console.log('📝 Updating selectedDocumentForPreview due to metadata changes');
 							setSelectedDocumentForPreview(foundPreviewDoc); // Update preview document khi có thay đổi thực sự
 						} else {
-							console.log('✅ selectedDocumentForPreview unchanged - no metadata changes');
 						}
 					} else {
-						console.log('ℹ️ selectedDocumentForPreview not found in new search results, but keeping it');
 						// KHÔNG CLEAR - giữ nguyên selectedDocumentForPreview ngay cả khi không tìm thấy trong kết quả search
 						// User có thể đang xem document từ trang khác hoặc từ search term khác
 					}
@@ -392,13 +386,10 @@ const LabDocument = () => {
 					),
 				];
 
-				console.log('Found unique UIDs to fetch:', uniqueUIDs);
-				console.log('Sample document metadata:', transformedDocuments[0]?.metadata);
 
 				// Fetch identity names asynchronously
 				if (uniqueUIDs.length > 0) {
 					uniqueUIDs.forEach(async (uid) => {
-						console.log('Fetching identity for UID:', uid);
 						await fetchIdentityName(uid);
 					});
 				}
@@ -435,7 +426,6 @@ const LabDocument = () => {
 			// Nếu không có đủ metadata, kiểm tra fileId và tạo fileRecord mới
 			if (!hasCompleteMetadata && (requestFileRecord.id || requestFileRecord.fileId)) {
 				const fileId = requestFileRecord.id || requestFileRecord.fileId;
-				console.log('Metadata không đầy đủ, sử dụng fileId để preview:', fileId);
 				requestFileRecord = { id: fileId };
 			}
 
@@ -474,7 +464,6 @@ const LabDocument = () => {
 		const hasHeaderContent = header && Object.keys(header).length > 0;
 		const hasContent = content && content.trim() !== '';
 		const hasFooter = footer && footer.trim() !== '';
-		console.log('Document metadata:', { hasHeaderContent, hasContent, hasFooter });
 
 		// Nếu không có đủ header và content, sử dụng file preview thay thế
 		if (!hasHeaderContent && !hasContent) {
@@ -902,7 +891,6 @@ const LabDocument = () => {
 		}
 
 		loadDocuments('', 1, initialMode, documentStatus, pendingDocumentType);
-		console.log('Component mounted, loading documents with mode:', initialMode);
 		// Cleanup function
 		return () => {
 			// Clean up global function
@@ -948,13 +936,10 @@ const LabDocument = () => {
 			});
 
 			if (needsReload) {
-				console.log('🔄 Loading preview content for document:', selectedDocumentForPreview.id);
 				loadPreviewContent(selectedDocumentForPreview);
 			} else {
-				console.log('✅ Preview content already loaded for document:', selectedDocumentForPreview.id);
 			}
 		} else {
-			console.log('❌ No selectedDocumentForPreview, clearing preview content');
 			setPreviewContent('');
 		}
 	}, [selectedDocumentForPreview?.id]); // CHỈ phụ thuộc vào ID của document - KHÔNG phụ thuộc vào search
@@ -1045,7 +1030,6 @@ const LabDocument = () => {
 		// Set new timeout để tránh re-render liên tục
 		const timeout = setTimeout(() => {
 			// Có thể thêm logic preview optimization ở đây nếu cần
-			console.log('Search term stabilized:', value);
 		}, 300); // 300ms debounce
 
 		setSearchTimeout(timeout);
@@ -1061,14 +1045,10 @@ const LabDocument = () => {
 
 		// Chỉ thực hiện search khi nhấn Enter và khác với search term hiện tại
 		if (searchTerm !== lastSearchTerm) {
-			console.log('🚀 Performing search with term:', searchTerm);
-			console.log('📌 Preview document before search:', selectedDocumentForPreview?.id);
 
 			await loadDocuments(searchTerm, 1, mode, documentStatus, pendingDocumentType);
 
-			console.log('📌 Preview document after search (should be unchanged):', selectedDocumentForPreview?.id);
 		} else {
-			console.log('⏭️ Search term unchanged, skipping search');
 		}
 	};
 
@@ -1082,7 +1062,6 @@ const LabDocument = () => {
 
 	// Handle document click for preview - TÁCH BIỆT HOÀN TOÀN VỚI SEARCH
 	const handleDocumentClick = async (doc) => {
-		console.log('🖱️ Document clicked:', doc.id);
 
 		// Close analysis extract modal when selecting a different document
 		if (showAnalysisExtract && analysisExtractDocument?.id !== doc?.id) {
@@ -1092,18 +1071,14 @@ const LabDocument = () => {
 
 		// Update UI selection only if different
 		if (selectedDocument?.id !== doc?.id) {
-			console.log('🎯 Updating selectedDocument to:', doc.id);
 			setSelectedDocument(doc);
 		} else {
-			console.log('✅ selectedDocument already selected:', doc.id);
 		}
 
 		// CHỈ cập nhật selectedDocumentForPreview và load preview khi chọn document KHÁC
 		if (selectedDocumentForPreview?.id !== doc?.id) {
-			console.log('🔄 Changing selectedDocumentForPreview from:', selectedDocumentForPreview?.id, 'to:', doc.id);
 			setSelectedDocumentForPreview(doc);
 		} else {
-			console.log('✅ selectedDocumentForPreview already selected:', doc.id);
 		}
 	};
 
@@ -1111,13 +1086,11 @@ const LabDocument = () => {
 	const loadPreviewContent = async (document) => {
 		try {
 			setIsLoadingPreview(true);
-			console.log('Loading preview content for document:', document.id);
 
 			// Kiểm tra xem đã có preview content cho document này chưa
 			const currentDocumentId = document.id;
 			if (previewContent && previewContent.includes(currentDocumentId)) {
 				// Đã có preview cho document này, không cần load lại
-				console.log('Preview content already loaded for document:', currentDocumentId);
 				setIsLoadingPreview(false);
 				return;
 			}
@@ -1154,7 +1127,6 @@ const LabDocument = () => {
 			`;
 
 			setPreviewContent(documentPreviewContent);
-			console.log('Preview content generated for document:', currentDocumentId);
 
 			// Expose functions to window for use in HTML content
 			window.handleFilePreviewFromDocument = (fileId) => {
@@ -1738,11 +1710,9 @@ const LabDocument = () => {
 
 				// CHECK: Nếu đã load rồi thì không load lại
 				if (hasLoadedOnce.has(`file_${document.id}`) && filePreviewUrl) {
-					console.log('✅ File preview already loaded, skipping');
 					return;
 				}
 
-				console.log('🔄 Loading file preview for document:', document.id);
 				setIsLoadingDetail(true);
 				setDetailError(null);
 				setIsFilePreview(true);
@@ -1757,7 +1727,6 @@ const LabDocument = () => {
 					if (response.status === 200 && response.data) {
 						setFilePreviewUrl(response.data);
 						setHasLoadedOnce((prev) => new Set([...prev, `file_${document.id}`]));
-						console.log('✅ File preview loaded successfully for document:', document.id);
 					} else {
 						throw new Error('Không thể lấy link preview file');
 					}
@@ -1778,27 +1747,22 @@ const LabDocument = () => {
 
 				// CHECK: Nếu đã load rồi thì không load lại
 				if (hasLoadedOnce.has(`html_${document.id}`) && reportHtml) {
-					console.log('✅ HTML report already loaded, skipping');
 					return;
 				}
 
-				console.log('🔍 Checking conditions before loading report for document:', document.id);
 
 				// 1. Kiểm tra cache trước
 				if (reportCache[document.id]) {
-					console.log('💾 Report already in cache for document:', document.id);
 					setHasLoadedOnce((prev) => new Set([...prev, `html_${document.id}`]));
 					return;
 				}
 
 				// 2. Kiểm tra metadata
 				if (!hasValidMetadata()) {
-					console.log('⚠️ No valid metadata, switching to file preview for document:', document.id);
 					await loadFilePreview();
 					return;
 				}
 
-				console.log('🚀 Starting API call for document:', document.id);
 				setIsLoadingDetail(true);
 				setDetailError(null);
 				setIsFilePreview(false);
@@ -1832,7 +1796,6 @@ const LabDocument = () => {
 						}));
 
 						setHasLoadedOnce((prev) => new Set([...prev, `html_${document.id}`]));
-						console.log('✅ Report API call completed and cached for document:', document.id);
 					} else {
 						throw new Error('Không thể tải báo cáo từ server');
 					}
@@ -1847,16 +1810,13 @@ const LabDocument = () => {
 			// Effect chạy khi document thay đổi - TỐI ƯU HÓA
 			useEffect(() => {
 				if (!document || !document.id) {
-					console.log('❌ No document or document ID');
 					return;
 				}
 
-				console.log('📄 ReportDetail useEffect triggered for document:', document.id);
 
 				// CHECK QUAN TRỌNG: Nếu đã load document này rồi thì không load lại
 				const cacheKey = hasValidMetadata() ? `html_${document.id}` : `file_${document.id}`;
 				if (hasLoadedOnce.has(cacheKey)) {
-					console.log('✅ Document already loaded, skipping reload');
 					return;
 				}
 
@@ -1878,19 +1838,15 @@ const LabDocument = () => {
 				});
 
 				if (hasCache) {
-					console.log('✅ Using cached report for document:', document.id);
 					setHasLoadedOnce((prev) => new Set([...prev, `html_${document.id}`]));
 					return;
 				}
 
 				if (hasValidMeta) {
-					console.log('🔄 No cache but has valid metadata, loading HTML report...');
 					loadHtmlReport();
 				} else if (document.fileId) {
-					console.log('🔄 No valid metadata, loading file preview...');
 					loadFilePreview();
 				} else {
-					console.log('❌ No valid metadata and no fileId');
 					setDetailError('Không có dữ liệu để hiển thị');
 				}
 			}, [document?.id, hasValidMetadata, loadHtmlReport, loadFilePreview, hasLoadedOnce]);

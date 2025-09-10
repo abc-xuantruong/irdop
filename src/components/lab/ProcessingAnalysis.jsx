@@ -6,7 +6,9 @@ import { useLocation } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import TinyMceInput from '../Input';
 import { IoIosArrowDown } from 'react-icons/io';
+import { MdAttachFile } from 'react-icons/md';
 import LabBulkUpdate from './LabBulkUpdate';
+import ExperimentDetail from './ExperimentDetail';
 
 // Custom CSS for thin scrollbars and enhanced editing experience
 const customScrollbarStyle = `
@@ -464,6 +466,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	// Bulk edit states
 	const [showBulkEditBox, setShowBulkEditBox] = useState(false);
 
+	// ExperimentDetail modal states
+	const [showExperimentDetailModal, setShowExperimentDetailModal] = useState(false);
+
 	// Filter states
 	const [filters, setFilters] = useState({
 		columns: [
@@ -537,6 +542,10 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		loading: false,
 		docId: null,
 	});
+
+	// File preview states (similar to ExperimentLog)
+	const [previewFile, setPreviewFile] = useState(null);
+	const [previewUrl, setPreviewUrl] = useState('');
 
 	// Ref to prevent unnecessary API calls
 	const lastFetchParamsRef = useRef('');
@@ -619,7 +628,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// Load initial data function
 	const loadInitialData = async () => {
-		console.log('🚀 loadInitialData started');
 		setIsInitialDataLoading(true);
 		const searchParams = new URLSearchParams(location.search);
 
@@ -699,7 +707,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		if (JSON.stringify(newFilters) !== JSON.stringify(filters)) setFilters(newFilters);
 
 		setIsInitialDataLoading(false);
-		console.log('✅ loadInitialData completed');
 	};
 
 	// Update URL parameters when filters change
@@ -786,13 +793,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		customCurrentPage = null,
 		customItemsPerPage = null,
 	) => {
-		console.log('🔄 fetchAnalysisData called', {
-			preserveScroll,
-			customFilters: !!customFilters,
-			isInitialDataLoading,
-			caller: new Error().stack.split('\n')[2].trim(),
-		});
-
 		// Save current scroll position if preserving scroll
 		if (preserveScroll && scrollContainerRef.current) {
 			setScrollPosition(scrollContainerRef.current.scrollTop);
@@ -992,13 +992,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// Fetch parameters list
 	const fetchParameters = async (searchTerm = '', customFilters = null) => {
-		console.log('🔍 fetchParameters called', {
-			searchTerm,
-			customFilters: !!customFilters,
-			isInitialDataLoading,
-			caller: new Error().stack.split('\n')[2].trim(),
-		});
-
 		try {
 			const useFilters = customFilters || filters;
 			const requestBody = { searchTerm: searchTerm };
@@ -1279,20 +1272,11 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	// Simple effect with debounce to prevent rapid API calls
 	useEffect(() => {
 		if (isInitialLoad || isInitialDataLoading) {
-			console.log(
-				'⏸️ Debounce useEffect skipped - isInitialLoad:',
-				isInitialLoad,
-				'isInitialDataLoading:',
-				isInitialDataLoading,
-			);
 			return;
 		}
 
-		console.log('🔄 Filter/pagination changed, debouncing fetch...');
-
 		const timeoutId = setTimeout(() => {
 			if (!isCurrentlyFetchingRef.current) {
-				console.log('✅ Debounced fetch executing...');
 				isCurrentlyFetchingRef.current = true;
 
 				// Update URL parameters
@@ -1325,11 +1309,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		if (!isInitialLoad && !isInitialDataLoading && lastSearchTermRef.current !== parameterSearchTerm) {
 			lastSearchTermRef.current = parameterSearchTerm;
 
-			console.log('🔍 Search term changed, debouncing fetchParameters...');
-
 			const timeoutId = setTimeout(() => {
 				if (!isCurrentlyFetchingRef.current) {
-					console.log('✅ Search fetch executing...');
 					fetchParameters(parameterSearchTerm);
 				}
 			}, 300);
@@ -1379,11 +1360,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					!isCurrentlyFetchingRef.current &&
 					!hasActiveFilters // Thêm điều kiện để không auto-refresh khi có filter
 				) {
-					console.log('🔄 Auto-refresh triggered');
 					// Use current state instead of parsing URL to maintain filters
 					fetchAnalysisData(true, filters, currentPage, itemsPerPage);
 				} else if (hasActiveFilters) {
-					console.log('⏸️ Auto-refresh skipped - filters are active');
 				}
 			}, 60000); // 60 seconds
 
@@ -2064,6 +2043,19 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		setShowBulkEditBox(true);
 	};
 
+	// Handle create experiment detail modal
+	const handleCreateExperimentDetail = () => {
+		setShowExperimentDetailModal(true);
+	};
+
+	const handleCloseExperimentDetail = () => {
+		setShowExperimentDetailModal(false);
+		// Refresh data when closing ExperimentDetail modal
+		setTimeout(() => {
+			fetchAnalysisData(true);
+		}, 500);
+	};
+
 	// Handle bulk update completion
 	const handleBulkUpdateComplete = () => {
 		clearAllSelections();
@@ -2668,6 +2660,141 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		});
 	};
 
+	// FilePreview Component (from ExperimentLog)
+	const FilePreview = ({ url, fileName, onClose, isVisible }) => {
+		const getFileExtension = (filename) => {
+			return filename?.split('.').pop()?.toLowerCase() || '';
+		};
+
+		const isImage = (filename) => {
+			const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp'];
+			return imageExtensions.includes(getFileExtension(filename));
+		};
+
+		const isPdf = (filename) => {
+			return getFileExtension(filename) === 'pdf';
+		};
+
+		const isVideo = (filename) => {
+			const videoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'];
+			return videoExtensions.includes(getFileExtension(filename));
+		};
+
+		const isAudio = (filename) => {
+			const audioExtensions = ['mp3', 'wav', 'ogg', 'aac', 'flac'];
+			return audioExtensions.includes(getFileExtension(filename));
+		};
+
+		const isText = (filename) => {
+			const textExtensions = ['txt', 'csv', 'json', 'xml', 'log'];
+			return textExtensions.includes(getFileExtension(filename));
+		};
+
+		if (!isVisible || !url) return null;
+
+		return (
+			<div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-[60]" onClick={onClose}>
+				<div
+					className="bg-white rounded-lg max-w-[95vw] max-h-[95vh] w-[95vw] h-[95vh] overflow-hidden flex flex-col"
+					onClick={(e) => e.stopPropagation()}
+				>
+					{/* Header */}
+					<div className="flex justify-between items-center p-4 border-b bg-gray-50">
+						<h3 className="text-lg font-semibold text-black truncate max-w-[80%]">{fileName}</h3>
+						<button
+							onClick={onClose}
+							className="text-gray-500 hover:text-gray-700 text-xl font-bold min-w-[24px] h-6 flex items-center justify-center"
+						>
+							✕
+						</button>
+					</div>
+
+					{/* Content */}
+					<div className="flex-1 overflow-hidden bg-gray-100">
+						<iframe src={url} className="w-full h-full border-0" title={fileName} style={{ minHeight: '100%' }} />
+					</div>
+
+					{/* Footer */}
+					<div className="p-4 border-t bg-gray-50 flex justify-end">
+						<a
+							href={url}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 mr-2 inline-flex items-center gap-2"
+						>
+							<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+								/>
+							</svg>
+							Tải xuống
+						</a>
+						<button onClick={onClose} className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+							Đóng
+						</button>
+					</div>
+				</div>
+			</div>
+		);
+	};
+
+	// Handle file preview (similar to ExperimentLog)
+	const handleFileAction = async (docRecord, mode) => {
+		try {
+			// First, get the document details to obtain the fileId
+			const docResponse = await apiPost('https://red.irdop.org/v1/document/get_doc', {
+				docId: docRecord.docId,
+			});
+
+			if (docResponse.status === 200 && docResponse.data && docResponse.data.fileId) {
+				const fileId = docResponse.data.fileId;
+
+				// Now get the download link using the actual fileId
+				const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
+					expiry: 60 * 10,
+					mode: mode,
+					fileRecord: { id: fileId },
+				});
+
+				if (response.status === 200 && response.data) {
+					if (mode === 'view') {
+						// Display preview in popup
+						setPreviewFile({ id: fileId, originInfo: { fileName: `Document-${fileId}` } });
+						setPreviewUrl(response.data);
+					} else if (mode === 'download') {
+						// Download file using blob
+						const downloadResponse = await fetch(response.data);
+						const blob = await downloadResponse.blob();
+						const url = window.URL.createObjectURL(blob);
+						const a = document.createElement('a');
+						a.href = url;
+						a.download = `Document-${fileId}`;
+						document.body.appendChild(a);
+						a.click();
+						window.URL.revokeObjectURL(url);
+						document.body.removeChild(a);
+					}
+				} else {
+					throw new Error('Failed to get download link');
+				}
+			} else {
+				throw new Error('Failed to get document details');
+			}
+		} catch (error) {
+			console.error(`${mode} failed:`, error);
+			showErrorNotification(`Lỗi khi ${mode === 'view' ? 'xem' : 'tải'} file: ${error.message}`);
+		}
+	};
+
+	// Handle close file preview
+	const handleClosePreview = () => {
+		setPreviewFile(null);
+		setPreviewUrl('');
+	};
+
 	return (
 		<div className="flex h-full bg-gray-100 relative overflow-y-hidden">
 			{/* Loading overlay when updating */}
@@ -2701,10 +2828,10 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 							className="hover:underline flex-shrink-0"
 							onClick={() => onNavigateToLab && onNavigateToLab('analysis')}
 						>
-							PHÒNG THỬ NGHIỆM
+							LAB
 						</span>
 						<span className="flex-shrink-0">/</span>
-						<span className="hover:underline flex-shrink-0">DANH SÁCH PHÉP THỬ</span>
+						<span className="hover:underline flex-shrink-0">PHÉP THỬ</span>
 						<span className="flex-shrink-0">/</span>
 						<div className="relative flex-shrink-0" data-technician-dropdown>
 							<button
@@ -2714,7 +2841,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									handleTechnicianDropdownToggle();
 								}}
 							>
-								{getCurrentTechnicianName() === 'TOÀN BỘ' ? 'TẤT CẢ KIỂM NGHIỆM VIÊN' : getCurrentTechnicianName()}{' '}
+								{getCurrentTechnicianName() === 'TOÀN BỘ' ? 'TẤT CẢ KNV' : getCurrentTechnicianName()}{' '}
 								<IoIosArrowDown size={20} />
 							</button>
 							{technicianDropdownOpen && (
@@ -2802,12 +2929,20 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 							</button>
 
 							{(selectedRows?.size || 0) > 0 && (
-								<button
-									className="px-3 py-2 bg-green-500 border-2 border-green-700 text-white rounded-md text-sm font-bold hover:bg-green-600 transition-colors shadow-sm"
-									onClick={handleBulkEditClick}
-								>
-									<span>Cập nhật hàng loạt ({selectedRows?.size || 0})</span>
-								</button>
+								<>
+									<button
+										className="px-3 py-2 bg-green-500 border-2 border-green-700 text-white rounded-md text-sm font-bold hover:bg-green-600 transition-colors shadow-sm"
+										onClick={handleBulkEditClick}
+									>
+										<span>Cập nhật({selectedRows?.size || 0})</span>
+									</button>
+									<button
+										className="px-3 py-2 bg-blue-500 border-2 border-blue-700 text-white rounded-md text-sm font-bold hover:bg-blue-600 transition-colors shadow-sm"
+										onClick={handleCreateExperimentDetail}
+									>
+										<span>Dữ liệu thử nghiệm ({selectedRows?.size || 0})</span>
+									</button>
+								</>
 							)}
 						</div>
 					</div>
@@ -3409,16 +3544,21 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																	</div>
 																) : column === 'doc_id' ? (
 																	row.doc_id ? (
-																		<span
-																			className="text-blue-500 text-lg cursor-pointer p-1 rounded hover:text-blue-700 hover:bg-blue-50"
+																		<div
+																			className="flex items-center justify-center cursor-pointer hover:bg-blue-50 p-1 rounded"
 																			onClick={(e) => {
 																				e.stopPropagation();
-																				openDocument(row.doc_id);
+																				handleFileAction({ docId: row.doc_id }, 'view');
 																			}}
+																			title="Xem tài liệu đính kèm"
 																		>
-																			📄
-																		</span>
-																	) : null
+																			<MdAttachFile className="w-5 h-5 text-blue-600" />
+																		</div>
+																	) : (
+																		<div className="flex items-center justify-center p-1">
+																			<span className="text-gray-300">--</span>
+																		</div>
+																	)
 																) : column === 'technician_uid' ? (
 																	<div className="text-xs text-gray-900 p-1">
 																		{getTechnicianName(row.technician_uid)}
@@ -3793,6 +3933,14 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				</div>
 			)}
 
+			{/* File Preview Popup */}
+			<FilePreview
+				url={previewUrl}
+				fileName={previewFile?.originInfo?.fileName || `Document-${previewFile?.id}`}
+				isVisible={!!previewFile}
+				onClose={handleClosePreview}
+			/>
+
 			{/* Date Picker Modal */}
 			{showDatePicker && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -3825,6 +3973,14 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					</div>
 				</div>
 			)}
+
+			{/* ExperimentDetail Modal */}
+			<ExperimentDetail
+				docCopy={null}
+				processingAnalyses={Array.from(selectedRowsData.values())}
+				isOpen={showExperimentDetailModal}
+				onClose={handleCloseExperimentDetail}
+			/>
 		</div>
 	);
 };

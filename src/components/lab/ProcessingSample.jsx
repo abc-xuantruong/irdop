@@ -977,17 +977,14 @@ const ProcessingSample = ({ onNavigateToLab }) => {
 
 	// Helper function to group samples by sample_uid
 	const getGroupedSampleData = () => {
-		console.log('🔍 getGroupedSampleData - processingSample:', processingSample);
 
 		if (!processingSample || !Array.isArray(processingSample)) {
-			console.log('❌ processingSample is not valid array:', processingSample);
 			return [];
 		}
 
 		const sampleGroups = new Map();
 
 		processingSample.forEach((receipt) => {
-			console.log('🔍 Processing receipt:', receipt);
 			receipt.samples?.forEach((sample) => {
 				const sampleKey = sample.sample_uid;
 				if (!sampleGroups.has(sampleKey)) {

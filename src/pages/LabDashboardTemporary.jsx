@@ -314,7 +314,7 @@ const LabDashboardTemporary = () => {
 					</div>
 				) : currentView === 'experiment' ? (
 					<div className="h-full flex flex-col">
-						<div className="flex-1 overflow-hidden p-4">
+						<div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
 							<ExperimentLog />
 						</div>
 					</div>

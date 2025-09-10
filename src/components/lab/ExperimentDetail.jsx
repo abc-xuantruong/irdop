@@ -44,17 +44,8 @@ const customEditingStyles = `
 }
 `;
 
-const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
+const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 	const { currentUser, getIdenByUid } = useContext(GlobalContext);
-
-	// Debug logging for props
-	console.log('🔍 ExperimentDetail props:', {
-		docCopy: docCopy?.id || 'null',
-		isOpen,
-		hasOnClose: !!onClose,
-		isCreateMode: !docCopy,
-		docCopyTitle: docCopy?.jsonContent?.header?.title || docCopy?.title || 'no title',
-	});
 
 	// Utility functions
 	const isAdmin = () => {
@@ -92,15 +83,12 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		}
 
 		try {
-			console.log('Calling getIdenByUid for:', identityUID);
 			const identity = await getIdenByUid(identityUID);
-			console.log('getIdenByUid response:', identity);
 			if (identity && identity.identity_name) {
 				setIdentityNames((prev) => ({
 					...prev,
 					[identityUID]: identity.identity_name,
 				}));
-				console.log('Successfully cached identity name:', identity.identity_name);
 				return identity.identity_name;
 			}
 		} catch (error) {
@@ -180,6 +168,16 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 	// State to store current document copy (to handle refresh)
 	const [currentDocCopy, setCurrentDocCopy] = useState(docCopy);
 
+	// State to store converted analyses from processingAnalyses
+	const [convertedAnalyses, setConvertedAnalyses] = useState([]);
+
+	// State for attachment data
+	const [attachmentData, setAttachmentData] = useState({});
+	const [loadingAttachments, setLoadingAttachments] = useState(false);
+	const [showFilePreview, setShowFilePreview] = useState(false);
+	const [filePreviewUrl, setFilePreviewUrl] = useState('');
+	const [isLoadingFilePreview, setIsLoadingFilePreview] = useState(false);
+
 	// Function to reset all state when closing modal
 	const resetAllStates = () => {
 		setIsEditing(false);
@@ -200,11 +198,13 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		setHasAutoCompared(false);
 		setSelectedColumns({ result_value: true, result_unit: false, parameter_name: false, protocol_code: false });
 		setShowPreview(false);
+		setShowFilePreview(false);
+		setFilePreviewUrl('');
+		setIsLoadingFilePreview(false);
 		setEditableData({ header: { title: '' }, samples: [], analyses: [], fileId: null });
 		setSelectedColumnsCreate(new Set());
 		setShowColumnSelectionCreate(false);
-		setCreatedDoc(null);
-		// Don't set isCreateMode here as it depends on currentDocCopy which may not be initialized yet
+		setCreatedDoc(null); // Always reset createdDoc
 		setShowUploadModalCreate(false);
 		setUploadDataCreate({ files: [], userTags: [], foreignKeyUIDs: [] });
 		setUploadingCreate(false);
@@ -225,20 +225,56 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		setEditableCell({ analysisIndex: null, column: null });
 		setInputValue('');
 		setUpdating(false);
+		// Reset converted analyses from processingAnalyses
+		setConvertedAnalyses([]);
+		// Reset attachment data
+		setAttachmentData({});
+		setLoadingAttachments(false);
 	};
+
+	// Function to close file preview popup
+	const handleCloseFilePreview = () => {
+		setShowFilePreview(false);
+		setFilePreviewUrl('');
+		setIsLoadingFilePreview(false);
+	};
+
 	// Combined close handler to clear all state then call onClose
 	const handleCloseModal = () => {
-		console.log('🔍 ExperimentDetail: Closing modal and clearing state');
+		// Force reset isCreateMode and currentDocCopy to ensure fresh state
+		setIsCreateMode(!docCopy);
+		setCurrentDocCopy(docCopy);
+
+		// Reset all states completely
 		resetAllStates();
+
+		// Call parent onClose
 		onClose();
 	};
 	// Reset all state when modal opens
 	useEffect(() => {
 		if (isOpen) {
-			console.log('🔍 ExperimentDetail: Modal opened, resetting state');
+			// Force clear createdDoc first when opening
+			setCreatedDoc(null);
+
+			// Reset all other states
 			resetAllStates();
+
+			// Set correct create mode based on docCopy prop
+			setIsCreateMode(!docCopy);
+			setCurrentDocCopy(docCopy);
 		}
 	}, [isOpen]);
+
+	// Additional cleanup when docCopy changes
+	useEffect(() => {
+		if (isOpen && !docCopy) {
+			setCreatedDoc(null);
+			setIsCreateMode(true);
+		} else if (isOpen && docCopy) {
+			setIsCreateMode(false);
+		}
+	}, [isOpen, docCopy]);
 
 	// Inject custom CSS styles for TinyMCE editing
 	useEffect(() => {
@@ -259,20 +295,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 
 		try {
 			return analyses.map((analysis, index) => {
-				// Debug log each analysis to identify problematic data
-				console.log(`Processing analysis ${index}:`, {
-					keys: Object.keys(analysis),
-					hasCircularRef: (() => {
-						try {
-							JSON.stringify(analysis);
-							return false;
-						} catch (e) {
-							console.error(`Analysis ${index} has circular reference:`, e.message);
-							return true;
-						}
-					})(),
-				});
-
 				// Only extract safe primitive values, ignore any complex objects
 				const safeAnalysis = {
 					sampleId: typeof analysis.sampleId === 'string' ? analysis.sampleId : String(analysis.sampleId || ''),
@@ -324,7 +346,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 			console.error('Error in safeCloneAnalyses:', error);
 			// Return a completely safe fallback
 			return analyses.map((analysis, index) => {
-				console.log(`Fallback processing analysis ${index}:`, typeof analysis);
 				return {
 					sampleId: analysis && analysis.sampleId ? String(analysis.sampleId) : '',
 					testId: analysis && analysis.testId ? String(analysis.testId) : '',
@@ -429,28 +450,67 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		return deepCleanObject(analysis);
 	};
 
-	// Initialize edited analyses when document changes
+	// Initialize edited analyses when document changes or convertedAnalyses updates
 	useEffect(() => {
 		const sourceAnalyses = currentDocCopy?.metadata?.qualifiedAnalyses || currentDocCopy?.jsonContent?.analyses || [];
-		console.log('Initializing editedAnalyses:', {
-			qualifiedAnalyses: currentDocCopy?.metadata?.qualifiedAnalyses?.length || 0,
-			jsonContentAnalyses: currentDocCopy?.jsonContent?.analyses?.length || 0,
-			sourceAnalysesLength: sourceAnalyses.length,
-		});
+
 		if (sourceAnalyses.length > 0) {
 			setEditedAnalyses(safeCloneAnalyses(sourceAnalyses));
+			// Fetch attachments for the analyses
+			fetchAttachmentsForAnalyses(sourceAnalyses);
+		} else if (convertedAnalyses.length > 0 && !currentDocCopy) {
+			// Use convertedAnalyses when no docCopy but have processingAnalyses
+			setEditedAnalyses(safeCloneAnalyses(convertedAnalyses));
+			// Fetch attachments for the converted analyses
+			fetchAttachmentsForAnalyses(convertedAnalyses);
 		} else {
 			setEditedAnalyses([]);
+			setAttachmentData({});
 		}
 		// Reset matched document when document changes
 		setMatchedDocument(null);
 		setComparedAnalyses([]);
-	}, [currentDocCopy]);
+	}, [currentDocCopy, convertedAnalyses]);
+
+	// Convert processingAnalyses to docAnalyses when docCopy is null but processingAnalyses is provided
+	useEffect(() => {
+		if (!docCopy && processingAnalyses && Array.isArray(processingAnalyses) && processingAnalyses.length > 0) {
+			try {
+				const convertedDocAnalyses = processingAnalyses.map((blackAnalysis, index) => {
+					const docAnalysis = blackAnalysisToDocAnalysis(blackAnalysis);
+					return docAnalysis;
+				});
+
+				setConvertedAnalyses(convertedDocAnalyses);
+			} catch (error) {
+				console.error('Error converting processingAnalyses:', error);
+				setConvertedAnalyses([]);
+			}
+		} else {
+			setConvertedAnalyses([]);
+		}
+	}, [docCopy, processingAnalyses]);
+
+	// Update editableData.analyses when convertedAnalyses changes (for create mode)
+	useEffect(() => {
+		if (convertedAnalyses.length > 0 && !docCopy) {
+			setEditableData((prev) => ({
+				...prev,
+				analyses: convertedAnalyses.map((analysis) => ({
+					sampleId: analysis.sampleId || '',
+					testId: analysis.testId || analysis.id || '',
+					name: analysis.testName || '',
+					result: analysis.testResult || '',
+					unit: analysis.testUnit || '',
+					method: analysis.testProtocolCode || '',
+				})),
+			}));
+		}
+	}, [convertedAnalyses, docCopy]);
 
 	// Update currentDocCopy when docCopy prop changes
 	useEffect(() => {
 		setCurrentDocCopy(docCopy);
-		console.log('🔍 ExperimentDetail: currentDocCopy updated from prop:', docCopy?.id || 'null');
 	}, [docCopy]);
 
 	// Update create mode when docCopy changes
@@ -458,12 +518,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		if (currentDocCopy !== undefined) {
 			// Only run when currentDocCopy is initialized
 			setIsCreateMode(!currentDocCopy);
-			console.log(
-				'🔍 ExperimentDetail: docCopy changed, isCreateMode:',
-				!currentDocCopy,
-				'docCopy:',
-				currentDocCopy?.id || 'null',
-			);
 		}
 	}, [currentDocCopy]);
 
@@ -487,7 +541,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 	// Auto compare data when component mounts with docCopy
 	useEffect(() => {
 		if (currentDocCopy && !isCreateMode && comparedAnalyses.length === 0 && !isComparingData) {
-			console.log('🔍 Auto comparing data on component mount');
 			handleCompareData();
 		}
 	}, [currentDocCopy, isCreateMode]);
@@ -529,57 +582,11 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 
 		setIsSaving(true);
 		try {
-			// Debug: Log the original editedAnalyses to see what might contain circular references
-			console.log('=== DEBUG: Before cleaning ===');
-			console.log('editedAnalyses type:', typeof editedAnalyses, 'length:', editedAnalyses?.length);
-			console.log('currentDocCopy keys:', Object.keys(currentDocCopy));
-			console.log('currentDocCopy.metadata keys:', Object.keys(currentDocCopy.metadata || {}));
-
-			// Check for HTMLButtonElement specifically in the data
-			const findHTMLElements = (obj, path = '') => {
-				if (!obj || typeof obj !== 'object') return;
-
-				if (obj.constructor?.name === 'HTMLButtonElement' || obj.constructor?.name === 'FiberNode') {
-					console.error(`Found ${obj.constructor.name} at path: ${path}`);
-				}
-
-				if (Array.isArray(obj)) {
-					obj.forEach((item, index) => {
-						findHTMLElements(item, `${path}[${index}]`);
-					});
-				} else {
-					Object.keys(obj).forEach((key) => {
-						if (key.startsWith('__react') || key === 'stateNode' || key === '_owner') {
-							console.error(`Found React property ${key} at path: ${path}.${key}`);
-						}
-						findHTMLElements(obj[key], `${path}.${key}`);
-					});
-				}
-			};
-
-			console.log('Searching for HTML elements in editedAnalyses:');
-			findHTMLElements(editedAnalyses, 'editedAnalyses');
-			console.log('Searching for HTML elements in currentDocCopy:');
-			findHTMLElements(currentDocCopy, 'currentDocCopy');
-
-			editedAnalyses.forEach((analysis, index) => {
-				console.log(`Analysis ${index}:`, Object.keys(analysis));
-				// Check each property individually for circular references
-				Object.keys(analysis).forEach((key) => {
-					try {
-						JSON.stringify(analysis[key]);
-					} catch (e) {
-						console.error(`Analysis ${index}.${key} has circular reference:`, typeof analysis[key], e.message);
-					}
-				});
-			});
-
 			// Clean the analyses data to ensure no DOM elements or circular references
 			let cleanedAnalyses = safeCloneAnalyses(editedAnalyses);
 
 			// Additional safety: recreate analyses from scratch to ensure no contamination
 			cleanedAnalyses = editedAnalyses.map((analysis, index) => {
-				console.log(`Recreating analysis ${index} from scratch`);
 				return {
 					sampleId: analysis && analysis.sampleId ? String(analysis.sampleId) : '',
 					testId: analysis && analysis.testId ? String(analysis.testId) : '',
@@ -590,40 +597,13 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 				};
 			});
 
-			// Debug: Log the cleaned data to ensure it's serializable
-			console.log('=== DEBUG: After cleaning ===');
+			// Validate cleaned data is serializable
 			try {
 				JSON.stringify(cleanedAnalyses);
-				console.log('✓ Cleaned analyses data is JSON serializable');
 			} catch (serializationError) {
 				console.error('❌ Cleaned analyses still has serialization issues:', serializationError);
-				// Fallback: try to extract just the basic data
-				const fallbackAnalyses = editedAnalyses.map((analysis, index) => {
-					console.log(`Creating fallback for analysis ${index}`);
-					return {
-						sampleId: analysis && analysis.sampleId ? String(analysis.sampleId) : '',
-						testId: analysis && analysis.testId ? String(analysis.testId) : '',
-						testName: analysis && analysis.testName ? String(analysis.testName) : '',
-						testResult: analysis && analysis.testResult ? String(analysis.testResult) : '',
-						testUnit: analysis && analysis.testUnit ? String(analysis.testUnit) : '',
-						testProtocolCode: analysis && analysis.testProtocolCode ? String(analysis.testProtocolCode) : '',
-					};
-				});
-				cleanedAnalyses = fallbackAnalyses;
-				console.log('Using fallback analyses:', cleanedAnalyses);
+				throw new Error('Data serialization failed');
 			}
-
-			// Debug: Check if currentDocCopy.metadata has circular references
-			console.log('=== DEBUG: Checking currentDocCopy.metadata ===');
-			try {
-				JSON.stringify(currentDocCopy.metadata);
-				console.log('✓ currentDocCopy.metadata is JSON serializable');
-			} catch (metadataError) {
-				console.error('❌ currentDocCopy.metadata has circular references:', metadataError);
-			}
-
-			// Deep clean the entire metadata to remove all circular references and DOM elements
-			console.log('=== DEBUG: Deep cleaning metadata ===');
 
 			// Recreate metadata completely from scratch with only safe primitive values
 			const cleanedMetadata = {
@@ -654,8 +634,7 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 
 			// Final check: ensure the entire request body is serializable
 			try {
-				const serialized = JSON.stringify(requestBody);
-				console.log('✓ Request body is JSON serializable, size:', serialized.length);
+				JSON.stringify(requestBody);
 			} catch (finalError) {
 				console.error('❌ Request body still has circular references after complete recreation:', finalError);
 				throw new Error('Không thể tạo request body an toàn. Vui lòng refresh trang và thử lại.');
@@ -771,6 +750,66 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		}
 	};
 
+	// Function to fetch attachments for analyses
+	const fetchAttachmentsForAnalyses = async (analyses) => {
+		if (!analyses || analyses.length === 0) return;
+
+		setLoadingAttachments(true);
+		try {
+			const testIds = analyses.map((analysis) => analysis.testId || analysis.id).filter((id) => id);
+			if (testIds.length === 0) return;
+
+			const response = await apiPost('https://red.irdop.org/v1/file/get_by_key', {
+				foreignKeyUIDs: testIds,
+			});
+
+			if (response.status === 200 && response.data && Array.isArray(response.data)) {
+				const attachmentsByTestId = {};
+				response.data.forEach((attachment) => {
+					if (attachment.foreignKeyUIDs && Array.isArray(attachment.foreignKeyUIDs)) {
+						attachment.foreignKeyUIDs.forEach((testId) => {
+							if (!attachmentsByTestId[testId]) {
+								attachmentsByTestId[testId] = [];
+							}
+							attachmentsByTestId[testId].push(attachment);
+						});
+					}
+				});
+				setAttachmentData(attachmentsByTestId);
+			}
+		} catch (error) {
+			console.error('Error fetching attachments:', error);
+			setAttachmentData({});
+		} finally {
+			setLoadingAttachments(false);
+		}
+	};
+
+	// Function to handle attachment preview
+	const handleAttachmentPreview = async (fileId, fileName) => {
+		try {
+			setIsLoadingFilePreview(true);
+			const response = await apiPost('https://red.irdop.org/v1/file/get/download_link', {
+				expiry: 60 * 10,
+				mode: 'view',
+				fileRecord: { id: fileId },
+			});
+
+			if (response.status === 200 && response.data) {
+				// Show in popup modal instead of new tab
+				setFilePreviewUrl(response.data);
+				setShowFilePreview(true);
+			} else {
+				showAutoHideMessage('Không thể tải file preview', 'error');
+			}
+		} catch (error) {
+			console.error('Preview failed:', error);
+			showAutoHideMessage('Lỗi khi tải file preview', 'error');
+		} finally {
+			setIsLoadingFilePreview(false);
+		}
+	};
+
 	// Close preview in modal
 	const handleClosePreviewInModal = () => {
 		setPreviewUrl('');
@@ -784,8 +823,8 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		setInputValue(currentValue || '');
 	};
 
-	const handleSaveContent = async (content, column, analysisIndex) => {
-		if (!isEditing) return;
+	const handleSaveContentCreate = async (content, column, analysisIndex) => {
+		if (!isCreateMode) return;
 
 		try {
 			setUpdating(true);
@@ -797,11 +836,11 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 				return;
 			}
 
-			// Update the edited analyses array
-			const newEditedAnalyses = [...editedAnalyses];
-			if (newEditedAnalyses[analysisIndex]) {
-				newEditedAnalyses[analysisIndex][column] = sanitizedContent;
-				setEditedAnalyses(newEditedAnalyses);
+			// Update the editableData analyses array
+			const newEditableData = { ...editableData };
+			if (newEditableData.analyses[analysisIndex]) {
+				newEditableData.analyses[analysisIndex][column] = sanitizedContent;
+				setEditableData(newEditableData);
 			}
 
 			// Reset editing state
@@ -812,6 +851,30 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		} finally {
 			setUpdating(false);
 		}
+	};
+
+	const handleKeyDownCreate = (e) => {
+		if (e.key === 'Escape') {
+			setEditableCell({ analysisIndex: null, column: null });
+			setInputValue('');
+		}
+	};
+
+	// Open editor with auto-save previous cell for create mode
+	const openEditorWithAutoSaveCreate = async (analysisIndex, column, currentValue) => {
+		if (!isCreateMode) return;
+
+		// Auto-save previous cell if it was being edited
+		if (editableCell.analysisIndex !== null && editableCell.column !== null) {
+			const prevContent = inputValue;
+			if (editableCell.analysisIndex !== analysisIndex || editableCell.column !== column) {
+				await handleSaveContentCreate(prevContent, editableCell.column, editableCell.analysisIndex);
+			}
+		}
+
+		// Open new editor
+		setEditableCell({ analysisIndex, column });
+		setInputValue(currentValue || '');
 	};
 
 	const handleKeyDown = (e) => {
@@ -876,7 +939,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 
 	// Function to convert from black analysis naming (snake_case) to doc analysis naming (camelCase)
 	const blackAnalysisToDocAnalysis = (blackAnalysis) => {
-		console.log('Converting black analysis:', blackAnalysis);
 		const result = {
 			id: blackAnalysis.id,
 			testId: blackAnalysis.id,
@@ -886,7 +948,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 			testUnit: blackAnalysis.result_unit,
 			testProtocolCode: blackAnalysis.protocol_code,
 		};
-		console.log('Converted to doc analysis:', result);
 		return result;
 	};
 
@@ -895,31 +956,12 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		if (!matched) return extracted;
 		const diffObj = { ...extracted };
 
-		console.log('=== Comparing Analysis ===');
-		console.log('Extracted:', {
-			testId: extracted.testId,
-			testName: extracted.testName,
-			testResult: extracted.testResult,
-			testUnit: extracted.testUnit,
-			testProtocolCode: extracted.testProtocolCode,
-			sampleId: extracted.sampleId,
-		});
-		console.log('Matched:', {
-			testId: matched.testId,
-			testName: matched.testName,
-			testResult: matched.testResult,
-			testUnit: matched.testUnit,
-			testProtocolCode: matched.testProtocolCode,
-			sampleId: matched.sampleId,
-		});
-
 		// So sánh các field: parameterName, protocolCode, sampleUID
 		const fieldsToCompare = ['testName', 'testProtocolCode', 'sampleId'];
 		fieldsToCompare.forEach((field) => {
 			const extractedValue = extracted[field] || '';
 			const matchedValue = matched[field] || '';
 			if (extractedValue !== matchedValue) {
-				console.log(`Difference in ${field}: extracted="${extractedValue}" vs matched="${matchedValue}"`);
 				diffObj[field + 'Diff'] = matched[field];
 			}
 		});
@@ -928,7 +970,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		const extractedResult = extracted.testResult || '';
 		const matchedResult = matched.testResult || '';
 		if (extractedResult !== matchedResult) {
-			console.log(`Difference in testResult: extracted="${extractedResult}" vs matched="${matchedResult}"`);
 			diffObj.testResultDiff = matched.testResult;
 		}
 
@@ -936,22 +977,14 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		const extractedUnit = extracted.testUnit || '';
 		const matchedUnit = matched.testUnit || '';
 		if (extractedUnit !== matchedUnit) {
-			console.log(`Difference in testUnit: extracted="${extractedUnit}" vs matched="${matchedUnit}"`);
 			diffObj.testUnitDiff = matched.testUnit;
 		}
 
-		console.log('Final diffObj:', diffObj);
 		return diffObj;
 	};
 
 	// Handle data comparison
 	const handleCompareData = async () => {
-		// Prevent comparing if document is approved
-		if (currentDoc?.metadata?.status === 'approved') {
-			showAutoHideMessage('Không thể đối chiếu dữ liệu cho tài liệu đã được duyệt', 'warning');
-			return;
-		}
-
 		if (!currentDocCopy) return;
 
 		setIsComparingData(true);
@@ -977,23 +1010,18 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 			}
 
 			// Call API to get matched analysis data
-			console.log('Calling API with analysisIds:', analysisIds);
 			const response = await apiPost('https://black.irdop.org/v1/analysis/get_bulk', {
 				listIds: analysisIds,
 			});
 
-			console.log('API Response:', response);
 			let matchAnalysis = [];
 			if (response.status === 200 && response.data) {
-				console.log('Response data:', response.data);
 				if (Array.isArray(response.data)) {
 					matchAnalysis = response.data.map(blackAnalysisToDocAnalysis);
 				} else if (response.data.result && Array.isArray(response.data.result)) {
 					matchAnalysis = response.data.result.map(blackAnalysisToDocAnalysis);
 				}
 			}
-
-			console.log('Matched analyses after conversion:', matchAnalysis);
 
 			// Merge current analyses with matched data using differences function
 			const mergedAnalyses = currentAnalyses.map((analysis) => {
@@ -1027,7 +1055,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 			? comparedAnalyses
 			: displayDocument.metadata?.qualifiedAnalyses || displayDocument.jsonContent?.analyses || [];
 		const currentAnalyses = isEditing ? editedAnalyses : analyses;
-		console.log(currentAnalyses);
 		// Check if all analyses have id
 		const analysesWithoutId = currentAnalyses.filter((analysis) => !analysis.testId || analysis.testId === '');
 		if (analysesWithoutId.length > 0) {
@@ -1051,7 +1078,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		try {
 			// Extract analysis IDs for comparison API call
 			const analysisIds = currentAnalyses.map((a) => a.testId).map((id) => id);
-			console.log('Analysis IDs for update:', currentAnalyses);
 			if (analysisIds.length === 0) {
 				showAutoHideMessage('Không tìm thấy ID hợp lệ để so sánh', 'warning');
 				setIsUpdatingResults(false);
@@ -1126,6 +1152,7 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 			const analysesToUpdate = differencesToUpdate.map((analysis) => {
 				const updateObj = {
 					id: analysis.testId, // Always include id
+					doc_id: currentDoc.id,
 				};
 
 				// Only include selected columns
@@ -1144,7 +1171,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 
 				return updateObj;
 			});
-
 			const response = await apiPost('https://black.irdop.org/v1/db/update/bulk/analyses', {
 				analyses: analysesToUpdate,
 			});
@@ -1224,7 +1250,7 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 					messageDiv.remove();
 				}
 			}, 300);
-		}, 800);
+		}, 1800);
 	};
 
 	// Refresh data function (passed from parent)
@@ -1421,7 +1447,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 
 	const handleCompareDataCreate = () => {
 		// Handle data comparison logic
-		console.log('Compare data');
 	};
 
 	const handleSaveCreate = async () => {
@@ -1480,15 +1505,11 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 		if (!docId) return;
 
 		try {
-			console.log('🔄 Refreshing docCopy with ID:', docId);
-
 			// Gọi API để fetch lại dữ liệu docCopy mới nhất từ server
 			// Dựa trên các endpoint khác trong mã, tôi dùng '/v1/doc/get' để lấy docCopy theo ID
 			const response = await apiPost('https://red.irdop.org/v1/document/get_doc', { docId: docId });
 
 			if (response.status === 200 && response.data) {
-				console.log('✅ Refreshed docCopy data:', response.data);
-
 				// Cập nhật state với dữ liệu mới từ server
 				const refreshedDoc = response.data;
 
@@ -1559,8 +1580,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 				})),
 				fileId: editableData.fileId || null,
 			};
-
-			console.log('🔍 Submitting report with data:', requestBody);
 
 			// Call the API
 			const response = await apiPost('https://red.irdop.org/v1/analysis/report/create_doc', requestBody);
@@ -1633,10 +1652,23 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 
 		setIsSearchingSample(true);
 		try {
+			// Collect sampleIds and parameters from current analyses
+			const sampleIds = editableData.analyses
+				.map((analysis) => analysis.sampleId || analysis.sampleId)
+				.filter((id) => id && id.trim() !== '')
+				.filter((id, idx, arr) => arr.indexOf(id) === idx); // Remove duplicates
+
+			const parameters = editableData.analyses
+				.map((analysis) => analysis.method || analysis.testProtocolCode)
+				.filter((param) => param && param.trim() !== '')
+				.filter((param, idx, arr) => arr.indexOf(param) === idx); // Remove duplicates
+
 			const response = await apiPost('https://black.irdop.org/v1/analysis/search_by_sample', {
 				sampleId: sampleId,
 				itemsPerPage: sampleItemsPerPage,
 				page: page,
+				sampleIds: sampleIds,
+				parameters: parameters,
 			});
 
 			if (response.status === 200 && response.data) {
@@ -1831,20 +1863,16 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 
 	// Return null if modal is not open
 	if (!isOpen) {
-		console.log('🔍 ExperimentDetail: Modal not open, returning null');
 		return null;
 	}
 
-	console.log('🔍 ExperimentDetail: Before render - isCreateMode:', isCreateMode, 'docCopy:', docCopy?.id || 'null');
-
 	if (isCreateMode) {
-		console.log('🔍 ExperimentDetail: Rendering CREATE mode, isOpen:', isOpen);
 		// Create new experiment log mode - always in editing mode
 		const isEditingCreate = true;
 		return (
 			<div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
 				<div
-					className="relative mx-auto p-5 border shadow-lg rounded-md bg-white"
+					className="relative m-auto mt-2 p-5 border shadow-lg rounded-md bg-white"
 					style={{ width: '98vw', height: '98vh', overflow: 'auto' }}
 				>
 					{/* Header */}
@@ -1974,6 +2002,13 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 														<th className="border border-gray-300 px-4 py-2 text-left">Kết quả</th>
 														<th className="border border-gray-300 px-4 py-2 text-left">Đơn vị</th>
 														<th className="border border-gray-300 px-4 py-2 text-left">Phương pháp</th>
+														<th
+															className="border border-gray-300 px-4 py-2 text-left cursor-pointer hover:bg-gray-200"
+															onClick={() => fetchAttachmentsForAnalyses(editableData.analyses)}
+															title="Click để tải lại đính kèm"
+														>
+															Đính kèm
+														</th>
 														<th className="border border-gray-300 px-4 py-2 text-left">Thao tác</th>
 													</tr>
 												</thead>
@@ -2000,9 +2035,9 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 																		sampleSearchResults.length > 0 &&
 																		createPortal(
 																			<div
-																				className="sample-dropdown-portal absolute bg-white border border-gray-300 rounded shadow-lg z-[9999] max-h-64 overflow-hidden"
+																				className="sample-dropdown-portal absolute bg-white border border-gray-300 rounded shadow-lg z-[9999] max-h-[650px] overflow-hidden"
 																				style={{
-																					width: '380px',
+																					width: '600px',
 																					top: `${dropdownPosition.top}px`,
 																					left: `${dropdownPosition.left}px`,
 																					position: 'absolute',
@@ -2101,20 +2136,132 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 																/>
 															</td>
 															<td className="border border-gray-300 px-4 py-2">
-																<input
-																	type="text"
-																	value={analysis.result || ''}
-																	onChange={(e) => handleAnalysisChangeCreate(index, 'result', e.target.value)}
-																	className="w-full p-1 border border-gray-200 rounded bg-white"
-																/>
+																<div className="w-full h-full min-h-[30px]" onClick={(e) => e.stopPropagation()}>
+																	<div
+																		className={`editable-cell border rounded transition-all duration-200 cursor-pointer h-full ${
+																			editableCell.analysisIndex === index && editableCell.column === 'result'
+																				? 'editing-active border-purple-500'
+																				: 'border-transparent hover:border-purple-300'
+																		}`}
+																	>
+																		{editableCell.analysisIndex === index && editableCell.column === 'result' ? (
+																			<div className="relative" data-edit-id={`${index}-result`}>
+																				<TinyMceInput
+																					value={inputValue}
+																					onUpdate={(content) => handleSaveContentCreate(content, 'result', index)}
+																					onKey={handleKeyDownCreate}
+																					placeholder="Nhập kết quả..."
+																				/>
+																				{updating && (
+																					<div className="absolute top-1 right-1 text-purple-600 save-indicator">
+																						<svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+																							<path
+																								fillRule="evenodd"
+																								d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+																								clipRule="evenodd"
+																							/>
+																						</svg>
+																					</div>
+																				)}
+																			</div>
+																		) : (
+																			<div
+																				className="w-full h-full p-1 text-xs text-black text-left cursor-pointer hover:bg-blue-50 rounded min-h-[30px] flex items-center group"
+																				onClick={(e) => {
+																					e.stopPropagation();
+																					openEditorWithAutoSaveCreate(index, 'result', analysis.result);
+																				}}
+																			>
+																				{analysis.result ? (
+																					<div dangerouslySetInnerHTML={{ __html: analysis.result }} />
+																				) : (
+																					<span className="result-cell-placeholder group-hover:text-gray-600 text-gray-400 italic">
+																						Nhấp để nhập kết quả...
+																					</span>
+																				)}
+																				<div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+																					<svg
+																						className="w-3 h-3 text-purple-500"
+																						fill="none"
+																						stroke="currentColor"
+																						viewBox="0 0 24 24"
+																					>
+																						<path
+																							strokeLinecap="round"
+																							strokeLinejoin="round"
+																							strokeWidth="2"
+																							d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+																						/>
+																					</svg>
+																				</div>
+																			</div>
+																		)}
+																	</div>
+																</div>
 															</td>
 															<td className="border border-gray-300 px-4 py-2">
-																<input
-																	type="text"
-																	value={analysis.unit || ''}
-																	onChange={(e) => handleAnalysisChangeCreate(index, 'unit', e.target.value)}
-																	className="w-full p-1 border border-gray-200 rounded bg-white"
-																/>
+																<div className="w-full h-full min-h-[30px]" onClick={(e) => e.stopPropagation()}>
+																	<div
+																		className={`editable-cell border rounded transition-all duration-200 cursor-pointer h-full ${
+																			editableCell.analysisIndex === index && editableCell.column === 'unit'
+																				? 'editing-active border-purple-500'
+																				: 'border-transparent hover:border-purple-300'
+																		}`}
+																	>
+																		{editableCell.analysisIndex === index && editableCell.column === 'unit' ? (
+																			<div className="relative" data-edit-id={`${index}-unit`}>
+																				<TinyMceInput
+																					value={inputValue}
+																					onUpdate={(content) => handleSaveContentCreate(content, 'unit', index)}
+																					onKey={handleKeyDownCreate}
+																					placeholder="Nhập đơn vị..."
+																				/>
+																				{updating && (
+																					<div className="absolute top-1 right-1 text-purple-600 save-indicator">
+																						<svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+																							<path
+																								fillRule="evenodd"
+																								d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+																								clipRule="evenodd"
+																							/>
+																						</svg>
+																					</div>
+																				)}
+																			</div>
+																		) : (
+																			<div
+																				className="w-full h-full p-1 text-xs text-black text-left cursor-pointer hover:bg-blue-50 rounded min-h-[30px] flex items-center group"
+																				onClick={(e) => {
+																					e.stopPropagation();
+																					openEditorWithAutoSaveCreate(index, 'unit', analysis.unit);
+																				}}
+																			>
+																				{analysis.unit ? (
+																					<div dangerouslySetInnerHTML={{ __html: analysis.unit }} />
+																				) : (
+																					<span className="result-cell-placeholder group-hover:text-gray-600 text-gray-400 italic">
+																						Nhấp để nhập đơn vị...
+																					</span>
+																				)}
+																				<div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+																					<svg
+																						className="w-3 h-3 text-purple-500"
+																						fill="none"
+																						stroke="currentColor"
+																						viewBox="0 0 24 24"
+																					>
+																						<path
+																							strokeLinecap="round"
+																							strokeLinejoin="round"
+																							strokeWidth="2"
+																							d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+																						/>
+																					</svg>
+																				</div>
+																			</div>
+																		)}
+																	</div>
+																</div>
 															</td>
 															<td className="border border-gray-300 px-4 py-2">
 																<input
@@ -2123,6 +2270,29 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 																	onChange={(e) => handleAnalysisChangeCreate(index, 'method', e.target.value)}
 																	className="w-full p-1 border border-gray-200 rounded bg-white"
 																/>
+															</td>
+															<td className="border border-gray-300 px-4 py-2">
+																{loadingAttachments[analysis.testId] ? (
+																	<div className="text-xs text-gray-500">Đang tải...</div>
+																) : (
+																	<div className="text-xs">
+																		{attachmentData[analysis.testId]?.map((file, fileIndex) => (
+																			<div key={fileIndex} className="flex items-center gap-1">
+																				<span
+																					className={`text-blue-600 underline cursor-pointer hover:text-blue-800 ${
+																						isLoadingFilePreview ? 'pointer-events-none opacity-50' : ''
+																					}`}
+																					onClick={() => handleAttachmentPreview(file.id)}
+																				>
+																					{new Date(file.createdAt).toLocaleDateString('vi-VN')}
+																				</span>
+																				{isLoadingFilePreview && (
+																					<div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+																				)}
+																			</div>
+																		)) || <span className="text-gray-400">Không có</span>}
+																	</div>
+																)}
 															</td>
 															<td className="border border-gray-300 px-4 py-2">
 																<button
@@ -2241,7 +2411,7 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 					</div>
 
 					{/* Action Buttons */}
-					<div className="flex justify-end mt-6 pt-4 border-t">
+					<div className="flex justify-end mt-6 pt-4 pb-20 border-t">
 						<div className="flex gap-2">
 							{!createdDoc && (
 								<button
@@ -2290,7 +2460,6 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 									</button>
 									<button
 										onClick={() => {
-											console.log('Selected columns:', Array.from(selectedColumnsCreate));
 											setShowColumnSelectionCreate(false);
 										}}
 										className="px-3 py-1 bg-blue-500 text-white rounded"
@@ -2431,32 +2600,17 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 	// Use created document if available, otherwise use the original docCopy
 	const currentDoc = createdDoc || currentDocCopy;
 
-	console.log('🔍 ExperimentDetail: Document title sources:', {
-		currentDocId: currentDoc?.id,
-		jsonContentTitle: currentDoc?.jsonContent?.header?.title,
-		docTitle: currentDoc?.title,
-		finalTitle: currentDoc?.jsonContent?.header?.title || currentDoc?.title,
-	});
-
 	// Use matched document data if available, otherwise use current document
 	const displayDocument = matchedDocument || currentDoc;
 	const analyses = isEditing
 		? editedAnalyses
 		: comparedAnalyses.length > 0
 		? comparedAnalyses
+		: convertedAnalyses.length > 0 && !currentDoc
+		? convertedAnalyses
 		: displayDocument.metadata?.qualifiedAnalyses || displayDocument.jsonContent?.analyses || [];
 	const samples = displayDocument.jsonContent?.samples || displayDocument.metadata?.samples || [];
 	const sampleUIDs = samples.map((s) => s.sampleId);
-
-	// Debug log
-	console.log('Data sources:', {
-		isEditing,
-		editedAnalysesLength: editedAnalyses.length,
-		qualifiedAnalyses: currentDoc?.metadata?.qualifiedAnalyses?.length || 0,
-		jsonContentAnalyses: currentDoc?.jsonContent?.analyses?.length || 0,
-		finalAnalysesLength: analyses.length,
-		samplesLength: samples.length,
-	});
 
 	return (
 		<>
@@ -2637,7 +2791,7 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 								</div>
 							)}
 
-							<div className="p-6">
+							<div className="p-6 pb-20">
 								<div className="mb-6">
 									<h3 className="font-semibold text-gray-900 mb-4 text-left">Thông tin cơ bản</h3>
 									<div className="grid grid-cols-3 gap-6 text-left">
@@ -2772,6 +2926,13 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 												<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">
 													Phương pháp
 												</th>
+												<th
+													className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
+													onClick={() => fetchAttachmentsForAnalyses(analyses)}
+													title="Click để tải lại đính kèm"
+												>
+													Đính kèm
+												</th>
 												{isEditing && (
 													<th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-700">
 														Thao tác
@@ -2783,7 +2944,7 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 											{analyses.length === 0 ? (
 												<tr>
 													<td
-														colSpan={isEditing ? '8' : '7'}
+														colSpan={isEditing ? '9' : '8'}
 														className="border border-gray-300 px-3 py-4 text-left text-gray-500"
 													>
 														Không có dữ liệu phân tích
@@ -2816,9 +2977,9 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 																		sampleSearchResults.length > 0 &&
 																		createPortal(
 																			<div
-																				className="sample-dropdown-portal absolute bg-white border border-gray-300 rounded shadow-lg z-[9999] max-h-64 overflow-hidden"
+																				className="sample-dropdown-portal absolute bg-white border border-gray-300 rounded shadow-lg z-[9999] max-h-[650px] overflow-hidden"
 																				style={{
-																					width: '300px',
+																					width: '600px',
 																					top: `${dropdownPosition.top}px`,
 																					left: `${dropdownPosition.left}px`,
 																					position: 'absolute',
@@ -3103,6 +3264,42 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 																</div>
 															)}
 														</td>
+														{/* Attachment column */}
+														<td className="border border-gray-300 px-3 py-2 text-left">
+															{loadingAttachments ? (
+																<div className="flex items-center justify-center">
+																	<div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+																</div>
+															) : (
+																<div className="space-y-1">
+																	{attachmentData[analysis.testId || analysis.id] &&
+																	attachmentData[analysis.testId || analysis.id].length > 0 ? (
+																		attachmentData[analysis.testId || analysis.id].map((attachment, attIndex) => (
+																			<div key={attIndex} className="flex items-center gap-1">
+																				<button
+																					onClick={() =>
+																						handleAttachmentPreview(attachment.id, `attachment-${attachment.id}`)
+																					}
+																					className={`text-blue-600 hover:text-blue-800 underline text-sm block text-left ${
+																						isLoadingFilePreview ? 'pointer-events-none opacity-50' : ''
+																					}`}
+																					title={`Click để xem file đính kèm (${new Date(
+																						attachment.createdAt,
+																					).toLocaleDateString('vi-VN')})`}
+																				>
+																					{new Date(attachment.createdAt).toLocaleDateString('vi-VN')}
+																				</button>
+																				{isLoadingFilePreview && (
+																					<div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+																				)}
+																			</div>
+																		))
+																	) : (
+																		<span className="text-gray-400 text-sm">--</span>
+																	)}
+																</div>
+															)}
+														</td>
 														{isEditing && (
 															<td className="border border-gray-300 px-3 py-2 text-left">
 																<button
@@ -3119,7 +3316,7 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 											{/* Add new row button at the end when editing */}
 											{isEditing && (
 												<tr>
-													<td colSpan={8} className="border border-gray-300 px-3 py-4 text-center">
+													<td colSpan={9} className="border border-gray-300 px-3 py-4 text-center">
 														<button
 															onClick={handleAddAnalysis}
 															className="px-4 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition-colors"
@@ -3134,7 +3331,7 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 								</div>
 
 								{/* Action Buttons at Bottom */}
-								<div className="mt-4 flex justify-end gap-3">
+								<div className="mt-4 pb-20 flex justify-end gap-3">
 									{analyses.length > 0 && !isEditing && (
 										<button
 											onClick={handleUpdateResults}
@@ -3378,6 +3575,70 @@ const ExperimentDetail = ({ docCopy, isOpen, onClose }) => {
 										{isUpdatingResults ? 'Đang cập nhật...' : 'Xác nhận cập nhật'}
 									</button>
 								</div>
+							</div>
+						</div>
+					)}
+
+					{/* File Preview Popup Modal */}
+					{showFilePreview && (
+						<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+							<div className="bg-white rounded-lg p-4 w-[90vw] h-[90vh] max-w-7xl max-h-[90vh] flex flex-col">
+								{/* Header */}
+								<div className="flex justify-between items-center mb-4 border-b pb-2">
+									<h3 className="text-lg font-semibold">Xem trước file</h3>
+									<button
+										onClick={handleCloseFilePreview}
+										className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+									>
+										<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</div>
+
+								{/* Loading state */}
+								{isLoadingFilePreview && (
+									<div className="flex-1 flex items-center justify-center">
+										<div className="flex flex-col items-center gap-2">
+											<div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+											<span className="text-gray-600">Đang tải file...</span>
+										</div>
+									</div>
+								)}
+
+								{/* File content */}
+								{!isLoadingFilePreview && filePreviewUrl && (
+									<div className="flex-1 overflow-hidden">
+										<iframe
+											src={filePreviewUrl}
+											className="w-full h-full border-0"
+											title="File Preview"
+											onLoad={() => setIsLoadingFilePreview(false)}
+										/>
+									</div>
+								)}
+
+								{/* Error state */}
+								{!isLoadingFilePreview && !filePreviewUrl && (
+									<div className="flex-1 flex items-center justify-center">
+										<div className="text-center">
+											<svg
+												className="w-16 h-16 text-gray-400 mx-auto mb-4"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+												/>
+											</svg>
+											<p className="text-gray-600">Không thể tải file preview</p>
+										</div>
+									</div>
+								)}
 							</div>
 						</div>
 					)}

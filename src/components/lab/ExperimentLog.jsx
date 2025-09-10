@@ -45,15 +45,12 @@ const ExperimentLog = () => {
 		}
 
 		try {
-			console.log('Calling getIdenByUid for:', identityUID);
 			const identity = await getIdenByUid(identityUID);
-			console.log('getIdenByUid response:', identity);
 			if (identity && identity.identity_name) {
 				setIdentityNames((prev) => ({
 					...prev,
 					[identityUID]: identity.identity_name,
 				}));
-				console.log('Successfully cached identity name:', identity.identity_name);
 				return identity.identity_name;
 			}
 		} catch (error) {
@@ -102,6 +99,8 @@ const ExperimentLog = () => {
 		title: null,
 		samples: null,
 	});
+
+	const [hideSamplesColumn, setHideSamplesColumn] = useState(false);
 
 	// Tooltip states
 	const [showTooltip, setShowTooltip] = useState(null); // 'analyses' | 'samples' | null
@@ -330,7 +329,6 @@ const ExperimentLog = () => {
 							JSON.stringify(foundPreviewDoc.metadata) !== JSON.stringify(selectedDocumentForPreview.metadata) ||
 							foundPreviewDoc.fileId !== selectedDocumentForPreview.fileId;
 						if (hasMetadataChanges) {
-							console.log('📝 Updating selectedDocumentForPreview due to metadata changes');
 							setSelectedDocumentForPreview(foundPreviewDoc);
 						}
 					}
@@ -384,7 +382,6 @@ const ExperimentLog = () => {
 		setPagination((prev) => ({ ...prev, currentPage: urlParams.page }));
 
 		loadDocuments(urlParams.searchTerm, urlParams.page, 'all', urlParams.status);
-		console.log('Component mounted, loading documents with URL params:', urlParams);
 
 		return () => {
 			if (searchTimeout) {
@@ -402,17 +399,12 @@ const ExperimentLog = () => {
 		setSelectedDocumentForPreview(null);
 		setPreviewFile(null);
 		setPreviewUrl('');
-		console.log('Modal states reset on component mount');
 	}, []);
 
 	// Debug modal state changes
-	useEffect(() => {
-		console.log('🔄 isCreateModalOpen changed:', isCreateModalOpen);
-	}, [isCreateModalOpen]);
+	useEffect(() => {}, [isCreateModalOpen]);
 
-	useEffect(() => {
-		console.log('🔄 showDetailModal changed:', showDetailModal);
-	}, [showDetailModal]);
+	useEffect(() => {}, [showDetailModal]);
 
 	// Handle click outside for status dropdown
 	useEffect(() => {
@@ -615,9 +607,7 @@ const ExperimentLog = () => {
 			clearTimeout(searchTimeout);
 		}
 
-		const timeout = setTimeout(() => {
-			console.log('Search term stabilized:', value);
-		}, 300);
+		const timeout = setTimeout(() => {}, 300);
 
 		setSearchTimeout(timeout);
 	};
@@ -625,7 +615,6 @@ const ExperimentLog = () => {
 	// Execute search
 	const executeSearch = async () => {
 		if (searchTerm !== lastSearchTerm) {
-			console.log('🚀 Performing search with term:', searchTerm);
 			setPagination((prev) => ({ ...prev, currentPage: 1 }));
 
 			// Update URL params
@@ -649,8 +638,6 @@ const ExperimentLog = () => {
 
 	// Handle document click for preview
 	const handleDocumentClick = async (doc) => {
-		console.log('🖱️ Document clicked:', doc.id);
-
 		if (selectedDocument?.id !== doc?.id) {
 			setSelectedDocument(doc);
 		}
@@ -662,16 +649,18 @@ const ExperimentLog = () => {
 
 	// Handle document click for detail modal
 	const handleDocumentClickForDetail = async (doc) => {
-		console.log('🖱️ Document clicked for detail:', doc.id);
 		setSelectedDetailDocument(doc);
 		setShowDetailModal(true);
 	};
 
 	// Handle close detail modal
 	const handleCloseDetailModal = () => {
-		console.log('❌ Closing detail modal');
 		setShowDetailModal(false);
 		setSelectedDetailDocument(null);
+
+		// Clear all selection states to ensure fresh start
+		setSelectedDocument(null);
+		setSelectedDocumentForPreview(null);
 
 		// Silent refresh to update data after closing modal
 		const urlParams = getUrlParams();
@@ -697,20 +686,45 @@ const ExperimentLog = () => {
 	};
 
 	// Format tooltip content
-	const formatTooltipContent = (data, type) => {
-		if (!data || !Array.isArray(data)) return <div className="text-sm">Không có dữ liệu</div>;
+	const formatTooltipContent = (data, type, isDocData = false) => {
+		let analysesData = [];
+		let samplesData = [];
+
+		if (type === 'analyses' && typeof data === 'object' && !Array.isArray(data)) {
+			analysesData = data.analyses || [];
+			samplesData = data.samples || [];
+		} else if (Array.isArray(data)) {
+			if (type === 'analyses') {
+				analysesData = data;
+			} else {
+				samplesData = data;
+			}
+		}
+
+		if (!analysesData.length && !samplesData.length) return <div className="text-sm">Không có dữ liệu</div>;
+
+		// Define column widths
+		const columnWidths = {
+			sampleId: '90px',
+			testId: '100px',
+			testName: '200px',
+			testprotocolCode: '160px',
+			testResult: '150px',
+			testUnit: '120px',
+		};
 
 		// Define column order and labels
 		const columnConfig = {
 			analyses: {
-				title: 'Thông tin phép thử',
-				order: ['testId', 'testName', 'testResult', 'testUnit', 'testprotocolCode'],
+				title: isDocData ? null : 'Thông tin phép thử',
+				order: ['sampleId', 'testId', 'testName', 'testprotocolCode', 'testResult', 'testUnit'],
 				labels: {
+					sampleId: 'Mã mẫu',
 					testId: 'Mã chỉ tiêu',
 					testName: 'Tên chỉ tiêu',
+					testprotocolCode: 'Phương pháp thử',
 					testResult: 'Kết quả',
 					testUnit: 'Đơn vị',
-					testprotocolCode: 'Phương pháp thử',
 				},
 			},
 			samples: {
@@ -727,31 +741,55 @@ const ExperimentLog = () => {
 		const config = columnConfig[type];
 		if (!config) return <div className="text-sm">Không có dữ liệu</div>;
 
+		const displayData = type === 'analyses' ? analysesData : samplesData;
+
 		return (
 			<table className="w-full text-sm">
-				<thead>
-					<tr className="border-b border-gray-600">
-						{config.order.map((key, index) => (
-							<th key={index} className="text-left py-1 px-2 font-medium text-gray-200">
-								{config.labels[key] || key}
-							</th>
-						))}
-					</tr>
-				</thead>
 				<tbody>
-					{data.map((item, rowIndex) => (
-						<tr key={rowIndex} className="border-b border-gray-700 last:border-b-0">
-							{config.order.map((key, colIndex) => (
-								<td key={colIndex} className="py-1 px-2 text-gray-100">
-									{key === 'testResult' || key === 'testUnit' ? (
-										<span dangerouslySetInnerHTML={{ __html: item[key] || 'N/A' }} />
-									) : (
-										item[key] || 'N/A'
-									)}
-								</td>
-							))}
-						</tr>
-					))}
+					{displayData.map((item, rowIndex) => {
+						const sampleId = type === 'analyses' ? samplesData[rowIndex]?.sampleId || '--' : item.sampleId;
+						const isFirstRow = rowIndex === 0;
+						const isLastRow = rowIndex === displayData.length - 1;
+						return (
+							<tr key={rowIndex} className={`border-b border-gray-700 ${isLastRow ? 'last:border-b-0' : ''}`}>
+								{config.order.map((key, colIndex) => {
+									let value = '--';
+									if (key === 'sampleId') {
+										value = sampleId || '--';
+									} else if (key === 'testResult' || key === 'testUnit') {
+										// Strip HTML tags and get plain text for fixed width display
+										const plainText = item[key] ? item[key].replace(/<[^>]*>/g, '') : '--';
+										value = plainText;
+									} else {
+										value = item[key] || '--';
+									}
+									return (
+										<td
+											key={colIndex}
+											className="text-gray-100 truncate"
+											style={{
+												width: columnWidths[key] || 'auto',
+												minWidth: columnWidths[key] || 'auto',
+												maxWidth: columnWidths[key] || 'auto',
+												whiteSpace: 'nowrap',
+												overflow: 'hidden',
+												textOverflow: 'ellipsis',
+												padding:
+													isFirstRow && colIndex === 0
+														? '0 8px 4px 8px'
+														: isLastRow && colIndex === config.order.length - 1
+														? '4px 8px 0 8px'
+														: '4px 8px',
+											}}
+											title={typeof value === 'string' ? value : ''}
+										>
+											{value}
+										</td>
+									);
+								})}
+							</tr>
+						);
+					})}
 				</tbody>
 			</table>
 		);
@@ -759,18 +797,19 @@ const ExperimentLog = () => {
 
 	// Handle close create modal
 	const handleCloseCreateModal = () => {
-		console.log('❌ Closing create modal - BEFORE:', isCreateModalOpen);
 		setIsCreateModalOpen(false);
-		console.log('❌ Closing create modal - AFTER: should be false');
+
+		// Clear all selection states to ensure fresh start
+		setSelectedDetailDocument(null);
+		setSelectedDocument(null);
+		setSelectedDocumentForPreview(null);
 
 		// Silent refresh to update data after closing modal
 		const urlParams = getUrlParams();
 		silentRefreshDocuments(urlParams.searchTerm, urlParams.page, mode, urlParams.status);
 
 		// Force re-render check
-		setTimeout(() => {
-			console.log('❌ Closing create modal - TIMEOUT CHECK:', isCreateModalOpen);
-		}, 100);
+		setTimeout(() => {}, 100);
 	};
 
 	// Handle file preview
@@ -1118,9 +1157,7 @@ const ExperimentLog = () => {
 						{/* Add New Experiment Log Button - luôn hiển thị bên phải */}
 						<button
 							onClick={() => {
-								console.log('➕ Opening create modal - BEFORE:', isCreateModalOpen);
 								setIsCreateModalOpen(true);
-								console.log('➕ Opening create modal - AFTER: should be true');
 							}}
 							className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors flex items-center gap-2"
 							disabled={isLoading}
@@ -1145,7 +1182,9 @@ const ExperimentLog = () => {
 						<div
 							className="grid mb-2 p-2 bg-white border-b-2 border-gray-300"
 							style={{
-								gridTemplateColumns: '165px minmax(200px, 17%) 100px minmax(200px, 1fr) 120px 130px',
+								gridTemplateColumns: hideSamplesColumn
+									? '165px minmax(200px, 17%) minmax(300px, 1fr) 120px 130px'
+									: '165px minmax(200px, 17%) 100px minmax(200px, 1fr) 120px 130px',
 								gap: '16px',
 							}}
 						>
@@ -1160,24 +1199,31 @@ const ExperimentLog = () => {
 							>
 								Tiêu đề
 							</div>
-							<div id="col-tests" className="p-3 text-left font-semibold text-gray-700" style={{ width: '100px' }}>
-								Phép thử
-							</div>
 							<div
-								id="col-samples"
-								ref={samplesHeaderRef}
-								className="p-3 text-left font-semibold text-gray-700"
-								style={{ minWidth: '200px' }}
+								id="col-tests"
+								className="p-3 text-left font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 rounded"
+								style={{ width: '110px' }}
+								onClick={() => setHideSamplesColumn(!hideSamplesColumn)}
 							>
-								Mã mẫu thử
+								Phép thử {hideSamplesColumn ? '▼' : '▶'}
 							</div>
+							{!hideSamplesColumn && (
+								<div
+									id="col-samples"
+									ref={samplesHeaderRef}
+									className="p-3 text-left font-semibold text-gray-700"
+									style={{ minWidth: '200px' }}
+								>
+									Mã mẫu thử
+								</div>
+							)}
 							<div id="col-file" className="p-3 text-left font-semibold text-gray-700" style={{ width: '120px' }}>
 								File
 							</div>
 							<div
 								id="col-status"
 								className="p-3 text-left font-semibold text-gray-700 relative"
-								style={{ width: '130px' }}
+								style={{ width: '140px' }}
 							>
 								<button
 									ref={statusButtonRef}
@@ -1195,7 +1241,7 @@ const ExperimentLog = () => {
 									ReactDOM.createPortal(
 										<div
 											ref={statusDropdownRef}
-											className="absolute bg-white border border-gray-300 rounded-md shadow-lg z-[9999] w-40"
+											className="absolute bg-white border border-gray-300 rounded-md shadow-lg z-[9999] w-32"
 											style={{
 												top: statusButtonRef.current
 													? statusButtonRef.current.getBoundingClientRect().bottom + window.scrollY
@@ -1272,7 +1318,6 @@ const ExperimentLog = () => {
 											key={doc.id}
 											className="p-2 mb-2 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
 											onClick={(e) => {
-												console.log('📋 Document row clicked:', doc.id);
 												handleDocumentClickForDetail(doc);
 											}}
 										>
@@ -1304,45 +1349,181 @@ const ExperimentLog = () => {
 													</span>
 												</div>
 
-												{/* Column 3: Số lượng Phép thử */}
+												{/* Column 3: Phép thử - hiển thị bảng analyses trực tiếp */}
 												<div
-													className="p-3 flex items-start justify-start text-left"
+													className="p-3 flex items-start justify-start text-left relative"
 													data-col="col-tests"
-													style={{ width: '100px', flexShrink: 0 }}
-													onMouseEnter={(e) => analyses.length > 0 && handleTooltipShow(e, 'analyses', analyses)}
-													onMouseLeave={handleTooltipHide}
-												>
-													<span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium cursor-help">
-														{analyses.length}
-													</span>
-												</div>
-
-												{/* Column 4: Sample UIDs */}
-												<div
-													className="p-3 flex flex-wrap gap-1 justify-start items-start text-left overflow-hidden"
-													data-col="col-samples"
 													style={{
-														width: actualColumnWidths.samples ? `${actualColumnWidths.samples}px` : 'auto',
-														minWidth: '200px',
+														width: hideSamplesColumn ? 'auto' : '100px',
 														flexShrink: 0,
+														flex: hideSamplesColumn ? 1 : 'none',
 													}}
-													onMouseEnter={(e) => samples.length > 0 && handleTooltipShow(e, 'samples', samples)}
+													onMouseEnter={(e) =>
+														!hideSamplesColumn &&
+														analyses.length > 0 &&
+														handleTooltipShow(e, 'analyses', { analyses, samples })
+													}
 													onMouseLeave={handleTooltipHide}
 												>
-													{sampleUIDs.slice(0, 5).map((uid, index) => (
-														<span
-															key={index}
-															className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs cursor-help"
-														>
-															{uid}
-														</span>
-													))}
-													{sampleUIDs.length > 5 && (
-														<span className="bg-gray-200 text-gray-600 px-2 py-1 rounded text-xs cursor-help">
-															+{sampleUIDs.length - 5}
+													{hideSamplesColumn ? (
+														// Hiển thị bảng analyses trực tiếp khi ẩn cột samples
+														<div className="w-full">
+															{analyses.length > 0 ? (
+																<table className="w-full text-xs ">
+																	<tbody>
+																		{analyses.map((item, rowIndex) => {
+																			const isFirstRow = rowIndex === 0;
+																			const isLastRow = rowIndex === analyses.length - 1;
+																			return (
+																				<tr key={rowIndex}>
+																					<td
+																						className="text-gray-700 truncate"
+																						style={{
+																							maxWidth: '80px',
+																							whiteSpace: 'nowrap',
+																							overflow: 'hidden',
+																							textOverflow: 'ellipsis',
+																							padding: isFirstRow
+																								? '0 8px 4px 8px'
+																								: isLastRow
+																								? '4px 8px 0 8px'
+																								: '4px 8px',
+																						}}
+																						title={samples[rowIndex]?.sampleId || '--'}
+																					>
+																						{samples[rowIndex]?.sampleId || '--'}
+																					</td>
+																					<td
+																						className="text-gray-700 truncate"
+																						style={{
+																							maxWidth: '110px',
+																							whiteSpace: 'nowrap',
+																							overflow: 'hidden',
+																							textOverflow: 'ellipsis',
+																							padding: isFirstRow
+																								? '0 8px 4px 8px'
+																								: isLastRow
+																								? '4px 8px 0 8px'
+																								: '4px 8px',
+																						}}
+																						title={item.testId || '--'}
+																					>
+																						{item.testId || '--'}
+																					</td>
+																					<td
+																						className="text-gray-600 truncate"
+																						style={{
+																							maxWidth: '140px',
+																							whiteSpace: 'nowrap',
+																							overflow: 'hidden',
+																							textOverflow: 'ellipsis',
+																							padding: isFirstRow
+																								? '0 8px 4px 8px'
+																								: isLastRow
+																								? '4px 8px 0 8px'
+																								: '4px 8px',
+																						}}
+																						title={item.testName || '--'}
+																					>
+																						{item.testName || '--'}
+																					</td>
+																					<td
+																						className="text-gray-600 truncate"
+																						style={{
+																							maxWidth: '160px',
+																							whiteSpace: 'nowrap',
+																							overflow: 'hidden',
+																							textOverflow: 'ellipsis',
+																							padding: isFirstRow
+																								? '0 8px 4px 8px'
+																								: isLastRow
+																								? '4px 8px 0 8px'
+																								: '4px 8px',
+																						}}
+																						title={item.testprotocolCode || '--'}
+																					>
+																						{item.testprotocolCode || '--'}
+																					</td>
+																					<td
+																						className="text-gray-800 truncate"
+																						style={{
+																							width: '130px',
+																							maxWidth: '130px',
+																							whiteSpace: 'nowrap',
+																							overflow: 'hidden',
+																							textOverflow: 'ellipsis',
+																							padding: isFirstRow
+																								? '0 8px 4px 8px'
+																								: isLastRow
+																								? '4px 8px 0 8px'
+																								: '4px 8px',
+																						}}
+																						title={item.testResult ? item.testResult.replace(/<[^>]*>/g, '') : '--'}
+																					>
+																						{item.testResult ? item.testResult.replace(/<[^>]*>/g, '') : '--'}
+																					</td>
+																					<td
+																						className="text-gray-600 truncate"
+																						style={{
+																							maxWidth: '100px',
+																							whiteSpace: 'nowrap',
+																							overflow: 'hidden',
+																							textOverflow: 'ellipsis',
+																							padding: isFirstRow
+																								? '0 8px 4px 8px'
+																								: isLastRow
+																								? '4px 8px 0 8px'
+																								: '4px 8px',
+																						}}
+																						title={item.testUnit ? item.testUnit.replace(/<[^>]*>/g, '') : '--'}
+																					>
+																						{item.testUnit ? item.testUnit.replace(/<[^>]*>/g, '') : '--'}
+																					</td>
+																				</tr>
+																			);
+																		})}
+																	</tbody>
+																</table>
+															) : (
+																<span className="text-gray-400 text-sm">Không có dữ liệu</span>
+															)}
+														</div>
+													) : (
+														// Hiển thị số lượng khi không ẩn cột samples
+														<span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+															{analyses.length}
 														</span>
 													)}
 												</div>
+
+												{/* Column 4: Sample UIDs - only show if not hidden */}
+												{!hideSamplesColumn && (
+													<div
+														className="p-3 flex flex-wrap gap-1 justify-start items-start text-left overflow-hidden"
+														data-col="col-samples"
+														style={{
+															width: actualColumnWidths.samples ? `${actualColumnWidths.samples}px` : 'auto',
+															minWidth: '200px',
+															flexShrink: 0,
+														}}
+														onMouseEnter={(e) => samples.length > 0 && handleTooltipShow(e, 'samples', samples)}
+														onMouseLeave={handleTooltipHide}
+													>
+														{sampleUIDs.slice(0, 5).map((uid, index) => (
+															<span
+																key={index}
+																className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs cursor-help"
+															>
+																{uid}
+															</span>
+														))}
+														{sampleUIDs.length > 5 && (
+															<span className="bg-gray-200 text-gray-600 px-2 py-1 rounded text-xs cursor-help">
+																+{sampleUIDs.length - 5}
+															</span>
+														)}
+													</div>
+												)}
 
 												{/* Column 5: File */}
 												<div
@@ -1369,7 +1550,7 @@ const ExperimentLog = () => {
 												<div
 													className="p-3 flex items-start justify-start text-left"
 													data-col="col-status"
-													style={{ width: '130px', flexShrink: 0 }}
+													style={{ width: '140px', flexShrink: 0 }}
 												>
 													<span
 														className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -1394,6 +1575,7 @@ const ExperimentLog = () => {
 			{/* Tooltips */}
 			{showTooltip &&
 				tooltipData &&
+				!(hideSamplesColumn && showTooltip === 'analyses') &&
 				ReactDOM.createPortal(
 					<div
 						ref={tooltipRef}
@@ -1407,7 +1589,7 @@ const ExperimentLog = () => {
 							{showTooltip === 'analyses' ? 'Thông tin phép thử:' : 'Thông tin mẫu thử:'}
 						</div>
 						<div className="max-h-80 overflow-y-auto overflow-x-auto">
-							{formatTooltipContent(tooltipData, showTooltip)}
+							{formatTooltipContent(tooltipData, showTooltip, showTooltip === 'analyses')}
 						</div>
 					</div>,
 					document.body,

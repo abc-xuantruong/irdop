@@ -91,12 +91,10 @@ const AnalysesExtract = ({ document, showAnalysisExtractInstead = false, editId 
 		});
 
 		if (!doc || !doc.metadata || !hasValidExtractData) {
-			console.log('❌ No analysis data found for document:', doc?.id);
 
 			// Nếu có editId, mở tab mới để chỉnh sửa
 			if (editId || doc?.id) {
 				const targetEditId = editId || doc.id;
-				console.log('🔀 Opening new tab for edit page with editId:', targetEditId);
 				showAutoHideMessage('Mở tab mới để chỉnh sửa...', 'info');
 
 				// Mở tab mới và đảm bảo không bị duplicate

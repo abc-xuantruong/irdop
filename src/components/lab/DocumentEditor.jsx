@@ -225,7 +225,6 @@ const DocumentEditor = () => {
 
 		// Cancel any pending call with different parameters
 		if (pendingDocumentsCall.current && pendingDocumentsCall.current !== callId) {
-			console.log(`Cancelling previous documents call: ${pendingDocumentsCall.current}`);
 		}
 
 		// Prevent duplicate API calls with same parameters (excluding timestamp)
@@ -235,20 +234,17 @@ const DocumentEditor = () => {
 			: '';
 
 		if (pendingDocumentsCall.current && currentCallParams === existingCallParams) {
-			console.log(`Skipping duplicate loadRecentDocuments [${currentCallParams}] - same call already pending`);
 			return;
 		}
 
 		// Prevent overlapping calls
 		if (isLoading) {
-			console.log(`Skipping loadRecentDocuments [${callId}] - already loading another request`);
 			return;
 		}
 
 		try {
 			pendingDocumentsCall.current = callId;
 			setIsLoading(true);
-			console.log(`Loading recent documents [${callId}]:`, { searchTerm, page, status });
 
 			// Always use the same API endpoint but with different status
 			const response = await apiPost(RECENT_DOCS_API_ENDPOINT, {
@@ -259,7 +255,6 @@ const DocumentEditor = () => {
 
 			// Check if this call is still the current one (not cancelled)
 			if (pendingDocumentsCall.current !== callId) {
-				console.log(`Call [${callId}] was cancelled, ignoring response`);
 				return;
 			}
 
@@ -295,7 +290,6 @@ const DocumentEditor = () => {
 					totalPages: result.pagination?.totalPages || Math.ceil(documents.length / 10),
 				});
 
-				console.log(`Successfully loaded documents [${callId}]:`, documents.length, 'documents');
 			}
 		} catch (error) {
 			console.error(`Error loading recent documents [${callId}]:`, error);
@@ -319,25 +313,21 @@ const DocumentEditor = () => {
 
 		// Cancel any pending call with different parameters
 		if (pendingTemplatesCall.current && pendingTemplatesCall.current !== callId) {
-			console.log(`Cancelling previous templates call: ${pendingTemplatesCall.current}`);
 		}
 
 		// Prevent duplicate API calls with same parameters
 		if (pendingTemplatesCall.current === callId) {
-			console.log(`Skipping duplicate loadTemplates [${callId}] - same call already pending`);
 			return;
 		}
 
 		// Prevent overlapping calls
 		if (isLoading) {
-			console.log(`Skipping loadTemplates [${callId}] - already loading another request`);
 			return;
 		}
 
 		try {
 			pendingTemplatesCall.current = callId;
 			setIsLoading(true);
-			console.log(`Loading templates [${callId}]:`, { searchTerm, page });
 
 			const response = await apiPost(TEMPLATE_API_ENDPOINT, {
 				id: '',
@@ -347,7 +337,6 @@ const DocumentEditor = () => {
 
 			// Check if this call is still the current one (not cancelled)
 			if (pendingTemplatesCall.current !== callId) {
-				console.log(`Call [${callId}] was cancelled, ignoring response`);
 				return;
 			}
 
@@ -388,7 +377,6 @@ const DocumentEditor = () => {
 					totalPages: result.pagination?.totalPages || Math.ceil(templates.length / 10),
 				});
 
-				console.log(`Successfully loaded templates [${callId}]:`, templates.length, 'templates');
 			}
 		} catch (error) {
 			console.error(`Error loading templates [${callId}]:`, error);
@@ -423,11 +411,9 @@ const DocumentEditor = () => {
 
 			// Cancel any pending API calls
 			if (pendingDocumentsCall.current) {
-				console.log('Cleaning up pending documents call:', pendingDocumentsCall.current);
 				pendingDocumentsCall.current = null;
 			}
 			if (pendingTemplatesCall.current) {
-				console.log('Cleaning up pending templates call:', pendingTemplatesCall.current);
 				pendingTemplatesCall.current = null;
 			}
 		};
@@ -453,7 +439,6 @@ const DocumentEditor = () => {
 
 		// Load documents with new status - but prevent duplicate calls
 		if (!isLoading) {
-			console.log('Status changed, loading documents with new status:', documentStatus);
 			loadRecentDocuments('', 1, documentStatus);
 		}
 	}, [documentStatus]); // ONLY depend on documentStatus
@@ -474,13 +459,11 @@ const DocumentEditor = () => {
 		if (searchTerm !== '') {
 			// Search term change - use debounce
 			const timeoutId = setTimeout(() => {
-				console.log('Search term changed, loading documents with search:', searchTerm);
 				loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
 			}, 500);
 			return () => clearTimeout(timeoutId);
 		} else if (!isInitialLoad) {
 			// Page change or refresh trigger - call immediately (but not on initial load)
-			console.log('Page or refresh changed, loading documents');
 			loadRecentDocuments(searchTerm, recentDocumentsPage, documentStatus);
 		}
 	}, [searchTerm, recentDocumentsPage, refreshDocumentsTrigger]); // documentStatus excluded to prevent duplicate API calls
@@ -511,20 +494,16 @@ const DocumentEditor = () => {
 
 	// Handle document status change - improved to prevent duplicate API calls
 	const handleDocumentStatusChange = async (newStatus) => {
-		console.log(`Status change requested: ${documentStatus} -> ${newStatus}`);
 
 		if (newStatus === documentStatus) {
-			console.log('Status unchanged, skipping API call');
 			return; // No change needed
 		}
 
 		// Prevent status change if already loading
 		if (isLoading) {
-			console.log('Already loading, preventing status change');
 			return;
 		}
 
-		console.log(`Executing status change: ${documentStatus} -> ${newStatus}`);
 
 		// Clear current data before switching - immediate UI feedback
 		setSelectedDocument(null);
@@ -541,14 +520,12 @@ const DocumentEditor = () => {
 	const handleToggleChange = () => {
 		// Prevent toggle if already loading
 		if (isLoading) {
-			console.log('Toggle blocked - already loading');
 			return;
 		}
 
 		const newIsDraft = !isDraft;
 		const newStatus = newIsDraft ? 'draft' : 'submitted';
 
-		console.log(`Toggle change: ${isDraft} -> ${newIsDraft}, Status: ${documentStatus} -> ${newStatus}`);
 
 		// Directly change the status - useEffect will handle the API call
 		if (newStatus !== documentStatus) {
@@ -1061,8 +1038,6 @@ const DocumentEditor = () => {
 
 		try {
 			// Debug logs to check template data
-			console.log('Print template object:', template);
-			console.log('Template classifierCode for print:', template.classifierCode);
 
 			const header = template.header || {};
 			let content = template.content || '';
@@ -1084,8 +1059,6 @@ const DocumentEditor = () => {
 			};
 
 			// Debug log API data being sent
-			console.log('API data being sent:', templateData);
-			console.log('ClassifierCode being sent:', templateData.classifierCode);
 
 			// Call API to get formatted HTML like in Editor
 			const response = await apiPost('https://black.irdop.org/khsi19me/convert/lab_result_report_html', templateData);
@@ -1388,14 +1361,6 @@ const DocumentEditor = () => {
 
 	const handleTemplateClick = (template) => {
 		// Debug log to check template object and classifierCode
-		console.log('=== TEMPLATE CLICK DEBUG ===');
-		console.log('Full template object:', JSON.stringify(template, null, 2));
-		console.log('Template ID:', template.id);
-		console.log('Template name:', template.templateName || template.name);
-		console.log('Template classifierCode:', template.classifierCode);
-		console.log('Has classifierCode?', template.hasOwnProperty('classifierCode'));
-		console.log('ClassifierCode type:', typeof template.classifierCode);
-		console.log('===========================');
 
 		// Extract header information
 		const headerInfo = template.header || {};

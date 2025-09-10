@@ -13,6 +13,15 @@
 		overflow: overlay; /* Chỉ hoạt động trên WebKit */
 		/* scrollbar-gutter: stable; Giữ vị trí scrollbar ổn định */
 	}
+
+	.scrollbar-hide {
+		scrollbar-width: none;
+		-ms-overflow-style: none;
+	}
+
+	.scrollbar-hide::-webkit-scrollbar {
+		display: none;
+	}
 }
 @tailwind utilities;
 @keyframes bounce {
@@ -75,7 +84,6 @@
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 }
-
 
 a {
 	font-weight: 500;
