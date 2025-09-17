@@ -30,6 +30,44 @@ import 'react-datepicker/dist/react-datepicker.css';
 // Replace axios import with our helper functions
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
 
+// Import @dnd-kit components
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import {
+	arrayMove,
+	SortableContext,
+	sortableKeyboardCoordinates,
+	verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+const SortableItem = ({ id, children }) => {
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+		opacity: isDragging ? 0.5 : 1,
+	};
+
+	return (
+		<tr ref={setNodeRef} style={style} className="cursor-move">
+			{children}
+			<td className="p-1  text-center">
+				<div
+					{...attributes}
+					{...listeners}
+					className="h-5 box-border cursor-move inline-block p-1 hover:bg-gray-100 rounded"
+				>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<path d="M4 8h16M4 16h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+					</svg>
+				</div>
+			</td>
+		</tr>
+	);
+};
+
 const SampleInfor = () => {
 	// Timezone adjustment functions for GMT+7 (Vietnam timezone)
 	const adjustTimezoneForDisplay = (dateValue) => {
@@ -42,7 +80,7 @@ const SampleInfor = () => {
 		date.setHours(date.getHours() + 7);
 		return date.toISOString();
 	};
-	console.log(document)
+
 	const adjustDateForApiSubmission = (dateValue) => {
 		if (!dateValue) return null;
 
@@ -133,6 +171,18 @@ const SampleInfor = () => {
 	const [refreshTrigger, setRefreshTrigger] = useState(0);
 	const [isBulkDeadlineVisible, setIsBulkDeadlineVisible] = useState(false);
 	const [bulkDeadlineDate, setBulkDeadlineDate] = useState(new Date());
+
+	// Add state for drag and drop functionality
+	const [customerInfoOrder, setCustomerInfoOrder] = useState([]);
+	const [receiptInfoOrder, setReceiptInfoOrder] = useState([]);
+
+	// Initialize sensors for drag and drop
+	const sensors = useSensors(
+		useSensor(PointerSensor),
+		useSensor(KeyboardSensor, {
+			coordinateGetter: sortableKeyboardCoordinates,
+		}),
+	);
 
 	// Add new state variables for unique lists and dropdowns
 	const [uniqueParameterNames, setUniqueParameterNames] = useState([]);
@@ -523,13 +573,17 @@ const SampleInfor = () => {
 		setSearchTerm(e.target.value);
 		if (typingTimeout) clearTimeout(typingTimeout);
 		if (e.target.value.length > 4) {
-			const timeout = setTimeout(() => {
-				if (e.target.value.trim() !== '') {
-					searchParameters(e.target.value);
-				}
-			}, 500);
+			// Kiểm tra nếu giá trị tìm kiếm có dạng SPXXxXXXX-YY thì không gọi API parameter
+			const sampleUidPattern = /^SP\d{2}[a-zA-Z]\d{4}-\d{2}$/;
+			if (!sampleUidPattern.test(e.target.value.trim())) {
+				const timeout = setTimeout(() => {
+					if (e.target.value.trim() !== '') {
+						searchParameters(e.target.value);
+					}
+				}, 500);
 
-			setTypingTimeout(timeout);
+				setTypingTimeout(timeout);
+			}
 		}
 	};
 	const handleSampleSelectFromDropdown = async (sampleUid) => {
@@ -553,8 +607,16 @@ const SampleInfor = () => {
 
 	const handleSearchKeyDown = (e) => {
 		if (e.key === 'Enter' && searchTerm.length >= 2) {
-			if (typingTimeout) clearTimeout(typingTimeout);
-			searchParameters(searchTerm);
+			// Kiểm tra nếu giá trị tìm kiếm có dạng SPXXxXXXX-YY
+			const sampleUidPattern = /^SP\d{2}[a-zA-Z]\d{4}-\d{2}$/;
+			if (sampleUidPattern.test(searchTerm.trim())) {
+				// Gọi API get/sample_full/{giá trị tìm kiếm} và tự động thêm tất cả analysis
+				fetchSampleFullAndAddAll(searchTerm.trim());
+			} else {
+				// Tìm kiếm parameter thông thường
+				if (typingTimeout) clearTimeout(typingTimeout);
+				searchParameters(searchTerm);
+			}
 		}
 	};
 
@@ -570,26 +632,116 @@ const SampleInfor = () => {
 		}
 	};
 
+	const fetchSampleFull = async (sampleUid) => {
+		try {
+			const response = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sampleUid}`);
+			if (response.data && response.data.analysis) {
+				// Tạo danh sách analysis để hiển thị
+				const analyses = response.data.analysis.map((analysis) => {
+					// Tạo object mới không có result_value và reviewed_by
+					const { result_value, reviewed_by, ...cleanAnalysis } = analysis;
+					return {
+						...cleanAnalysis,
+						temp_id: Math.random().toString(36).substr(2, 9),
+					};
+				});
+
+				// Hiển thị danh sách analysis trong dropdown
+				setParameterList(analyses);
+				showToast(`Đã tìm thấy ${analyses.length} chỉ tiêu từ mẫu ${sampleUid}`);
+			} else {
+				showToast('Không tìm thấy mẫu với mã này', 'warning');
+				setParameterList([]);
+			}
+		} catch (error) {
+			console.error('Error fetching sample full:', error);
+			showToast('Có lỗi xảy ra khi tìm kiếm mẫu', 'error');
+			setParameterList([]);
+		}
+	};
+
+	const fetchSampleFullAndAddAll = async (sampleUid) => {
+		try {
+			const response = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sampleUid}`);
+			if (response.data && response.data.analysis) {
+				// Tạo danh sách analysis để thêm trực tiếp
+				const analyses = response.data.analysis.map((analysis) => {
+					// Tạo object mới không có result_value và reviewed_by
+					const { result_value, reviewed_by, ...cleanAnalysis } = analysis;
+					return {
+						...cleanAnalysis,
+						temp_id: Math.random().toString(36).substr(2, 9),
+						parameter_uid: cleanAnalysis.parameter_uid || '',
+						display_style: cleanAnalysis.display_style || [
+							{
+								label: 'default',
+								value: '',
+							},
+							{
+								label: 'eng',
+								value: '',
+							},
+						],
+					};
+				});
+
+				// Tự động thêm tất cả analysis vào selectedParameters
+				setSelectedParameters([...selectedParameters, ...analyses]);
+				showToast(`Đã thêm ${analyses.length} chỉ tiêu từ mẫu ${sampleUid}`);
+				setSearchTerm(''); // Clear the search input field
+			} else {
+				showToast('Không tìm thấy mẫu với mã này', 'warning');
+			}
+		} catch (error) {
+			console.error('Error fetching sample full:', error);
+			showToast('Có lỗi xảy ra khi tìm kiếm mẫu', 'error');
+		}
+	};
+
 	const handleParameterSelect = (parameter) => {
-		if (!selectedParameters.some((p) => p.id === parameter.id)) {
-			// Make sure parameter_uid and display_style are included when adding parameters
-			setSelectedParameters([
-				...selectedParameters,
-				{
-					...parameter,
-					parameter_uid: parameter.parameter_uid || '',
-					display_style: parameter.display_style || [
-						{
-							label: 'default',
-							value: '',
-						},
-						{
-							label: 'eng',
-							value: '',
-						},
-					],
-				},
-			]);
+		// Kiểm tra nếu parameter có temp_id (tức là từ sample)
+		if (parameter.temp_id) {
+			// Xử lý parameter từ sample
+			if (!selectedParameters.some((p) => p.temp_id === parameter.temp_id)) {
+				setSelectedParameters([
+					...selectedParameters,
+					{
+						...parameter,
+						parameter_uid: parameter.parameter_uid || '',
+						display_style: parameter.display_style || [
+							{
+								label: 'default',
+								value: '',
+							},
+							{
+								label: 'eng',
+								value: '',
+							},
+						],
+					},
+				]);
+			}
+		} else {
+			// Xử lý parameter thông thường
+			if (!selectedParameters.some((p) => p.id === parameter.id)) {
+				setSelectedParameters([
+					...selectedParameters,
+					{
+						...parameter,
+						parameter_uid: parameter.parameter_uid || '',
+						display_style: parameter.display_style || [
+							{
+								label: 'default',
+								value: '',
+							},
+							{
+								label: 'eng',
+								value: '',
+							},
+						],
+					},
+				]);
+			}
 		}
 		setSearchTerm(''); // Clear the search input field
 	};
@@ -605,7 +757,6 @@ const SampleInfor = () => {
 				return;
 			}
 
-			console.log('Selected Parameters:', selectedParameters);
 			const parameters = selectedParameters.map((parameter) => {
 				const analysisData = {
 					receipt_id: currentSample.receipt_id,
@@ -1022,7 +1173,7 @@ const SampleInfor = () => {
 									<ul>
 										{paginatedParameters.map((parameter, index) => (
 											<li
-												key={index}
+												key={parameter.temp_id || parameter.id || index}
 												className="p-2 border-b cursor-pointer hover:bg-gray-200"
 												onClick={() => handleParameterSelect(parameter)}
 											>
@@ -1035,7 +1186,8 @@ const SampleInfor = () => {
 													</p>
 													<p className="text-start text-text-secondary w-full line-clamp-1">
 														{parameter.protocol_code}
-														{parameter?.accreditation && <b>{` (${parameter.accreditation})`}</b>}
+														{parameter.accreditation && <b>{` (${parameter.accreditation})`}</b>}
+														{parameter.temp_id && <span className="text-blue-600 font-medium"> - Từ mẫu khác</span>}
 													</p>
 												</div>
 											</li>
@@ -1048,7 +1200,7 @@ const SampleInfor = () => {
 						<div className="mb-4 h-full flex overflow-y-auto text-sm flex-wrap content-start">
 							{selectedParameters.map((parameter, index) => (
 								<div
-									key={index}
+									key={parameter.temp_id || parameter.id || index}
 									className="p-1 border rounded mb-2 flex text-start items-center w-fit h-fit mr-1 max-w-68"
 								>
 									<div>
@@ -1057,6 +1209,7 @@ const SampleInfor = () => {
 										<p className="text-start text-text-secondary w-full line-clamp-1">
 											{parameter.protocol_code}
 											{parameter?.accreditation && <b>{` (${parameter.accreditation})`}</b>}
+											{parameter.temp_id && <span className="text-blue-600 font-medium"> - Từ mẫu khác</span>}
 										</p>
 									</div>
 
@@ -1257,17 +1410,6 @@ const SampleInfor = () => {
 				setCurrentSample(response.data);
 				setListAnalytes(response.data.analysis);
 
-				// Debug log to check technician_uid data
-				console.log(
-					'Sample analysis data loaded:',
-					response.data.analysis?.map((analysis) => ({
-						id: analysis.id,
-						parameter_name: analysis.parameter_name,
-						technician_uid: analysis.technician_uid,
-						has_technician: !!analysis.technician_uid,
-					})),
-				);
-
 				// Store original sample values for comparison
 				setOriginalSampleValues({
 					sample_name: response.data.sample_name || '',
@@ -1302,6 +1444,10 @@ const SampleInfor = () => {
 
 					setCustomerInfo(customerInfoItems);
 					setReceiptInfo(receiptInfoItems);
+
+					// Initialize drag and drop order
+					setCustomerInfoOrder(customerInfoItems.map((_, index) => `customer-${index}`));
+					setReceiptInfoOrder(receiptInfoItems.map((_, index) => `receipt-${index}`));
 				} else {
 					// Initialize with empty arrays if no information is available
 					setCustomerInfo([]);
@@ -1350,7 +1496,7 @@ const SampleInfor = () => {
 		const fieldParts = currentField.split('-');
 		const fieldType = fieldParts[0];
 		const analysisId = fieldParts[1]; // Keep as string to handle both numeric and text IDs
-		console.log(newValue, currentField, analysisId);
+
 		// Get original value for comparison
 		const originalValue = originalValues[currentField] || '';
 
@@ -1552,6 +1698,7 @@ const SampleInfor = () => {
 
 	const handleAddCustomerField = () => {
 		setCustomerInfo([...customerInfo, { ...newField }]);
+		setCustomerInfoOrder([...customerInfoOrder, `customer-${customerInfo.length}`]);
 		setNewField({ fname: '', fvalue: '' });
 		setIsReportChanged(true); // Mark report as changed
 	};
@@ -1565,9 +1712,11 @@ const SampleInfor = () => {
 					fvalue: formatDate(receiptFull?.receipt_date) || '',
 				},
 			]);
+			setReceiptInfoOrder([`receipt-0`]);
 		} else {
 			// Otherwise, add an empty field
 			setReceiptInfo([...receiptInfo, { ...newField }]);
+			setReceiptInfoOrder([...receiptInfoOrder, `receipt-${receiptInfo.length}`]);
 		}
 		setNewField({ fname: '', fvalue: '' });
 		setIsReportChanged(true); // Mark report as changed
@@ -1614,12 +1763,18 @@ const SampleInfor = () => {
 	const handleDeleteCustomerField = (index) => {
 		const updatedCustomerInfo = customerInfo.filter((_, i) => i !== index);
 		setCustomerInfo(updatedCustomerInfo);
+		// Update order array
+		const updatedOrder = customerInfoOrder.filter((_, i) => i !== index).map((id, i) => `customer-${i}`);
+		setCustomerInfoOrder(updatedOrder);
 		setIsReportChanged(true); // Mark report as changed
 	};
 
 	const handleDeleteReceiptField = (index) => {
 		const updatedReceiptInfo = receiptInfo.filter((_, i) => i !== index);
 		setReceiptInfo(updatedReceiptInfo);
+		// Update order array
+		const updatedOrder = receiptInfoOrder.filter((_, i) => i !== index).map((id, i) => `receipt-${i}`);
+		setReceiptInfoOrder(updatedOrder);
 		setIsReportChanged(true); // Mark report as changed
 	};
 
@@ -1733,6 +1888,57 @@ const SampleInfor = () => {
 		setSampleDropdownVisible(false);
 	};
 
+	// Function to handle drag end for customer info
+	const handleCustomerInfoDragEnd = (event) => {
+		const { active, over } = event;
+
+		if (active.id !== over.id) {
+			const oldIndex = customerInfoOrder.indexOf(active.id);
+			const newIndex = customerInfoOrder.indexOf(over.id);
+
+			const newOrder = arrayMove(customerInfoOrder, oldIndex, newIndex);
+			setCustomerInfoOrder(newOrder);
+
+			// Reorder customerInfo array based on the new order
+			const reorderedCustomerInfo = newOrder.map((id) => {
+				const originalIndex = parseInt(id.split('-')[1]);
+				return customerInfo[originalIndex];
+			});
+			setCustomerInfo(reorderedCustomerInfo);
+
+			// Update customerInfoOrder to reflect new positions
+			const updatedOrder = reorderedCustomerInfo.map((_, index) => `customer-${index}`);
+			setCustomerInfoOrder(updatedOrder);
+			setIsReportChanged(true);
+		}
+	};
+
+	// Function to handle drag end for receipt info
+	const handleReceiptInfoDragEnd = (event) => {
+		const { active, over } = event;
+
+		if (active.id !== over.id) {
+			const oldIndex = receiptInfoOrder.indexOf(active.id);
+			const newIndex = receiptInfoOrder.indexOf(over.id);
+
+			const newOrder = arrayMove(receiptInfoOrder, oldIndex, newIndex);
+			setReceiptInfoOrder(newOrder);
+
+			// Reorder receiptInfo array to match the new order
+			const reorderedReceiptInfo = newOrder.map((id) => {
+				const originalIndex = parseInt(id.split('-')[1]);
+				return receiptInfo[originalIndex];
+			});
+			setReceiptInfo(reorderedReceiptInfo);
+
+			// Update receiptInfoOrder to be sequential again
+			const updatedOrder = reorderedReceiptInfo.map((_, index) => `receipt-${index}`);
+			setReceiptInfoOrder(updatedOrder);
+
+			setIsReportChanged(true);
+		}
+	};
+
 	// Add a helper function to check if user is a technician
 	const isTechnician = () => {
 		// Admin users bypass technician restrictions
@@ -1763,60 +1969,73 @@ const SampleInfor = () => {
 						</div>
 						<div className="w-full overflow-hidden hover:overflow-auto md:pb-2 lg:pb-0 pb-0 hover:pb-0 mb-1">
 							{customerInfo?.length > 0 && (
-								<div className="flex flex-wrap md:min-w-[450px]">
-									{customerInfo.map((field, index) => (
-										<div key={index} className="mb-1 w-full  px-2">
-											<table className=" w-full">
-												<tbody>
-													<tr>
-														<td className=" w-1/5 text-start p-1 font-medium min-w-40 flex justify-between items-center">
-															<select
-																value={field?.fname || ''}
-																onChange={(e) => handleCustomerFieldChange(index, 'fname', e.target.value)}
-																className={`p-1 ${
-																	field.fname === 'Khác' ? 'w-1/3 mr-1' : 'w-full'
-																} border min-w-16 rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm `}
-															>
-																<option value={field.fname}>{field.fname || 'Chọn thông tin'}</option>
-																{defaultCustomerFields.map((selectField) => (
-																	<option key={selectField.fname} value={selectField.fname}>
-																		{selectField.fname}
-																	</option>
-																))}
-																<option value="Khác">Khác</option>
-															</select>
-															{field.fname === 'Khác' && (
+								<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCustomerInfoDragEnd}>
+									<table className="w-full table-fixed border-collapse">
+										<thead>
+											<tr>
+												<th className="text-left p-2 border-b w-[200px]"></th>
+												<th className="text-left p-2 border-b w-full"></th>
+												<th className="p-2 border-b w-10"></th>
+												<th className="p-2 border-b w-10"></th>
+											</tr>
+										</thead>
+										<SortableContext items={customerInfoOrder} strategy={verticalListSortingStrategy}>
+											<tbody>
+												{customerInfoOrder.map((id, orderIndex) => {
+													const field = customerInfo[orderIndex];
+													return (
+														<SortableItem key={id} id={id}>
+															<td className="p-1 ">
+																<div className="flex justify-between items-center">
+																	<select
+																		value={field?.fname || ''}
+																		onChange={(e) => handleCustomerFieldChange(orderIndex, 'fname', e.target.value)}
+																		className={`p-1 ${
+																			field.fname === 'Khác' ? 'w-1/3 mr-1' : 'w-full'
+																		} border min-w-16 rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+																	>
+																		<option value={field.fname}>{field.fname || 'Chọn thông tin'}</option>
+																		{defaultCustomerFields.map((selectField) => (
+																			<option key={selectField.fname} value={selectField.fname}>
+																				{selectField.fname}
+																			</option>
+																		))}
+																		<option value="Khác">Khác</option>
+																	</select>
+																	{field.fname === 'Khác' && (
+																		<input
+																			type="text"
+																			value={field?.other || ''}
+																			onChange={(e) => handleCustomerFieldChange(orderIndex, 'other', e.target.value)}
+																			className="p-1 w-2/3 border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+																			placeholder="Nhập tên khác"
+																		/>
+																	)}
+																</div>
+															</td>
+															<td className="p-1 ">
 																<input
 																	type="text"
-																	value={field?.other || ''}
-																	onChange={(e) => handleCustomerFieldChange(index, 'other', e.target.value)}
+																	value={field?.fvalue || ''}
+																	onChange={(e) => handleCustomerFieldChange(orderIndex, 'fvalue', e.target.value)}
 																	className="p-1 w-full border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-																	placeholder="Nhập tên khác"
 																/>
-															)}
-														</td>
-														<td className=" w-full text-start p-1 min-w-64">
-															<input
-																type="text"
-																value={field?.fvalue || ''}
-																onChange={(e) => handleCustomerFieldChange(index, 'fvalue', e.target.value)}
-																className="p-1 w-full border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-															/>
-														</td>
-														<td>
-															<button
-																className="text-red-200 hover:text-red-500 bg-white text-lg rounded-lg py-0 px-1 focus:outline-none text-center"
-																onClick={() => handleDeleteCustomerField(index)}
-															>
-																✕
-															</button>
-														</td>
-													</tr>
-												</tbody>
-											</table>
-										</div>
-									))}
-								</div>
+															</td>
+															<td className="p-1  text-center">
+																<button
+																	className="text-red-200 hover:text-red-500 bg-white text-lg rounded-lg py-0 px-1 focus:outline-none"
+																	onClick={() => handleDeleteCustomerField(orderIndex)}
+																>
+																	✕
+																</button>
+															</td>
+														</SortableItem>
+													);
+												})}
+											</tbody>
+										</SortableContext>
+									</table>
+								</DndContext>
 							)}
 							{customerInfo?.length === 0 && (
 								<div className="text-center text-gray-500 italic py-2">
@@ -1840,60 +2059,73 @@ const SampleInfor = () => {
 						</div>
 						<div className="w-full overflow-hidden hover:overflow-auto md:pb-2 lg:pb-0 pb-0 hover:pb-0 mb-1">
 							{receiptInfo?.length > 0 && (
-								<div className="flex flex-wrap md:min-w-[450px]">
-									{receiptInfo.map((field, index) => (
-										<div key={index} className="mb-1 w-full px-2">
-											<table className=" w-full">
-												<tbody>
-													<tr>
-														<td className=" w-1/5 text-start p-1 font-medium min-w-40 flex justify-between items-center">
-															<select
-																value={field?.fname || ''}
-																onChange={(e) => handleReceiptFieldChange(index, 'fname', e.target.value)}
-																className={`p-1 ${
-																	field.fname === 'Khác' ? 'w-1/3 mr-1' : 'w-full'
-																} border min-w-16 rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm `}
-															>
-																<option value={field.fname}>{field.fname || 'Chọn thông tin'}</option>
-																{defaultReceiptFields.map((selectField) => (
-																	<option key={selectField.fname} value={selectField.fname}>
-																		{selectField.fname}
-																	</option>
-																))}
-																<option value="Khác">Khác</option>
-															</select>
-															{field.fname === 'Khác' && (
+								<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleReceiptInfoDragEnd}>
+									<table className="w-full table-fixed border-collapse">
+										<thead>
+											<tr>
+												<th className="text-left p-2 border-b w-[200px]"></th>
+												<th className="text-left p-2 border-b w-full"></th>
+												<th className="p-2 border-b w-10"></th>
+												<th className="p-2 border-b w-10"></th>
+											</tr>
+										</thead>
+										<SortableContext items={receiptInfoOrder} strategy={verticalListSortingStrategy}>
+											<tbody>
+												{receiptInfoOrder.map((id, orderIndex) => {
+													const field = receiptInfo[orderIndex];
+													return (
+														<SortableItem key={id} id={id}>
+															<td className="p-1  w-[200px]">
+																<div className="flex justify-between items-center">
+																	<select
+																		value={field?.fname || ''}
+																		onChange={(e) => handleReceiptFieldChange(orderIndex, 'fname', e.target.value)}
+																		className={`p-1 ${
+																			field.fname === 'Khác' ? 'w-1/3 mr-1' : 'w-full'
+																		} border min-w-16 rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+																	>
+																		<option value={field.fname}>{field.fname || 'Chọn thông tin'}</option>
+																		{defaultReceiptFields.map((selectField) => (
+																			<option key={selectField.fname} value={selectField.fname}>
+																				{selectField.fname}
+																			</option>
+																		))}
+																		<option value="Khác">Khác</option>
+																	</select>
+																	{field.fname === 'Khác' && (
+																		<input
+																			type="text"
+																			value={field?.other || ''}
+																			onChange={(e) => handleReceiptFieldChange(orderIndex, 'other', e.target.value)}
+																			className="p-1 w-2/3 border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+																			placeholder="Nhập tên khác"
+																		/>
+																	)}
+																</div>
+															</td>
+															<td className="p-1 ">
 																<input
 																	type="text"
-																	value={field?.other || ''}
-																	onChange={(e) => handleReceiptFieldChange(index, 'other', e.target.value)}
+																	value={field?.fvalue || ''}
+																	onChange={(e) => handleReceiptFieldChange(orderIndex, 'fvalue', e.target.value)}
 																	className="p-1 w-full border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-																	placeholder="Nhập tên khác"
 																/>
-															)}
-														</td>
-														<td className=" w-full text-start p-1 min-w-64">
-															<input
-																type="text"
-																value={field?.fvalue || ''}
-																onChange={(e) => handleReceiptFieldChange(index, 'fvalue', e.target.value)}
-																className="p-1 w-full border rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-															/>
-														</td>
-														<td>
-															<button
-																className="text-red-200 hover:text-red-500 bg-white text-lg rounded-lg py-0 px-1 focus:outline-none text-center"
-																onClick={() => handleDeleteReceiptField(index)}
-															>
-																✕{' '}
-															</button>
-														</td>
-													</tr>
-												</tbody>
-											</table>
-										</div>
-									))}
-								</div>
+															</td>
+															<td className="p-1  text-center w-8">
+																<button
+																	className="text-red-200 hover:text-red-500 bg-white text-lg rounded-lg py-0 px-1 focus:outline-none"
+																	onClick={() => handleDeleteReceiptField(orderIndex)}
+																>
+																	✕
+																</button>
+															</td>
+														</SortableItem>
+													);
+												})}
+											</tbody>
+										</SortableContext>
+									</table>
+								</DndContext>
 							)}
 							{receiptInfo?.length === 0 && (
 								<div className="text-center text-gray-500 italic py-2">
@@ -1934,6 +2166,10 @@ const SampleInfor = () => {
 
 									setCustomerInfo(customerInfoItems);
 									setReceiptInfo(receiptInfoItems);
+
+									// Reset order
+									setCustomerInfoOrder(customerInfoItems.map((_, index) => `customer-${index}`));
+									setReceiptInfoOrder(receiptInfoItems.map((_, index) => `receipt-${index}`));
 								}
 							}}
 						>
@@ -3366,14 +3602,6 @@ const SampleInfor = () => {
 								display_style: matchedAnalysis.display_style || analyte.display_style,
 								technician_uid: matchedAnalysis.technician_uid || analyte.technician_uid,
 							};
-
-							// Debug logging for technician_uid update
-							console.log(`Updating analysis ${analyte.id}:`, {
-								old_technician_uid: analyte.technician_uid,
-								new_technician_uid: matchedAnalysis.technician_uid,
-								final_technician_uid: updatedAnalyte.technician_uid,
-								technician_found: technicians.find((tech) => tech.identity_uid === updatedAnalyte.technician_uid),
-							});
 
 							return updatedAnalyte;
 						}

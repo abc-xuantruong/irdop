@@ -12,6 +12,7 @@ import {
 	FaVial,
 	FaMicroscope,
 	FaDatabase,
+	FaExchangeAlt,
 } from 'react-icons/fa';
 import { MdEditDocument } from 'react-icons/md';
 import { FaBoxesPacking } from 'react-icons/fa6';
@@ -137,6 +138,12 @@ const LabDashboardTemporary = () => {
 
 	// Bottom navigation items
 	const bottomNavigationItems = [
+		{
+			to: '/handover-dashboard',
+			icon: FaExchangeAlt,
+			label: 'Bàn giao',
+			isActive: currentPath.includes('/handover-dashboard'),
+		},
 		{
 			to: '/dashboard',
 			icon: FaClipboardList,

@@ -1,7 +1,7 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { GlobalContext } from '../contexts/GlobalContext';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { MdArrowRight } from 'react-icons/md';
+import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { MdArrowRight, MdKeyboardArrowDown } from 'react-icons/md';
 
 import FilterBar from './FilterBar';
 
@@ -19,6 +19,10 @@ const Breadcrumb = ({
 	const [tempSearchValue, setTempSearchValue] = useState('');
 	const location = useLocation();
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
+	const currentSampleUid =
+		searchParams.get('sample_uid') || (sample_uids && sample_uids.length > 0 ? sample_uids[0] : '');
+	const [showDropdown, setShowDropdown] = useState(false);
 	const isDashboard = location.pathname.includes('dashboard') || location.pathname === '/';
 	const isMainDashboard =
 		location.pathname === '/' || location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard?');
@@ -75,21 +79,47 @@ const Breadcrumb = ({
 							<div key={index} className="mr-1 flex items-center">
 								{index === paths.length - 1 ? (
 									sample_uids && sample_uids.length > 0 ? (
-										<select
-											className=" bg-transparent text-gray-700 rounded-md p-1 px-0"
-											onChange={(e) => navigate(e.target.value)}
-											value={location.pathname + location.search}
-										>
-											{sample_uids.map((uid, uidIndex) => (
-												<option
-													key={uidIndex}
-													value={`/dashboard/sample?receipt_uid=${paths[index - 1].name}&sample_uid=${uid}`}
-													className="text-gray-700 cursor-pointer"
+										<div className="relative flex items-center">
+											<span
+												className="text-blue-500 hover:underline cursor-pointer"
+												onMouseEnter={() => setShowDropdown(true)}
+												onMouseLeave={() => setShowDropdown(false)}
+											>
+												{currentSampleUid}
+											</span>
+											{showDropdown && (
+												<div
+													className="absolute top-full left-0 bg-white border border-gray-300 rounded-md shadow-md z-10"
+													onMouseEnter={() => setShowDropdown(true)}
+													onMouseLeave={() => setShowDropdown(false)}
 												>
-													{uid}
-												</option>
-											))}
-										</select>
+													{sample_uids.map((uid, uidIndex) => (
+														<div
+															key={uidIndex}
+															className="p-2 hover:bg-gray-100 cursor-pointer"
+															onClick={() => {
+																navigate(`/dashboard/sample?receipt_uid=${paths[index - 1].name}&sample_uid=${uid}`);
+																setShowDropdown(false);
+															}}
+														>
+															{uid}
+														</div>
+													))}
+												</div>
+											)}
+											<button
+												className="ml-1 p-1 bg-gray-100	"
+												onClick={() => {
+													const currentIndex = sample_uids.indexOf(currentSampleUid);
+													const nextIndex = (currentIndex + 1) % sample_uids.length;
+													const nextUid = sample_uids[nextIndex];
+													navigate(`/dashboard/sample?receipt_uid=${paths[index - 1].name}&sample_uid=${nextUid}`);
+												}}
+												title="Next sample"
+											>
+												<MdKeyboardArrowDown size={16} />
+											</button>
+										</div>
 									) : (
 										<span className="text-blue-500 hover:underline cursor-pointer align-middle text-center">
 											<NavLink to={path.link}>{path.name} </NavLink>

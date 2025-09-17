@@ -10,6 +10,9 @@
 		"preview": "vite preview --host"
 	},
 	"dependencies": {
+		"@dnd-kit/core": "^6.3.1",
+		"@dnd-kit/sortable": "^10.0.0",
+		"@dnd-kit/utilities": "^3.2.2",
 		"@handsontable/react": "^15.1.0",
 		"@tinymce/tinymce-react": "^5.1.1",
 		"axios": "^1.7.9",

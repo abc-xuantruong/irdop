@@ -34,7 +34,7 @@ const Header = () => {
 			// Check if the user is a technician but not an admin
 			if (currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin) {
 				// Allow access to /processing and /files, redirect from other pages
-				if (!currentPath.includes('/processing') && !currentPath.includes('/files')) {
+				if (!currentPath.includes('/processing') && !currentPath.includes('/files') && !currentPath.includes('handover')) {
 					navigate('/processing');
 				}
 			}
@@ -131,6 +131,14 @@ const Header = () => {
 								</Link>
 							)}{' '}
 							<Link
+								to="/handover-dashboard"
+								className={`cursor-pointer md:text-md ml-4 text-md font-medium ${
+									currentPath.includes('/handover-dashboard') ? 'text-primary' : 'text-teritary hover:text-primary'
+								}`}
+							>
+								Bàn giao
+							</Link>
+							<Link
 								to="/library"
 								className={`cursor-pointer md:text-md ml-4 text-md font-medium ${
 									currentPath.includes('/library') ? 'text-primary' : 'text-teritary hover:text-primary'
@@ -221,6 +229,12 @@ const Header = () => {
 											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
 										>
 											Lab
+										</button>
+										<button
+											onClick={() => handleNavigate('/handover-dashboard')}
+											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
+										>
+											Bàn giao
 										</button>
 										{shouldShowReception() && (
 											<button

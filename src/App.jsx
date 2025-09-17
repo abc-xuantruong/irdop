@@ -24,6 +24,7 @@ import Editor from './components/lab/Editor';
 import ExperimentLog from './components/lab/ExperimentLog';
 import AuthGuard from './components/AuthGuard';
 import AccountantDashboard from './pages/AccountantDashboard';
+import HandoverSampleDash from './pages/HandoverSampleDash';
 
 const App = () => {
 	return (
@@ -55,10 +56,10 @@ const App = () => {
 										<Route path="/dashboard/receipt" element={<ReceiptInfor />} />
 										<Route path="/dashboard/receipt/print_sp" element={<PrintSampleTag />} />
 										<Route path="/dashboard/sample" element={<SampleInfor />} />
+										<Route path="/handover-dashboard" element={<HandoverSampleDash />} />
 										<Route path="/login" element={<Login />} />
 										<Route path="library/client" element={<ClientInfor />} />
 										<Route path="/files" element={<FileInfor />} />
-										<Route path="/experiment-log" element={<ExperimentLog />} />
 									</Routes>
 								</div>
 								<Footer />

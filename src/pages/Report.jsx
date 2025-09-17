@@ -28,7 +28,7 @@ export default function MultiPageEditor() {
 	const [showReference, setShowReference] = useState(false);
 	const [showEnglish, setShowEnglish] = useState(false);
 	const [showReplace, setShowReplace] = useState(false);
-	const [showSign, setShowSign] = useState(false);
+	const [showSign, setShowSign] = useState(true);
 	const [showKN, setShowKN] = useState(false);
 
 	// State for section HTML content
@@ -368,11 +368,11 @@ export default function MultiPageEditor() {
 		 style="padding-top:5mm; position:relative; ">
 		<div style="position:relative; text-align:left;">
 			<p contenteditable="true" class=" content-header-title" 
-			   style="font-weight:840; font-size:24pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
+			   style="font-weight:800; font-size:24pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
 				PHIẾU KẾT QUẢ THỬ NGHIỆM
 			</p>
 			<p class=" content-header-title_eng" 
-			   style="font-weight:820; font-size:21pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
+			   style="font-weight:760; font-size:21pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
 				/ Certificate of Analysis
 			</p>
 			<div class=" display-flex" 
@@ -1099,7 +1099,7 @@ export default function MultiPageEditor() {
 					return `
 				<tr id="${rowId}" class="table-row" data-row-index="${index}">
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${index + 1}.</td>
-					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px; white-space: pre-line;">${parameterName}</td>
+					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;;">${parameterName}</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${result}</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${unit}</td>
 					<td style="border: 1px solid black; padding: 4px 8px; text-align:left; font-size:12px;">${protocol}</td>
@@ -1328,12 +1328,12 @@ export default function MultiPageEditor() {
 	<div class=" " 
 		 style="padding-top:5mm; position:relative; ">
 		<div style="position:relative; text-align:left;">
-			<p contenteditable="true" class="inter-840 content-header-title" 
-			   style="font-family: 'Inter', Arial, sans-serif; font-weight: 840; font-size:24pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
+			<p contenteditable="true" class="inter-800 content-header-title" 
+			   style="font-family: 'Inter', Arial, sans-serif; font-weight: 800; font-size:24pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
 				PHIẾU KẾT QUẢ THỬ NGHIỆM
 			</p>
-			<p class="inter-820 content-header-title_eng" 
-			   style="font-family: 'Inter', Arial, sans-serif; font-weight: 820; font-size:21pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
+			<p class="inter-760 content-header-title_eng" 
+			   style="font-family: 'Inter', Arial, sans-serif; font-weight: 760; font-size:21pt; color:#0058A3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;">
 				/ Certificate of Analysis
 			</p>
 			<div class="inter-400 display-flex" 
@@ -2807,12 +2807,12 @@ export default function MultiPageEditor() {
 						/* Font sizes for header elements */
 						.header .content-header-title {
 							font-size: 24pt !important;
-							font-weight: 840 !important;
+							font-weight: 800 !important;
 						}
 						
 						.header .content-header-title_eng {
 							font-size: 21pt !important;
-							font-weight: 820 !important;
+							font-weight: 760 !important;
 						}
 						
 						.header .std_ref-title, 
@@ -2942,7 +2942,7 @@ export default function MultiPageEditor() {
 							margin-top: 0;
 							margin-bottom: 0;
 							line-height: inherit;
-							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+							font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 						}
 						
 						img {
@@ -2954,7 +2954,7 @@ export default function MultiPageEditor() {
 								background-color: white;
 								-webkit-print-color-adjust: exact;
 								print-color-adjust: exact;
-								font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+								font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 							}
 							
 							/* Ensure anchor styling is maintained in print */
@@ -3899,7 +3899,7 @@ export default function MultiPageEditor() {
 
 				{/* Add the sample selection dropdown */}
 				{relatedSamples.length > 0 && (
-					<div className="mt-2 flex items-center">
+					<div className="mt-2 flex items-center gap-2">
 						<span className="text-gray-600 mr-2">Mẫu thử:</span>
 						<select
 							className="px-3 py-1 focus:outline-none border-2 border-gray-300 rounded-md bg-white"
@@ -3912,6 +3912,37 @@ export default function MultiPageEditor() {
 								</option>
 							))}
 						</select>
+						<button
+							onClick={() => {
+								// Get receipt_uid from sampleData or URL params
+								let receiptUid = null;
+								if (sampleData && sampleData.receipt_id) {
+									receiptUid = sampleData.receipt_id;
+								} else {
+									// Try to get from URL params as fallback
+									const urlParams = new URLSearchParams(window.location.search);
+									receiptUid = urlParams.get('receipt_uid');
+								}
+
+								if (receiptUid && sample_uid) {
+									navigate(`/dashboard/sample?receipt_uid=${receiptUid}&sample_uid=${sample_uid}`);
+								} else {
+									console.warn('Missing receipt_uid or sample_uid for navigation');
+								}
+							}}
+							className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none flex items-center gap-1"
+							title="Chuyển đến trang chi tiết mẫu thử"
+						>
+							<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+								/>
+							</svg>
+							Chuyển
+						</button>
 					</div>
 				)}
 			</div>

@@ -59,19 +59,19 @@ const applyFormatToHTML = (htmlContent) => {
 	tdTags.forEach((td) => {
 		const currentStyle = td.getAttribute('style') || '';
 		const currentWidth = extractStyleProperty(currentStyle, 'width') || td.getAttribute('width');
-		
+
 		td.removeAttribute('style');
 		td.removeAttribute('class');
 		td.removeAttribute('width');
 
 		// Set required styles: border, padding (6px left/right, 0px top/bottom), text-align left, font-size: 11px, min-height: 25px
 		let styleString = 'border: 1px solid #000; padding: 0px 6px; text-align: left; font-size: 11px; min-height: 25px';
-		
+
 		// Preserve width if it existed
 		if (currentWidth) {
 			styleString += `; width: ${currentWidth}`;
 		}
-		
+
 		td.setAttribute('style', styleString);
 	});
 
@@ -204,6 +204,10 @@ const Editor = () => {
 	const [analysisIds, setAnalysisIds] = useState([]);
 	const [tableInfoContent, setTableInfoContent] = useState('Chưa có thông tin mẫu thử - chỉ tiêu đã chọn...');
 	const [sampleUIDs, setSampleUIDs] = useState([]);
+
+	// Template columns and custom rows state
+	const [templateColumns, setTemplateColumns] = useState([]);
+	const [templateCustomRows, setTemplateCustomRows] = useState('');
 
 	// Component state for template search
 	const [showTemplateSearchForm, setShowTemplateSearchForm] = useState(false);
@@ -657,9 +661,19 @@ const Editor = () => {
 					templateName: template.templateName || template.name || '',
 					name: template.templateName || template.name || '',
 				});
+
+				// Store template columns and custom rows
+				if (template.columns) {
+					setTemplateColumns(template.columns);
+				}
+				if (template.customRows) {
+					setTemplateCustomRows(template.customRows);
+				}
 			} else {
 				// Reset template nếu không có thông tin hợp lệ
 				setCurrentTemplate(null);
+				setTemplateColumns([]);
+				setTemplateCustomRows('');
 			}
 
 			// Gán header data từ template
@@ -864,7 +878,7 @@ const Editor = () => {
 		try {
 			if (!currentEditId) {
 				await autoSaveLabResultReport();
-				
+
 				// if (!currentEditId) {
 				// 	throw new Error('Không thể tạo mã tài liệu. Vui lòng thử lại.');
 				// }
@@ -1440,6 +1454,68 @@ const Editor = () => {
 		}
 	};
 
+	// Naming transformation functions
+	const newAnalysisNaming = (a) => {
+		if (!a || typeof a !== 'object') return a;
+		const newA = {};
+		for (const k in a) {
+			if (k === 'created_at') newA['createdAt'] = a[k];
+			else if (k === 'created_by_uid') newA['createdById'] = a[k];
+			else if (k === 'modified_at') newA['modifiedAt'] = a[k];
+			else if (k === 'modified_by_uid') newA['modifiedById'] = a[k];
+			else if (k === 'receipt_id') newA['receiptId'] = a[k];
+			else if (k === 'sample_id') newA['sampleId'] = a[k];
+			else if (k === 'protocol_id') newA['protocolId'] = a[k];
+			else if (k === 'parameter_id') newA['parameterId'] = a[k];
+			else if (k === 'technician_uid') newA['technicianId'] = a[k];
+			else if (k === 'parameter_name') newA['parameterName'] = a[k];
+			else if (k === 'protocol_source') newA['protocolSource'] = a[k];
+			else if (k === 'protocol_code') newA['protocolCode'] = a[k];
+			else if (k === 'result_unit') newA['resultUnit'] = a[k];
+			else if (k === 'result_value') newA['resultValue'] = a[k];
+			else if (k === 'product_type') newA['_deprecated_productType'] = a[k];
+			else if (k === 'parameter_uid') newA['_deprecated_parameterUid'] = a[k];
+			else if (k === 'reviewed_by') newA['reviewedById'] = a[k];
+			else if (k === 'submit_result_at') newA['submitLastResultAt'] = a[k];
+			else if (k === 'submit_result_by') newA['submitLastResultById'] = a[k];
+			else if (k === 'reference') newA['resultReference'] = a[k];
+			else if (k === 'field') newA['scientificField'] = a[k];
+			else if (k === 'ex_info') newA['exInfo'] = a[k];
+			else if (k === 'sample_uid') newA['_deprecated_sampleUid'] = a[k];
+			else if (k === 'receipt_uid') newA['_deprecated_receiptUid'] = a[k];
+			else if (k === 'doc_id') newA['docId'] = a[k];
+			else if (k === 'display_style') newA['displayStyle'] = a[k];
+			else newA[k] = a[k];
+		}
+		return newA;
+	};
+
+	const newSampleNaming = (s) => {
+		if (!s || typeof s !== 'object') return s;
+		const newS = {};
+		for (const k in s) {
+			if (k === 'sample_uid') newS['sampleId'] = s[k];
+			else if (k === 'created_at') newS['createdAt'] = s[k];
+			else if (k === 'created_by_uid') newS['createdById'] = s[k];
+			else if (k === 'modified_at') newS['modifiedAt'] = s[k];
+			else if (k === 'modified_by_uid') newS['modifiedById'] = s[k];
+			else if (k === 'receipt_id') newS['receiptId'] = s[k];
+			else if (k === 'client_id') newS['clientId'] = s[k];
+			else if (k === 'sample_description') newS['sampleDescription'] = s[k];
+			else if (k === 'sample_volume') newS['sampleVolume'] = s[k];
+			else if (k === 'additional_request') newS['additionalRequest'] = s[k];
+			else if (k === 'sample_name') newS['sampleName'] = s[k];
+			else if (k === 'emails_received') newS['emailsReceived'] = s[k];
+			else if (k === 'handover_at') newS['handoverAt'] = s[k];
+			else if (k === 'receipt_uid') newS['_deprecated_receiptUid'] = s[k];
+			else if (k === 'sample_information') newS['sampleInformation'] = s[k];
+			else if (k === 'analyses' || k === 'analysis')
+				newS['analyses'] = Array.isArray(s[k]) ? s[k].map(newAnalysisNaming) : [];
+			else newS[k] = s[k];
+		}
+		return newS;
+	};
+
 	const insertTableInfo = async () => {
 		// This function inserts table 1 at the beginning and table 2 at the end of the editor
 		if (!analysisIds || analysisIds.length === 0) {
@@ -1483,23 +1559,27 @@ const Editor = () => {
 				throw new Error(result.error);
 			}
 
-			const { tableAnalysisInfo, tableSampleInfo } = result;
+			const { analyses, samples } = result;
+
+			// Apply naming transformations
+			const transformedAnalyses = analyses ? analyses.map(newAnalysisNaming) : [];
+			const transformedSamples = samples ? samples.map(newSampleNaming) : [];
 
 			// Extract and update sample UIDs
-			const extractedSampleUIDs = tableSampleInfo?.map((sample) => sample.sample_uid).filter((uid) => uid) || [];
+			const extractedSampleUIDs = transformedSamples?.map((sample) => sample.sampleId).filter((uid) => uid) || [];
 			setSampleUIDs(extractedSampleUIDs);
 
 			let table1HTML = '';
 			let table2HTML = '';
 
 			// Bảng 1: Thông tin mẫu thử (Mã mẫu, Tên mẫu, Mô tả mẫu)
-			if (tableSampleInfo && tableSampleInfo.length > 0) {
-				const sampleRows = tableSampleInfo
+			if (transformedSamples && transformedSamples.length > 0) {
+				const sampleRows = transformedSamples
 					.map(
 						(sample, index) =>
 							`<tr style="min-height: 25px;">
-								<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${sample.sample_uid || 'N/A'}</td>
-								<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${sample.sample_name || 'N/A'}</td>
+								<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${sample.sampleId || 'N/A'}</td>
+								<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${sample.sampleName || 'N/A'}</td>
 								<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;"></td>
 							</tr>`,
 					)
@@ -1509,9 +1589,9 @@ const Editor = () => {
 					<table style="width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 16px;">
 						<thead>
 							<tr style="min-height: 25px;">
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Mã mẫu</th>
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Tên mẫu</th>
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Mô tả mẫu</th>
+								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px; width: 12%;">Mã mẫu</th>
+								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px; width: 38%;">Tên mẫu</th>
+								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px; width: 50%;">Mô tả mẫu</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -1521,37 +1601,111 @@ const Editor = () => {
 				`;
 			}
 
-			// Bảng 2: Thông tin chỉ tiêu kiểm nghiệm (Mã mẫu, Mã chỉ tiêu, Chỉ tiêu, Kết quả, Đơn vị)
-			if (tableAnalysisInfo && tableAnalysisInfo.length > 0) {
-				const analysisRows = tableAnalysisInfo
+			// Bảng 2: Template-based table using templateColumns and templateCustomRows
+			if (templateColumns && templateColumns.length > 0) {
+				// Create table header from template columns
+				const tableHeader = templateColumns
 					.map(
-						(analysis, index) =>
-							`<tr style="min-height: 25px;">
-								<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${analysis.sample_uid || 'N/A'}</td>
-								<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${analysis.id || 'N/A'}</td>
-								<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${analysis.parameter_name || 'N/A'}</td>
-								<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;"></td>
-								<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;"></td>
-							</tr>`,
+						(col) =>
+							`<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px; width: ${col.width}%;">${col.columnName}</th>`,
 					)
+					.join('');
+
+				// Create analysis rows from transformed analyses data
+				const analysisRows = transformedAnalyses
+					.map((analysis, index) => {
+						const rowCells = templateColumns
+							.map((col) => {
+								let cellValue = '';
+								if (col.objectKey === 'auto') {
+									cellValue = (index + 1).toString();
+								} else if (col.objectKey && analysis[col.objectKey] !== undefined) {
+									cellValue = analysis[col.objectKey] || '';
+								} else {
+									// Nếu không có objectKey hoặc không có dữ liệu thì để trống
+									cellValue = '';
+								}
+								return `<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${cellValue}</td>`;
+							})
+							.join('');
+						return `<tr style="min-height: 25px;">${rowCells}</tr>`;
+					})
 					.join('');
 
 				table2HTML = `
 					<table style="width: 100%; border-collapse: collapse; border: 1px solid #000; margin-top: 16px;">
 						<thead>
 							<tr style="min-height: 25px;">
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Mã mẫu</th>
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Mã chỉ tiêu</th>
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Chỉ tiêu</th>
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Kết quả</th>
-								<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Đơn vị</th>
+								${tableHeader}
 							</tr>
 						</thead>
 						<tbody>
 							${analysisRows}
+						</tbody>`;
+
+				// Add custom rows if they exist
+				if (templateCustomRows) {
+					try {
+						// Extract table rows from custom rows content using regex
+						const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/gi;
+						const customRows = templateCustomRows.match(rowRegex);
+
+						if (customRows && customRows.length > 0) {
+							customRows.forEach((row) => {
+								// Clean up the row content - keep as-is, don't modify cell count
+								let cleanedRow = row
+									.replace(/<thead[^>]*>[\s\S]*?<\/thead>/gi, '')
+									.replace(/<tbody[^>]*>/gi, '')
+									.replace(/<\/tbody>/gi, '');
+
+								// Insert each row exactly as it is (preserve colspan and cell structure)
+								table2HTML += cleanedRow;
+							});
+						}
+					} catch (error) {
+						console.error('Error processing custom rows:', error);
+					}
+				}
+
+				table2HTML += `
 						</tbody>
 					</table>
 				`;
+			} else {
+				// Fallback to original static table if no template columns
+				if (transformedAnalyses && transformedAnalyses.length > 0) {
+					const analysisRows = transformedAnalyses
+						.map(
+							(analysis, index) =>
+								`<tr style="min-height: 25px;">
+									<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${analysis.sampleId || 'N/A'}</td>
+									<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${analysis.id || 'N/A'}</td>
+									<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;">${
+										analysis.parameterName || 'N/A'
+									}</td>
+									<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;"></td>
+									<td style="border: 1px solid #000; padding: 8px; font-size: 11px; min-height: 25px;"></td>
+								</tr>`,
+						)
+						.join('');
+
+					table2HTML = `
+						<table style="width: 100%; border-collapse: collapse; border: 1px solid #000; margin-top: 16px;">
+							<thead>
+								<tr style="min-height: 25px;">
+									<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Mã mẫu</th>
+									<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Mã chỉ tiêu</th>
+									<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Chỉ tiêu</th>
+									<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Kết quả</th>
+									<th style="border: 1px solid #000; padding: 8px; background-color: #f9f9f9; font-size: 11px; min-height: 25px;">Đơn vị</th>
+								</tr>
+							</thead>
+							<tbody>
+								${analysisRows}
+							</tbody>
+						</table>
+					`;
+				}
 			}
 
 			// Thêm div chia 2 phần như yêu cầu - đặt sau bảng cuối
@@ -1572,9 +1726,9 @@ const Editor = () => {
 				// Get current editor content
 				const currentContent = editor.getContent();
 
-		// Combine: Experiment date + Table 1 + Current Content + Table 2 + Divider (divider after last table)
-		const experimentDateHTML = `<p>Ngày thực hiện thử nghiệm: </p>`;
-		const newContent = experimentDateHTML + table1HTML + currentContent + table2HTML + dividerHTML;				// Set the new content (Table 1 at beginning, current content in middle, Table 2, then divider at end)
+				// Combine: Experiment date + Table 1 + Current Content + Table 2 + Divider (divider after last table)
+				const experimentDateHTML = `<p>Ngày thực hiện thử nghiệm: </p>`;
+				const newContent = experimentDateHTML + table1HTML + currentContent + table2HTML + dividerHTML; // Set the new content (Table 1 at beginning, current content in middle, Table 2, then divider at end)
 				editor.setContent(newContent);
 				setEditorContent(newContent);
 
@@ -1701,6 +1855,14 @@ const Editor = () => {
 	const selectTemplateFromModal = async (template) => {
 		try {
 			setCurrentTemplate(template);
+
+			// Store template columns and custom rows
+			if (template.columns) {
+				setTemplateColumns(template.columns);
+			}
+			if (template.customRows) {
+				setTemplateCustomRows(template.customRows);
+			}
 
 			// Apply template content to editor if available
 			if (template.content && editorRef.current) {
@@ -2255,7 +2417,6 @@ const Editor = () => {
 
 	// Show submit result modal with analyses and nonconformity data - with editing capability
 	const showSubmitResultModal = (analyses, nonconformityAnalyses) => {
-
 		// Create a document-like object for the analysis data popup
 		const documentData = {
 			id: currentEditId,
@@ -2281,7 +2442,6 @@ const Editor = () => {
 		}
 
 		try {
-
 			const response = await apiPost('https://red.irdop.org/v1/editor/lab_result_report/get_editor', {
 				id: currentEditId,
 				searchTerm: '',
@@ -2354,7 +2514,6 @@ const Editor = () => {
 	// Handle bulk update confirmation
 	const handleBulkUpdateConfirm = async () => {
 		try {
-
 			const response = await apiPost('https://red.irdop.org/v1/analysis/update_bulk', {
 				analyses: submitResultData.analyses,
 			});
@@ -2379,7 +2538,6 @@ const Editor = () => {
 		// Load data from last submit response into current state
 		if (lastSubmitResponse) {
 			try {
-
 				// Reload the latest data from server to get the updated metadata
 				const reloadSuccess = await reloadEditorData();
 
@@ -3070,8 +3228,8 @@ const Editor = () => {
 									<button
 										id="a4FormatBtn"
 										className={`py-1 px-3 text-xs font-semibold border-2 rounded transition-all shadow-sm ${
-											isA4Format 
-												? 'bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600' 
+											isA4Format
+												? 'bg-green-500 text-white border-green-500 hover:bg-green-600 hover:border-green-600'
 												: 'bg-gray-400 text-white border-gray-400 hover:bg-gray-500 hover:border-gray-500'
 										}`}
 										title="Định dạng A4 (793px width)"
@@ -3118,7 +3276,6 @@ const Editor = () => {
 										editor.initialized = true;
 									}}
 									init={{
-										plugins: 'paste table',
 										paste_data_images: true,
 										paste_retain_style_properties: 'none', // Loại bỏ các thuộc tính style không cần thiết
 										paste_strip_class_attributes: 'all', // Loại bỏ các thuộc tính class
@@ -3201,6 +3358,7 @@ const Editor = () => {
                       padding: 8px;
                       vertical-align: top;
                       box-sizing: border-box;
+                      word-break: normal;
                     }
                     table th {
                       background-color: #f9f9f9;
