@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiGet } from '../contexts/helperFunctionCallAPI';
 import { GlobalContext } from '../contexts/GlobalContext'; // Add import for GlobalContext
-import logoSvg from '../assets/IRDOP-LOGO-FULL_.svg';
+import JsBarcode from 'jsbarcode';
 
 const PrintSampleTag = () => {
 	const [searchParams] = useSearchParams();
@@ -102,6 +102,70 @@ const PrintSampleTag = () => {
 		return <div className="flex justify-center items-center h-screen text-red-500">{error}</div>;
 	}
 
+	// Barcode component with multiple format options
+	const BarcodeGenerator = ({ value, width = 1, height = 40, format = 'CODE128' }) => {
+		const canvasRef = useRef(null);
+
+		useEffect(() => {
+			if (canvasRef.current && value) {
+				try {
+					// Different barcode formats for different needs:
+					// CODE39: Best spacing, good for 1x2 ratio, supports alphanumeric
+					// CODE128: More compact, better data density
+					// ITF: Numbers only, very compact
+					const formatOptions = {
+						CODE39: {
+							format: 'CODE39',
+							width: width,
+							height: height,
+							displayValue: false,
+							margin: 3, // Good spacing to prevent sticking
+							background: 'transparent',
+							lineColor: '#000000',
+						},
+						CODE128: {
+							format: 'CODE128',
+							width: width,
+							height: height,
+							displayValue: false,
+							margin: 2,
+							background: 'transparent',
+							lineColor: '#000000',
+						},
+						ITF: {
+							format: 'ITF',
+							width: width,
+							height: height,
+							displayValue: false,
+							margin: 2,
+							background: 'transparent',
+							lineColor: '#000000',
+						},
+					};
+
+					JsBarcode(canvasRef.current, value, formatOptions[format] || formatOptions.CODE39);
+				} catch (error) {
+					// Fallback to CODE128 if selected format fails
+					try {
+						JsBarcode(canvasRef.current, value, {
+							format: 'CODE128',
+							width: width,
+							height: height,
+							displayValue: false,
+							margin: 2,
+							background: 'transparent',
+							lineColor: '#000000',
+						});
+					} catch (fallbackError) {
+						console.error('Error generating barcode:', fallbackError);
+					}
+				}
+			}
+		}, [value, width, height, format]);
+
+		return <canvas ref={canvasRef} style={{ maxWidth: '100%', height: 'auto' }} />;
+	};
+
 	// Single tag component for each sample
 	const SampleTag = ({ sample, isPrintView = false }) => (
 		<div
@@ -109,29 +173,27 @@ const PrintSampleTag = () => {
 				!isPrintView ? 'border-gray-300 border rounded-sm' : ''
 			}`}
 		>
-			<div className="flex-1 flex flex-col justify-between font-semibold ">
-				<div className="flex w-full justify-between">
+			<div className="flex-1 flex flex-col justify-start font-semibold ">
+				<div className="flex w-full justify-between items-end">
 					<div>
 						<div className="flex justify-between mb-0  text-3xl">
 							<span>{receiptData.record_code || '--'}</span>
 						</div>
-						<div className="flex justify-between mb-1 text-base">
-							<span>{formatDate(receiptData.created_at)}</span>
-						</div>
 					</div>
-
 					{sample.status === 1 && (
-						<div className="flex justify-between text-6xl">
+						<div className="flex justify-between text-xl">
 							<span>K</span>
 						</div>
 					)}
-					<div className="flex items-center justify-center ml-0.5">
-						<img src={logoSvg} alt="IRDOP Logo" className="h-11 object-contain" />
+					<div className="flex justify-between mb-1 text-base">
+						<span>{formatDate(receiptData.created_at)}</span>
 					</div>
 				</div>
-
-				<div className="flex justify-between mb-0.5 text-xl">
-					<span>{sample.sample_uid}</span>
+				<div className="flex items-center justify-center ">
+					<BarcodeGenerator value={sample.sample_uid} width={1} height={40} />
+				</div>
+				<div className="flex justify-center mb-0.5 text-xl">
+					<p style={{ letterSpacing: '0.1em', lineHeight: '20px' }}>{sample.sample_uid}</p>
 				</div>
 			</div>
 		</div>
