@@ -17,7 +17,7 @@ import {
 import { MdEditDocument } from 'react-icons/md';
 import { FaBoxesPacking } from 'react-icons/fa6';
 import ProcessingAnalysis from '../components/lab/ProcessingAnalysis';
-import ProcessingSample from '../components/lab/ProcessingSample';
+import ProcessingSampleV2 from '../components/lab/ProcessingSampleV2';
 import DocumentEditor from '../components/lab/DocumentEditor';
 import ExperimentLog from '../components/lab/ExperimentLog';
 import { GlobalContext } from '../contexts/GlobalContext';
@@ -48,11 +48,14 @@ const LabDashboardTemporary = () => {
 	// Check for auth cookie and fetch user info on mount and when auth cookie changes
 	useEffect(() => {
 		const authCookie = Cookies.get('auth');
+
 		if (!authCookie) {
 			setCurrentUser(null);
-		} else if (fetchUser && (!currentUser || !currentUser.identity_name)) {
+		} else if (!currentUser || !currentUser.identity_name) {
 			// Fetch user information if we have an auth cookie but no user info
-			fetchUser();
+			if (fetchUser) {
+				fetchUser();
+			}
 		}
 	}, [setCurrentUser, fetchUser, currentUser]);
 
@@ -326,7 +329,11 @@ const LabDashboardTemporary = () => {
 						</div>
 					</div>
 				) : currentView === 'sample' ? (
-					<ProcessingSample />
+					<div className="h-full flex flex-col">
+						<div className="flex-1 overflow-y-auto scrollbar-hide">
+							<ProcessingSampleV2 />
+						</div>
+					</div>
 				) : (
 					<ProcessingAnalysis />
 				)}

@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { apiGet } from '../contexts/helperFunctionCallAPI';
+import { apiPost } from '../contexts/helperFunctionCallAPI';
 import { GlobalContext } from '../contexts/GlobalContext'; // Add import for GlobalContext
 import JsBarcode from 'jsbarcode';
 
 const PrintSampleTag = () => {
 	const [searchParams] = useSearchParams();
-	const receipt_uid = searchParams.get('receipt_uid');
-	const sample_uid = searchParams.get('sample_uid'); // Get sample_uid from query params
+	const receiptId = searchParams.get('receiptId');
+	const sampleId = searchParams.get('sampleId'); // Get sampleId from query params
 	const [receiptData, setReceiptData] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
@@ -15,36 +15,40 @@ const PrintSampleTag = () => {
 
 	useEffect(() => {
 		const fetchReceiptData = async () => {
-			if (!receipt_uid) {
-				setError('No receipt_uid provided');
+			if (!receiptId) {
+				setError('No receiptId provided');
 				setLoading(false);
 				return;
 			}
 
 			try {
-				const response = await apiGet(`https://black.irdop.org/khsi19me/db/get/receipt_full/${receipt_uid}`);
+				const response = await apiPost('https://red.irdop.org/v1/receipt/get/full', {
+					receiptId: receiptId,
+				});
 				if (response.status === 200) {
-					// Extract only the data we need
-					const { receipt_uid, record_code, created_at, samples } = response.data;
+					// Extract only the data we need with new camelCase structure
+					const { receiptId, _deprecated_recordCode, receiptDate, samples } = response.data;
 
-					// Filter samples if sample_uid is provided
+					// Filter samples if sampleId is provided
 					let simplifiedSamples = samples.map((sample) => ({
-						sample_uid: sample.sample_uid,
+						sampleId: sample.sampleId || sample.sample_id,
 						status: sample.status,
 					}));
 
-					// If sample_uid is provided, filter to show only that specific sample
-					if (sample_uid) {
-						simplifiedSamples = simplifiedSamples.filter((sample) => sample.sample_uid === sample_uid);
+					// If sampleId is provided, filter to show only that specific sample
+					if (sampleId) {
+						simplifiedSamples = simplifiedSamples.filter(
+							(sample) => (sample.sampleId || sample.sample_id) === sampleId,
+						);
 						if (simplifiedSamples.length === 0) {
-							setError(`Sample with ID ${sample_uid} not found in this receipt`);
+							setError(`Sample with ID ${sampleId} not found in this receipt`);
 						}
 					}
 
 					setReceiptData({
-						receipt_uid,
-						record_code,
-						created_at,
+						receiptId: receiptId,
+						recordCode: _deprecated_recordCode,
+						createdAt: receiptDate,
 						samples: simplifiedSamples,
 					});
 				} else {
@@ -58,7 +62,7 @@ const PrintSampleTag = () => {
 		};
 
 		fetchReceiptData();
-	}, [receipt_uid, sample_uid]); // Add sample_uid to dependency array
+	}, [receiptId, sampleId]); // Add sampleId to dependency array
 
 	// Format date to dd-mm-yyyy
 	const formatDate = (dateString) => {
@@ -177,7 +181,7 @@ const PrintSampleTag = () => {
 				<div className="flex w-full justify-between items-end">
 					<div>
 						<div className="flex justify-between mb-0  text-3xl">
-							<span>{receiptData.record_code || '--'}</span>
+							<span>{receiptData.recordCode || '--'}</span>
 						</div>
 					</div>
 					{sample.status === 1 && (
@@ -186,14 +190,14 @@ const PrintSampleTag = () => {
 						</div>
 					)}
 					<div className="flex justify-between mb-1 text-base">
-						<span>{formatDate(receiptData.created_at)}</span>
+						<span>{formatDate(receiptData.createdAt || receiptData.receiptDate)}</span>
 					</div>
 				</div>
 				<div className="flex items-center justify-center ">
-					<BarcodeGenerator value={sample.sample_uid} width={1} height={40} />
+					<BarcodeGenerator value={sample.sampleId} width={1} height={40} />
 				</div>
 				<div className="flex justify-center mb-0.5 text-xl">
-					<p style={{ letterSpacing: '0.1em', lineHeight: '20px' }}>{sample.sample_uid}</p>
+					<p style={{ letterSpacing: '0.1em', lineHeight: '20px' }}>{sample.sampleId}</p>
 				</div>
 			</div>
 		</div>

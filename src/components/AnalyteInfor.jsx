@@ -1222,7 +1222,7 @@ const AnalyteInfor = () => {
 			const { tat_expected, ...analyteWithoutTat } = analyteToUpdate;
 			const finalAnalyte = {
 				...analyteWithoutTat,
-				modified_by_uid: currentUser.identity_uid,
+				modifiedById: currentUser.identity_uid,
 			};
 
 			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/update/parameter', {
@@ -1292,7 +1292,7 @@ const AnalyteInfor = () => {
 		const finalAnalyte = { ...analyteWithoutTat, displayStyle: currentDisplayStyle };
 
 		try {
-			finalAnalyte.modified_by_uid = currentUser.identity_uid;
+			finalAnalyte.modifiedById = currentUser.identity_uid;
 
 			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/update/parameter', {
 				parameter: finalAnalyte,
@@ -1355,7 +1355,7 @@ const AnalyteInfor = () => {
 			try {
 				const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/delete/parameter', {
 					id: analyte.id,
-					modified_by_uid: currentUser.identity_uid,
+					modifiedById: currentUser.identity_uid,
 				});
 				if (response.status === 200) {
 					toast.success('Analyte deleted successfully');
@@ -1412,8 +1412,8 @@ const AnalyteInfor = () => {
 		const { tat_expected, ...analyteWithoutTat } = newAnalyte;
 		const finalAnalyte = { ...analyteWithoutTat, displayStyle: currentDisplayStyle };
 
-		finalAnalyte.created_by_uid = currentUser.identity_uid;
-		finalAnalyte.modified_by_uid = currentUser.identity_uid;
+		finalAnalyte.createdById = currentUser.identity_uid;
+		finalAnalyte.modifiedById = currentUser.identity_uid;
 
 		try {
 			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/insert/bulk/parameter', {
@@ -1541,7 +1541,7 @@ const AnalyteInfor = () => {
 	const handleProtocolSelect = (id, protocol) => {
 		const updatedAnalytes = analytes.map((analyte) => {
 			if (analyte.id === id) {
-				return { ...analyte, protocol_id: protocol.id, protocolCode: protocol.protocolCode };
+				return { ...analyte, protocolId: protocol.id, protocolCode: protocol.protocolCode };
 			}
 			return analyte;
 		});
@@ -1551,7 +1551,7 @@ const AnalyteInfor = () => {
 	};
 
 	const handleNewProtocolSelect = (protocol) => {
-		setNewAnalyte({ ...newAnalyte, protocolCode: protocol.protocolCode, protocol_id: protocol.id });
+		setNewAnalyte({ ...newAnalyte, protocolCode: protocol.protocolCode, protocolId: protocol.id });
 		setIsProtocolDropdownVisible(false);
 	};
 

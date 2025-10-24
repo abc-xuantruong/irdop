@@ -38,7 +38,6 @@ import FileForm from '../components/FileForm';
 import EmailForm from '../components/EmailForm';
 import SampleImageUpload from '../components/SampleImageUpload';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-// Import the generateReportToHTML function
 
 const ReceiptInfor = ({ receipt }) => {
 	const { setCurrentTitlePage, currentUser, technicians, status, purposes, formatDate, getIdenByUid, identityCache } =
@@ -48,11 +47,9 @@ const ReceiptInfor = ({ receipt }) => {
 	const [editingField, setEditingField] = useState(null);
 	const [inputValue, setInputValue] = useState('');
 	const [isEditorVisible, setIsEditorVisible] = useState(false);
-	const [viewMode, setViewMode] = useState('analyte'); // 'analyte' or 'sample' or 'ppt'
+	const [viewMode, setViewMode] = useState('analyte'); // 'analyte' or 'sample'
 	const [isAddingSample, setIsAddingSample] = useState(false);
 	const [isEditMode, setIsEditMode] = useState(false); // Add edit mode state
-	const [selectedReports, setSelectedReports] = useState({});
-	const [selectAllChecked, setSelectAllChecked] = useState(false);
 
 	// Keep editingRevenueField state but remove showRevenueSection
 	const [editingRevenueField, setEditingRevenueField] = useState(null);
@@ -65,12 +62,12 @@ const ReceiptInfor = ({ receipt }) => {
 	const [isBulkDeadlineVisible, setIsBulkDeadlineVisible] = useState(false);
 	const [bulkDeadlineDate, setBulkDeadlineDate] = useState(new Date());
 	const [newSample, setNewSample] = useState({
-		sample_name: '',
+		sampleName: '',
 		matrix: '',
 		sample_description: '',
 		sample_volume: '',
 		purpose: '',
-		additional_request: '',
+		additionalRequest: '',
 		copiedFromSampleUid: '',
 	});
 	const [copyCount, setCopyCount] = useState(1);
@@ -85,9 +82,10 @@ const ReceiptInfor = ({ receipt }) => {
 	let key,
 		isfetch = false;
 	const [searchParams] = useSearchParams(); // Changed to useSearchParams
-	const receipt_uid = searchParams.get('receipt_uid');
+	const receiptId = searchParams.get('receiptId') || searchParams.get('receiptId');
 	const navigate = useNavigate();
 	const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
+	const [scientificFields, setScientificFields] = useState([]);
 	const [deleteItemId, setDeleteItemId] = useState(null);
 	const [deleteType, setDeleteType] = useState(null);
 	// State to store user information fetched from API
@@ -107,11 +105,8 @@ const ReceiptInfor = ({ receipt }) => {
 
 	// Add state to store original values for comparison
 	const [originalValues, setOriginalValues] = useState({});
-	// State to track report generation progress
-	const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
-	const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
-	const [isGeneratingPublish, setIsGeneratingPublish] = useState(false);
-	const [generationProgress, setGenerationProgress] = useState(0); // State for EmailForm visibility
+
+	// State for EmailForm visibility
 	const [isEmailFormVisible, setIsEmailFormVisible] = useState(false);
 	const [emailFormData, setEmailFormData] = useState({
 		from: '',
@@ -134,6 +129,21 @@ const ReceiptInfor = ({ receipt }) => {
 	const [cameraPermission, setCameraPermission] = useState(null); // null, 'granted', 'denied'
 	const [isRequestingPermission, setIsRequestingPermission] = useState(false);
 	const qrScannerRef = useRef(null);
+
+	// Note modal states
+	const [showNoteModal, setShowNoteModal] = useState(false);
+	const [selectedAnalysisForNote, setSelectedAnalysisForNote] = useState(null);
+	const [newNoteText, setNewNoteText] = useState('');
+	const [isUpdatingNote, setIsUpdatingNote] = useState(false);
+
+	// Tooltip state
+	const [tooltip, setTooltip] = useState({
+		visible: false,
+		content: '',
+		x: 0,
+		y: 0,
+		position: 'above',
+	});
 
 	// Function to format date strings entered manually
 	const formatDateString = (dateStr) => {
@@ -182,14 +192,14 @@ const ReceiptInfor = ({ receipt }) => {
 	const handleReceiptDateChange = (date) => {
 		// Just update the component state without API call
 		setTempReceiptDate(date);
-		handleInputChange({ target: { name: 'receipt_date', value: date } });
+		handleInputChange({ target: { name: 'receiptDate', value: date } });
 	};
 
 	// Handle the receipt DatePicker blur event
 	const handleReceiptDateBlur = () => {
-		if (isReceiptDateFocused && currentReceipt?.receipt_date) {
+		if (isReceiptDateFocused && currentReceipt?.receiptDate) {
 			// Only make API call when focus is lost and there's a value
-			handleReceiptApiUpdate('receipt_date', currentReceipt.receipt_date);
+			handleReceiptApiUpdate('receiptDate', currentReceipt.receiptDate);
 			setIsReceiptDateFocused(false);
 		}
 	};
@@ -197,7 +207,7 @@ const ReceiptInfor = ({ receipt }) => {
 	// Handle receipt DatePicker focus
 	const handleReceiptDateFocus = () => {
 		setIsReceiptDateFocused(true);
-		setTempReceiptDate(currentReceipt?.receipt_date);
+		setTempReceiptDate(currentReceipt?.receiptDate);
 	};
 
 	// Handle keydown events on the receipt DatePicker
@@ -211,10 +221,10 @@ const ReceiptInfor = ({ receipt }) => {
 
 			if (parsedDate) {
 				handleInputChange({
-					target: { name: 'receipt_date', value: parsedDate },
+					target: { name: 'receiptDate', value: parsedDate },
 				});
 				// Update API with the new date
-				handleReceiptApiUpdate('receipt_date', parsedDate);
+				handleReceiptApiUpdate('receiptDate', parsedDate);
 
 				// Clear the input and blur
 				setReceiptDateInput('');
@@ -232,7 +242,7 @@ const ReceiptInfor = ({ receipt }) => {
 		} else if (e.key === 'Escape') {
 			// Revert to original value and blur
 			handleInputChange({
-				target: { name: 'receipt_date', value: tempReceiptDate },
+				target: { name: 'receiptDate', value: tempReceiptDate },
 			});
 			setReceiptDateInput('');
 			if (document.activeElement) {
@@ -316,6 +326,52 @@ const ReceiptInfor = ({ receipt }) => {
 		setCurrentTitlePage('Tiếp nhận mẫu');
 	}, []);
 
+	// Add tooltip CSS
+	useEffect(() => {
+		const style = document.createElement('style');
+		style.innerHTML = `
+		/* Custom Tooltip Styles */
+		.custom-tooltip {
+			position: absolute;
+			background: rgba(0, 0, 0, 0.9);
+			color: white;
+			padding: 10px 14px;
+			border-radius: 6px;
+			font-size: 13px;
+			font-weight: 500;
+			white-space: pre-wrap;
+			pointer-events: none;
+			z-index: 10000;
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+			opacity: 0;
+			transition: opacity 0.2s ease-in-out;
+			max-width: 350px;
+			min-width: 200px;
+			word-wrap: break-word;
+		}
+		.custom-tooltip.visible {
+			opacity: 1;
+		}
+		.custom-tooltip.left {
+			transform: translateX(-100%) translateY(-50%);
+		}
+		.custom-tooltip.right {
+			transform: translateX(0) translateY(-50%);
+		}
+		.custom-tooltip.above {
+			transform: translateX(-50%) translateY(-100%);
+		}
+		.custom-tooltip.below {
+			transform: translateX(-50%) translateY(0);
+		}
+		`;
+		document.head.appendChild(style);
+
+		return () => {
+			document.head.removeChild(style);
+		};
+	}, []);
+
 	// Get current URL for QR code
 	useEffect(() => {
 		setCurrentUrl(window.location.href);
@@ -393,10 +449,14 @@ const ReceiptInfor = ({ receipt }) => {
 		return gmtPlus7Date.toISOString();
 	};
 
-	// Function to fetch sample image if sample_img_uid exists
+	// Function to fetch sample image if _deprecated_sampleImageId exists
 	const fetchSampleImage = async (sampleImgUid) => {
-		if (!sampleImgUid) return;
+		if (!sampleImgUid) {
+			console.log('No sampleImgUid provided');
+			return;
+		}
 
+		console.log('Fetching sample image for UID:', sampleImgUid);
 		setIsLoadingImage(true);
 		setImageError(false);
 
@@ -407,9 +467,13 @@ const ReceiptInfor = ({ receipt }) => {
 				fileRecord: { id: sampleImgUid },
 			});
 
+			console.log('Image fetch response:', response);
+
 			if (response.status === 200 && response.data) {
+				console.log('Setting sample image URL:', response.data);
 				setSampleImageUrl(response.data);
 			} else {
+				console.log('Error: Invalid response status or no data');
 				setImageError(true);
 			}
 		} catch (error) {
@@ -422,75 +486,163 @@ const ReceiptInfor = ({ receipt }) => {
 
 	const fetchReceipt = async () => {
 		try {
-			const response = await apiGet(`https://black.irdop.org/khsi19me/db/get/receipt_full/${receipt_uid}`);
+			// Use new API endpoint with proper request body
+			const response = await apiPost('https://red.irdop.org/v1/receipt/get/full', {
+				receiptId: receiptId,
+			});
+
 			if (response.status === 200) {
-				// Adjust timezone for dates before setting state
+				console.log('Receipt API Response:', response.data); // Debug log
+
+				// Process data with new camelCase structure and adjust timezone for dates
 				const receiptData = response.data;
-				if (receiptData.receipt_date) {
-					receiptData.receipt_date = adjustTimezoneDate(receiptData.receipt_date);
+
+				// Handle both camelCase and snake_case for backward compatibility
+				if (receiptData.receiptDate) {
+					receiptData.receiptDate = adjustTimezoneDate(receiptData.receiptDate);
 				}
 				if (receiptData.deadline) {
 					receiptData.deadline = adjustTimezoneDate(receiptData.deadline);
 				}
 
-				// Adjust timezone for all sample deadlines
+				// Transform client object fields to camelCase if they exist in snake_case
+				if (receiptData.client) {
+					const client = receiptData.client;
+					// API now returns proper camelCase, no transformation needed
+					// Keep for backward compatibility if needed
+				}
+
+				// Adjust timezone for all sample deadlines and map camelCase
 				if (receiptData.samples) {
 					receiptData.samples.forEach((sample) => {
-						if (sample.analysis) {
-							sample.analysis.forEach((analysis) => {
+						// Map sample properties to camelCase
+						sample.sampleId = sample.sampleId;
+						sample.sampleName = sample.sampleName || sample.sampleName;
+						sample.sampleDescription = sample.sampleDescription || sample.sample_description;
+						sample.sampleInformation = sample.sampleInformation || sample.sample_information;
+						sample.sampleVolume = sample.sampleVolume || sample.sample_volume;
+						sample.additionalRequest = sample.additionalRequest || sample.additionalRequest;
+						// Map new API fields
+						sample.matrix = sample.matrix; // Already in camelCase
+						sample.status = sample.status; // Already in camelCase
+						sample.purpose = sample.purpose; // Already in camelCase
+						sample.refNumber = sample.refNumber; // Already in camelCase
+						sample.modifiedAt = sample.modifiedAt; // Already in camelCase
+
+						// Handle both old 'analysis' and new 'analyses' structure
+						const analyses = sample.analyses || sample.analysis;
+						if (analyses) {
+							analyses.forEach((analysis) => {
+								// Map analysis properties to camelCase
+								analysis.sampleId = analysis.sampleId;
+								analysis.parameterId = analysis.parameterId;
+								analysis.parameterName = analysis.parameterName || analysis.parameterName;
+								analysis.parameterUid = analysis.parameterUid || analysis.parameterUid;
+								analysis.resultValue = analysis.resultValue || analysis.resultValue;
+								analysis.resultUnit = analysis.resultUnit || analysis.resultUnit;
+								analysis.protocolCode = analysis.protocolCode || analysis.protocolCode;
+								analysis.protocolSource = analysis.protocolSource || analysis.protocolSource;
+								analysis.technicianId = analysis.technicianId || analysis.technician_id;
+								analysis.technicianAlias = analysis.technicianAlias || analysis.technician_alias;
+								analysis.technicianIds = analysis.technicianIds || analysis.technician_ids;
+								analysis.displayStyle = analysis.displayStyle || analysis.display_style;
+								analysis.docId = analysis.docId || analysis.docId;
+								analysis.scientificField = analysis.scientificField || analysis.scientific_field;
+								analysis.protocolSource = analysis.protocolSource || analysis.protocolSource;
+								analysis.technicianUid = analysis.technicianUid || analysis.technicianUid;
+								analysis.createdByUid = analysis.createdByUid;
+								analysis.modifiedByUid = analysis.modifiedByUid || analysis.modified_by_uid;
+
 								if (analysis.deadline) {
 									analysis.deadline = adjustTimezoneDate(analysis.deadline);
 								}
 							});
+							// Ensure sample has analyses field for new API structure
+							sample.analyses = analyses;
 						}
 					});
 				}
 
 				setCurrentReceipt(receiptData);
-				setListAnalytes(receiptData.samples.flatMap((sample) => sample.analysis));
+				setListAnalytes(receiptData.samples?.flatMap((sample) => sample.analyses || sample.analysis || []) || []);
 
-				// Store original values for comparison
+				// Store original values for comparison with new camelCase structure
 				setOriginalValues({
-					record_code: receiptData.record_code || '',
-					request_number: receiptData.request_number || '',
-					receipt_uid: receiptData.receipt_uid || '',
-					receipt_date: receiptData.receipt_date || null,
+					_deprecated_recordCode: receiptData._deprecated_recordCode || '',
+					_deprecated_requestNumber: receiptData._deprecated_requestNumber || '',
+					_deprecated_trackingNumber: receiptData._deprecated_trackingNumber || '',
+					receiptId: receiptData.receiptId || '',
+					receiptDate: receiptData.receiptDate || null,
 					deadline: receiptData.deadline || null,
 					note: receiptData.note || '',
-					quote_code: receiptData.quote_code || '',
-					order_code: receiptData.order_code || '',
-					total_amount: receiptData.total_amount || '',
-					sale_recorder: receiptData.sale_recorder || '',
-					'client.client_name': receiptData.client?.client_name || '',
-					'client.client_uid': receiptData.client?.client_uid || '',
-					'client.client_address': receiptData.client?.client_address || '',
-					'client.legal_id': receiptData.client?.legal_id || '',
-					'contact.name': receiptData.contact?.name || '',
-					'contact.phone': receiptData.contact?.phone || '',
-					'contact.email': receiptData.contact?.email || '',
-					'receiver.address': receiptData.receiver?.address || '',
-					'receiver.name': receiptData.receiver?.name || '',
-					'receiver.email': receiptData.receiver?.email || '',
-					'receiver.other': receiptData.receiver?.other || '',
+					quoteId: receiptData.quoteId || '',
+					orderId: receiptData.orderId || '',
+					totalFeeBeforeTax: receiptData.totalFeeBeforeTax || '',
+					salePerson: receiptData.salePerson || '',
+					'client.clientName': receiptData.client?.clientName || '',
+					'client.clientUID': receiptData.client?.clientUID || '',
+					'client.clientPhone': receiptData.client?.clientPhone || '',
+					'client.invoiceEmail': receiptData.client?.invoiceEmail || '',
+					'client.clientAddress': receiptData.client?.clientAddress || '',
+					'client.legalId': receiptData.client?.legalId || '',
+					'contactPerson.name': receiptData.contactPerson?.name || '',
+					'contactPerson.phone': receiptData.contactPerson?.phone || '',
+					'contactPerson.email': receiptData.contactPerson?.email || '',
+					'reportRecipient.address': receiptData.reportRecipient?.address || '',
+					'reportRecipient.name': receiptData.reportRecipient?.name || '',
+					'reportRecipient.email': receiptData.reportRecipient?.email || '',
+					'reportRecipient.other': receiptData.reportRecipient?.other || '',
 				});
 
-				// Fetch user information for created_by_uid and modified_by_uid
-				if (receiptData.created_by_uid) {
-					fetchUserIdentity(receiptData.created_by_uid);
+				// Fetch user information for createdByUid and modifiedByUid
+				if (receiptData.createdById) {
+					fetchUserIdentity(receiptData.createdById);
 				}
-				if (receiptData.modified_by_uid) {
-					fetchUserIdentity(receiptData.modified_by_uid);
+				if (receiptData.modifiedByUid) {
+					fetchUserIdentity(receiptData.modifiedByUid);
 				}
 
-				// Fetch sample image if sample_img_uid exists
-				if (receiptData.sample_img_uid) {
-					fetchSampleImage(receiptData.sample_img_uid);
+				// Fetch sample image if _deprecated_sampleImageId exists
+				console.log('Receipt data _deprecated_sampleImageId:', receiptData._deprecated_sampleImageId);
+				if (receiptData._deprecated_sampleImageId) {
+					fetchSampleImage(receiptData._deprecated_sampleImageId);
+				} else {
+					// Reset image state if no _deprecated_sampleImageId
+					console.log('No _deprecated_sampleImageId found, resetting image state');
+					setSampleImageUrl('');
+					setImageError(false);
+					setIsLoadingImage(false);
 				}
 			} else if (response.status === 401) {
 				navigate('/login');
+			} else {
+				console.error('API returned non-200 status:', response.status);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: `Lỗi khi tải thông tin phiếu: ${response.status}`,
+				});
 			}
 		} catch (error) {
 			console.error('Error fetching receipt:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Đã xảy ra lỗi khi tải thông tin phiếu',
+			});
+		}
+
+		// Fetch scientific fields for bulk field update options
+		try {
+			const scientificFieldsResponse = await apiPost('https://red.irdop.org/v1/option/get/list', {
+				listType: 'scientificFields',
+			});
+			console.log('Scientific fields response:', scientificFieldsResponse);
+			if (scientificFieldsResponse.data && Array.isArray(scientificFieldsResponse.data)) {
+				setScientificFields(scientificFieldsResponse.data.filter(Boolean));
+			}
+		} catch (error) {
+			console.error('Error fetching scientific fields:', error);
 		}
 	};
 
@@ -512,11 +664,11 @@ const ReceiptInfor = ({ receipt }) => {
 	};
 
 	useEffect(() => {
-		if (receipt_uid && isfetch === false) {
+		if (receiptId && isfetch === false) {
 			isfetch = true;
 			fetchReceipt();
 		}
-	}, []);
+	}, [receiptId]);
 
 	// Function to get user name from identity
 	const getUserName = (uid) => {
@@ -561,24 +713,23 @@ const ReceiptInfor = ({ receipt }) => {
 				sample: {
 					id: sampleId,
 					[field]: newValue,
-					modified_by_uid: currentUser.identity_uid,
+					modifiedById: currentUser.identity_uid,
 				},
 			};
 
-			// For sample_name or sample_description, update sample_information
-			if (field === 'sample_name' || field === 'sample_description') {
-				// Parse sample_information (could be string or object)
-				let sampleInfo = [];
-				try {
-					if (sample.sample_information) {
-						sampleInfo =
-							typeof sample.sample_information === 'string'
-								? JSON.parse(sample.sample_information)
-								: sample.sample_information;
+			// For sampleName or sampleDescription, update sampleInformation
+			if (field === 'sampleName' || field === 'sampleDescription') {
+				// Get sampleInformation (new API returns array directly)
+				let sampleInfo = sample.sampleInformation || sample.sample_information || [];
+
+				// Handle backward compatibility - if it's a string, parse it
+				if (typeof sampleInfo === 'string') {
+					try {
+						sampleInfo = JSON.parse(sampleInfo);
+					} catch (error) {
+						console.error('Error parsing sample information:', error);
+						sampleInfo = [];
 					}
-				} catch (error) {
-					console.error('Error parsing sample information:', error);
-					sampleInfo = [];
 				}
 
 				// Make sure it's an array
@@ -587,7 +738,7 @@ const ReceiptInfor = ({ receipt }) => {
 				}
 
 				// Define search keywords based on the field being edited
-				const searchKeywords = field === 'sample_name' ? ['Tên mẫu', 'name'] : ['Mô tả', 'desc'];
+				const searchKeywords = field === 'sampleName' ? ['Tên mẫu', 'name'] : ['Mô tả', 'desc'];
 
 				// Look for matching entry
 				let found = false;
@@ -606,30 +757,30 @@ const ReceiptInfor = ({ receipt }) => {
 				// If no matching entry found, add a new one
 				if (!found) {
 					const newEntry = {
-						fname: field === 'sample_name' ? 'Tên mẫu thử / name.' : 'Mô tả / desc.',
+						fname: field === 'sampleName' ? 'Tên mẫu thử / name.' : 'Mô tả / desc.',
 						fvalue: newValue,
 					};
 					updatedSampleInfo.push(newEntry);
 				}
 
-				// Add the updated sample_information to the payload
-				payload.sample.sample_information = updatedSampleInfo;
+				// Add the updated sampleInformation to the payload
+				payload.sample.sampleInformation = updatedSampleInfo;
 			}
 
-			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', payload);
+			const response = await apiPost('https://red.irdop.org/v1/sample/edit', payload);
 
 			if (response.status === 200) {
 				showToast(`Cập nhật thông tin thành công!`);
 
-				// If we updated sample_information, update the local state too
-				if (field === 'sample_name' || field === 'sample_description') {
+				// If we updated sampleInformation, update the local state too
+				if (field === 'sampleName' || field === 'sampleDescription') {
 					setCurrentReceipt((prev) => ({
 						...prev,
 						samples: prev.samples.map((s) => {
 							if (s.id === sampleId) {
-								// Get the updated sample_information from the payload
-								const updatedSampleInfo = payload.sample.sample_information;
-								return { ...s, sample_information: updatedSampleInfo };
+								// Get the updated sampleInformation from the payload
+								const updatedSampleInfo = payload.sample.sampleInformation;
+								return { ...s, sampleInformation: updatedSampleInfo };
 							}
 							return s;
 						}),
@@ -689,17 +840,17 @@ const ReceiptInfor = ({ receipt }) => {
 		handleSampleApiUpdate(sampleId, field, newValue);
 	};
 	const handleResultValueClick = (order) => {
-		const fieldKey = `result_value-${order.sample_id}-${order.id}`;
+		const fieldKey = `resultValue-${order.sampleId}-${order.id}`;
 		setEditingField(fieldKey);
-		const originalValue = order.result_value ? String(order.result_value) : '';
+		const originalValue = order.resultValue ? String(order.resultValue) : '';
 		setInputValue(originalValue);
 		setIsEditorVisible(true);
 	};
 
 	const handleResultUnitClick = (order) => {
-		const fieldKey = `result_unit-${order.sample_id}-${order.id}`;
+		const fieldKey = `resultUnit-${order.sampleId}-${order.id}`;
 		setEditingField(fieldKey);
-		const originalValue = order.result_unit ? String(order.result_unit) : '';
+		const originalValue = order.resultUnit ? String(order.resultUnit) : '';
 		setInputValue(originalValue);
 		setIsEditorVisible(true);
 	};
@@ -723,11 +874,21 @@ const ReceiptInfor = ({ receipt }) => {
 	// Add this new function to handle API updates for analysis
 	const onUpdateAnalysis = async (analysis) => {
 		try {
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-				analysis: {
-					...analysis,
-					modified_by_uid: currentUser.identity_uid,
-				},
+			// Create minimal update object with proper structure
+			const updateData = {
+				id: analysis.id,
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
+				...analysis,
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analysis.displayStyle || [
+					{ label: 'default', value: '' },
+					{ label: 'eng', value: '' },
+				],
+			};
+
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analysis: updateData,
 			});
 
 			if (response.status === 200) {
@@ -747,7 +908,139 @@ const ReceiptInfor = ({ receipt }) => {
 				title: 'Lỗi',
 				text: error.message || 'Đã xảy ra lỗi khi cập nhật',
 			});
-			return analysis;
+			throw error;
+		}
+	};
+
+	// Add function to handle individual field updates for analysis
+	const handleAnalysisFieldUpdate = async (analysisId, field, newValue) => {
+		try {
+			// Store original state for rollback
+			const originalAnalytes = [...listAnalytes];
+
+			// Update local state immediately for better UX
+			const updatedAnalytes = listAnalytes.map((item) => {
+				if (item.id === analysisId) {
+					return { ...item, [field]: newValue };
+				}
+				return item;
+			});
+			setListAnalytes(updatedAnalytes);
+
+			// Find the analysis being updated
+			const analysis = updatedAnalytes.find((item) => item.id === analysisId);
+
+			// Create minimal update object with only required fields
+			const updateData = {
+				id: analysis.id,
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
+				[field]: newValue,
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analysis.displayStyle || [
+					{ label: 'default', value: '' },
+					{ label: 'eng', value: '' },
+				],
+			};
+
+			// Send the update to the server
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analysis: updateData,
+			});
+
+			if (response.status === 200) {
+				showToast(`Đã cập nhật ${field === 'scientificField' ? 'lĩnh vực' : field} thành công!`);
+			} else {
+				// Rollback the state on error
+				setListAnalytes(originalAnalytes);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || `Lỗi khi cập nhật ${field === 'scientificField' ? 'lĩnh vực' : field}`,
+				});
+			}
+		} catch (error) {
+			console.error('Error updating analysis field:', error);
+			// Rollback the state on error
+			const originalAnalytes = listAnalytes.filter((item) => item.id !== analysisId || item[field] !== newValue);
+			setListAnalytes(originalAnalytes);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || `Có lỗi xảy ra khi cập nhật ${field === 'scientificField' ? 'lĩnh vực' : field}`,
+			});
+		}
+	};
+
+	// Add function to handle technician assignment for individual analysis
+	const handleTechnicianAssignment = async (analysisId, technicianId, selectedTechnician) => {
+		try {
+			// Store original state for rollback
+			const originalAnalytes = [...listAnalytes];
+
+			// Update local state immediately for better UX
+			const updatedAnalytes = listAnalytes.map((item) => {
+				if (item.id === analysisId) {
+					return {
+						...item,
+						technicianId: technicianId,
+						technicianUid: technicianId,
+						technician: {
+							identityId: technicianId,
+							identityName: selectedTechnician.identityName,
+						},
+					};
+				}
+				return item;
+			});
+			setListAnalytes(updatedAnalytes);
+
+			// Find the updated analysis
+			const analysis = updatedAnalytes.find((item) => item.id === analysisId);
+
+			// Create minimal update object with only required fields
+			const updateData = {
+				id: analysis.id,
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
+				technicianId: technicianId,
+				technicianUid: technicianId,
+				technician: {
+					identityId: technicianId,
+					identityName: selectedTechnician.identityName,
+				},
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analysis.displayStyle || [
+					{ label: 'default', value: '' },
+					{ label: 'eng', value: '' },
+				],
+			};
+
+			// Send the update to the server
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analysis: updateData,
+			});
+
+			if (response.status === 200) {
+				showToast(`Đã gán ${selectedTechnician.identityName} thực hiện`);
+			} else {
+				// Rollback the state on error
+				setListAnalytes(originalAnalytes);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi cập nhật người thực hiện',
+				});
+			}
+		} catch (error) {
+			console.error('Error updating technician:', error);
+			// Rollback the state on error
+			setListAnalytes(originalAnalytes);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật người thực hiện',
+			});
 		}
 	};
 	// Add this new function to handle API updates for analysis with value comparison
@@ -759,13 +1052,13 @@ const ReceiptInfor = ({ receipt }) => {
 		const analysisId = parseInt(fieldParts[2]);
 
 		// Get original value for comparison
-		const analysis = listAnalytes.find((item) => item.id === analysisId && item.sample_id.toString() === sampleId);
+		const analysis = listAnalytes.find((item) => item.id === analysisId && item.sampleId.toString() === sampleId);
 		let originalValue;
 
-		if (fieldType === 'result_value') {
-			originalValue = analysis?.result_value || '';
-		} else if (fieldType === 'result_unit') {
-			originalValue = analysis?.result_unit || '';
+		if (fieldType === 'resultValue') {
+			originalValue = analysis?.resultValue || '';
+		} else if (fieldType === 'resultUnit') {
+			originalValue = analysis?.resultUnit || '';
 		}
 
 		// Check if value has changed
@@ -779,14 +1072,11 @@ const ReceiptInfor = ({ receipt }) => {
 
 		setInputValue(newValue);
 		const updatedAnalytes = listAnalytes.map((item) => {
-			if (
-				item.id === parseInt(editingField.split('-')[2]) &&
-				item.sample_id.toString() === editingField.split('-')[1]
-			) {
-				if (editingField.startsWith('result_value')) {
-					return { ...item, result_value: newValue };
-				} else if (editingField.startsWith('result_unit')) {
-					return { ...item, result_unit: newValue };
+			if (item.id === parseInt(editingField.split('-')[2]) && item.sampleId.toString() === editingField.split('-')[1]) {
+				if (editingField.startsWith('resultValue')) {
+					return { ...item, resultValue: newValue };
+				} else if (editingField.startsWith('resultUnit')) {
+					return { ...item, resultUnit: newValue };
 				}
 			}
 			return item;
@@ -799,7 +1089,7 @@ const ReceiptInfor = ({ receipt }) => {
 		try {
 			const analysis = updatedAnalytes.find(
 				(item) =>
-					item.id === parseInt(editingField.split('-')[2]) && item.sample_id.toString() === editingField.split('-')[1],
+					item.id === parseInt(editingField.split('-')[2]) && item.sampleId.toString() === editingField.split('-')[1],
 			);
 
 			if (analysis) {
@@ -853,13 +1143,13 @@ const ReceiptInfor = ({ receipt }) => {
 			iconColor: '#FFFFFF',
 		});
 	};
-	const getSampleUid = (sample_id) => {
-		const sample = currentReceipt.samples.find((sample) => sample.id === sample_id);
-		return sample ? sample.sample_uid : '';
+	const getSampleUid = (sampleId) => {
+		const sample = currentReceipt.samples.find((sample) => sample.id === sampleId);
+		return sample ? sample.sampleId : '';
 	};
 
-	const getTechnicianName = (technician_uid) => {
-		const technician = technicians.find((tech) => tech.identity_uid === technician_uid);
+	const getTechnicianName = (technicianId) => {
+		const technician = technicians.find((tech) => tech.identity_uid === technicianId);
 		return technician ? `${technician.identity_name} (${technician.alias})` : '';
 	};
 
@@ -870,7 +1160,7 @@ const ReceiptInfor = ({ receipt }) => {
 		setCheckConfirm(true);
 
 		// Check if any required field is empty (but only check if they have been modified/touched)
-		const requiredFields = ['sample_name', 'matrix', 'sample_description', 'sample_volume', 'purpose'];
+		const requiredFields = ['sampleName', 'matrix', 'sample_description', 'sample_volume', 'purpose'];
 		const hasAnyContent = requiredFields.some((field) => newSample[field].trim() !== '');
 
 		if (!hasAnyContent) {
@@ -886,31 +1176,36 @@ const ReceiptInfor = ({ receipt }) => {
 		for (let i = 0; i < copyCount; i++) {
 			const sampleNameSuffix = copyCount > 1 ? ` - Bản sao ${i + 1}` : '';
 			const newSampleData = {
-				receipt_id: currentReceipt.id,
-				...newSample,
-				sample_name: (newSample.sample_name || '') + sampleNameSuffix,
-				sample_information: JSON.stringify([
+				receiptId: currentReceipt.receiptId,
+				sampleName: (newSample.sampleName || newSample.sampleName || '') + sampleNameSuffix,
+				sampleDescription: newSample?.sampleDescription || newSample?.sample_description || '',
+				sampleVolume: newSample?.sampleVolume || newSample?.sample_volume || '',
+				matrix: newSample?.matrix || '',
+				status: newSample?.status || 0,
+				purpose: newSample?.purpose || '',
+				additionalRequest: newSample?.additionalRequest || newSample?.additionalRequest || '',
+				sampleInformation: [
 					{
 						fname: 'Tên mẫu thử / name.',
-						fvalue: (newSample?.sample_name || '') + sampleNameSuffix,
+						fvalue: (newSample?.sampleName || newSample?.sampleName || '') + sampleNameSuffix,
 					},
 					...sampleInformation,
 					{
 						fname: 'Ngày tiếp nhận / receipt date.',
-						fvalue: formatDate(currentReceipt.receipt_date) || '',
+						fvalue: formatDate(currentReceipt.receiptDate) || '',
 					},
 					{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
 					{
 						fname: 'Mô tả / desc.',
-						fvalue: newSample?.sample_description || '',
+						fvalue: newSample?.sampleDescription || newSample?.sample_description || '',
 					},
-				]),
-				created_by_uid: currentUser.identity_uid,
-				modified_by_uid: currentUser.identity_uid,
+				],
+				createdById: currentUser.identity_uid,
+				modifiedById: currentUser.identity_uid,
 			};
 
 			try {
-				const response = await apiPost('https://black.irdop.org/to82oe92i/db/insert/sample', { sample: newSampleData });
+				const response = await apiPost('https://red.irdop.org/v1/sample/create', { sample: newSampleData });
 				if (response.status === 200) {
 					const newSampleId = response.data.id; // Use 'id' field from the response
 
@@ -918,46 +1213,47 @@ const ReceiptInfor = ({ receipt }) => {
 					const copiedSampleUid = newSample.copiedFromSampleUid;
 					if (copiedSampleUid) {
 						// Find the sample that was copied from
-						const sampleToCopy = currentReceipt.samples.find((sample) => sample.sample_uid === copiedSampleUid);
+						const sampleToCopy = currentReceipt.samples.find((sample) => sample.sampleId === copiedSampleUid);
 
-						if (sampleToCopy && sampleToCopy.analysis && sampleToCopy.analysis.length > 0) {
+						const analysesToCopy = sampleToCopy?.analyses || sampleToCopy?.analysis || [];
+						if (sampleToCopy && analysesToCopy.length > 0) {
 							// Create analyses based on the copied sample
-							const analysesToCopy = sampleToCopy.analysis.map((analysis) => {
+							const analysesToCopyData = analysesToCopy.map((analysis) => {
 								// Create the analysis object
 								const analysisData = {
-									receipt_id: currentReceipt.id,
-									sample_id: newSampleId,
-									parameter_id: analysis.parameter_id || 0,
-									parameter_name: analysis.parameter_name,
-									parameter_uid: analysis.parameter_uid || '',
+									receiptId: currentReceipt.receiptId,
+									sampleId: newSampleId,
+									parameterId: analysis.parameterId || 0,
+									parameterName: analysis.parameterName,
+									parameterUid: analysis.parameterUid || '',
 									accreditation: analysis.accreditation,
-									protocol_id: analysis.protocol_id,
-									technician_uid: analysis.technician_uid,
+									protocolId: analysis.protocolId,
+									technicianId: analysis.technicianId,
 									deadline: analysis.deadline
 										? adjustDateForApiSubmission(new Date(analysis.deadline))
 										: adjustDateForApiSubmission(
 												new Date(Date.now() + (analysis?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0)),
 										  ),
-									protocol_code: analysis.protocol_code,
-									result_unit: analysis.result_unit || '',
-									protocol_source: analysis.protocol_source,
+									protocolCode: analysis.protocolCode,
+									resultUnit: analysis.resultUnit || '',
+									protocolSource: analysis.protocolSource,
 									matrix: newSample.matrix || analysis.matrix,
 									field: analysis.field,
-									created_by_uid: currentUser.identity_uid,
-									modified_by_uid: currentUser.identity_uid,
+									createdById: currentUser.identity_uid,
+									modifiedById: currentUser.identity_uid,
 								};
-								// Add result_value if it exists and is not null, empty string, or '<p><p>'
-								if (analysis.result_value && analysis.result_value !== '' && analysis.result_value !== '<p><p>') {
-									analysisData.result_value = analysis.result_value;
+								// Add resultValue if it exists and is not null, empty string, or '<p><p>'
+								if (analysis.resultValue && analysis.resultValue !== '' && analysis.resultValue !== '<p><p>') {
+									analysisData.resultValue = analysis.resultValue;
 								}
 								// Remove keys with empty string values
 								return Object.fromEntries(Object.entries(analysisData).filter(([key, value]) => value !== ''));
 							});
 
-							// Add analyses in bulk
+							// Add analyses in bulk using new API
 							try {
-								const analysisResponse = await apiPost('https://black.irdop.org/trelw82ki/db/insert/bulk/analysis', {
-									analyses: analysesToCopy,
+								const analysisResponse = await apiPost('https://red.irdop.org/v1/analysis/create', {
+									analyses: analysesToCopyData,
 								});
 
 								if (analysisResponse.status !== 200) {
@@ -990,7 +1286,7 @@ const ReceiptInfor = ({ receipt }) => {
 		const copiedSampleUid = newSample.copiedFromSampleUid;
 		const hasAnalyses =
 			copiedSampleUid &&
-			currentReceipt.samples.find((sample) => sample.sample_uid === copiedSampleUid)?.analysis?.length > 0;
+			currentReceipt.samples.find((sample) => sample.sampleId === copiedSampleUid)?.analysis?.length > 0;
 
 		if (copyCount > 1) {
 			showToast(
@@ -1003,12 +1299,12 @@ const ReceiptInfor = ({ receipt }) => {
 		}
 
 		setNewSample({
-			sample_name: '',
+			sampleName: '',
 			matrix: '',
 			sample_description: '',
 			sample_volume: '',
 			purpose: '',
-			additional_request: '',
+			additionalRequest: '',
 			copiedFromSampleUid: '', // Reset copied sample UID
 		});
 		setCopyCount(1); // Reset copy count
@@ -1073,9 +1369,9 @@ const ReceiptInfor = ({ receipt }) => {
 
 	const handleDeleteSample = async (sampleId) => {
 		try {
-			const response = await apiPost('https://black.irdop.org/to82oe92i/db/delete/sample', {
-				id: sampleId,
-				modified_by_uid: currentUser.identity_uid,
+			// Use the correct API body format with sampleId
+			const response = await apiPost('https://red.irdop.org/v1/sample/delete', {
+				sampleId: sampleId,
 			});
 			if (response.status === 200) {
 				showToast('Xóa mẫu thành công!');
@@ -1097,32 +1393,13 @@ const ReceiptInfor = ({ receipt }) => {
 	};
 
 	const handleDeleteReceipt = async () => {
-		try {
-			const response = await apiPost('https://black.irdop.org/khsi19me/db/delete/receipt', {
-				id: currentReceipt.id,
-				receipt_uid: currentReceipt.receipt_uid,
-				modified_by_uid: currentUser.identity_uid,
-			});
-			if (response.status === 200) {
-				showToast('Xóa tiếp nhận mẫu thành công!', {
-					autoClose: 1000,
-				});
-				// Redirect to dashboard after successful deletion
-				navigate('/dashboard');
-			} else {
-				Swal.fire({
-					icon: 'error',
-					title: 'Lỗi',
-					text: response.data?.message || 'Xóa tiếp nhận mẫu thất bại. Vui lòng thử lại',
-				});
-			}
-		} catch (error) {
-			Swal.fire({
-				icon: 'error',
-				title: 'Lỗi',
-				text: error.message || 'Có lỗi xảy ra. Vui lòng thử lại',
-			});
-		}
+		// Receipt deletion is blocked - show notification
+		Swal.fire({
+			icon: 'info',
+			title: 'Không thể xóa',
+			text: 'Thông báo xóa tới bộ phận ITC để xử lý!',
+			confirmButtonText: 'Đã hiểu',
+		});
 	};
 
 	// Add handler for checkbox selection
@@ -1160,9 +1437,12 @@ const ReceiptInfor = ({ receipt }) => {
 
 	const handleDeleteMultipleConfirmAction = async () => {
 		try {
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/delete/analysis', {
-				ids: selectedAnalytes,
-				modified_by_uid: currentUser.identity_uid,
+			// Get the array of selected analysis IDs
+			const analysisIds = selectedAnalytes;
+
+			// Use the correct API endpoint with analysisIds array
+			const response = await apiPost('https://red.irdop.org/v1/analysis/delete', {
+				analysisIds: analysisIds,
 			});
 
 			if (response.status === 200) {
@@ -1218,66 +1498,70 @@ const ReceiptInfor = ({ receipt }) => {
 			// Get the selected analytes
 			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
 
-			let successCount = 0;
-			let failCount = 0;
+			// Find technician information
+			const technicianInfo = technicians.find((tech) => tech.identity_uid === selectedTechnician);
 
-			// Make API calls for each analyte separately with minimal data
-			for (const analyte of selectedItems) {
-				try {
-					// Create minimal update object
-					const updateData = {
-						id: analyte.id,
-						sample_id: analyte.sample_id,
-						receipt_id: analyte.receipt_id,
-						technician_uid: selectedTechnician,
-						modified_by_uid: currentUser.identity_uid,
-					};
+			// Prepare bulk update data with proper structure
+			const analysesToUpdate = selectedItems.map((analyte) => ({
+				id: analyte.id,
+				sampleId: analyte.sampleId,
+				receiptId: analyte.receiptId || analyte.receipt_id,
+				technicianId: selectedTechnician,
+				technicianUid: selectedTechnician,
+				technician: {
+					identityId: selectedTechnician,
+					identityName: technicianInfo?.identityName || 'Unknown',
+				},
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analyte.displayStyle || [
+					{ label: 'default', value: '' },
+					{ label: 'eng', value: '' },
+				],
+			}));
 
-					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-						analysis: updateData,
-					});
-					successCount++;
-				} catch (error) {
-					console.error(`Error updating analysis ID ${analyte.id}:`, error);
-					failCount++;
-				}
-			}
-
-			// Update the UI
-			const newAnalytesList = listAnalytes.map((analyte) => {
-				if (selectedAnalytes.includes(analyte.id)) {
-					return { ...analyte, technician_uid: selectedTechnician };
-				}
-				return analyte;
+			// Send bulk update request
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analyses: analysesToUpdate,
 			});
-			setListAnalytes(newAnalytesList);
 
-			if (failCount > 0) {
-				Swal.fire({
-					icon: 'warning',
-					title: 'Kết quả',
-					text: `${successCount} chỉ tiêu cập nhật thành công, ${failCount} thất bại`,
+			if (response.status === 200) {
+				// Update the UI
+				const newAnalytesList = listAnalytes.map((analyte) => {
+					if (selectedAnalytes.includes(analyte.id)) {
+						return {
+							...analyte,
+							technicianUid: selectedTechnician,
+							technicianId: selectedTechnician,
+							technician: {
+								identityId: selectedTechnician,
+								identityName: technicianInfo?.identityName || 'Unknown',
+							},
+						};
+					}
+					return analyte;
 				});
-			} else {
-				showToast(
-					`Đã bàn giao thành công ${selectedAnalytes.length} chỉ tiêu cho ${
-						technicians.find((tech) => tech.identity_uid === selectedTechnician)?.identity_name
-					}`,
-				);
-			}
 
-			setIsTransferMultipleVisible(false);
-			setSelectedTechnician(null);
-			setSelectedAnalytes([]);
-			setSelectAllAnalytes(false);
+				setListAnalytes(newAnalytesList);
+				setSelectedAnalytes([]);
+				setBulkAction(false);
+
+				showToast(`Đã cập nhật kỹ thuật viên cho ${analysesToUpdate.length} phân tích thành công!`);
+			} else {
+				throw new Error(`Lỗi ${response.status}: ${response.statusText || 'Không thể cập nhật phân tích'}`);
+			}
 		} catch (error) {
-			console.error('Error transferring analyses:', error);
+			console.error('Lỗi khi cập nhật phân tích:', error);
 			Swal.fire({
 				icon: 'error',
 				title: 'Lỗi',
-				text: error.message || 'Có lỗi xảy ra khi bàn giao chỉ tiêu',
+				text: error.message || 'Đã xảy ra lỗi khi cập nhật kỹ thuật viên',
 			});
 		}
+
+		setIsTransferMultipleVisible(false);
+		setSelectedTechnician(null);
+		setSelectedAnalytes([]);
+		setSelectAllAnalytes(false);
 	};
 
 	// Add function to handle bulk deadline updates
@@ -1301,64 +1585,53 @@ const ReceiptInfor = ({ receipt }) => {
 			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
 			const newDeadline = adjustDateForApiSubmission(bulkDeadlineDate);
 
-			let successCount = 0;
-			let failCount = 0;
+			// Prepare bulk update data with proper structure
+			const analysesToUpdate = selectedItems.map((analyte) => ({
+				id: analyte.id,
+				sampleId: analyte.sampleId,
+				receiptId: analyte.receiptId || analyte.receipt_id,
+				deadline: newDeadline,
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analyte.displayStyle || [
+					{ label: 'default', value: '' },
+					{ label: 'eng', value: '' },
+				],
+			}));
 
-			// Make API calls for each analyte separately with minimal data
-			for (const analyte of selectedItems) {
-				try {
-					// Create minimal update object
-					const updateData = {
-						id: analyte.id,
-						sample_id: analyte.sample_id,
-						receipt_id: analyte.receipt_id,
-						deadline: newDeadline,
-						modified_by_uid: currentUser.identity_uid,
-					};
-
-					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-						analysis: updateData,
-					});
-					successCount++;
-				} catch (error) {
-					console.error(`Error updating analysis ID ${analyte.id}:`, error);
-					failCount++;
-				}
-			}
-
-			// Update the UI
-			const newAnalytesList = listAnalytes.map((analyte) => {
-				if (selectedAnalytes.includes(analyte.id)) {
-					return { ...analyte, deadline: newDeadline };
-				}
-				return analyte;
+			// Send bulk update request
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analyses: analysesToUpdate,
 			});
-			setListAnalytes(newAnalytesList);
 
-			if (failCount > 0) {
-				Swal.fire({
-					icon: 'warning',
-					title: 'Kết quả',
-					text: `${successCount} chỉ tiêu cập nhật thành công, ${failCount} thất bại`,
+			if (response.status === 200) {
+				// Update the UI
+				const newAnalytesList = listAnalytes.map((analyte) => {
+					if (selectedAnalytes.includes(analyte.id)) {
+						return { ...analyte, deadline: newDeadline };
+					}
+					return analyte;
 				});
-			} else {
-				showToast(`Đã cập nhật hạn trả cho ${selectedAnalytes.length} chỉ tiêu thành ${formatDate(bulkDeadlineDate)}`);
-			}
 
-			setIsBulkDeadlineVisible(false);
-			setSelectedAnalytes([]);
-			setSelectAllAnalytes(false);
+				setListAnalytes(newAnalytesList);
+				setSelectedAnalytes([]);
+				setSelectAllAnalytes(false);
+				setIsBulkDeadlineVisible(false);
+
+				showToast(`Đã cập nhật hạn trả cho ${analysesToUpdate.length} chỉ tiêu thành ${formatDate(bulkDeadlineDate)}`);
+			} else {
+				throw new Error(`Lỗi ${response.status}: ${response.statusText || 'Không thể cập nhật hạn trả'}`);
+			}
 		} catch (error) {
-			console.error('Error updating deadlines:', error);
+			console.error('Lỗi khi cập nhật hạn trả:', error);
 			Swal.fire({
 				icon: 'error',
 				title: 'Lỗi',
-				text: error.message || 'Có lỗi xảy ra khi cập nhật hạn trả',
+				text: error.message || 'Đã xảy ra lỗi khi cập nhật hạn trả',
 			});
 		}
 	};
 
-	// Add function to handle bulk field updates
+	// Add function to handle bulk field updates (improved version based on SampleInfor.jsx)
 	const handleBulkFieldUpdate = async () => {
 		if (selectedAnalytes.length === 0) {
 			Swal.fire({
@@ -1369,14 +1642,17 @@ const ReceiptInfor = ({ receipt }) => {
 			return;
 		}
 
+		// Create inputOptions dynamically from scientificFields
+		const inputOptions = scientificFields.reduce((acc, field) => {
+			acc[field] = field;
+			return acc;
+		}, {});
+
 		// Prompt for the field value
 		const { value: field } = await Swal.fire({
 			title: 'Chọn lĩnh vực',
 			input: 'select',
-			inputOptions: {
-				'Hóa lý': 'Hóa lý',
-				'Vi sinh': 'Vi sinh',
-			},
+			inputOptions: inputOptions,
 			inputPlaceholder: 'Chọn lĩnh vực',
 			showCancelButton: true,
 			cancelButtonText: 'Hủy bỏ',
@@ -1393,48 +1669,41 @@ const ReceiptInfor = ({ receipt }) => {
 				// Get the selected analytes
 				const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
 
-				let successCount = 0;
-				let failCount = 0;
+				// Prepare bulk update array with proper structure
+				const updateDataArray = selectedItems.map((analyte) => ({
+					id: analyte.id,
+					sampleId: analyte.sampleId,
+					receiptId: analyte.receiptId || analyte.receipt_id,
+					scientificField: field,
+					modifiedByUid: currentUser.identityUid,
+					displayStyle: analyte.displayStyle || [
+						{ label: 'default', value: '' },
+						{ label: 'eng', value: '' },
+					],
+				}));
 
-				// Make API calls for each analyte separately with minimal data
-				for (const analyte of selectedItems) {
-					try {
-						// Create minimal update object
-						const updateData = {
-							id: analyte.id,
-							sample_id: analyte.sample_id,
-							receipt_id: analyte.receipt_id,
-							field: field,
-							modified_by_uid: currentUser.identity_uid,
-						};
-
-						await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-							analysis: updateData,
-						});
-						successCount++;
-					} catch (error) {
-						console.error(`Error updating analysis ID ${analyte.id}:`, error);
-						failCount++;
-					}
-				}
-
-				// Update the UI
-				const newAnalytesList = listAnalytes.map((analyte) => {
-					if (selectedAnalytes.includes(analyte.id)) {
-						return { ...analyte, field: field };
-					}
-					return analyte;
+				// Make a single API call with the analyses array
+				const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+					analyses: updateDataArray,
 				});
-				setListAnalytes(newAnalytesList);
 
-				if (failCount > 0) {
-					Swal.fire({
-						icon: 'warning',
-						title: 'Kết quả',
-						text: `${successCount} chỉ tiêu cập nhật thành công, ${failCount} thất bại`,
+				if (response.status === 200) {
+					// Update the UI
+					const newAnalytesList = listAnalytes.map((analyte) => {
+						if (selectedAnalytes.includes(analyte.id)) {
+							return { ...analyte, scientificField: field };
+						}
+						return analyte;
 					});
-				} else {
+					setListAnalytes(newAnalytesList);
+
 					showToast(`Đã cập nhật lĩnh vực "${field}" cho ${selectedAnalytes.length} chỉ tiêu`);
+				} else {
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: response.data?.message || 'Có lỗi xảy ra khi cập nhật lĩnh vực',
+					});
 				}
 
 				setSelectedAnalytes([]);
@@ -1496,6 +1765,236 @@ const ReceiptInfor = ({ receipt }) => {
 	// 		}
 	// 	});
 	// };
+
+	// Add handleSyncData function (based on SampleInfor.jsx)
+	const handleSyncData = async () => {
+		try {
+			if (selectedAnalytes.length === 0) {
+				Swal.fire({
+					icon: 'warning',
+					title: 'Cảnh báo',
+					text: 'Vui lòng chọn ít nhất một chỉ tiêu để đồng bộ',
+				});
+				return;
+			}
+
+			// Get the selected analytes
+			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
+
+			// Check if any item is missing matrix
+			const missingMatrixItems = selectedItems.filter((item) => !item.matrix || item.matrix.trim() === '');
+			if (missingMatrixItems.length > 0) {
+				const result = await Swal.fire({
+					icon: 'warning',
+					title: 'Cảnh báo',
+					text: `Có ${missingMatrixItems.length} chỉ tiêu thiếu thông tin nền mẫu. Vui lòng bổ sung thông tin nền mẫu trước khi đối soát.`,
+					showCancelButton: true,
+					confirmButtonText: 'Tiếp tục đối soát',
+					cancelButtonText: 'Hủy bỏ',
+				});
+
+				if (!result.isConfirmed) {
+					return;
+				}
+			}
+
+			// Call match API to get updated parameter information
+			const matchData = selectedItems.map((item) => ({
+				parameterName: item.parameterName || item.parameter_name,
+				matrix: item.matrix || '',
+			}));
+
+			const matchResponse = await apiPost('https://red.irdop.org/v1/analysis/match/parameter', {
+				analyses: matchData,
+			});
+
+			if (matchResponse.status === 200) {
+				// Create array of update objects for bulk update using matched data
+				const updateDataArray = selectedItems.map((analyte) => {
+					// Find the corresponding matched data
+					const matchedData = matchResponse.data.find((item) => {
+						const apiParamName = (item.parameterName || '').toLowerCase().trim();
+						const analyteParamName = (analyte.parameterName || analyte.parameter_name || '').toLowerCase().trim();
+						const apiMatrix = (item.matrix || '').toLowerCase().trim();
+						const analyteMatrix = (analyte.matrix || '').toLowerCase().trim();
+						return apiParamName === analyteParamName && (apiMatrix === analyteMatrix || (!apiMatrix && !analyteMatrix));
+					});
+
+					// Create update object with matched data or original data
+					return {
+						id: analyte.id,
+						sampleId: analyte.sampleId,
+						receiptId: analyte.receiptId || analyte.receipt_id,
+						parameterName: matchedData?.parameterName || analyte.parameterName,
+						parameterId: matchedData?.parameterId || analyte.parameterId,
+						parameterUid: matchedData?.parameterUid || analyte.parameterUid || analyte.parameter_uid || '',
+						protocolCode: matchedData?.protocolCode || analyte.protocolCode,
+						protocolSource: matchedData?.protocolSource || analyte.protocolSource,
+						matrix: matchedData?.matrix || analyte.matrix,
+						scientificField: matchedData?.scientificField || analyte.scientificField,
+						technicianAlias: matchedData?.technicianAlias || analyte.technicianAlias,
+						modifiedByUid: currentUser.identityUid,
+						displayStyle: analyte.displayStyle || [
+							{
+								label: 'default',
+								value: '',
+							},
+							{
+								label: 'eng',
+								value: '',
+							},
+						],
+					};
+				});
+
+				// Make bulk update API call
+				const updateResponse = await apiPost('https://red.irdop.org/v1/analysis/update', {
+					analyses: updateDataArray,
+				});
+
+				if (updateResponse.status === 200) {
+					// Update the UI
+					const newAnalytesList = listAnalytes.map((analyte) => {
+						if (selectedAnalytes.includes(analyte.id)) {
+							const updateData = updateDataArray.find((item) => item.id === analyte.id);
+							return {
+								...analyte,
+								...updateData,
+							};
+						}
+						return analyte;
+					});
+					setListAnalytes(newAnalytesList);
+
+					showToast(`Đã đồng bộ dữ liệu cho ${selectedAnalytes.length} chỉ tiêu`);
+				} else {
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: updateResponse.data?.message || 'Có lỗi xảy ra khi cập nhật dữ liệu',
+					});
+				}
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: matchResponse.data?.message || 'Có lỗi xảy ra khi đối soát thông số',
+				});
+			}
+		} catch (error) {
+			console.error('Error syncing data:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Đã xảy ra lỗi khi đồng bộ dữ liệu',
+			});
+		}
+	};
+
+	// Add handleUpdateDatabase function (based on SampleInfor.jsx)
+	const handleUpdateDatabase = async () => {
+		try {
+			// Use selected analyses if any are selected, otherwise find analyses that need database updates
+			let analysesToUpdate;
+
+			if (selectedAnalytes.length > 0) {
+				// Use selected analyses for update
+				analysesToUpdate = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
+			} else {
+				// Find analyses that need database updates (missing parameterUid but have other required fields)
+				analysesToUpdate = listAnalytes.filter(
+					(analysis) =>
+						((!analysis.parameterUid && !analysis.parameter_uid) ||
+							analysis.parameterUid === '' ||
+							analysis.parameter_uid === '') &&
+						analysis.matrix &&
+						((analysis.protocolSource !== 'EX' && analysis.protocolCode) ||
+							(analysis.protocol_source !== 'EX' && analysis.protocol_code) ||
+							analysis.protocolSource === 'EX' ||
+							analysis.protocol_source === 'EX') &&
+						(analysis.protocolSource || analysis.protocol_source) &&
+						analysis.scientificField,
+				);
+			}
+
+			if (analysesToUpdate.length === 0) {
+				showToast('Không có chỉ tiêu nào cần cập nhật CSDL', 'info');
+				return;
+			}
+
+			// Show confirmation dialog
+			const confirmResult = await Swal.fire({
+				title: 'Cập nhật CSDL',
+				text: `Có ${analysesToUpdate.length} chỉ tiêu cần cập nhật vào CSDL. Bạn có muốn tiếp tục?`,
+				icon: 'question',
+				showCancelButton: true,
+				confirmButtonText: 'Có',
+				cancelButtonText: 'Không',
+			});
+
+			if (!confirmResult.isConfirmed) return;
+
+			// Create array of update objects for bulk update
+			const updateDataArray = analysesToUpdate.map((analyte) => ({
+				id: analyte.id,
+				sampleId: analyte.sampleId,
+				receiptId: analyte.receiptId || analyte.receipt_id,
+				parameterName: analyte.parameter_name || analyte.parameterName,
+				parameterUid: analyte.parameter_uid || analyte.parameterUid || '',
+				parameterId: analyte.parameterId,
+				protocolCode: analyte.protocol_code || analyte.protocolCode,
+				protocolSource: analyte.protocol_source || analyte.protocolSource,
+				matrix: analyte.matrix || '',
+				scientificField: analyte.scientificField || analyte.field,
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analyte.displayStyle || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
+			}));
+
+			// Make a single API call with the analyses array
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analyses: updateDataArray,
+			});
+
+			if (response.status === 200) {
+				// Update the UI
+				const newAnalytesList = listAnalytes.map((analyte) => {
+					const updateData = updateDataArray.find((item) => item.id === analyte.id);
+					if (updateData) {
+						return {
+							...analyte,
+							...updateData,
+						};
+					}
+					return analyte;
+				});
+				setListAnalytes(newAnalytesList);
+
+				showToast(`Đã cập nhật CSDL cho ${analysesToUpdate.length} chỉ tiêu`);
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi cập nhật CSDL',
+				});
+			}
+		} catch (error) {
+			console.error('Error updating database:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Đã xảy ra lỗi khi cập nhật CSDL',
+			});
+		}
+	};
 
 	const renderBulkTransferForm = () => (
 		<div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
@@ -1639,26 +2138,30 @@ const ReceiptInfor = ({ receipt }) => {
 		if (!sampleUid || sampleUid === 'copy') return;
 
 		// Find the sample with the matching UID
-		const sampleToCopy = currentReceipt.samples.find((sample) => sample.sample_uid === sampleUid);
+		const sampleToCopy = currentReceipt.samples.find((sample) => sample.sampleId === sampleUid);
 
 		if (sampleToCopy) {
 			// Copy sample data to the form and store the source sample UID
 			setNewSample({
-				sample_name: sampleToCopy.sample_name || '',
+				sampleName: sampleToCopy.sampleName || sampleToCopy.sample_name || '',
 				matrix: sampleToCopy.matrix || '',
-				sample_description: sampleToCopy.sample_description || '',
-				sample_volume: sampleToCopy.sample_volume || '',
+				sampleDescription: sampleToCopy.sampleDescription || sampleToCopy.sample_description || '',
+				sampleVolume: sampleToCopy.sampleVolume || sampleToCopy.sample_volume || '',
+				status: sampleToCopy.status || 0,
 				purpose: sampleToCopy.purpose || '',
-				additional_request: sampleToCopy.additional_request || '',
+				additionalRequest: sampleToCopy.additionalRequest || sampleToCopy.additional_request || '',
 				copiedFromSampleUid: sampleUid, // Store the source sample UID
 			});
-			// Try to parse sample_information if it exists
+			// Handle sample information from new API structure
 			try {
-				if (sampleToCopy.sample_information) {
-					const parsedInfo =
-						typeof sampleToCopy.sample_information === 'string'
-							? JSON.parse(sampleToCopy.sample_information)
-							: sampleToCopy.sample_information;
+				const sampleInfo = sampleToCopy.sampleInformation || sampleToCopy.sample_information;
+				if (sampleInfo) {
+					// New API returns array directly, old API might be string
+					const parsedInfo = Array.isArray(sampleInfo)
+						? sampleInfo
+						: typeof sampleInfo === 'string'
+						? JSON.parse(sampleInfo)
+						: sampleInfo;
 
 					const filteredInfo = parsedInfo.filter(
 						(item) =>
@@ -1687,11 +2190,13 @@ const ReceiptInfor = ({ receipt }) => {
 							<label className="block text-sm font-medium mb-1 text-start">Tên mẫu</label>
 							<input
 								type="text"
-								name="sample_name"
-								value={newSample.sample_name}
+								name="sampleName"
+								value={newSample.sampleName || newSample.sample_name || ''}
 								onChange={handleNewSampleChange}
 								className={`w-full border rounded p-1 bg-white ${
-									checkConfirm && newSample.sample_name.trim() === '' ? 'border-red-500' : ''
+									checkConfirm && (newSample.sampleName || newSample.sample_name || '').trim() === ''
+										? 'border-red-500'
+										: ''
 								}`}
 							/>
 						</div>
@@ -1710,11 +2215,13 @@ const ReceiptInfor = ({ receipt }) => {
 						<div className="mb-4">
 							<label className="block text-sm font-medium mb-1 text-start">Mô tả</label>
 							<textarea
-								name="sample_description"
-								value={newSample.sample_description}
+								name="sampleDescription"
+								value={newSample.sampleDescription || newSample.sample_description || ''}
 								onChange={handleNewSampleChange}
 								className={`w-full border rounded p-1 bg-white resize-none ${
-									checkConfirm && newSample.sample_description.trim() === '' ? 'border-red-500' : ''
+									checkConfirm && (newSample.sampleDescription || newSample.sample_description || '').trim() === ''
+										? 'border-red-500'
+										: ''
 								}`}
 								rows={2}
 							/>
@@ -1725,11 +2232,13 @@ const ReceiptInfor = ({ receipt }) => {
 							<label className="block text-sm font-medium mb-1 text-start">Số lượng</label>
 							<input
 								type="text"
-								name="sample_volume"
-								value={newSample.sample_volume}
+								name="sampleVolume"
+								value={newSample.sampleVolume || newSample.sample_volume || ''}
 								onChange={handleNewSampleChange}
 								className={`w-full border rounded p-1 bg-white ${
-									checkConfirm && newSample.sample_volume.trim() === '' ? 'border-red-500' : ''
+									checkConfirm && (newSample.sampleVolume || newSample.sample_volume || '').trim() === ''
+										? 'border-red-500'
+										: ''
 								}`}
 							/>
 						</div>
@@ -1802,8 +2311,8 @@ const ReceiptInfor = ({ receipt }) => {
 						>
 							<option value="copy">Sao chép</option>
 							{currentReceipt?.samples.map((sample) => (
-								<option key={sample.sample_uid} value={sample.sample_uid}>
-									{sample.sample_uid}
+								<option key={sample.sampleId} value={sample.sampleId}>
+									{sample.sampleId}
 								</option>
 							))}
 						</select>
@@ -1848,9 +2357,9 @@ const ReceiptInfor = ({ receipt }) => {
 
 	const handleDeleteSampleConfirmAction = async () => {
 		try {
-			const response = await apiPost('https://black.irdop.org/to82oe92i/db/delete/sample', {
-				id: deleteItemId,
-				modified_by_uid: currentUser.identity_uid,
+			const response = await apiPost('https://red.irdop.org/v1/sample/delete', {
+				sampleId: deleteItemId,
+				modifiedByUid: currentUser.identityUid,
 			});
 			if (response.status === 200) {
 				showToast('Xóa mẫu thành công!');
@@ -1875,9 +2384,9 @@ const ReceiptInfor = ({ receipt }) => {
 	};
 	const handleDeleteAnalysisConfirmAction = async () => {
 		try {
-			// Replace axios.post with apiPost to match the rest of the codebase
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/delete/analysis', {
-				id: deleteItemId,
+			// Use the correct API body format with analysisId
+			const response = await apiPost('https://red.irdop.org/v1/analysis/delete', {
+				analysisId: deleteItemId,
 			});
 			if (response.status === 200) {
 				showToast('Xóa chỉ tiêu thành công!');
@@ -2117,7 +2626,7 @@ const ReceiptInfor = ({ receipt }) => {
 
 			// Specify Excel MIME type explicitly
 			const excelMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; // Using apiGetBlob function with correct headers and responseType
-			const response = await apiGetBlob(`https://black.irdop.org/xlsx/download/${receipt_uid}`);
+			const response = await apiGetBlob(`https://red.irdop.org/v1/excel/handover?receiptId=${receiptId}`);
 
 			if (response.status === 200) {
 				// Get the blob directly from the response
@@ -2131,12 +2640,12 @@ const ReceiptInfor = ({ receipt }) => {
 
 				// For IE/Edge browsers
 				if (window.navigator && window.navigator.msSaveOrOpenBlob) {
-					window.navigator.msSaveOrOpenBlob(excelBlob, `Receipt_${receipt_uid}.xlsx`);
+					window.navigator.msSaveOrOpenBlob(excelBlob, `Receipt_${receiptId}.xlsx`);
 				} else {
 					// For modern browsers
 					const link = document.createElement('a');
 					link.href = url;
-					link.setAttribute('download', `Receipt_${receipt_uid}.xlsx`);
+					link.setAttribute('download', `Receipt_${receiptId}.xlsx`);
 					link.style.display = 'none';
 
 					// Append to body, click and remove
@@ -2186,12 +2695,12 @@ const ReceiptInfor = ({ receipt }) => {
 	const handlePayStatusChange = async () => {
 		try {
 			const newPayStatus = currentReceipt.pay_status === 1 ? 0 : 1;
-			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', {
+			const response = await apiPost('https://red.irdop.org/v1/receipt/edit', {
 				receipt: {
 					id: currentReceipt.id,
-					receipt_uid: currentReceipt.receipt_uid,
-					pay_status: newPayStatus,
-					modified_by_uid: currentUser.identity_uid,
+					receiptId: currentReceipt.receiptId,
+					paymentStatus: newPayStatus,
+					modifiedByUid: currentUser.identityUid,
 				},
 			});
 
@@ -2251,21 +2760,20 @@ const ReceiptInfor = ({ receipt }) => {
 		try {
 			// Apply timezone adjustment for date fields before sending to API
 			let adjustedValue = value;
-			if (field === 'deadline' || field === 'receipt_date') {
+			if (field === 'deadline' || field === 'receiptDate') {
 				adjustedValue = adjustDateForApiSubmission(value);
 			}
 
 			const payload = {
 				receipt: {
 					id: currentReceipt.id,
-					receipt_uid: currentReceipt.receipt_uid,
+					receiptId: currentReceipt.receiptId,
 					[field]: adjustedValue,
-					modified_by_uid: currentUser.identity_uid,
+					modifiedByUid: currentUser.identityUid,
 				},
 			};
 
-			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
-
+			const response = await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 			if (response.status === 200) {
 				showToast(`Cập nhật thành công!`);
 				return true;
@@ -2298,7 +2806,114 @@ const ReceiptInfor = ({ receipt }) => {
 		}));
 		handleReceiptApiUpdate('status', newStatus);
 		setEditingGeneralField(null);
-	}; // Function to update receipt status from EmailForm
+	};
+
+	// Tooltip functions
+	const showTooltip = (event, content, customPosition = null) => {
+		const rect = event.target.getBoundingClientRect();
+		const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+		const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+		let x, y, position;
+
+		if (customPosition === 'left') {
+			// Position tooltip completely to the left of the element
+			x = rect.left + scrollLeft - 10; // 10px padding from element
+			y = rect.top + scrollTop + rect.height / 2;
+			position = 'left';
+		} else if (customPosition === 'right') {
+			// Position tooltip completely to the right of the element
+			x = rect.right + scrollLeft + 10; // 10px padding from element
+			y = rect.top + scrollTop + rect.height / 2;
+			position = 'right';
+		} else {
+			// Default behavior: above or below (center aligned)
+			const spaceAbove = rect.top;
+			const tooltipHeight = 40; // Approximate tooltip height
+			const shouldShowBelow = spaceAbove < tooltipHeight + 20; // 20px buffer
+
+			x = rect.left + scrollLeft + rect.width / 2;
+			y = shouldShowBelow
+				? rect.bottom + scrollTop + 10 // Show below
+				: rect.top + scrollTop - 10; // Show above
+			position = shouldShowBelow ? 'below' : 'above';
+		}
+
+		setTooltip({
+			visible: true,
+			content,
+			x,
+			y,
+			position,
+		});
+	};
+
+	const hideTooltip = () => {
+		setTooltip({
+			visible: false,
+			content: '',
+			x: 0,
+			y: 0,
+			position: 'above',
+		});
+	};
+
+	// Handle note icon click
+	const handleNoteClick = (analysis, e) => {
+		e.stopPropagation();
+		setSelectedAnalysisForNote(analysis);
+		setNewNoteText('');
+		setShowNoteModal(true);
+	};
+
+	// Handle note update
+	const handleUpdateNote = async () => {
+		if (!selectedAnalysisForNote || !newNoteText.trim()) {
+			showToast('Vui lòng nhập nội dung ghi chú', 'warning');
+			return;
+		}
+
+		setIsUpdatingNote(true);
+		try {
+			const currentNote = selectedAnalysisForNote.note || '';
+			const userName = currentUser?.identity_name || 'Unknown User';
+			const timestamp = new Date().toLocaleString('vi-VN');
+			const newNote = currentNote
+				? `${currentNote}\n[${timestamp}] ${userName}: ${newNoteText.trim()}`
+				: `[${timestamp}] ${userName}: ${newNoteText.trim()}`;
+
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analysis: {
+					id: selectedAnalysisForNote.id,
+					note: newNote,
+				},
+			});
+
+			if (response?.status < 300) {
+				showToast('Cập nhật ghi chú thành công!');
+
+				// Update local data
+				const updatedAnalytes = listAnalytes.map((item) =>
+					item.id === selectedAnalysisForNote.id ? { ...item, note: newNote } : item,
+				);
+				setListAnalytes(updatedAnalytes);
+
+				// Close modal
+				setShowNoteModal(false);
+				setSelectedAnalysisForNote(null);
+				setNewNoteText('');
+			} else {
+				showToast('Lỗi khi cập nhật ghi chú', 'error');
+			}
+		} catch (error) {
+			console.error('Error updating note:', error);
+			showToast('Lỗi khi cập nhật ghi chú: ' + error.message, 'error');
+		} finally {
+			setIsUpdatingNote(false);
+		}
+	};
+
+	// Function to update receipt status from EmailForm
 	const updateReceiptStatus = (newStatus) => {
 		setCurrentReceipt((prev) => ({
 			...prev,
@@ -2308,7 +2923,7 @@ const ReceiptInfor = ({ receipt }) => {
 
 	// Function to fetch email form data from API
 	const fetchEmailFormData = async () => {
-		if (!currentReceipt?.receipt_uid) return;
+		if (!currentReceipt?.receiptId) return;
 
 		// Check if receipt status is already "Đã tiếp nhận"
 		if (currentReceipt?.status === 'Đã tiếp nhận') {
@@ -2334,9 +2949,9 @@ const ReceiptInfor = ({ receipt }) => {
 		try {
 			showToast('Đang tải dữ liệu email...', 'info');
 
-			const response = await apiPost('https://black.irdop.org/v1/get/email/receipt_form', {
-				receipt_uid: currentReceipt.receipt_uid,
-			});
+			const response = await apiGet(
+				`https://red.irdop.org/v1/get/email/receipt_form?receiptId=${currentReceipt.receiptId}`,
+			);
 
 			if (response.status === 200) {
 				const { from, to, subject, body, attachments } = response.data;
@@ -2345,7 +2960,7 @@ const ReceiptInfor = ({ receipt }) => {
 					to: to || 'trungkien912@gmail.com',
 					subject: subject || '',
 					body: body || '',
-					attachments: [currentReceipt?.sample_img_uid] || [],
+					attachments: [currentReceipt?._deprecated_sampleImageId] || [],
 				});
 				setIsEmailFormVisible(true);
 			} else {
@@ -2376,13 +2991,13 @@ const ReceiptInfor = ({ receipt }) => {
 					const updatePayload = {
 						receipt: {
 							id: currentReceipt.id,
-							receipt_uid: currentReceipt.receipt_uid,
+							receiptId: currentReceipt.receiptId,
 							status: 'Đã tiếp nhận',
-							modified_by_uid: currentUser.identity_uid,
+							modifiedById: currentUser.identity_uid,
 						},
 					};
 
-					const updateResponse = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', updatePayload);
+					const updateResponse = await apiPost('https://red.irdop.org/v1/receipt/edit', updatePayload);
 					if (updateResponse.status === 200) {
 						console.log('Receipt status updated successfully to "Đã tiếp nhận"');
 						updateReceiptStatus('Đã tiếp nhận');
@@ -2421,19 +3036,19 @@ const ReceiptInfor = ({ receipt }) => {
 				[field]: value,
 			};
 
-			delete updatedClient.created_by_uid;
+			delete updatedClient.createdById;
 
 			// Update through receipt endpoint with client as a nested property
 			const payload = {
 				receipt: {
 					id: currentReceipt.id,
-					receipt_uid: currentReceipt.receipt_uid,
+					receiptId: currentReceipt.receiptId,
 					client: updatedClient,
-					modified_by_uid: currentUser.identity_uid,
+					modifiedById: currentUser.identity_uid,
 				},
 			};
 
-			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+			const response = await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 			if (response.status === 200) {
 				showToast(`Cập nhật thông tin khách hàng thành công!`);
@@ -2467,20 +3082,20 @@ const ReceiptInfor = ({ receipt }) => {
 				[field]: value,
 			};
 
-			delete updatedContact.created_by_uid;
+			delete updatedContact.createdById;
 			delete updatedContact.search;
 
 			// Update through receipt endpoint with contact as a nested property
 			const payload = {
 				receipt: {
 					id: currentReceipt.id,
-					receipt_uid: currentReceipt.receipt_uid,
-					contact: updatedContact,
-					modified_by_uid: currentUser.identity_uid,
+					receiptId: currentReceipt.receiptId,
+					contactPerson: updatedContact,
+					modifiedById: currentUser.identity_uid,
 				},
 			};
 
-			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+			const response = await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 			if (response.status === 200) {
 				showToast(`Cập nhật thông tin liên hệ thành công!`);
@@ -2515,19 +3130,19 @@ const ReceiptInfor = ({ receipt }) => {
 				[field]: value,
 			};
 
-			delete updatedReceiver.created_by_uid;
+			delete updatedReceiver.createdById;
 
 			// Update through receipt endpoint with receiver as a nested property
 			const payload = {
 				receipt: {
 					id: currentReceipt.id,
-					receipt_uid: currentReceipt.receipt_uid,
-					receiver: updatedReceiver,
-					modified_by_uid: currentUser.identity_uid,
+					receiptId: currentReceipt.receiptId,
+					reportRecipient: updatedReceiver,
+					modifiedById: currentUser.identity_uid,
 				},
 			};
 
-			const response = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+			const response = await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 			if (response.status === 200) {
 				showToast(`Cập nhật thông tin người nhận thành công!`);
@@ -2740,512 +3355,18 @@ const ReceiptInfor = ({ receipt }) => {
 		);
 	};
 
-	// Function to find the draft report from sample.report array
-	const getDraftReport = (reports) => {
-		if (!reports || !Array.isArray(reports)) return null;
-		return reports.find((report) => report.ppt_uid && report.ppt_uid.includes('DRAFT'));
-	};
-
-	// Function to get published reports (non-draft)
-	const getPublishedReports = (reports) => {
-		if (!reports || !Array.isArray(reports)) return [];
-		return reports
-			.filter((report) => report.ppt_uid && !report.ppt_uid.includes('DRAFT'))
-			.sort((a, b) => new Date(b.publish_date) - new Date(a.publish_date));
-	};
-
-	// Function to handle report selection change - preserve checkbox state
-	const handleReportSelection = (sampleId, reportId) => {
-		setSelectedReports((prev) => {
-			const isCurrentlyChecked = prev[sampleId]?.isChecked || false;
-			return {
-				...prev,
-				[sampleId]: {
-					ppt_uid: reportId,
-					isChecked: isCurrentlyChecked,
-				},
-			};
-		});
-	};
-
-	// Function to handle checkbox toggle - refactored to preserve ppt_uid selection
-	const handleCheckboxToggle = (sampleId, explicitState) => {
-		setSelectedReports((prev) => {
-			const prevValue = prev[sampleId];
-			const newIsChecked = explicitState !== undefined ? explicitState : !prevValue?.isChecked;
-
-			// Get the current selected report ID
-			let currentPptUid = null;
-
-			// If prevValue is a string (ppt_uid), use it
-			if (typeof prevValue === 'string') {
-				currentPptUid = prevValue;
-			}
-			// If it's an object with ppt_uid, use that
-			else if (prevValue?.ppt_uid) {
-				currentPptUid = prevValue.ppt_uid;
-			}
-			// Otherwise check if there's a default selection possible
-			else {
-				const sample = currentReceipt?.samples.find((s) => s.id === sampleId);
-				if (sample?.report?.length > 0) {
-					const newestReport = getNewestReport(sample.report);
-					if (newestReport) {
-						currentPptUid = newestReport.ppt_uid;
-					}
-				}
-			}
-
-			return {
-				...prev,
-				[sampleId]: {
-					ppt_uid: currentPptUid,
-					isChecked: newIsChecked,
-				},
-			};
-		});
-	};
-
-	// Function to handle "select all" checkbox toggle
-	const handleSelectAllToggle = () => {
-		const newSelectAllState = !selectAllChecked;
-		setSelectAllChecked(newSelectAllState);
-
-		// Update all checkboxes to match the select all state
-		currentReceipt?.samples.forEach((sample) => {
-			handleCheckboxToggle(sample.id, newSelectAllState);
-		});
-	};
-
-	// Function to handle generating draft reports for selected samples
-	const handleGenerateDraftReports = async () => {
-		// Get all checked samples
-		const selectedItems = [];
-
-		// Find all samples with checked reports
-		currentReceipt?.samples.forEach((sample) => {
-			const value = selectedReports[sample.id];
-			if (value?.isChecked) {
-				// Get the sample_uid
-				const sampleUid = sample.sample_uid;
-				// Get ppt_uid if available, otherwise empty string
-				let pptUid = '';
-
-				if (typeof value === 'string') {
-					pptUid = value;
-				} else if (value.ppt_uid) {
-					pptUid = value.ppt_uid;
-				}
-
-				// Add to selected items
-				selectedItems.push({
-					sample_uid: sampleUid,
-					ppt_uid: pptUid,
-				});
-			}
-		});
-
-		// Check if we have any selected samples
-		if (selectedItems.length === 0) {
-			Swal.fire({
-				icon: 'warning',
-				title: 'Không có mẫu nào được chọn',
-				text: 'Vui lòng chọn ít nhất một mẫu để tạo báo cáo sơ bộ.',
-			});
-			return;
-		}
-
-		setIsGeneratingDraft(true);
-		setGenerationProgress(0);
-
-		try {
-			// Show loading toast
-			showToast(`Đang tạo báo cáo sơ bộ cho ${selectedItems.length} mẫu...`, 'info');
-
-			// Prepare the request body
-			const requestBody = {
-				list_uids: selectedItems,
-				is_save: true,
-				is_publish: false,
-			};
-
-			// Call the API
-			const response = await axios.post('https://black.irdop.org/khsi19me/convert/report_html', requestBody, {
-				headers: {
-					'Content-Type': 'application/json',
-					Accept: '*/*',
-				},
-			});
-
-			// Process response - assuming it's HTML content
-			const htmlContent = response.data;
-
-			// Open the HTML content in a new tab
-			const newTab = window.open();
-			newTab.document.write(htmlContent);
-			// newTab.document.close();
-
-			// Fetch updated data to refresh the report list
-			await fetchReceipt();
-
-			showToast(`Đã tạo báo cáo sơ bộ cho ${selectedItems.length} mẫu thành công!`, 'success');
-		} catch (error) {
-			console.error('Error generating draft reports:', error);
-			Swal.fire({
-				icon: 'error',
-				title: 'Lỗi',
-				text: `Không thể tạo báo cáo sơ bộ: ${error.message || 'Lỗi không xác định'}`,
-			});
-		} finally {
-			setIsGeneratingDraft(false);
-			setGenerationProgress(0);
-		}
-	};
-
-	// Function to handle publishing reports for selected samples
-	const handlePublishReports = async () => {
-		// Get all checked samples
-		const selectedItems = [];
-
-		// Find all samples with checked reports
-		currentReceipt?.samples.forEach((sample) => {
-			const value = selectedReports[sample.id];
-			if (value?.isChecked) {
-				// Get the sample_uid
-				const sampleUid = sample.sample_uid;
-				// Get ppt_uid if available, otherwise empty string
-				let pptUid = '';
-
-				if (typeof value === 'string') {
-					pptUid = value;
-				} else if (value.ppt_uid) {
-					pptUid = value.ppt_uid;
-				}
-
-				// Add to selected items
-				selectedItems.push({
-					sample_uid: sampleUid,
-					ppt_uid: pptUid,
-				});
-			}
-		});
-
-		// Check if we have any selected samples
-		if (selectedItems.length === 0) {
-			Swal.fire({
-				icon: 'warning',
-				title: 'Không có mẫu nào được chọn',
-				text: 'Vui lòng chọn ít nhất một mẫu để phát hành báo cáo.',
-			});
-			return;
-		}
-
-		setIsGeneratingPublish(true);
-
-		try {
-			// Show loading toast
-			showToast(`Đang phát hành báo cáo cho ${selectedItems.length} mẫu...`, 'info');
-
-			// Prepare the request body
-			const requestBody = {
-				list_uids: selectedItems,
-				is_save: false,
-				is_publish: true,
-			};
-
-			// Call the API
-			const response = await axios.post('https://black.irdop.org/khsi19me/convert/report_html', requestBody, {
-				headers: {
-					'Content-Type': 'application/json',
-					Accept: '*/*',
-				},
-			});
-
-			// Process response - assuming it's HTML content
-			const htmlContent = response.data;
-
-			// Open the HTML content in a new tab
-			const newTab = window.open();
-			newTab.document.write(htmlContent);
-			newTab.document.close();
-
-			// Fetch updated data to refresh the report list
-			await fetchReceipt();
-
-			showToast(`Đã phát hành báo cáo cho ${selectedItems.length} mẫu thành công!`, 'success');
-		} catch (error) {
-			console.error('Error publishing reports:', error);
-			Swal.fire({
-				icon: 'error',
-				title: 'Lỗi',
-				text: `Không thể phát hành báo cáo: ${error.message || 'Lỗi không xác định'}`,
-			});
-		} finally {
-			setIsGeneratingPublish(false);
-		}
-	};
-
-	// Function to handle previewing reports for selected samples
-	const handlePreviewReports = async () => {
-		// Get all checked samples
-		const selectedItems = [];
-
-		// Find all samples with checked reports
-		currentReceipt?.samples.forEach((sample) => {
-			const value = selectedReports[sample.id];
-			if (value?.isChecked) {
-				// Get the sample_uid
-				const sampleUid = sample.sample_uid;
-				// Get ppt_uid if available, otherwise empty string
-				let pptUid = '';
-
-				if (typeof value === 'string') {
-					pptUid = value;
-				} else if (value.ppt_uid) {
-					pptUid = value.ppt_uid;
-				}
-
-				// Add to selected items
-				selectedItems.push({
-					sample_uid: sampleUid,
-					ppt_uid: pptUid,
-				});
-			}
-		});
-
-		// Check if we have any selected samples
-		if (selectedItems.length === 0) {
-			Swal.fire({
-				icon: 'warning',
-				title: 'Không có mẫu nào được chọn',
-				text: 'Vui lòng chọn ít nhất một mẫu để xem trước báo cáo.',
-			});
-			return;
-		}
-
-		setIsGeneratingPreview(true);
-
-		try {
-			// Show loading toast
-			showToast(`Đang xem trước báo cáo cho ${selectedItems.length} mẫu...`, 'info');
-
-			// Prepare the request body
-			const requestBody = {
-				list_uids: selectedItems,
-				is_save: false,
-				is_publish: false,
-			};
-
-			// Use apiPost instead of axios directly or form submission
-			const response = await axios.post('https://black.irdop.org/khsi19me/convert/report_html', requestBody, {
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				responseType: 'text', // Ensure we get the HTML as text
-			});
-
-			// Get the HTML content from the response
-			const htmlContent = response.data;
-
-			// Create a new blob with the HTML content
-			const blob = new Blob([htmlContent], { type: 'text/html' });
-			const url = URL.createObjectURL(blob);
-
-			// Open in a new window
-			const newWindow = window.open();
-			if (newWindow) {
-				// If window opened successfully
-				newWindow.document.write(htmlContent);
-				newWindow.document.close();
-			} else {
-				// If popup was blocked, provide a direct link
-				Swal.fire({
-					icon: 'info',
-					title: 'Popup bị chặn',
-					text: 'Trình duyệt đã chặn popup. Nhấn vào liên kết dưới đây để mở báo cáo.',
-					footer: `<a href="${url}" target="_blank" class="text-blue-500 underline">Nhấn vào đây để xem báo cáo</a>`,
-				});
-			}
-
-			// Fetch updated data to refresh the report list
-			await fetchReceipt();
-
-			showToast(`Đã mở xem trước báo cáo cho ${selectedItems.length} mẫu!`, 'success');
-		} catch (error) {
-			console.error('Error previewing reports:', error);
-			Swal.fire({
-				icon: 'error',
-				title: 'Lỗi',
-				text: `Không thể xem trước báo cáo: ${error.message || 'Lỗi không xác định'}`,
-			});
-		} finally {
-			setIsGeneratingPreview(false);
-		}
-	};
-
-	// Function to get all reports (including drafts and published)
-	const getAllReports = (reports) => {
-		if (!reports || !Array.isArray(reports)) return [];
-		// Sort by publish date, newest first
-		return [...reports].sort((a, b) => new Date(b.publish_date) - new Date(a.publish_date));
-	};
-
-	// Function to get the newest report (draft or published)
-	const getNewestReport = (reports) => {
-		const allReports = getAllReports(reports);
-		return allReports.length > 0 ? allReports[0] : null;
-	}; // Helper function to check if all analyses in a sample have been reviewed
+	// Helper function to check if all analyses in a sample have been reviewed
 	const allAnalysesReviewed = (sample) => {
-		if (!sample.analysis || sample.analysis.length === 0) return false;
-		const allReviewed = sample.analysis.every((analysis) => analysis.reviewed_by);
+		const analyses = sample.analyses || sample.analysis || [];
+		if (!analyses || analyses.length === 0) return false;
+		const allReviewed = analyses.every((analysis) => analysis.reviewed_by);
 		return allReviewed ? true : false;
 	};
 
-	// Modify renderPPTTable to include the review indicator
+	// PPT Table function removed - report functionality no longer available
 	const renderPPTTable = () => {
 		return (
-			<div className="overflow-x-auto overflow-hidden">
-				<table className="min-w-full text-black">
-					<thead>
-						<tr>
-							<th className="py-2 border-2 text-start pl-2 w-36 min-w-36">Mã mẫu thử</th>
-							<th className="py-2 border-2 text-start pl-2 w-[18%] min-w-44">Chỉ tiêu</th>
-							<th className="py-2 border-2 text-start pl-2 w-[12%] min-w-32">Lần cuối cập nhật</th>
-							<th className="py-2 border-2 text-start pl-2 w-[24%] min-w-52">Mã phiếu phân tích</th>
-							<th className="py-2 border-2 text-start pl-2 w-32 min-w-32">Ngày phát hành</th>
-							<th className="py-2 border-2 text-center w-14 min-w-14 cursor-pointer" onClick={handleSelectAllToggle}>
-								<input
-									type="checkbox"
-									className="w-4 h-4 pointer-events-none"
-									checked={selectAllChecked}
-									onChange={handleSelectAllToggle}
-								/>
-							</th>
-						</tr>
-					</thead>
-					<tbody className="border-2">
-						{currentReceipt?.samples.map((sample) => {
-							const reports = sample.report || [];
-							const draftReport = getDraftReport(reports);
-							const allReports = getAllReports(reports);
-							const newestReport = getNewestReport(reports);
-
-							// Calculate analysis statistics - similar to sample view
-							const totalTests = sample.analysis.length;
-							const completedTests = sample.analysis.filter((order) => order.result_value !== '').length;
-							const pendingTests = totalTests - completedTests;
-
-							// Use ppt_uid from the object structure if available, otherwise fall back to string or newest report
-							const selectedReportObj = selectedReports[sample.id];
-							let selectedReportId = '';
-
-							if (typeof selectedReportObj === 'string') {
-								selectedReportId = selectedReportObj;
-							} else if (selectedReportObj?.ppt_uid) {
-								selectedReportId = selectedReportObj.ppt_uid;
-							} else if (newestReport) {
-								selectedReportId = newestReport.ppt_uid;
-							}
-
-							// Find the selected report object
-							const selectedReport = reports.find((r) => r.ppt_uid === selectedReportId);
-
-							return (
-								<tr key={sample.id}>
-									<td className="p-2 border text-start text-text-secondary relative">
-										<NavLink
-											to={`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`}
-											className="text-primary font-semibold hover:text-[#103667]"
-										>
-											{sample.sample_uid}
-										</NavLink>
-										{allAnalysesReviewed(sample) === true && (
-											<span className="absolute top-1 right-2 text-yellow-500 font-bold">*</span>
-										)}
-										<span
-											className="absolute top-1 right-1 text-blue-500 cursor-pointer"
-											onClick={(e) => {
-												e.stopPropagation();
-												window.open(
-													`/dashboard/receipt/print_sp?receipt_uid=${currentReceipt?.receipt_uid}&sample_uid=${sample.sample_uid}`,
-													'_blank',
-												);
-											}}
-										>
-											<FaTag size={14} />
-										</span>
-									</td>
-									<td className="p-2 border text-start">
-										{/* Show completed/pending/total analysis counts */}
-										{completedTests} / {pendingTests} / {totalTests}
-									</td>
-									<td className="p-2 border text-start">{draftReport ? formatDate(draftReport.publish_date) : '--'}</td>
-									<td className="p-2 border text-start">
-										<div className="flex items-center space-x-2">
-											{allReports.length > 0 ? (
-												<>
-													<select
-														className="p-1 border rounded-md flex-grow text-sm bg-white"
-														value={selectedReportId}
-														onChange={(e) => handleReportSelection(sample.id, e.target.value)}
-													>
-														<option value="">-- Chọn phiếu phân tích --</option>
-														{allReports.map((report, index) => (
-															<option key={index} value={report.ppt_uid}>
-																{report.ppt_uid}
-															</option>
-														))}
-													</select>
-													{/* Add forward button to navigate to report */}
-													{selectedReportId && (
-														<button
-															className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-															onClick={() =>
-																window.open(
-																	`${window.location.origin}/report?sample_uid=${sample.sample_uid}&ppt_uid=${selectedReportId}`,
-																	'_blank',
-																)
-															}
-														>
-															<svg
-																xmlns="http://www.w3.org/2000/svg"
-																fill="none"
-																viewBox="0 0 24 24"
-																strokeWidth={1.5}
-																stroke="currentColor"
-																className="w-5 h-5"
-															>
-																<path
-																	strokeLinecap="round"
-																	strokeLinejoin="round"
-																	d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-																/>
-															</svg>
-														</button>
-													)}
-												</>
-											) : (
-												'--'
-											)}
-										</div>
-									</td>
-									<td className="p-2 border text-start">
-										{selectedReport && selectedReport.publish_date ? formatDate(selectedReport.publish_date) : '--'}
-									</td>
-									<td className="p-2 border text-center cursor-pointer" onClick={() => handleCheckboxToggle(sample.id)}>
-										<input
-											type="checkbox"
-											className="w-4 h-4 pointer-events-none"
-											checked={!!selectedReports[sample.id]?.isChecked}
-											onChange={() => handleCheckboxToggle(sample.id)}
-										/>
-									</td>
-								</tr>
-							);
-						})}
-					</tbody>
-				</table>
-			</div>
+			<div className="p-4 text-center text-gray-500">Report functionality has been removed from this component.</div>
 		);
 	};
 
@@ -3398,8 +3519,8 @@ const ReceiptInfor = ({ receipt }) => {
 				paths={[
 					{ name: 'Danh sách', link: '/' },
 					{
-						name: `${currentReceipt?.receipt_uid}`,
-						link: `/dashboard/receipt?receipt_uid=${currentReceipt?.receipt_uid}`,
+						name: `${currentReceipt?.receiptId}`,
+						link: `/dashboard/receipt?receiptId=${currentReceipt?.receiptId}`,
 					},
 				]}
 				showSearch={true}
@@ -3423,7 +3544,7 @@ const ReceiptInfor = ({ receipt }) => {
 								<button
 									className="bg-background border-gray-300 text-primary font-medium py-1 px-2 rounded-lg text-sm whitespace-nowrap max-w-[80px]"
 									onClick={() =>
-										window.open(`/dashboard/receipt/print_sp?receipt_uid=${currentReceipt?.receipt_uid}`, '_blank')
+										window.open(`/dashboard/receipt/print_sp?receiptId=${currentReceipt?.receiptId}`, '_blank')
 									}
 								>
 									<div className="flex items-center justify-center gap-1">
@@ -3473,6 +3594,7 @@ const ReceiptInfor = ({ receipt }) => {
 								<button
 									className="bg-background border-gray-300 text-red-500 font-medium py-1 px-2 rounded-lg text-sm whitespace-nowrap max-w-[80px]"
 									onClick={handleDeleteReceipt}
+									title="Thông báo xóa tới bộ phận ITC để xử lý!"
 								>
 									<div className="flex items-center justify-center gap-1">
 										Xóa <FaTrashAlt size={14} />
@@ -3496,7 +3618,7 @@ const ReceiptInfor = ({ receipt }) => {
 							<div className="w-full">
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số hồ sơ lưu</label>
-									{renderField('record_code', currentReceipt?.record_code)}
+									{renderField('_deprecated_recordCode', currentReceipt?._deprecated_recordCode)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Trạng thái</label>
@@ -3524,12 +3646,12 @@ const ReceiptInfor = ({ receipt }) => {
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ngày tiếp nhận</label>
-									{editingGeneralField === 'receipt_date' ? (
+									{editingGeneralField === 'receiptDate' ? (
 										<DatePicker
-											selected={currentReceipt?.receipt_date}
+											selected={currentReceipt?.receiptDate}
 											onChange={handleReceiptDateChange}
 											onBlur={() => {
-												handleReceiptApiUpdate('receipt_date', currentReceipt?.receipt_date);
+												handleReceiptApiUpdate('receiptDate', currentReceipt?.receiptDate);
 												setEditingGeneralField(null);
 											}}
 											onKeyDown={handleReceiptDateKeyDown}
@@ -3543,10 +3665,10 @@ const ReceiptInfor = ({ receipt }) => {
 									) : (
 										<div
 											className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg"
-											onClick={() => setEditingGeneralField('receipt_date')}
+											onClick={() => setEditingGeneralField('receiptDate')}
 										>
-											{currentReceipt?.receipt_date ? formatDate(currentReceipt.receipt_date) : '--'} bởi{' '}
-											<span className="font-semibold"> {getUserName(currentReceipt?.created_by_uid)}</span>
+											{currentReceipt?.receiptDate ? formatDate(currentReceipt.receiptDate) : '--'} bởi{' '}
+											<span className="font-semibold"> {currentReceipt?.createdBy?.identityName}</span>
 										</div>
 									)}
 								</div>
@@ -3584,7 +3706,7 @@ const ReceiptInfor = ({ receipt }) => {
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã vận đơn</label>
 									<div className="w-2/3 px-2 py-0 text-sm text-left border border-white rounded-lg">
-										{currentReceipt?.tracking_number || '--'}
+										{currentReceipt?._deprecated_trackingNumber || '--'}
 									</div>
 								</div>
 								<div className="flex justify-start items-start mb-1">
@@ -3597,9 +3719,9 @@ const ReceiptInfor = ({ receipt }) => {
 									<div>
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Hình ảnh mẫu</label>
 										{/* Sample Image Upload Button */}
-										{currentReceipt?.receipt_uid && (
+										{currentReceipt?.receiptId && (
 											<SampleImageUpload
-												receiptUid={currentReceipt.receipt_uid}
+												receiptUid={currentReceipt.receiptId}
 												receiptID={currentReceipt.id}
 												onUploadSuccess={(fileUid) => {
 													// Handle successful upload, e.g., by fetching the receipt again
@@ -3610,7 +3732,7 @@ const ReceiptInfor = ({ receipt }) => {
 									</div>
 									<div className="w-2/3">
 										{/* Sample Image Display */}
-										{currentReceipt?.sample_img_uid && (
+										{currentReceipt?._deprecated_sampleImageId && (
 											<div className="mb-2 w-fit h-fit">
 												{isLoadingImage ? (
 													<div className="flex items-center justify-center p-4 border border-gray-300 rounded-lg">
@@ -3691,31 +3813,31 @@ const ReceiptInfor = ({ receipt }) => {
 								<div className="rounded-lg mb-2">
 									<div className="flex justify-start items-start mb-1">
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã khách hàng</label>
-										{renderField('client.client_uid', currentReceipt?.client?.client_uid)}
+										{renderField('client.clientUID', currentReceipt?.client?.clientUID)}
 									</div>
 									<div className="flex justify-start items-start mb-1">
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
 											Tổ chức/cá nhân
 										</label>
-										{renderField('client.client_name', currentReceipt?.client?.client_name)}
+										{renderField('client.clientName', currentReceipt?.client?.clientName)}
 									</div>
 									<div className="flex justify-start items-start mb-1">
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Địa chỉ</label>
-										{renderField('client.client_address', currentReceipt?.client?.client_address)}
+										{renderField('client.clientAddress', currentReceipt?.client?.clientAddress)}
 									</div>
 									<div className="flex justify-start items-start mb-1">
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
 											Mã số thuế/CCCD
 										</label>
-										{renderField('client.legal_id', currentReceipt?.client?.legal_id)}
+										{renderField('client.legalId', currentReceipt?.client?.legalId)}
 									</div>
 									<div className="flex justify-start items-start mb-1">
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Điện thoại</label>
-										{renderField('client.client_phone', currentReceipt?.client?.client_phone)}
+										{renderField('client.clientPhone', currentReceipt?.client?.clientPhone)}
 									</div>
 									<div className="flex justify-start items-start mb-1">
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email hóa đơn</label>
-										{renderField('client.invoice_email', currentReceipt?.client?.invoice_email)}
+										{renderField('client.invoiceEmail', currentReceipt?.client?.invoiceEmail)}
 									</div>
 									<div className="flex justify-start items-start mb-1">
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Hóa đơn (khác)</label>
@@ -3745,16 +3867,16 @@ const ReceiptInfor = ({ receipt }) => {
 
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Số báo giá</label>
-									{renderField('quote_code', currentReceipt?.quote_code)}
+									{renderField('quoteId', currentReceipt?.quoteId)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã đơn hàng</label>
-									{renderField('order_code', currentReceipt?.order_code)}
+									{renderField('_deprecated_recordCode', currentReceipt?._deprecated_recordCode)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Giá trị</label>
 									<div className="flex items-center">
-										{renderField('total_amount', currentReceipt?.total_amount, false, 'number', true)}
+										{renderField('totalFeeBeforeTax', currentReceipt?.totalFeeBeforeTax, false, 'number', true)}
 										<div className="flex items-center ml-2 cursor-pointer" onClick={handlePayStatusToggle}>
 											<div
 												className={`min-w-2 h-2 rounded-full mr-1 ${
@@ -3773,7 +3895,7 @@ const ReceiptInfor = ({ receipt }) => {
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Người thực hiện</label>
-									{renderField('sale_recorder', currentReceipt?.sale_recorder)}
+									{renderField('salePerson', currentReceipt?.salePerson)}
 								</div>
 							</div>
 						</div>
@@ -3787,62 +3909,64 @@ const ReceiptInfor = ({ receipt }) => {
 							<div className="w-full">
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Người liên hệ</label>
-									{renderField('contact.name', currentReceipt?.contact?.name)}
+									{renderField('contact.name', currentReceipt?.contactPerson?.name)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Điện thoại</label>
-									{renderField('contact.phone', currentReceipt?.contact?.phone)}
+									{renderField('contact.phone', currentReceipt?.contactPerson?.phone)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email</label>
-									{renderField('contact.email', currentReceipt?.contact?.email)}
+									{renderField('contact.email', currentReceipt?.contactPerson?.email)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">CCCD</label>
-									{renderField('contact.id', currentReceipt?.contact?.id)}
+									{renderField('contact.id', currentReceipt?.contactPerson?.id)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Ngày cấp</label>
-									{renderField('contact.id_date', currentReceipt?.contact?.id_date)}
+									{renderField('contact.id_date', currentReceipt?.contactPerson?.id_date)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Nơi cấp</label>
-									{renderField('contact.id_place', currentReceipt?.contact?.id_place)}
+									{renderField('contact.id_place', currentReceipt?.contactPerson?.id_place)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Địa chỉ nhận KQ</label>
-									{renderField('receiver.address', currentReceipt?.receiver?.address)}
+									{renderField('receiver.address', currentReceipt?.reportRecipient?.address)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">
 										Người nhận (khác)
 									</label>
-									{renderField('receiver.name', currentReceipt?.receiver?.name)}
+									{renderField('receiver.name', currentReceipt?.reportRecipient?.name)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Email KQ</label>
-									{renderField('receiver.email', currentReceipt?.receiver?.email)}
+									{renderField('reportRecipient.email', currentReceipt?.reportRecipient?.email)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Khác</label>
-									{editingGeneralField === 'receiver.other' ? (
+									{editingGeneralField === 'reportRecipient.other' ? (
 										<textarea
-											name="receiver.other"
+											name="reportRecipient.other"
 											className="w-2/3 bg-white border border-blue-500 px-2 py-0 rounded-lg text-sm focus:outline-none resize-none align-top"
 											rows="2"
-											value={currentReceipt?.receiver?.other || ''}
+											value={currentReceipt?.reportRecipient?.other || ''}
 											onChange={handleInputChange}
-											onBlur={() => handleFieldBlur('receiver.other', currentReceipt?.receiver?.other)}
-											onKeyDown={(e) => handleFieldKeyDown(e, 'receiver.other', currentReceipt?.receiver?.other)}
+											onBlur={() => handleFieldBlur('reportRecipient.other', currentReceipt?.reportRecipient?.other)}
+											onKeyDown={(e) =>
+												handleFieldKeyDown(e, 'reportRecipient.other', currentReceipt?.reportRecipient?.other)
+											}
 											autoFocus
 										/>
 									) : (
 										<div
 											className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top break-words overflow-hidden"
-											onClick={() => handleFieldClick('receiver.other')}
-											title={displayValue(currentReceipt?.receiver?.other)}
+											onClick={() => handleFieldClick('reportRecipient.other')}
+											title={displayValue(currentReceipt?.reportRecipient?.other)}
 										>
-											<span className="block">{displayValue(currentReceipt?.receiver?.other)}</span>
+											<span className="block">{displayValue(currentReceipt?.reportRecipient?.other)}</span>
 										</div>
 									)}
 								</div>
@@ -3870,14 +3994,6 @@ const ReceiptInfor = ({ receipt }) => {
 					>
 						Chỉ tiêu
 					</button>
-					<button
-						className={`ml-2 px-2 py-1 rounded-lg focus:outline-none h-fit min-w-40 ${
-							viewMode === 'ppt' ? 'bg-blue-200' : 'bg-gray-200'
-						}`}
-						onClick={() => setViewMode('ppt')}
-					>
-						Phiếu kết quả
-					</button>
 				</div>
 			</div>
 			{/* Rest of the component remains unchanged */}
@@ -3885,123 +4001,20 @@ const ReceiptInfor = ({ receipt }) => {
 				<div className="flex justify-end items-start sm:h-10 sm:flex-row flex-col h-[76px] ">
 					{viewMode === 'analyte' ? (
 						<FilterBar
-							source={currentReceipt.samples.flatMap((sample) => sample.analysis)}
+							source={currentReceipt.samples.flatMap((sample) => sample.analyses || sample.analysis || [])}
 							setCurrentList={setListAnalytes}
 							typeSearch={'analysis'}
 							className="absolute right-0"
 						/>
-					) : viewMode === 'ppt' ? (
-						<div className="flex items-center space-x-2">
-							{/* Only show these buttons for non-technicians */}
-							{!isTechnician() && (
-								<>
-									<button
-										className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
-										onClick={handlePreviewReports}
-										disabled={isGeneratingPreview}
-									>
-										{isGeneratingPreview ? (
-											<span className="flex items-center justify-center">
-												<svg
-													className="animate-spin h-5 w-5 text-primary"
-													xmlns="http://www.w3.org/2000/svg"
-													fill="none"
-													viewBox="0 0 24 24"
-												>
-													<circle
-														className="opacity-25"
-														cx="12"
-														cy="12"
-														r="10"
-														stroke="currentColor"
-														strokeWidth="4"
-													></circle>
-													<path
-														className="opacity-75"
-														fill="currentColor"
-														d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-													></path>
-												</svg>
-											</span>
-										) : (
-											<div className="flex items-center justify-between">
-												{'Xem trước'} <FaFilePdf size={20} className="ml-1" />
-											</div>
-										)}
-									</button>
-									<button
-										className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
-										onClick={handleGenerateDraftReports}
-										disabled={isGeneratingDraft}
-									>
-										{isGeneratingDraft ? (
-											<span className="flex items-center justify-center">
-												<svg
-													className="animate-spin h-5 w-5 text-primary"
-													xmlns="http://www.w3.org/2000/svg"
-													fill="none"
-													viewBox="0 0 24 24"
-												>
-													<circle
-														className="opacity-25"
-														cx="12"
-														cy="12"
-														r="10"
-														stroke="currentColor"
-														strokeWidth="4"
-													></circle>
-													<path
-														className="opacity-75"
-														fill="currentColor"
-														d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-													></path>
-												</svg>
-											</span>
-										) : (
-											<div className="flex items-center justify-between">
-												{'Tạo sơ bộ'} <FaFilePdf size={20} className="ml-1" />
-											</div>
-										)}
-									</button>
-									<button
-										className="bg-background border-gray-300 text-primary font-medium py-1 px-1 rounded-lg w-28"
-										onClick={handlePublishReports}
-										disabled={isGeneratingPublish}
-									>
-										{isGeneratingPublish ? (
-											<span className="flex items-center justify-center">
-												<svg
-													className="animate-spin h-5 w-5 text-primary"
-													xmlns="http://www.w3.org/2000/svg"
-													fill="none"
-													viewBox="0 0 24 24"
-												>
-													<circle
-														className="opacity-25"
-														cx="12"
-														cy="12"
-														r="10"
-														stroke="currentColor"
-														strokeWidth="4"
-													></circle>
-													<path
-														className="opacity-75"
-														fill="currentColor"
-														d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-													></path>
-												</svg>
-											</span>
-										) : (
-											<div className="flex items-center justify-between">
-												{'Phát hành'} <FaFilePdf size={20} className="ml-1" />
-											</div>
-										)}
-									</button>
-								</>
-							)}
-						</div>
 					) : (
 						<div className="flex items-center space-x-2">
+							{/* Report button */}
+							<button
+								className="bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600"
+								onClick={() => window.open(`/dashboard/receipt/report?receiptId=${receiptId}`, '_blank')}
+							>
+								Report
+							</button>
 							{/* Only show edit and add sample buttons for non-technicians */}
 							{!isTechnician() && (
 								<>
@@ -4029,17 +4042,96 @@ const ReceiptInfor = ({ receipt }) => {
 							<div className="mb-1 flex justify-end">
 								<div className="w-fit flex items-center flex-wrap py-1 mr-0.5">
 									<div className="flex -translate-y-0 md:translate-y-0 md:pt-0 w-full justify-end">
-										{/* Hidden delete button
+										{/* Sync Data button */}
+										<button
+											className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+												selectedAnalytes.length > 0 ? 'bg-green-500' : 'bg-gray-300 cursor-not-allowed'
+											} mr-2`}
+											onClick={selectedAnalytes.length > 0 ? handleSyncData : undefined}
+											title="Đồng bộ dữ liệu"
+										>
+											<FaSync className="mr-1" />
+											{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
+										</button>
+										{/* Update Database button */}
+										<button
+											className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+												(selectedAnalytes.length > 0 &&
+													listAnalytes
+														.filter((a) => selectedAnalytes.includes(a.id))
+														.every(
+															(a) =>
+																(!a.parameterUid || a.parameterUid === '') &&
+																a.parameterName &&
+																a.matrix &&
+																((a.protocolSource !== 'EX' && a.protocolCode) || a.protocolSource === 'EX') &&
+																a.protocolSource &&
+																a.scientificField,
+														)) ||
+												(selectedAnalytes.length === 0 &&
+													listAnalytes.some(
+														(a) =>
+															(!a.parameterUid || a.parameterUid === '') &&
+															a.parameterName &&
+															a.matrix &&
+															((a.protocolSource !== 'EX' && a.protocolCode) || a.protocolSource === 'EX') &&
+															a.protocolSource &&
+															a.scientificField,
+													))
+													? 'bg-blue-500'
+													: 'bg-gray-300 cursor-not-allowed'
+											} mr-2`}
+											onClick={
+												(selectedAnalytes.length > 0 &&
+													listAnalytes
+														.filter((a) => selectedAnalytes.includes(a.id))
+														.every(
+															(a) =>
+																(!a.parameterUid || a.parameterUid === '') &&
+																a.parameterName &&
+																a.matrix &&
+																((a.protocolSource !== 'EX' && a.protocolCode) || a.protocolSource === 'EX') &&
+																a.protocolSource &&
+																a.scientificField,
+														)) ||
+												(selectedAnalytes.length === 0 &&
+													listAnalytes.some(
+														(a) =>
+															(!a.parameterUid || a.parameterUid === '') &&
+															a.parameterName &&
+															a.matrix &&
+															((a.protocolSource !== 'EX' && a.protocolCode) || a.protocolSource === 'EX') &&
+															a.protocolSource &&
+															a.scientificField,
+													))
+													? handleUpdateDatabase
+													: undefined
+											}
+											title="Cập nhật CSDL"
+										>
+											<FaDatabase className="mr-1" />
+											{selectedAnalytes.length > 0
+												? selectedAnalytes.length
+												: listAnalytes.filter(
+														(a) =>
+															(!a.parameterUid || a.parameterUid === '') &&
+															a.parameterName &&
+															a.matrix &&
+															((a.protocolSource !== 'EX' && a.protocolCode) || a.protocolSource === 'EX') &&
+															a.protocolSource &&
+															a.scientificField,
+												  ).length || '0'}
+										</button>
 										<button
 											className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
 												selectedAnalytes.length > 0 ? 'bg-red-500' : 'bg-gray-300 cursor-not-allowed'
 											} mr-2`}
 											onClick={selectedAnalytes.length > 0 ? handleDeleteSelected : undefined}
+											title="Xóa hàng loạt"
 										>
 											<FaTrashAlt className="mr-1" />
 											{selectedAnalytes.length > 0 ? selectedAnalytes.length : '0'}
 										</button>
-										*/}
 										<button
 											className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
 												selectedAnalytes.length > 0 ? 'bg-blue-500' : 'bg-gray-300 cursor-not-allowed'
@@ -4085,6 +4177,7 @@ const ReceiptInfor = ({ receipt }) => {
 											<th className="py-2 border-x w-1/12 min-w-20">Đơn vị</th>
 											<th className="py-2 border-x w-1/12 min-w-28">Hạn trả</th>
 											<th className="py-2 border-x w-[12%] min-w-36">Người thực hiện</th>
+											<th className="py-2 border-x w-20 min-w-20">Ghi chú</th>
 											<th className="py-2 border-x w-10 min-w-10 cursor-pointer" onClick={handleSelectAllAnalytes}>
 												<input
 													type="checkbox"
@@ -4097,42 +4190,43 @@ const ReceiptInfor = ({ receipt }) => {
 									</thead>
 									<tbody>
 										{listAnalytes.map((order) => (
-											<tr key={`${getSampleUid(order.sample_id)}-${order.id}`}>
+											<tr key={`${getSampleUid(order.sampleId || order.sample_id)}-${order.id}`}>
 												<td className="p-1 border">
 													<NavLink
-														to={`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${getSampleUid(order.sample_id)}`}
+														to={`/dashboard/sample?receiptId=${receiptId}&sampleId=${getSampleUid(
+															order.sampleId || order.sample_id,
+														)}`}
 														className="text-primary font-semibold hover:text-[#103667]"
 													>
-														{getSampleUid(order.sample_id)}
+														{getSampleUid(order.sampleId || order.sample_id)}
 													</NavLink>
-
 												</td>
-												<td className="p-1 border text-start">{order.parameter_name}</td>
+												<td className="p-1 border text-start">{order.parameterName}</td>
 												<td className="p-1 border text-start">
 													<span>
-														<p>{order.protocol_code}</p>
-														<p className="text-slate-300 text-sm">{order.protocol_source} </p>
+														<p>{order.protocolCode}</p>
+														<p className="text-slate-300 text-sm">{order.protocolSource} </p>
 													</span>
 												</td>
 												<td className="p-1 border relative" onClick={() => handleResultValueClick(order)}>
-													{editingField === `result_value-${order.sample_id}-${order.id}` && isEditorVisible ? (
+													{editingField === `resultValue-${order.sampleId}-${order.id}` && isEditorVisible ? (
 														<TinyMceInput value={inputValue} onUpdate={handleSaveContent} onKey={handleKeyDown} />
 													) : (
 														<div
 															dangerouslySetInnerHTML={{
-																__html: order.result_value || '--',
+																__html: order.resultValue || '--',
 															}}
 														/>
 													)}
 												</td>
 												<td className="p-1 border relative" onClick={() => handleResultUnitClick(order)}>
-													{editingField === `result_unit-${order.sample_id}-${order.id}` && isEditorVisible ? (
+													{editingField === `resultUnit-${order.sampleId}-${order.id}` && isEditorVisible ? (
 														<TinyMceInput value={inputValue} onUpdate={handleSaveContent} onKey={handleKeyDown} />
 													) : (
 														<div
 															className="min-h-6"
 															dangerouslySetInnerHTML={{
-																__html: order.result_unit || '--',
+																__html: order.resultUnit || '--',
 															}}
 														/>
 													)}
@@ -4140,7 +4234,26 @@ const ReceiptInfor = ({ receipt }) => {
 												<td className="p-1 border text-start">
 													{canViewDeadline() ? formatDate(order.deadline) : '--'}
 												</td>
-												<td className="p-1 border text-start">{getTechnicianName(order.technician_uid)}</td>
+												<td className="p-1 border text-start">{getTechnicianName(order.technicianId)}</td>
+												<td className="p-1 border text-center">
+													<div
+														className="flex items-center justify-center cursor-pointer hover:scale-110 transition-transform"
+														onClick={(e) => handleNoteClick(order, e)}
+														onMouseEnter={(e) => {
+															if (order.note) {
+																showTooltip(e, order.note, 'left');
+															}
+														}}
+														onMouseLeave={hideTooltip}
+														title={order.note ? 'Click để xem/thêm ghi chú' : 'Click để thêm ghi chú'}
+													>
+														{order.note ? (
+															<span className="text-2xl">📝</span>
+														) : (
+															<span className="text-2xl text-gray-400">📋</span>
+														)}
+													</div>
+												</td>
 												<td
 													className="pt-[5px] pb-0 border align-top text-center cursor-pointer"
 													onClick={() => handleAnalyteSelect(order.id)}
@@ -4158,8 +4271,6 @@ const ReceiptInfor = ({ receipt }) => {
 								</table>
 							</div>
 						</>
-					) : viewMode === 'ppt' ? (
-						renderPPTTable()
 					) : (
 						<div className="overflow-x-auto overflow-hidden">
 							<table className="min-w-full text-black">
@@ -4179,21 +4290,21 @@ const ReceiptInfor = ({ receipt }) => {
 								</thead>
 								<tbody className="border-2">
 									{currentReceipt?.samples.map((sample, sampleIndex) => {
-										const totalTests = sample.analysis.length;
+										const analyses = sample.analyses || sample.analysis || [];
+										const totalTests = analyses.length;
 										const completedTests =
-											sample?.analysis?.filter(
-												(order) => order?.result_value !== null && order?.result_value !== '<p></p>',
-											)?.length || 0;
+											analyses.filter((order) => order?.resultValue !== null && order?.resultValue !== '<p></p>')
+												?.length || 0;
 										const pendingTests = totalTests - completedTests;
 
 										return (
 											<tr key={sample.id}>
 												<td className="p-2 px-1 border text-start text-text-secondary relative">
 													<NavLink
-														to={`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`}
+														to={`/dashboard/sample?receiptId=${receiptId}&sampleId=${sample.sampleId}`}
 														className="text-primary font-semibold hover:text-[#103667]"
 													>
-														{sample.sample_uid}
+														{sample.sampleId}
 													</NavLink>
 													{allAnalysesReviewed(sample) && (
 														<span className="absolute top-1 right-2 text-yellow-500 font-bold">*</span>
@@ -4203,7 +4314,7 @@ const ReceiptInfor = ({ receipt }) => {
 														onClick={(e) => {
 															e.stopPropagation();
 															window.open(
-																`/dashboard/receipt/print_sp?receipt_uid=${currentReceipt?.receipt_uid}&sample_uid=${sample.sample_uid}`,
+																`/dashboard/receipt/print_sp?receiptId=${currentReceipt?.receiptId}&sampleId=${sample.sampleId}`,
 																'_blank',
 															);
 														}}
@@ -4214,15 +4325,15 @@ const ReceiptInfor = ({ receipt }) => {
 												<td className="p-2 border text-start">
 													{isEditMode ? (
 														<textarea
-															value={sample?.sample_name || ''}
-															onChange={(e) => handleSampleChange(sample.id, 'sample_name', e.target.value)}
-															onKeyDown={(e) => handleTextareaKeyDown(e, sample.id, 'sample_name', e.target.value)}
-															onBlur={(e) => handleTextareaBlur(sample.id, 'sample_name', e.target.value)}
+															value={sample?.sampleName || sample?.sample_name || ''}
+															onChange={(e) => handleSampleChange(sample.id, 'sampleName', e.target.value)}
+															onKeyDown={(e) => handleTextareaKeyDown(e, sample.id, 'sampleName', e.target.value)}
+															onBlur={(e) => handleTextareaBlur(sample.id, 'sampleName', e.target.value)}
 															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
 															rows={2}
 														/>
 													) : (
-														displayValue(sample.sample_name)
+														displayValue(sample.sampleName || sample.sample_name)
 													)}
 												</td>
 												<td className="p-2 border text-start">
@@ -4242,31 +4353,31 @@ const ReceiptInfor = ({ receipt }) => {
 												<td className="p-2 border text-start">
 													{isEditMode ? (
 														<textarea
-															value={sample.sample_description || ''}
-															onChange={(e) => handleSampleChange(sample.id, 'sample_description', e.target.value)}
+															value={sample.sampleDescription || sample.sample_description || ''}
+															onChange={(e) => handleSampleChange(sample.id, 'sampleDescription', e.target.value)}
 															onKeyDown={(e) =>
-																handleTextareaKeyDown(e, sample.id, 'sample_description', e.target.value)
+																handleTextareaKeyDown(e, sample.id, 'sampleDescription', e.target.value)
 															}
-															onBlur={(e) => handleTextareaBlur(sample.id, 'sample_description', e.target.value)}
+															onBlur={(e) => handleTextareaBlur(sample.id, 'sampleDescription', e.target.value)}
 															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
 															rows={2}
 														/>
 													) : (
-														displayValue(sample.sample_description)
+														displayValue(sample.sampleDescription || sample.sample_description)
 													)}
 												</td>
 												<td className="p-2 border text-start">
 													{isEditMode ? (
 														<textarea
-															value={sample.sample_volume || ''}
-															onChange={(e) => handleSampleChange(sample.id, 'sample_volume', e.target.value)}
-															onKeyDown={(e) => handleTextareaKeyDown(e, sample.id, 'sample_volume', e.target.value)}
-															onBlur={(e) => handleTextareaBlur(sample.id, 'sample_volume', e.target.value)}
+															value={sample.sampleVolume || sample.sample_volume || ''}
+															onChange={(e) => handleSampleChange(sample.id, 'sampleVolume', e.target.value)}
+															onKeyDown={(e) => handleTextareaKeyDown(e, sample.id, 'sampleVolume', e.target.value)}
+															onBlur={(e) => handleTextareaBlur(sample.id, 'sampleVolume', e.target.value)}
 															className="p-1 border rounded-md w-full text-sm bg-white resize-none"
 															rows={2}
 														/>
 													) : (
-														displayValue(sample.sample_volume)
+														displayValue(sample.sampleVolume || sample.sample_volume)
 													)}
 												</td>
 												<td className="p-2 border text-start">
@@ -4344,8 +4455,14 @@ const ReceiptInfor = ({ receipt }) => {
 			{!isTechnician() && isPaymentConfirmVisible && renderPayStatusConfirm()}
 			{isDeleteConfirmVisible &&
 				renderDeleteConfirm(
-					'Bạn có chắc chắn muốn xóa mục này?',
-					deleteType === 'sample' ? handleDeleteSampleConfirmAction : handleDeleteAnalysisConfirmAction,
+					deleteType === 'multiple'
+						? `Bạn có chắc chắn muốn xóa ${selectedAnalytes.length} chỉ tiêu đã chọn?`
+						: 'Bạn có chắc chắn muốn xóa mục này?',
+					deleteType === 'multiple'
+						? handleDeleteMultipleConfirmAction
+						: deleteType === 'sample'
+						? handleDeleteSampleConfirmAction
+						: handleDeleteAnalysisConfirmAction,
 				)}{' '}
 			{/* EmailForm */}
 			<EmailForm
@@ -4361,7 +4478,7 @@ const ReceiptInfor = ({ receipt }) => {
 			/>
 			{/* FileForm */}
 			<FileForm
-				foreignKeyUIDs={[currentReceipt?.record_code, currentReceipt?.order_code]}
+				foreignKeyUIDs={[currentReceipt?._deprecated_recordCode]}
 				// localPath="activities/LAB"
 				objectPath="activities/LAB"
 				isVisible={isFileFormVisible}
@@ -4454,6 +4571,103 @@ const ReceiptInfor = ({ receipt }) => {
 			{isTransferMultipleVisible && renderBulkTransferForm()}
 			{/* Bulk Deadline Update Modal */}
 			{isBulkDeadlineVisible && renderBulkDeadlinePicker()}
+			{/* Tooltip Portal */}
+			{tooltip.visible &&
+				createPortal(
+					<div
+						className={`custom-tooltip ${tooltip.visible ? 'visible' : ''} ${tooltip.position}`}
+						style={{
+							left: `${tooltip.x}px`,
+							top: `${tooltip.y}px`,
+							whiteSpace: 'pre-wrap',
+						}}
+					>
+						{tooltip.content}
+					</div>,
+					document.body,
+				)}
+			{/* Modal Ghi chú */}
+			{showNoteModal && selectedAnalysisForNote && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
+						<div className="px-6 py-4 border-b border-gray-200">
+							<h3 className="text-lg font-semibold text-blue-600">Ghi chú</h3>
+							<p className="text-sm text-gray-600 mt-1">
+								Mẫu: {selectedAnalysisForNote.sampleId} - Chỉ tiêu: {selectedAnalysisForNote.parameterName}
+							</p>
+						</div>
+
+						<div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
+							{/* Ghi chú cũ - chỉ xem */}
+							{selectedAnalysisForNote.note && (
+								<div className="mb-4">
+									<label className="block text-sm font-medium text-gray-700 mb-2">Ghi chú hiện tại:</label>
+									<div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-sm text-gray-700 whitespace-pre-wrap">
+										{selectedAnalysisForNote.note}
+									</div>
+								</div>
+							)}
+
+							{/* Thêm ghi chú mới */}
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2">
+									{selectedAnalysisForNote.note ? 'Thêm ghi chú mới:' : 'Ghi chú:'}
+								</label>
+								<textarea
+									value={newNoteText}
+									onChange={(e) => setNewNoteText(e.target.value)}
+									placeholder="Nhập nội dung ghi chú..."
+									className="w-full bg-white border border-gray-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+									rows={4}
+								/>
+							</div>
+						</div>
+
+						<div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+							<button
+								onClick={() => {
+									setShowNoteModal(false);
+									setSelectedAnalysisForNote(null);
+									setNewNoteText('');
+								}}
+								className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+								disabled={isUpdatingNote}
+							>
+								Hủy
+							</button>
+							<button
+								onClick={handleUpdateNote}
+								disabled={isUpdatingNote || !newNoteText.trim()}
+								className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
+							>
+								{isUpdatingNote ? (
+									<>
+										<span className="mr-2">Đang cập nhật...</span>
+										<svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+											<circle
+												className="opacity-25"
+												cx="12"
+												cy="12"
+												r="10"
+												stroke="currentColor"
+												strokeWidth="4"
+												fill="none"
+											/>
+											<path
+												className="opacity-75"
+												fill="currentColor"
+												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+											/>
+										</svg>
+									</>
+								) : (
+									'Cập nhật'
+								)}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };

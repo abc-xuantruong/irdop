@@ -14,17 +14,19 @@ import { GlobalContext } from './contexts/GlobalContext';
 import ClientInfor from './components/ClientInfor';
 import Footer from './sections/Footer';
 import Event from './components/Event';
-import LabDashboard from './pages/LabDashboard';
+// import LabDashboard from './pages/LabDashboard';
 import LabDashboardTemporary from './pages/LabDashboardTemporary';
-import Report from './pages/Report';
+import ReportEditor from './pages/Report';
 import Result from './components/Analysis_result';
 import PrintSampleTag from './components/PrintSampleTag';
 import FileInfor from './pages/FileInfor';
 import Editor from './components/lab/Editor';
-import ExperimentLog from './components/lab/ExperimentLog';
 import AuthGuard from './components/AuthGuard';
 import AccountantDashboard from './pages/AccountantDashboard';
+import ProcessingSampleV2 from './components/lab/ProcessingSampleV2';
 import HandoverSampleDash from './pages/HandoverSampleDash';
+import LabResultReport from './components/LabResultReport';
+import ProgressDashboard from './pages/ProgressDashboard';
 
 const App = () => {
 	return (
@@ -32,7 +34,7 @@ const App = () => {
 			<AuthGuard>
 				<Routes>
 					{/* Fullscreen route without header/footer */}
-					<Route path="/lab" element={<LabDashboard />} />
+					{/* <Route path="/lab" element={<LabDashboard />} /> */}
 					<Route path="/processing" element={<LabDashboardTemporary />} />
 					<Route path="/editor" element={<Editor />} />
 
@@ -42,7 +44,7 @@ const App = () => {
 						element={
 							<div className="h-full min-h-lvh min-w-lvw w-lvw flex flex-col items-center relative">
 								<Header />
-								<div className="flex justify-center items-center w-full px-5 mb-60">
+								<div className="flex justify-center items-center w-full px-2 mb-60">
 									<Routes>
 										<Route path="library" element={<Library />} />
 										<Route path="library/protocol" element={<ProtocolInfor />} />
@@ -51,15 +53,18 @@ const App = () => {
 										<Route path="/dashboard" element={<Dashboard />} />
 										<Route path="/" element={<Dashboard />} />
 										<Route path="/accountant" element={<AccountantDashboard />} />
-										<Route path="/report" element={<Report />} />
+										<Route path="/report" element={<ReportEditor />} />
 										<Route path="/result" element={<Result />} />
 										<Route path="/dashboard/receipt" element={<ReceiptInfor />} />
+										<Route path="/dashboard/receipt/report" element={<LabResultReport />} />
 										<Route path="/dashboard/receipt/print_sp" element={<PrintSampleTag />} />
 										<Route path="/dashboard/sample" element={<SampleInfor />} />
-										<Route path="/handover-dashboard" element={<HandoverSampleDash />} />
 										<Route path="/login" element={<Login />} />
 										<Route path="library/client" element={<ClientInfor />} />
 										<Route path="/files" element={<FileInfor />} />
+										<Route path="/filterable" element={<ProcessingSampleV2 />} />
+										<Route path="/handover-dashboard" element={<HandoverSampleDash />} />
+										<Route path="/progress" element={<ProgressDashboard />} />
 									</Routes>
 								</div>
 								<Footer />

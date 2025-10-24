@@ -11,6 +11,98 @@ const Login = () => {
 	const [error, setError] = useState('');
 	const navigate = useNavigate();
 
+	// Card scanner states
+	const [cardBuffer, setCardBuffer] = useState('');
+	const [cardInputTimer, setCardInputTimer] = useState(null);
+
+	// Handle card scanner login
+	const handleCardLogin = async (cardCode) => {
+		if (cardCode.length !== 10) return;
+
+		setIsLoading(true);
+		setError('');
+
+		try {
+			const response = await axios.post('https://pink.irdop.org/gre134e/auth/login', {
+				code: cardCode,
+			});
+
+			// Check if status code is >= 300, show error message
+			if (response.statusCode && response.statusCode >= 300) {
+				const errorMessage = response.message || 'Đăng nhập thất bại. Vui lòng thử lại.';
+				Swal.fire({
+					icon: 'error',
+					title: 'Đăng nhập thất bại',
+					text: errorMessage,
+				});
+				setError(errorMessage);
+				setIsLoading(false);
+				setCardBuffer('');
+				return;
+			}
+
+			const auth = response.data?.session_uid;
+			const appUID = response.data?.app_uid;
+			const identityName = response.data?.identity_name;
+			const identityUID = response.data?.identity_uid;
+
+			Cookies.set('auth', auth);
+			Cookies.set('appUID', appUID);
+			Cookies.set('identityUID', identityUID);
+			Cookies.set('identityName', identityName);
+			Cookies.set('identityId', identityUID);
+
+			// Show success message with SweetAlert2
+			Swal.fire({
+				icon: 'success',
+				title: 'Đăng nhập thành công',
+				text: 'Đăng nhập bằng thẻ từ thành công!',
+				timer: 1500,
+				showConfirmButton: false,
+			}).then(() => {
+				navigate('/');
+			});
+		} catch (err) {
+			const errorMessage = err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra thẻ từ.';
+			Swal.fire({
+				icon: 'error',
+				title: 'Đăng nhập thất bại',
+				text: errorMessage,
+			});
+			setError(errorMessage);
+			console.error('Card login error:', err);
+		} finally {
+			setIsLoading(false);
+			setCardBuffer('');
+		}
+	};
+
+	// Handle email input with card scanner detection
+	const handleEmailChange = (e) => {
+		const newValue = e.target.value;
+		setEmail(newValue);
+
+		// Clear previous timer
+		if (cardInputTimer) {
+			clearTimeout(cardInputTimer);
+		}
+
+		// Update card buffer
+		const updatedBuffer = cardBuffer + newValue.slice(-1);
+		setCardBuffer(updatedBuffer);
+
+		// Set new timer - if no input for 500ms, consider it complete
+		const timer = setTimeout(() => {
+			// If we have 10 characters and it was entered quickly (card scanner behavior)
+			if (updatedBuffer.length === 10) {
+				handleCardLogin(updatedBuffer);
+			}
+			setCardBuffer('');
+		}, 500);
+
+		setCardInputTimer(timer);
+	};
+
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 		setIsLoading(true);
@@ -43,6 +135,7 @@ const Login = () => {
 			Cookies.set('appUID', appUID);
 			Cookies.set('identityUID', identityUID);
 			Cookies.set('identityName', identityName);
+			Cookies.set('identityId', identityUID);
 
 			// Show success message with SweetAlert2
 			Swal.fire({
@@ -83,10 +176,11 @@ const Login = () => {
 								type="text"
 								id="email"
 								value={email}
-								onChange={(e) => setEmail(e.target.value)}
+								onChange={handleEmailChange}
 								placeholder="Enter your email or identity UID"
 								className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
 								required
+								autoFocus
 							/>
 						</div>
 						<div>

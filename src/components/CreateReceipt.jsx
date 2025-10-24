@@ -26,7 +26,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 	const [receipt, setReceipt] = useState(
 		initialReceipt || {
 			request_number: '',
-			created_by_uid: '',
+			createdById: '',
 			receipt_date: null,
 			deadline: null,
 			contact: { index: -1, name: '', email: '', phone: '' },
@@ -67,10 +67,10 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 			setCustomer(initialReceipt.client);
 			setContact(initialReceipt.contact);
 		} else {
-			// Set created_by_uid to currentUser when creating a new receipt
+			// Set createdById to currentUser when creating a new receipt
 			setReceipt((prevReceipt) => ({
 				...prevReceipt,
-				created_by_uid: currentUser?.identity_uid || '',
+				createdById: currentUser?.identity_uid || '',
 			}));
 		}
 	}, [initialReceipt, currentUser]);
@@ -187,7 +187,7 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 		setContact({ search: '', name: '', email: '', phone: '' });
 		setReceipt({
 			request_number: '',
-			created_by_uid: '',
+			createdById: '',
 			created_by_name: '',
 			receipt_date: null,
 			deadline: null,
@@ -204,8 +204,8 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 			},
 			contact: {
 				...(contact || {}),
-				// Ensure created_by_uid is set to current user
-				created_by_uid: currentUser?.identity_uid || prevState.created_by_uid,
+				// Ensure createdById is set to current user
+				createdById: currentUser?.identity_uid || prevState.createdById,
 			},
 		}));
 
@@ -243,13 +243,13 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 			const receiptWithAuth = initialReceipt
 				? {
 						...receipt,
-						modified_by_uid: currentUser.identity_uid,
+						modifiedById: currentUser.identity_uid,
 				  }
 				: {
 						...receipt,
-						created_by_uid: currentUser.identity_uid,
+						createdById: currentUser.identity_uid,
 						created_by_name: currentUser.identity_name,
-						modified_by_uid: currentUser.identity_uid,
+						modifiedById: currentUser.identity_uid,
 				  };
 
 			const newReceipt = await apiPost(apiUrl, { receipt: receiptWithAuth });
@@ -260,12 +260,12 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 				// Show brief notification and navigate after delay
 				const successMessage = 'Cập nhật thành công!';
 				await showBriefNotification(successMessage);
-				navigate(`/dashboard/receipt?receipt_uid=${newReceipt.data.receipt_uid}`);
+				navigate(`/dashboard/receipt?receiptId=${newReceipt.data.receipt_uid}`);
 			} else if (newReceipt && newReceipt.status === 200) {
 				// Show brief notification and navigate after delay
 				const successMessage = 'Tiếp nhận mẫu thành công!';
 				await showBriefNotification(successMessage);
-				navigate(`/dashboard/receipt?receipt_uid=${newReceipt.data.receipt_uid}`);
+				navigate(`/dashboard/receipt?receiptId=${newReceipt.data.receipt_uid}`);
 			} else {
 				Swal.fire({
 					icon: 'error',
@@ -428,11 +428,11 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 										<label className="block p-1 pb-0 text-start text-sm font-medium">Người tiếp nhận</label>
 										<input
 											type="text"
-											name="created_by_uid"
+											name="createdById"
 											placeholder="Người tiếp nhận"
 											value={currentUser?.identity_name || ''}
 											className={`w-full outline-none focus:border-primary p-2 border ${
-												validationErrors.created_by_uid ? 'border-red-500' : 'border-gray-300'
+												validationErrors.createdById ? 'border-red-500' : 'border-gray-300'
 											} rounded mb-2 placeholder-gray-500 text-black bg-gray-200`}
 											disabled={true}
 											required

@@ -6,7 +6,6 @@ import { createPortal } from 'react-dom';
 import { GlobalContext } from '../contexts/GlobalContext';
 import Breadcrumb from '../components/Breadcrumb';
 import TinyMceInput from '../components/Input';
-import { RiEdit2Line } from 'react-icons/ri';
 import { GrDocumentText, GrPrint } from 'react-icons/gr';
 import { MdLibraryAdd, MdChevronLeft, MdChevronRight, MdCalendarMonth } from 'react-icons/md';
 import Swal from 'sweetalert2';
@@ -29,6 +28,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 // Replace axios import with our helper functions
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
+import { convertValueToHTML } from '../contexts/formatHelpers';
 
 // Import @dnd-kit components
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -100,17 +100,21 @@ const SampleInfor = () => {
 	};
 
 	const [searchParams] = useSearchParams();
-	const receipt_uid = searchParams.get('receipt_uid');
-	const sample_uid = searchParams.get('sample_uid');
-	const { setCurrentTitlePage, technicians, formatDate, status, purposes, currentUser, getIdenByUid } =
-		useContext(GlobalContext);
+	const receiptId = searchParams.get('receiptId');
+	const sampleId = searchParams.get('sampleId');
+
+	// Debug URL parameters
+	console.log('URL Parameters:', { receiptId, sampleId });
+	console.log('Full search params:', searchParams.toString());
+
+	const { setCurrentTitlePage, formatDate, status, purposes, currentUser, getIdenByUid } = useContext(GlobalContext);
+	const [technicians, setTechnicians] = useState([]);
 	const [currentSample, setCurrentSample] = useState(null);
 	const [sample, setSample] = useState(null);
 	const [listAnalytes, setListAnalytes] = useState([]);
 	const [editingField, setEditingField] = useState(null);
 	const [inputValue, setInputValue] = useState('');
 	const [isEditorVisible, setIsEditorVisible] = useState(false);
-	const [isEditingSample, setIsEditingSample] = useState(false);
 	const [listSampleByReceipt, setListSampleByReceipt] = useState([]);
 	// Replace single newReport with separate states for customer and receipt info
 	const [customerInfo, setCustomerInfo] = useState([]);
@@ -120,7 +124,18 @@ const SampleInfor = () => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [parameterList, setParameterList] = useState([]);
 	const [selectedParameters, setSelectedParameters] = useState([]);
+	// Add state for sample analyses
+	const [sampleAnalyses, setSampleAnalyses] = useState([]);
+	const [isLoadingSampleAnalyses, setIsLoadingSampleAnalyses] = useState(false);
 	const [currentPage, setCurrentPage] = useState(1);
+	// Add state for parameter pagination
+	const [parameterPagination, setParameterPagination] = useState({
+		currentPage: 1,
+		itemsPerPage: 20,
+		totalItems: 0,
+		totalPages: 1,
+	});
+	const [isLoadingParameters, setIsLoadingParameters] = useState(false);
 	const [technicianDropdownVisible, setTechnicianDropdownVisible] = useState(null);
 	const [dropdownPosition, setDropdownPosition] = useState({
 		top: 0,
@@ -128,10 +143,9 @@ const SampleInfor = () => {
 	});
 	const [deadlineDropdownVisible, setDeadlineDropdownVisible] = useState(null);
 	const [selectedDate, setSelectedDate] = useState(new Date());
-	const [originalSample, setOriginalSample] = useState(null); // Store original sample data
 	const [isReportChanged, setIsReportChanged] = useState(false); // Track if report has changed
 	const [typingTimeout, setTypingTimeout] = useState(null);
-	const [receiptFull, setReceiptFull] = useState({}); // Add state to store receipt samples
+	const [receiptFull, setReceiptFull] = useState({}); // Legacy state - still used in some parts but not for breadcrumb
 	const [isDropdownVisible, setIsDropdownVisible] = useState(false);
 	const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
 	const [deleteItemId, setDeleteItemId] = useState(null);
@@ -140,20 +154,25 @@ const SampleInfor = () => {
 	const [selectAll, setSelectAll] = useState(false); // Add state for select all checkbox
 	const [isTransferMultipleVisible, setIsTransferMultipleVisible] = useState(false);
 	const [selectedTechnician, setSelectedTechnician] = useState(null);
-	const statusContainerRef = useRef(null);
+	const [hoveredGroup, setHoveredGroup] = useState(null);
+	const [dropdownRect, setDropdownRect] = useState(null);
+	const [hoveredIndividualGroup, setHoveredIndividualGroup] = useState(null);
+	const [individualDropdownRect, setIndividualDropdownRect] = useState(null);
+	const [currentAnalysisId, setCurrentAnalysisId] = useState(null);
 	const [isAddingNewParameter, setIsAddingNewParameter] = useState(false);
 	const [newParameter, setNewParameter] = useState({
-		parameter_name: '',
-		parameter_uid: '',
+		parameterName: '',
+		parameterId: '',
 		matrix: '',
-		protocol_code: '',
-		protocol_source: 'IRDOP',
-		result_value: '',
-		result_unit: '',
+		protocolCode: '',
+		protocolSource: 'IRDOP',
+		resultValue: '',
+		resultUnit: '',
 		deadline: adjustDateForApiSubmission(new Date()),
-		technician_uid: '',
-		sample_id: 0,
-		display_style: [
+		technicianId: '',
+		sampleId: 0,
+		scientificField: '',
+		displayStyle: [
 			{
 				label: 'default',
 				value: '',
@@ -197,6 +216,8 @@ const SampleInfor = () => {
 	const [matrixPage, setMatrixPage] = useState(1);
 	const [unitPage, setUnitPage] = useState(1);
 	const itemsPerPage = 6; // 6 items per page for all dropdowns
+	// Add state for scientific fields
+	const [scientificFields, setScientificFields] = useState([]);
 	// Add state to store original values for comparison
 	const [originalValues, setOriginalValues] = useState({});
 	// Add state to store original sample values
@@ -248,14 +269,14 @@ const SampleInfor = () => {
 			// Create minimal update object
 			const updateData = {
 				id: analysis.id,
-				sample_id: analysis.sample_id,
-				receipt_id: analysis.receipt_id,
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
 				accreditation: newAccreditation,
-				modified_by_uid: currentUser.identity_uid,
+				modifiedByUid: currentUser.identityUid,
 			};
 
 			// Send the update to the server
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
@@ -288,11 +309,11 @@ const SampleInfor = () => {
 			const updatedSample = {
 				...sample,
 				[field]: value,
-				modified_by_uid: currentUser.identity_uid,
+				modifiedByUid: currentUser.identityUid,
 			};
 
-			// Update corresponding values in sample_information arrays if needed
-			if (field === 'sample_name') {
+			// Update corresponding values in sampleInformation arrays if needed
+			if (field === 'sampleName') {
 				// Update the "Tên mẫu thử / name." field in customerInfo
 				const updatedCustomerInfo = customerInfo.map((item) => {
 					if (item.fname.includes('Tên mẫu thử') || item.fname.includes('name')) {
@@ -300,10 +321,10 @@ const SampleInfor = () => {
 					}
 					return item;
 				});
-				updatedSample.sample_information = [...updatedCustomerInfo, ...receiptInfo];
+				updatedSample.sampleInformation = [...updatedCustomerInfo, ...receiptInfo];
 				setCustomerInfo(updatedCustomerInfo);
 			}
-			if (field === 'sample_description') {
+			if (field === 'sampleDescription') {
 				// Update the "Mô tả / desc." field in receiptInfo
 				const updatedReceiptInfo = receiptInfo.map((item) => {
 					if (item.fname.includes('Mô tả') || item.fname.includes('desc')) {
@@ -311,7 +332,7 @@ const SampleInfor = () => {
 					}
 					return item;
 				});
-				updatedSample.sample_information = [...customerInfo, ...updatedReceiptInfo];
+				updatedSample.sampleInformation = [...customerInfo, ...updatedReceiptInfo];
 				setReceiptInfo(updatedReceiptInfo);
 			}
 			if (field === 'matrix') {
@@ -323,16 +344,16 @@ const SampleInfor = () => {
 					return item;
 				});
 				setReceiptInfo(updatedReceiptInfo);
-				// Don't include sample_information in matrix updates
+				// Don't include sampleInformation in matrix updates
 			} // Send the update to the server using the required structure
-			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
+			const response = await apiPost('https://red.irdop.org/v1/sample/edit', {
 				sample: {
 					id: sample.id,
-					sample_uid: sample.sample_uid,
+					sampleId: sample.sampleId,
 					[field]: value,
-					modified_by_uid: currentUser.identity_uid,
-					...(field === 'sample_name' && { sample_information: updatedSample.sample_information }),
-					...(field === 'sample_description' && { sample_information: updatedSample.sample_information }),
+					modifiedByUid: currentUser.identity_uid,
+					...(field === 'sampleName' && { sampleInformation: updatedSample.sampleInformation }),
+					...(field === 'sampleDescription' && { sampleInformation: updatedSample.sampleInformation }),
 				},
 			});
 
@@ -375,10 +396,10 @@ const SampleInfor = () => {
 				// Create minimal update object with only required fields
 				const updateData = {
 					id: analysis.id,
-					sample_id: analysis.sample_id,
-					receipt_id: analysis.receipt_id,
+					sampleId: analysis.sampleId,
+					receiptId: analysis.receiptId,
 					matrix: newMatrixValue,
-					modified_by_uid: currentUser.identity_uid,
+					modifiedByUid: currentUser.identityUid,
 				};
 
 				updatedAnalyses.push(updateData);
@@ -391,24 +412,18 @@ const SampleInfor = () => {
 			}));
 			setListAnalytes(newAnalytesList);
 
-			// Call API for each analysis and check response status
-			let successCount = 0;
-			for (const analysis of updatedAnalyses) {
-				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: analysis,
-				});
-				if (response.status === 200) {
-					successCount++;
-				}
-			}
+			// Send bulk update instead of individual updates
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analyses: updatedAnalyses, // Send as bulk update
+			});
 
-			if (successCount === updatedAnalyses.length) {
+			if (response.status === 200) {
 				showToast(`Đã cập nhật nền mẫu cho ${updatedAnalyses.length} chỉ tiêu`);
 			} else {
 				Swal.fire({
-					icon: 'warning',
-					title: 'Cảnh báo',
-					text: `Chỉ cập nhật thành công ${successCount}/${updatedAnalyses.length} chỉ tiêu`,
+					icon: 'error',
+					title: 'Lỗi',
+					text: `Lỗi khi cập nhật nền mẫu: ${response.data?.message || 'Unknown error'}`,
 				});
 			}
 		} catch (error) {
@@ -440,7 +455,7 @@ const SampleInfor = () => {
 	const handleFieldColumnChange = async (index, newValue) => {
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
-				return { ...item, field: newValue };
+				return { ...item, scientificField: newValue };
 			}
 			return item;
 		});
@@ -451,11 +466,11 @@ const SampleInfor = () => {
 			// Create minimal update object with only required fields
 			const updateData = {
 				id: analysis.id,
-				sample_id: analysis.sample_id,
-				receipt_id: analysis.receipt_id,
-				field: newValue,
-				modified_by_uid: currentUser.identity_uid,
-				display_style: analysis.display_style || [
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
+				scientificField: newValue,
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analysis.displayStyle || [
 					{
 						label: 'default',
 						value: '',
@@ -468,7 +483,7 @@ const SampleInfor = () => {
 			};
 
 			// Send the update to the server
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
@@ -515,32 +530,70 @@ const SampleInfor = () => {
 				new Date(prev.publish_date) > new Date(current.publish_date) ? prev : current,
 			);
 			// Mở trang với ppt_uid từ report
-			window.open(
-				`${window.location.origin}/report?sample_uid=${sample_uid}&ppt_uid=${latestReport.ppt_uid}`,
-				'_blank',
-			);
+			window.open(`${window.location.origin}/report?sampleId=${sampleId}&ppt_uid=${latestReport.ppt_uid}`, '_blank');
 		} else {
 			// Nếu không có report, mở trang mặc định
-			window.open(`${window.location.origin}/report?sample_uid=${sample_uid}`, '_blank');
+			window.open(`${window.location.origin}/report?sampleId=${sampleId}`, '_blank');
 		}
 	};
 
-	// Add new function to navigate to result page
-	const openPKQWindow = () => {
-		// Navigate to the result page with the current sample_uid
-		navigate(`/result?sample_uid=${sample_uid}`);
-	};
-
-	const fetchReceiptFull = async () => {
+	// Add function to fetch technicians
+	const fetchTechnicians = async () => {
 		try {
-			const response = await apiGet(`https://black.irdop.org/khsi19me/db/get/receipt_full/${receipt_uid}`);
-			setReceiptFull(response.data);
-			// Update listSampleByReceipt with samples from receiptFull
-			if (response.data && response.data.samples) {
-				setListSampleByReceipt(response.data.samples);
+			const response = await apiGet('https://pink.irdop.org/v1/iden/get/techinicians');
+			if (response.data && Array.isArray(response.data)) {
+				setTechnicians(response.data);
 			}
 		} catch (error) {
-			console.error('Error fetching receipt full:', error);
+			console.error('Error fetching technicians:', error);
+		}
+	};
+
+	// Helper function to find technician group by alias
+	const findTechnicianGroupByAlias = (technicianAlias) => {
+		if (!technicianAlias || !technicians || !Array.isArray(technicians)) {
+			console.log('Missing technicianAlias or technicians data:', { technicianAlias, technicians });
+			return null;
+		}
+
+		// First try to find by group alias
+		let group = technicians.find((group) => group.alias === technicianAlias);
+
+		if (!group) {
+			// Then try to find by individual technician alias within groups
+			group = technicians.find(
+				(group) =>
+					group.technicians &&
+					Array.isArray(group.technicians) &&
+					group.technicians.some((tech) => tech.technicianAlias === technicianAlias),
+			);
+		}
+
+		console.log('Found technician group for alias', technicianAlias, ':', group);
+		return group;
+	};
+
+	const fetchSampleIdsByReceiptId = async () => {
+		// Priority: use receiptId from URL query, fallback to sample.receiptId
+		const receiptId = receiptId || sample?.receiptId;
+
+		if (!receiptId) {
+			console.log('No receiptId available (neither from URL nor sample), skipping fetch');
+			return;
+		}
+
+		try {
+			const response = await apiPost('https://red.irdop.org/v1/option/get/list', {
+				listType: 'sampleIdsByReceiptId',
+				param: { receiptId: receiptId },
+			});
+
+			if (response.data && Array.isArray(response.data)) {
+				// The response is an array of sampleIds
+				setListSampleByReceipt(response.data);
+			}
+		} catch (error) {
+			console.error('Error fetching sample IDs by receipt ID:', error);
 		}
 	};
 
@@ -570,39 +623,72 @@ const SampleInfor = () => {
 	};
 
 	const handleSearchChange = (e) => {
-		setSearchTerm(e.target.value);
+		const value = e.target.value;
+		setSearchTerm(value);
 		if (typingTimeout) clearTimeout(typingTimeout);
-		if (e.target.value.length > 4) {
-			// Kiểm tra nếu giá trị tìm kiếm có dạng SPXXxXXXX-YY thì không gọi API parameter
+
+		if (value.length > 4) {
+			// Kiểm tra nếu giá trị tìm kiếm có dạng SPXXxXXXX-YY thì gọi API lấy analyses từ sample
 			const sampleUidPattern = /^SP\d{2}[a-zA-Z]\d{4}-\d{2}$/;
-			if (!sampleUidPattern.test(e.target.value.trim())) {
+			if (sampleUidPattern.test(value.trim())) {
+				// Clear existing sample analyses
+				setSampleAnalyses([]);
+				setIsLoadingSampleAnalyses(true);
+
+				const timeout = setTimeout(async () => {
+					try {
+						const response = await apiPost('https://red.irdop.org/v1/sample/get/full', {
+							sampleId: value.trim(),
+						});
+
+						if (response.status === 200 && response.data?.analyses) {
+							// Add tempId to distinguish from regular parameters
+							const analysesWithTempId = response.data.analyses.map((analysis, index) => ({
+								...analysis,
+								tempId: `sample_${value.trim()}_${index}`,
+								parameterName: analysis.parameterName || analysis.parameter_name,
+								matrix: analysis.matrix,
+								protocolCode: analysis.protocolCode || analysis.protocol_code,
+								protocolSource: analysis.protocolSource || analysis.protocol_source,
+								scientificField: analysis.scientificField,
+								accreditation: analysis.accreditation,
+							}));
+
+							setSampleAnalyses(analysesWithTempId);
+							console.log('Loaded analyses from sample:', analysesWithTempId);
+						} else {
+							setSampleAnalyses([]);
+							console.warn('No analyses found for sample:', value.trim());
+						}
+					} catch (error) {
+						console.error('Error fetching sample analyses:', error);
+						setSampleAnalyses([]);
+					} finally {
+						setIsLoadingSampleAnalyses(false);
+					}
+				}, 500);
+
+				setTypingTimeout(timeout);
+			} else {
+				// Clear sample analyses when not a sampleId
+				setSampleAnalyses([]);
+				setIsLoadingSampleAnalyses(false);
+
 				const timeout = setTimeout(() => {
-					if (e.target.value.trim() !== '') {
-						searchParameters(e.target.value);
+					if (value.trim() !== '') {
+						setCurrentPage(1); // Reset to first page when new search
+						setParameterPagination((prev) => ({ ...prev, currentPage: 1 }));
+						searchParameters(value, 1); // Always start from page 1 for new search
 					}
 				}, 500);
 
 				setTypingTimeout(timeout);
 			}
+		} else {
+			// Clear sample analyses when input is too short
+			setSampleAnalyses([]);
+			setIsLoadingSampleAnalyses(false);
 		}
-	};
-	const handleSampleSelectFromDropdown = async (sampleUid) => {
-		// Find the sample in receiptFull with the matching sample_uid
-		let analyses = receiptFull.samples.find((sample) => sample.sample_uid === sampleUid).analysis;
-
-		// Create a clone of the analyses without result values and review info
-		analyses = analyses.map((analysis) => {
-			// Create a new object without the specific fields we want to exclude
-			const { id, reviewed_by, ...cleanAnalysis } = analysis;
-			// Return the cleaned analysis with a temporary id for UI rendering
-			return {
-				...cleanAnalysis,
-				temp_id: Math.random().toString(36).substr(2, 9),
-			};
-		});
-
-		setSelectedParameters(analyses);
-		setIsDropdownVisible(false);
 	};
 
 	const handleSearchKeyDown = (e) => {
@@ -613,50 +699,58 @@ const SampleInfor = () => {
 				// Gọi API get/sample_full/{giá trị tìm kiếm} và tự động thêm tất cả analysis
 				fetchSampleFullAndAddAll(searchTerm.trim());
 			} else {
-				// Tìm kiếm parameter thông thường
+				// Tìm kiếm parameter thông thường với API mới
 				if (typingTimeout) clearTimeout(typingTimeout);
-				searchParameters(searchTerm);
+				setCurrentPage(1);
+				setParameterPagination((prev) => ({ ...prev, currentPage: 1 }));
+				searchParameters(searchTerm, 1);
 			}
 		}
 	};
 
-	const searchParameters = async (query) => {
+	const searchParameters = async (query, page = 1) => {
 		try {
-			const response = await apiPost('https://black.irdop.org/ha8i0uw2/db/search/parameter', {
-				query,
-				matrix: currentSample.matrix,
+			setIsLoadingParameters(true);
+			const response = await apiPost('https://red.irdop.org/v1/parameter/get', {
+				columns: [
+					'id',
+					'parameterName',
+					'matrix',
+					'scientificField',
+					'displayStyle',
+					'fee',
+					'accreditation',
+					'protocolSource',
+					'protocolCode',
+					'technicianAlias',
+				],
+				page: page,
+				itemsPerPage: 20,
+				sortBy: 'ASC',
+				columnSort: 'createdAt',
+				searchTerm: query,
 			});
-			setParameterList(response.data);
-		} catch (error) {
-			console.error('Error searching parameters:', error);
-		}
-	};
 
-	const fetchSampleFull = async (sampleUid) => {
-		try {
-			const response = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sampleUid}`);
-			if (response.data && response.data.analysis) {
-				// Tạo danh sách analysis để hiển thị
-				const analyses = response.data.analysis.map((analysis) => {
-					// Tạo object mới không có result_value và reviewed_by
-					const { result_value, reviewed_by, ...cleanAnalysis } = analysis;
-					return {
-						...cleanAnalysis,
-						temp_id: Math.random().toString(36).substr(2, 9),
-					};
-				});
-
-				// Hiển thị danh sách analysis trong dropdown
-				setParameterList(analyses);
-				showToast(`Đã tìm thấy ${analyses.length} chỉ tiêu từ mẫu ${sampleUid}`);
+			if (response.status === 200) {
+				console.log('Parameter search response:', response.data);
+				setParameterList(response.data.result || []);
+				setParameterPagination(
+					response.data.pagination || {
+						currentPage: 1,
+						itemsPerPage: 20,
+						totalItems: 0,
+						totalPages: 1,
+					},
+				);
 			} else {
-				showToast('Không tìm thấy mẫu với mã này', 'warning');
+				console.error('Error in parameter search:', response);
 				setParameterList([]);
 			}
 		} catch (error) {
-			console.error('Error fetching sample full:', error);
-			showToast('Có lỗi xảy ra khi tìm kiếm mẫu', 'error');
+			console.error('Error searching parameters:', error);
 			setParameterList([]);
+		} finally {
+			setIsLoadingParameters(false);
 		}
 	};
 
@@ -666,13 +760,13 @@ const SampleInfor = () => {
 			if (response.data && response.data.analysis) {
 				// Tạo danh sách analysis để thêm trực tiếp
 				const analyses = response.data.analysis.map((analysis) => {
-					// Tạo object mới không có result_value và reviewed_by
-					const { result_value, reviewed_by, ...cleanAnalysis } = analysis;
+					// Tạo object mới không có resultValue và reviewedBy
+					const { resultValue, reviewedBy, ...cleanAnalysis } = analysis;
 					return {
 						...cleanAnalysis,
-						temp_id: Math.random().toString(36).substr(2, 9),
-						parameter_uid: cleanAnalysis.parameter_uid || '',
-						display_style: cleanAnalysis.display_style || [
+						tempId: Math.random().toString(36).substr(2, 9),
+						parameterUid: cleanAnalysis.parameterUid || cleanAnalysis.parameter_uid || '',
+						displayStyle: cleanAnalysis.displayStyle || [
 							{
 								label: 'default',
 								value: '',
@@ -699,16 +793,17 @@ const SampleInfor = () => {
 	};
 
 	const handleParameterSelect = (parameter) => {
-		// Kiểm tra nếu parameter có temp_id (tức là từ sample)
-		if (parameter.temp_id) {
+		// Kiểm tra nếu parameter có tempId (tức là từ sample)
+		if (parameter.tempId) {
 			// Xử lý parameter từ sample
-			if (!selectedParameters.some((p) => p.temp_id === parameter.temp_id)) {
+			if (!selectedParameters.some((p) => p.tempId === parameter.tempId)) {
 				setSelectedParameters([
 					...selectedParameters,
 					{
 						...parameter,
-						parameter_uid: parameter.parameter_uid || '',
-						display_style: parameter.display_style || [
+						parameterId: parameter.parameterId || parameter.id,
+						parameterUid: parameter.parameterUid || parameter.parameter_uid || '',
+						displayStyle: parameter.displayStyle || [
 							{
 								label: 'default',
 								value: '',
@@ -722,14 +817,15 @@ const SampleInfor = () => {
 				]);
 			}
 		} else {
-			// Xử lý parameter thông thường
+			// Xử lý parameter thông thường từ API mới
 			if (!selectedParameters.some((p) => p.id === parameter.id)) {
 				setSelectedParameters([
 					...selectedParameters,
 					{
 						...parameter,
-						parameter_uid: parameter.parameter_uid || '',
-						display_style: parameter.display_style || [
+						parameterId: parameter.id, // Map id to parameterId
+						parameterUid: parameter.parameterUid || '',
+						displayStyle: parameter.displayStyle || [
 							{
 								label: 'default',
 								value: '',
@@ -744,6 +840,14 @@ const SampleInfor = () => {
 			}
 		}
 		setSearchTerm(''); // Clear the search input field
+		setParameterList([]); // Clear parameter list to hide dropdown
+		setParameterPagination({
+			// Reset pagination
+			currentPage: 1,
+			itemsPerPage: 20,
+			totalItems: 0,
+			totalPages: 1,
+		});
 	};
 
 	const handleRemoveParameter = (index) => {
@@ -759,12 +863,14 @@ const SampleInfor = () => {
 
 			const parameters = selectedParameters.map((parameter) => {
 				const analysisData = {
-					receipt_id: currentSample.receipt_id,
-					sample_id: currentSample.id,
-					parameter_id: parameter.parameter_id || 0,
-					parameter_name: parameter.parameter_name,
-					parameter_uid: parameter.parameter_uid || '', // Ensure parameter_uid is included
-					display_style: parameter.display_style || [
+					receiptId: currentSample.receiptId,
+					sampleId: currentSample.id,
+					parameterId: parameter.parameterId || 0,
+					parameterName: parameter.parameterName,
+					parameterUid: parameter.parameterUid || '', // Ensure parameterUid is included
+					matrix: parameter.matrix || '', // Include matrix from sample analyses
+					scientificField: parameter.scientificField || '', // Include scientificField from sample analyses
+					displayStyle: parameter.displayStyle || [
 						{
 							label: 'default',
 							value: '',
@@ -775,35 +881,49 @@ const SampleInfor = () => {
 						},
 					],
 					accrenditation: parameter.accrenditation,
-					protocol_id: parameter.protocol_id,
-					technician_uid: parameter.technician_uid,
+					protocolId: parameter.protocolId,
+					technicianUid: parameter.technicianUid,
 					deadline: parameter.deadline
 						? adjustDateForApiSubmission(new Date(parameter.deadline))
 						: adjustDateForApiSubmission(
-								new Date(Date.now() + (parameter?.tat_expected?.days * 24 * 60 * 60 * 1000 || 0)),
+								new Date(Date.now() + (parameter?.tatExpected?.days * 24 * 60 * 60 * 1000 || 0)),
 						  ),
-					protocol_code: parameter.protocol_code,
-					result_unit: parameter.default_unit || parameter.result_unit,
-					protocol_source: parameter.protocol_source,
-					created_by_uid: currentUser.identity_uid,
-					modified_by_uid: currentUser.identity_uid,
+					protocolCode: parameter.protocolCode,
+					resultUnit: parameter.defaultUnit || parameter.resultUnit,
+					protocolSource: parameter.protocolSource,
+					createdByUid: currentUser.identity_uid,
+					modifiedByUid: currentUser.identity_uid,
 				};
 
-				// Only add result_value if it exists and is not empty
-				if (parameter.result_value && parameter.result_value !== '') {
-					analysisData.result_value = parameter.result_value;
+				// Only add resultValue if it exists and is not empty
+				if (parameter.resultValue && parameter.resultValue !== '') {
+					analysisData.resultValue = parameter.resultValue;
 				}
 
 				return analysisData;
 			});
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/insert/bulk/analysis', {
-				analyses: parameters,
+
+			// Use the new analysis/create API endpoint
+			const response = await apiPost('https://red.irdop.org/v1/analysis/create', {
+				analyses: parameters, // For multiple analyses
 			});
 
 			if (response.status === 200) {
 				showToast(`${response.data.length} chỉ tiêu được thêm thành công!`);
 				setIsAddingParameter(false);
 				setSelectedParameters([]);
+				setSampleAnalyses([]);
+				setSearchTerm('');
+				setIsLoadingSampleAnalyses(false);
+				setParameterList([]);
+				setIsLoadingParameters(false);
+				setCurrentPage(1);
+				setParameterPagination({
+					currentPage: 1,
+					itemsPerPage: 20,
+					totalItems: 0,
+					totalPages: 1,
+				});
 
 				// Update listAnalytes with the new analyses from the API response
 				setListAnalytes([...listAnalytes, ...response.data]);
@@ -833,17 +953,29 @@ const SampleInfor = () => {
 	const handleCancelAddParameter = () => {
 		setIsAddingParameter(false);
 		setSelectedParameters([]);
+		setSampleAnalyses([]);
+		setSearchTerm('');
+		setIsLoadingSampleAnalyses(false);
+		setParameterList([]);
+		setIsLoadingParameters(false);
+		setCurrentPage(1);
+		setParameterPagination({
+			currentPage: 1,
+			itemsPerPage: 20,
+			totalItems: 0,
+			totalPages: 1,
+		});
 	};
 
 	const handleAddNewParameter = () => {
 		setIsAddingParameter(false);
 		setIsAddingNewParameter(true);
-		// Set the sample_id from the current sample and ensure display_style is initialized
+		// Set the sample_id from the current sample and ensure displayStyle is initialized
 		setNewParameter({
 			...newParameter,
 			sample_id: currentSample?.id,
 			matrix: currentSample?.matrix || '',
-			display_style: [
+			displayStyle: [
 				{
 					label: 'default',
 					value: '',
@@ -871,24 +1003,24 @@ const SampleInfor = () => {
 			const changedFields = {};
 
 			// Identify which fields need to be updated
-			if (analysis.parameter_name !== undefined) changedFields.parameter_name = analysis.parameter_name;
-			if (analysis.result_value !== undefined && analysis.result_value !== '')
-				changedFields.result_value = analysis.result_value;
+			if (analysis.parameterName !== undefined) changedFields.parameterName = analysis.parameterName;
+			if (analysis.resultValue !== undefined && analysis.resultValue !== '')
+				changedFields.resultValue = convertValueToHTML(analysis.resultValue);
 			if (analysis.matrix !== undefined) changedFields.matrix = analysis.matrix;
-			if (analysis.result_unit !== undefined) changedFields.result_unit = analysis.result_unit;
-			if (analysis.protocol_code !== undefined) changedFields.protocol_code = analysis.protocol_code;
-			if (analysis.protocol_source !== undefined) changedFields.protocol_source = analysis.protocol_source;
+			if (analysis.resultUnit !== undefined) changedFields.resultUnit = convertValueToHTML(analysis.resultUnit);
+			if (analysis.protocolCode !== undefined) changedFields.protocolCode = analysis.protocolCode;
+			if (analysis.protocolSource !== undefined) changedFields.protocolSource = analysis.protocolSource;
 			if (analysis.deadline !== undefined) changedFields.deadline = analysis.deadline;
 			if (analysis.field !== undefined) changedFields.field = analysis.field;
 
 			// Create minimal update object
 			const updateData = {
 				id: analysis.id,
-				sample_id: analysis.sample_id,
-				receipt_id: analysis.receipt_id,
-				modified_by_uid: currentUser.identity_uid,
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
+				modifiedByUid: currentUser.identity_uid,
 				...changedFields,
-				display_style: analysis.display_style || [
+				displayStyle: analysis.displayStyle || [
 					{
 						label: 'default',
 						value: '',
@@ -900,7 +1032,7 @@ const SampleInfor = () => {
 				],
 			};
 
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
@@ -932,23 +1064,23 @@ const SampleInfor = () => {
 			const fieldBeingUpdated = {};
 
 			// Check each field that might have been updated
-			if (analysis.parameter_name !== undefined) fieldBeingUpdated.parameter_name = analysis.parameter_name;
-			if (analysis.result_value !== undefined && analysis.result_value !== '')
-				fieldBeingUpdated.result_value = analysis.result_value;
-			if (analysis.result_unit !== undefined) fieldBeingUpdated.result_unit = analysis.result_unit;
-			if (analysis.protocol_code !== undefined) fieldBeingUpdated.protocol_code = analysis.protocol_code;
-			if (analysis.protocol_source !== undefined) fieldBeingUpdated.protocol_source = analysis.protocol_source;
-			if (analysis.technician_uid !== undefined) fieldBeingUpdated.technician_uid = analysis.technician_uid;
+			if (analysis.parameterName !== undefined) fieldBeingUpdated.parameterName = analysis.parameterName;
+			if (analysis.resultValue !== undefined && analysis.resultValue !== '')
+				fieldBeingUpdated.resultValue = convertValueToHTML(analysis.resultValue);
+			if (analysis.resultUnit !== undefined) fieldBeingUpdated.resultUnit = convertValueToHTML(analysis.resultUnit);
+			if (analysis.protocolCode !== undefined) fieldBeingUpdated.protocolCode = analysis.protocolCode;
+			if (analysis.protocolSource !== undefined) fieldBeingUpdated.protocolSource = analysis.protocolSource;
+			if (analysis.technicianId !== undefined) fieldBeingUpdated.technicianId = analysis.technicianId;
 			if (analysis.deadline !== undefined) fieldBeingUpdated.deadline = analysis.deadline;
 
 			// Create minimal update object
 			const updateData = {
 				id: analysis.id,
-				sample_id: analysis.sample_id,
-				receipt_id: analysis.receipt_id,
-				modified_by_uid: currentUser.identity_uid,
+				sampleId: analysis.sample_id,
+				receiptId: analysis.receiptId,
+				modifiedByUid: currentUser.identity_uid,
 				...fieldBeingUpdated,
-				display_style: analysis.display_style || [
+				displayStyle: analysis.displayStyle || [
 					{
 						label: 'default',
 						value: '',
@@ -960,7 +1092,7 @@ const SampleInfor = () => {
 				],
 			};
 
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
@@ -988,7 +1120,7 @@ const SampleInfor = () => {
 	const handleSaveNewParameter = async () => {
 		try {
 			// Make sure required fields are filled
-			if (!newParameter.parameter_name) {
+			if (!newParameter.parameterName) {
 				Swal.fire({
 					icon: 'error',
 					title: 'Lỗi',
@@ -996,18 +1128,20 @@ const SampleInfor = () => {
 				});
 				return;
 			} // We don't update the parameter library anymore
-			var parameter_id = 0; // Now create the analysis with the parameter_id (exclude result_value)
-			const { result_value, ...newParameterWithoutResult } = newParameter;
+			var parameterId = 0; // Now create the analysis with the parameterId (exclude resultValue)
+			const { resultValue, ...newParameterWithoutResult } = newParameter;
 			const analysisToAdd = {
 				...newParameterWithoutResult,
-				parameter_id: parameter_id,
-				receipt_id: currentSample.receipt_id,
-				sample_id: currentSample.id,
-				created_by_uid: currentUser.identity_uid,
-				modified_by_uid: currentUser.identity_uid,
+				parameterId: parameterId,
+				receiptId: currentSample.receipt_id,
+				sampleId: currentSample.id,
+				createdByUid: currentUser.identity_uid,
+				modifiedByUid: currentUser.identity_uid,
 			};
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/insert/analysis', {
-				analysis: analysisToAdd,
+
+			// Use the new analysis/create API endpoint for single analysis
+			const response = await apiPost('https://red.irdop.org/v1/analysis/create', {
+				analysis: analysisToAdd, // For single analysis
 			});
 
 			if (response.status === 200) {
@@ -1017,17 +1151,17 @@ const SampleInfor = () => {
 				setIsAddingNewParameter(false);
 				// Reset the new parameter object
 				setNewParameter({
-					parameter_name: '',
-					parameter_uid: '',
+					parameterName: '',
+					parameterUid: '',
 					matrix: currentSample?.matrix || '',
-					protocol_code: '',
-					protocol_source: 'IRDOP',
-					result_value: '',
-					result_unit: '',
+					protocolCode: '',
+					protocolSource: 'IRDOP',
+					resultValue: '',
+					resultUnit: '',
 					deadline: adjustDateForApiSubmission(new Date()),
-					technician_uid: '',
-					sample_id: currentSample?.id || 0,
-					display_style: [
+					technicianUid: '',
+					sampleId: currentSample?.id || 0,
+					displayStyle: [
 						{
 							label: 'default',
 							value: '',
@@ -1062,26 +1196,31 @@ const SampleInfor = () => {
 		});
 	};
 
-	// Function to handle display_style changes for new parameter
+	// Function to handle displayStyle changes for new parameter
 	const handleNewParameterDisplayStyleChange = (label, value) => {
-		const updatedDisplayStyle = newParameter.display_style.map((item) =>
+		const updatedDisplayStyle = newParameter.displayStyle.map((item) =>
 			item.label === label ? { ...item, value } : item,
 		);
 		setNewParameter({
 			...newParameter,
-			display_style: updatedDisplayStyle,
+			displayStyle: updatedDisplayStyle,
 		});
 	};
 
 	const renderNewParameter = () => {
-		const paginatedParameters = parameterList.slice((currentPage - 1) * 5, currentPage * 5);
+		// Use API data directly, no need for client-side slicing
+		const paginatedParameters = parameterList;
 
 		const handlePageChange = (page) => {
 			setCurrentPage(page);
+			// Trigger new API call with updated page
+			if (searchTerm && searchTerm.trim() !== '') {
+				searchParameters(searchTerm, page);
+			}
 		};
 
 		const renderPageButtons = () => {
-			const totalPages = Math.ceil(parameterList.length / 5);
+			const { totalPages, currentPage } = parameterPagination;
 			const pageButtons = [];
 
 			if (totalPages <= 5) {
@@ -1165,51 +1304,186 @@ const SampleInfor = () => {
 								onChange={handleSearchChange}
 								onKeyDown={handleSearchKeyDown}
 								className="w-full p-2 border rounded mb-4 bg-white focus:outline-none focus:border-purple-500"
-								placeholder="Tìm kiếm chỉ tiêu..."
+								placeholder="Tìm kiếm chỉ tiêu hoặc nhập Sample ID (SPxxAxxxx-xx) để lấy từ mẫu khác..."
 							/>
 
-							{searchTerm.length > 1 && (
+							{/* Show dropdown only for regular parameter search, not for sample analyses */}
+							{searchTerm.length > 1 && sampleAnalyses.length === 0 && !isLoadingSampleAnalyses && (
 								<div className="absolute bg-white border rounded w-full max-h-72 overflow-y-auto mb-4 z-10">
-									<ul>
-										{paginatedParameters.map((parameter, index) => (
-											<li
-												key={parameter.temp_id || parameter.id || index}
-												className="p-2 border-b cursor-pointer hover:bg-gray-200"
-												onClick={() => handleParameterSelect(parameter)}
-											>
-												<div>
-													<p className="text-start text-xs font-medium w-full line-clamp-1">
-														Nền mẫu: {parameter.matrix}
-													</p>
-													<p className="text-start text-primary font-medium w-full line-clamp-1">
-														{parameter.parameter_name}
-													</p>
-													<p className="text-start text-text-secondary w-full line-clamp-1">
-														{parameter.protocol_code}
-														{parameter.accreditation && <b>{` (${parameter.accreditation})`}</b>}
-														{parameter.temp_id && <span className="text-blue-600 font-medium"> - Từ mẫu khác</span>}
-													</p>
-												</div>
-											</li>
-										))}
-									</ul>
-									<div className="flex justify-center mt-2">{renderPageButtons()}</div>
+									{/* Show loading indicator */}
+									{isLoadingParameters && (
+										<div className="p-4 text-center text-gray-500">
+											<div className="flex items-center justify-center">
+												<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+												Đang tìm kiếm chỉ tiêu...
+											</div>
+										</div>
+									)}
+
+									{/* Show regular parameters only when not loading */}
+									{!isLoadingParameters && paginatedParameters.length > 0 && (
+										<div>
+											<div className="p-2 bg-gray-50 border-b font-medium text-gray-600 flex justify-between items-center">
+												<span>Kết quả tìm kiếm ({parameterPagination.totalItems} chỉ tiêu)</span>
+												<span className="text-sm">
+													Trang {parameterPagination.currentPage}/{parameterPagination.totalPages}
+												</span>
+											</div>
+											<ul>
+												{paginatedParameters.map((parameter, index) => (
+													<li
+														key={parameter.id || index}
+														className="p-2 border-b cursor-pointer hover:bg-gray-200"
+														onClick={() => handleParameterSelect(parameter)}
+													>
+														<div>
+															<p className="text-start text-xs font-medium w-full line-clamp-1">
+																Nền mẫu: {parameter.matrix}
+															</p>
+															<p className="text-start text-primary font-medium w-full line-clamp-1">
+																{parameter.parameterName}
+															</p>
+															<p className="text-start text-text-secondary w-full line-clamp-1">
+																{parameter.protocolCode}
+																{parameter.accreditation && (
+																	<b className="text-green-600">{` (${parameter.accreditation['107'] ? '107' : ''}  ${
+																		parameter.accreditation['VILAS997'] ? 'VILAS 997' : ''
+																	} )`}</b>
+																)}
+															</p>
+															{parameter.scientificField && (
+																<p className="text-start text-xs text-blue-600 w-full line-clamp-1">
+																	Lĩnh vực: {parameter.scientificField}
+																</p>
+															)}
+														</div>
+													</li>
+												))}
+											</ul>
+											{parameterPagination.totalPages > 1 && (
+												<div className="flex justify-center mt-2 p-2 border-t bg-gray-50">{renderPageButtons()}</div>
+											)}
+										</div>
+									)}
+
+									{/* Show no results message when not loading and no results */}
+									{!isLoadingParameters && paginatedParameters.length === 0 && (
+										<div className="p-4 text-center text-gray-500">
+											Không tìm thấy chỉ tiêu nào với từ khóa "{searchTerm}"
+										</div>
+									)}
 								</div>
 							)}
 						</div>
+
+						{/* Show sample analyses in a separate box below input */}
+						{(isLoadingSampleAnalyses || sampleAnalyses.length > 0) && (
+							<div className="mb-4 border rounded bg-gray-50 max-h-60 overflow-y-auto">
+								{isLoadingSampleAnalyses && (
+									<div className="p-4 text-center text-gray-500">
+										<div className="flex items-center justify-center">
+											<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+											Đang tải dữ liệu từ mẫu {searchTerm}...
+										</div>
+									</div>
+								)}
+
+								{sampleAnalyses.length > 0 && (
+									<div>
+										<div className="p-2 bg-blue-100 border-b font-medium text-blue-800 sticky top-0 flex justify-between items-center">
+											<span>
+												Chỉ tiêu từ mẫu {searchTerm} ({sampleAnalyses.length} chỉ tiêu)
+											</span>
+											<button
+												onClick={() => {
+													// Add all sample analyses to selectedParameters
+													const newAnalyses = sampleAnalyses.filter(
+														(analysis) =>
+															!selectedParameters.some(
+																(selected) =>
+																	selected.tempId === analysis.tempId ||
+																	(selected.parameterName === analysis.parameterName &&
+																		selected.matrix === analysis.matrix),
+															),
+													);
+													setSelectedParameters([...selectedParameters, ...newAnalyses]);
+													showToast(`Đã thêm ${newAnalyses.length} chỉ tiêu từ mẫu`);
+												}}
+												className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors"
+											>
+												Chọn tất cả
+											</button>
+										</div>
+										<div className="grid grid-cols-1 gap-1 p-2">
+											{sampleAnalyses.map((analysis, index) => {
+												const isAlreadySelected = selectedParameters.some(
+													(selected) =>
+														selected.tempId === analysis.tempId ||
+														(selected.parameterName === analysis.parameterName && selected.matrix === analysis.matrix),
+												);
+
+												return (
+													<div
+														key={analysis.tempId || analysis.id || index}
+														className={`p-2 border border-gray-200 rounded cursor-pointer transition-colors ${
+															isAlreadySelected ? 'bg-green-50 border-green-300 opacity-75' : 'hover:bg-blue-50'
+														}`}
+														onClick={() => !isAlreadySelected && handleParameterSelect(analysis)}
+													>
+														<div className="flex justify-between items-start">
+															<div className="flex-1">
+																<p className="text-start text-xs font-medium w-full line-clamp-1 text-gray-600">
+																	Nền mẫu: {analysis.matrix}
+																</p>
+																<p className="text-start text-primary font-medium w-full line-clamp-1">
+																	{analysis.parameterName}
+																</p>
+																<p className="text-start text-text-secondary w-full line-clamp-1 text-sm">
+																	{analysis.protocolCode}
+																	{analysis.accreditation && (
+																		<b className="text-green-600">{` (${analysis.accreditation['107'] ? '107' : ''}  ${
+																			analysis.accreditation['VILAS997'] ? 'VILAS 997' : ''
+																		} )`}</b>
+																	)}
+																</p>
+																{analysis.scientificField && (
+																	<p className="text-start text-xs text-blue-600 w-full line-clamp-1">
+																		Lĩnh vực: {analysis.scientificField}
+																	</p>
+																)}
+															</div>
+															{isAlreadySelected && (
+																<div className="flex-shrink-0 ml-2">
+																	<span className="bg-green-500 text-white text-xs px-2 py-1 rounded">✓ Đã chọn</span>
+																</div>
+															)}
+														</div>
+													</div>
+												);
+											})}
+										</div>
+									</div>
+								)}
+							</div>
+						)}
+
 						<div className="mb-4 h-full flex overflow-y-auto text-sm flex-wrap content-start">
 							{selectedParameters.map((parameter, index) => (
 								<div
-									key={parameter.temp_id || parameter.id || index}
+									key={parameter.tempId || parameter.id || index}
 									className="p-1 border rounded mb-2 flex text-start items-center w-fit h-fit mr-1 max-w-68"
 								>
 									<div>
 										<p className="text-xs font-medium w-full line-clamp-1">Nền mẫu: {parameter.matrix}</p>
-										<p className="text-primary font-medium w-full line-clamp-1">{parameter.parameter_name}</p>
+										<p className="text-primary font-medium w-full line-clamp-1">{parameter.parameterName}</p>
 										<p className="text-start text-text-secondary w-full line-clamp-1">
-											{parameter.protocol_code}
-											{parameter?.accreditation && <b>{` (${parameter.accreditation})`}</b>}
-											{parameter.temp_id && <span className="text-blue-600 font-medium"> - Từ mẫu khác</span>}
+											{parameter.protocolCode}
+											{parameter?.accreditation && (
+												<b>{` (${parameter.accreditation['107'] ? '107' : ''}  ${
+													parameter.accreditation['VILAS997'] ? 'VILAS 997' : ''
+												} )`}</b>
+											)}
+											{parameter.tempId && <span className="text-blue-600 font-medium"> - Từ mẫu khác</span>}
 										</p>
 									</div>
 
@@ -1220,31 +1494,10 @@ const SampleInfor = () => {
 							))}
 						</div>
 						<div className="flex justify-between items-center">
-							<div className="relative flex">
-								<button
-									className="bg-white border-gray-300 p-2 rounded"
-									onClick={() => setIsDropdownVisible(!isDropdownVisible)}
-								>
-									Sao chép chỉ tiêu
-								</button>
-								<button className="bg-white border-gray-300 p-2 rounded ml-2" onClick={handleAddNewParameter}>
+							<div className="flex">
+								<button className="bg-white border-gray-300 p-2 rounded" onClick={handleAddNewParameter}>
 									Thêm chỉ tiêu mới
 								</button>
-								{isDropdownVisible && (
-									<div className="absolute bg-white border rounded w-full max-h-72 overflow-y-auto mt-2 z-10 bottom-10">
-										<ul>
-											{receiptFull.samples.map((sample) => (
-												<li
-													key={sample.sample_uid}
-													className="p-2 border-b cursor-pointer hover:bg-gray-200"
-													onClick={() => handleSampleSelectFromDropdown(sample.sample_uid)}
-												>
-													{sample.sample_uid}
-												</li>
-											))}
-										</ul>
-									</div>
-								)}
 							</div>
 
 							<div className="flex justify-end">
@@ -1265,7 +1518,7 @@ const SampleInfor = () => {
 	let defaultCustomerFields = [
 		{
 			fname: 'Tên mẫu thử / name.',
-			fvalue: currentSample?.sample_name || '',
+			fvalue: currentSample?.sampleName || '',
 		},
 		{ fname: 'Số lô / LOT no.', fvalue: '' },
 		{ fname: 'Hạn sử dụng / exp.', fvalue: '' },
@@ -1280,9 +1533,9 @@ const SampleInfor = () => {
 		{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
 		{
 			fname: 'Mô tả / desc.',
-			fvalue: currentSample?.sample_description || '',
+			fvalue: currentSample?.sampleDescription || '',
 		},
-		{ fname: 'Mã tiếp nhận / receipt code.', fvalue: receipt_uid || '' },
+		{ fname: 'Mã tiếp nhận / receipt code.', fvalue: receiptId || '' },
 		{
 			fname: 'Ngày hoàn thành / deadline.',
 			fvalue: formatDate(receiptFull?.deadline) || '',
@@ -1294,7 +1547,7 @@ const SampleInfor = () => {
 	let key;
 
 	useEffect(() => {
-		fetchReceiptFull();
+		fetchTechnicians();
 		setCurrentTitlePage('Mẫu kiểm nghiệm');
 
 		// Fetch lists for dropdowns
@@ -1319,11 +1572,22 @@ const SampleInfor = () => {
 				setUniqueUnits(unitsResponse.data.filter(Boolean));
 			}
 
+			// Fetch scientific fields from new API
+			const scientificFieldsResponse = await apiPost('https://red.irdop.org/v1/option/get/list', {
+				listType: 'scientificFields',
+			});
+			console.log('Scientific fields response:', scientificFieldsResponse);
+			if (scientificFieldsResponse.data && Array.isArray(scientificFieldsResponse.data)) {
+				setScientificFields(scientificFieldsResponse.data.filter(Boolean));
+			}
+
 			// Fetch parameter names from available analyses
 			const parametersResponse = await apiGet('https://black.irdop.org/ha8i0uw2/db/get/parameter');
 			if (parametersResponse.data && Array.isArray(parametersResponse.data)) {
 				const parameterNames = [
-					...new Set(parametersResponse.data.map((item) => item.parameter_name || '').filter(Boolean)),
+					...new Set(
+						parametersResponse.data.map((item) => item.parameterName || item.parameter_name || '').filter(Boolean),
+					),
 				];
 
 				setUniqueParameterNames(parameterNames);
@@ -1347,12 +1611,6 @@ const SampleInfor = () => {
 	const filterUnits = (input) => {
 		if (!input || input.trim() === '') return []; // Only show suggestions if at least one character is typed
 		return uniqueUnits.filter((unit) => unit && unit.toLowerCase().includes((input || '').toLowerCase()));
-	};
-
-	// Get paginated results for dropdowns
-	const getPaginatedParameterNames = (input) => {
-		const filtered = filterParameterNames(input);
-		return filtered.slice((parameterNamePage - 1) * itemsPerPage, parameterNamePage * itemsPerPage);
 	};
 
 	const getPaginatedMatrices = (input) => {
@@ -1381,48 +1639,60 @@ const SampleInfor = () => {
 	useEffect(() => {
 		const fetchSample = async () => {
 			try {
-				const response = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sample_uid}`);
+				console.log('Fetching sample with sampleId:', sampleId);
+				const response = await apiPost('https://red.irdop.org/v1/sample/get/full', {
+					sampleId: sampleId,
+				});
 
-				// Process reviewer names for all analyses before setting state
-				if (response.data && response.data.analysis) {
-					for (const analysis of response.data.analysis) {
-						if (analysis.reviewed_by) {
-							// Call getIdenByUid and store the result directly in the analysis object
-							const reviewerData = await getIdenByUid(analysis.reviewed_by);
-							analysis.reviewerName = reviewerData ? reviewerData.identity_name : 'Unknown';
-						}
-						// Adjust deadline for display (GMT+7)
+				console.log('Sample API response:', response);
+
+				// Process data with new camelCase structure
+				if (response.data && response.data.analyses) {
+					for (const analysis of response.data.analyses) {
+						// Adjust deadline for display (GMT+7) if exists
 						if (analysis.deadline) {
 							analysis.deadline = adjustTimezoneForDisplay(analysis.deadline);
 						}
-						// Ensure technician_uid is properly set and valid
-						if (analysis.technician_uid) {
-							// Validate that the technician_uid exists in the technicians list
-							const techExists = technicians.find((tech) => tech.identity_uid === analysis.technician_uid);
-							if (!techExists) {
-								// Set to null if technician doesn't exist
-								analysis.technician_uid = null;
-							}
-						}
 					}
 				}
-				setSample(response.data);
-				setCurrentSample(response.data);
-				setListAnalytes(response.data.analysis);
+
+				// Debug: Log the API response to see what fields are actually returned
+				console.log('API Response data:', response.data);
+
+				// Map camelCase response to component state
+				const mappedSample = {
+					id: response.data.id,
+					sampleId: response.data.sampleId || response.data.sampleId,
+					sampleName: response.data.sampleName || response.data.sampleName,
+					sampleDescription: response.data.sampleDescription || response.data.sample_description,
+					matrix: response.data.matrix,
+					sampleInformation: response.data.sampleInformation || response.data.sample_information,
+					sampleVolume: response.data.sampleVolume || response.data.sample_volume,
+					additionalRequest: response.data.additionalRequest || response.data.additionalRequest,
+					status: response.data.status,
+					purpose: response.data.purpose,
+					analysis: response.data.analyses || [],
+				};
+
+				console.log('Mapped Sample:', mappedSample);
+
+				setSample(mappedSample);
+				setCurrentSample(mappedSample);
+				setListAnalytes(mappedSample.analysis);
 
 				// Store original sample values for comparison
 				setOriginalSampleValues({
-					sample_name: response.data.sample_name || '',
-					sample_description: response.data.sample_description || '',
-					matrix: response.data.matrix || '',
-					sample_volume: response.data.sample_volume || '',
-					purpose: response.data.purpose || '',
-					additional_request: response.data.additional_request || '',
+					sampleName: mappedSample.sampleName || '',
+					sampleDescription: mappedSample.sampleDescription || '',
+					matrix: mappedSample.matrix || '',
+					sampleVolume: mappedSample.sampleVolume || '',
+					purpose: mappedSample.purpose || '',
+					additionalRequest: mappedSample.additionalRequest || '',
 				});
 
-				// Split sample_information into customer and receipt info
-				if (response.data.sample_information && response.data.sample_information.length > 0) {
-					const sampleInfo = response.data.sample_information || [];
+				// Split sampleInformation into customer and receipt info
+				if (mappedSample.sampleInformation && mappedSample.sampleInformation.length > 0) {
+					const sampleInfo = mappedSample.sampleInformation || [];
 
 					// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
 					const receiptStartIndex = sampleInfo.findIndex(
@@ -1457,19 +1727,29 @@ const SampleInfor = () => {
 				console.error('Error fetching sample:', error);
 			}
 		};
-		if (sample_uid) {
+		if (sampleId) {
+			console.log('sampleId exists, calling fetchSample');
 			fetchSample();
+		} else {
+			console.log('No sampleId provided in URL');
 		}
-	}, [sample_uid]);
+	}, [sampleId]);
+
+	// Fetch sample IDs for breadcrumb - priority: receiptId from URL, fallback: sample.receiptId
+	useEffect(() => {
+		if (receiptId || sample?.receiptId) {
+			fetchSampleIdsByReceiptId();
+		}
+	}, [receiptId, sample?.receiptId]);
 
 	const handleSampleSelect = (sampleUid) => {
-		navigate(`/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sampleUid}`);
+		navigate(`/dashboard/sample?receiptId=${receiptId}&sampleId=${sampleUid}`);
 	};
 	const handleResultValueClick = (order) => {
 		if (!order) return;
-		const fieldKey = `result_value-${order.id}`;
+		const fieldKey = `resultValue-${order.id}`;
 		setEditingField(fieldKey);
-		const originalValue = order.result_value ? String(order.result_value) : '';
+		const originalValue = order.resultValue ? String(order.resultValue) : '';
 		setInputValue(originalValue);
 		// Store original value for comparison
 		setOriginalValues((prev) => ({
@@ -1480,9 +1760,9 @@ const SampleInfor = () => {
 	};
 
 	const handleResultUnitClick = (order) => {
-		const fieldKey = `result_unit-${order.id}`;
+		const fieldKey = `resultUnit-${order.id}`;
 		setEditingField(fieldKey);
-		const originalValue = order.result_unit ? String(order.result_unit) : '';
+		const originalValue = order.resultUnit ? String(order.resultUnit) : '';
 		setInputValue(originalValue);
 		// Store original value for comparison
 		setOriginalValues((prev) => ({
@@ -1518,12 +1798,12 @@ const SampleInfor = () => {
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id == analysisId) {
 				// Use loose equality to handle both string and number comparisons
-				if (fieldType === 'result_value') {
-					return { ...item, result_value: newValue };
-				} else if (fieldType === 'result_unit') {
-					return { ...item, result_unit: newValue };
-				} else if (fieldType === 'technician_uid') {
-					return { ...item, technician_uid: newValue };
+				if (fieldType === 'resultValue') {
+					return { ...item, resultValue: newValue };
+				} else if (fieldType === 'resultUnit') {
+					return { ...item, resultUnit: newValue };
+				} else if (fieldType === 'technicianUid') {
+					return { ...item, technicianId: newValue };
 				}
 			}
 			return item;
@@ -1538,10 +1818,10 @@ const SampleInfor = () => {
 			// Create minimal update object with only required fields
 			const updateData = {
 				id: analysis.id,
-				sample_id: analysis.sample_id,
-				receipt_id: analysis.receipt_id,
-				modified_by_uid: currentUser.identity_uid,
-				display_style: analysis.display_style || [
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analysis.displayStyle || [
 					{
 						label: 'default',
 						value: '',
@@ -1553,29 +1833,31 @@ const SampleInfor = () => {
 				],
 			};
 			// Add only the field being updated
-			if (fieldType === 'result_value') {
-				// Only add result_value if it's not empty
+			if (fieldType === 'resultValue') {
+				// Only add resultValue if it's not empty
 				if (newValue !== '') {
-					updateData.result_value = newValue;
+					// Convert special characters to HTML format
+					updateData.resultValue = convertValueToHTML(newValue);
 					// Add submission information when updating result value
-					updateData.submit_result_by = currentUser?.identity_name;
-					updateData.submit_result_at = adjustDateForApiSubmission(new Date());
+					updateData.submitResultBy = currentUser?.identity_name;
+					updateData.submitResultAt = adjustDateForApiSubmission(new Date());
 				}
-			} else if (fieldType === 'result_unit') {
-				updateData.result_unit = newValue;
-			} else if (fieldType === 'technician_uid') {
-				updateData.technician_uid = newValue;
+			} else if (fieldType === 'resultUnit') {
+				// Convert special characters to HTML format
+				updateData.resultUnit = convertValueToHTML(newValue);
+			} else if (fieldType === 'technicianId') {
+				updateData.technicianId = newValue;
 			}
 
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
 			if (response.status === 200) {
 				// Show more specific toast message based on what was updated
-				if (fieldType === 'result_value') {
+				if (fieldType === 'resultValue') {
 					showToast(`Đã cập nhật kết quả thành công!`);
-				} else if (fieldType === 'result_unit') {
+				} else if (fieldType === 'resultUnit') {
 					showToast(`Đã cập nhật đơn vị thành công!`);
 				} else {
 					showToast(`Đã cập nhật thông tin thành công!`);
@@ -1607,59 +1889,11 @@ const SampleInfor = () => {
 		}
 	};
 
-	const handleEditSample = () => {
-		setIsEditingSample(true);
-		setOriginalSample({ ...sample }); // Store original sample data
-	};
-
-	const handleCancelEdit = () => {
-		setIsEditingSample(false);
-		setSample(originalSample); // Revert to original sample data
-		setIsReportChanged(false); // Hide the cancel and save buttons
-	};
-
-	const handleConfirmEdit = async () => {
-		try {
-			// Combine customerInfo and receiptInfo for saving
-			const combinedInfo = [...customerInfo, ...receiptInfo];
-
-			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
-				sample: {
-					id: sample.id,
-					sample_uid: sample.sample_uid,
-					sample_name: sample.sample_name,
-					sample_description: sample.sample_description,
-					matrix: sample.matrix,
-					sample_information: combinedInfo,
-					modified_by_uid: currentUser.identity_uid,
-				},
-			});
-			if (response.status === 200) {
-				showToast('Sample updated successfully!');
-				setIsEditingSample(false);
-				fetchReceiptFull(); // Fetch updated data
-			} else {
-				Swal.fire({
-					icon: 'error',
-					title: 'Lỗi',
-					text: response.data?.message || 'Failed to update sample.',
-				});
-			}
-		} catch (error) {
-			console.error('Error updating sample:', error);
-			Swal.fire({
-				icon: 'error',
-				title: 'Lỗi',
-				text: error.message || 'An error occurred while updating sample.',
-			});
-		}
-	};
-
 	const handleInputChange = (field, value) => {
 		setSample({ ...sample, [field]: value });
 
-		// Update corresponding values in sample_information arrays
-		if (field === 'sample_name') {
+		// Update corresponding values in sampleInformation arrays
+		if (field === 'sampleName') {
 			// Update the "Tên mẫu thử / name." field in customerInfo
 			const updatedCustomerInfo = customerInfo.map((item) => {
 				if (item.fname.includes('Tên mẫu thử') || item.fname.includes('name')) {
@@ -1671,7 +1905,7 @@ const SampleInfor = () => {
 			setIsReportChanged(true);
 		}
 
-		if (field === 'sample_description') {
+		if (field === 'sampleDescription') {
 			// Update the "Mô tả / desc." field in receiptInfo
 			const updatedReceiptInfo = receiptInfo.map((item) => {
 				if (item.fname.includes('Mô tả') || item.fname.includes('desc')) {
@@ -1738,7 +1972,7 @@ const SampleInfor = () => {
 		setCustomerInfo(updatedCustomerInfo);
 		setIsReportChanged(true); // Mark report as changed
 
-		// We don't update sample_name when changing sample_information fields
+		// We don't update sampleName when changing sampleInformation fields
 	};
 	const handleReceiptFieldChange = (index, field, value) => {
 		const updatedReceiptInfo = [...receiptInfo];
@@ -1757,7 +1991,7 @@ const SampleInfor = () => {
 		setReceiptInfo(updatedReceiptInfo);
 		setIsReportChanged(true); // Mark report as changed
 
-		// We don't update sample_description or matrix when changing sample_information fields
+		// We don't update sampleDescription or matrix when changing sampleInformation fields
 	};
 
 	const handleDeleteCustomerField = (index) => {
@@ -1810,22 +2044,22 @@ const SampleInfor = () => {
 			return field;
 		});
 
-		// Combine both arrays into a single sample_information array
+		// Combine both arrays into a single sampleInformation array
 		const combinedInfo = [...updatedCustomerInfo, ...updatedReceiptInfo];
 		try {
-			// Only update the sample_information without changing sample_name and sample_description
-			const response = await apiPost('https://black.irdop.org/to82oe92i/db/update/sample', {
+			// Only update the sampleInformation without changing sampleName and sampleDescription
+			const response = await apiPost('https://red.irdop.org/v1/sample/edit', {
 				sample: {
 					id: sample.id,
-					sample_uid: sample.sample_uid,
-					sample_information: combinedInfo,
-					modified_by_uid: currentUser.identity_uid,
+					sampleId: sample.sampleId,
+					sampleInformation: combinedInfo,
+					modifiedByUid: currentUser.identityUid,
 				},
 			});
 			if (response.status === 200) {
 				showToast('Report updated successfully!');
 				setIsReportChanged(false); // Reset change tracker
-				fetchReceiptFull(); // Fetch updated data
+				fetchSampleIdsByReceiptId(); // Fetch updated data
 			} else {
 				Swal.fire({
 					icon: 'error',
@@ -1842,46 +2076,99 @@ const SampleInfor = () => {
 			});
 		}
 	};
-	const handleCopySampleInfo = (sampleUid) => {
-		// Find the selected sample from listSampleByReceipt
-		const selectedSample = listSampleByReceipt.find((s) => s.sample_uid === sampleUid);
+	const handleCopySampleInfo = async (sampleUid) => {
+		try {
+			// Call fetchSampleFull to get complete sample information
+			const response = await apiPost('https://red.irdop.org/v1/sample/get/full', {
+				sampleId: sampleUid,
+			});
 
-		if (selectedSample && selectedSample.sample_information) {
-			// Split into customer and receipt info based on the index
-			const sampleInfo = selectedSample.sample_information || [];
+			console.log('Copy sample response status:', response.status); // Debug log
+			console.log('Copy sample response:', response); // Debug log
 
-			// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
-			const receiptStartIndex = sampleInfo.findIndex(
-				(item) => item.fname.includes('Ngày tiếp nhận') || item.fname.includes('receipt date'),
-			);
-
-			let customerInfoItems = [];
-			let receiptInfoItems = [];
-
-			if (receiptStartIndex !== -1) {
-				// Split the array at the found index
-				customerInfoItems = sampleInfo.slice(0, receiptStartIndex);
-				receiptInfoItems = sampleInfo.slice(receiptStartIndex);
-			} else {
-				// If no receipt marker found, all items go to customer info
-				customerInfoItems = sampleInfo;
-				receiptInfoItems = [];
+			// Check response status first
+			if (response.status !== 200) {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: `API trả về lỗi ${response.status} cho mẫu ${sampleUid}`,
+				});
+				setSampleDropdownVisible(false);
+				return;
 			}
 
-			// Set the customer and receipt info
-			setCustomerInfo(customerInfoItems);
-			setReceiptInfo(receiptInfoItems);
+			if (response.data) {
+				console.log('Sample data found:', response.data); // Debug log
 
-			// Mark as changed to enable the save button
-			setIsReportChanged(true);
+				// Check if sampleInformation exists and has content
+				const sampleInfo = response.data.sampleInformation || [];
 
-			showToast(`Đã sao chép thông tin từ mẫu ${sampleUid}`);
-		} else {
-			Swal.fire({
-				icon: 'error',
-				title: 'Lỗi',
-				text: `Không tìm thấy thông tin từ mẫu ${sampleUid}`,
-			});
+				console.log('Sample information found:', sampleInfo); // Debug log
+
+				// Even if sampleInformation is empty, we can still proceed
+				if (sampleInfo.length === 0) {
+					showToast(`Mẫu ${sampleUid} không có thông tin in phiếu để sao chép`);
+					setSampleDropdownVisible(false);
+					return;
+				}
+
+				// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
+				const receiptStartIndex = sampleInfo.findIndex(
+					(item) => item.fname && (item.fname.includes('Ngày tiếp nhận') || item.fname.includes('receipt date')),
+				);
+
+				let customerInfoItems = [];
+				let receiptInfoItems = [];
+
+				if (receiptStartIndex !== -1) {
+					// Split the array at the found index
+					customerInfoItems = sampleInfo.slice(0, receiptStartIndex);
+					receiptInfoItems = sampleInfo.slice(receiptStartIndex);
+				} else {
+					// If no receipt marker found, all items go to customer info
+					customerInfoItems = sampleInfo;
+					receiptInfoItems = [];
+				}
+
+				// Set the customer and receipt info
+				setCustomerInfo(customerInfoItems);
+				setReceiptInfo(receiptInfoItems);
+
+				// Mark as changed to enable the save button
+				setIsReportChanged(true);
+
+				showToast(`Đã sao chép thông tin từ mẫu ${sampleUid}`);
+			} else {
+				console.error('No data returned from API for sample:', sampleUid);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: `Không tìm thấy dữ liệu mẫu ${sampleUid}`,
+				});
+			}
+		} catch (error) {
+			console.error('Error fetching sample information:', error);
+
+			// Check if it's a 404 or sample not found error
+			if (error.response && error.response.status === 404) {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: `Không tìm thấy mẫu ${sampleUid} trong hệ thống`,
+				});
+			} else if (error.message.includes('404') || error.message.includes('not found')) {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: `Không tìm thấy mẫu ${sampleUid} trong hệ thống`,
+				});
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: `Lỗi khi lấy thông tin từ mẫu ${sampleUid}: ${error.message}`,
+				});
+			}
 		}
 
 		// Close the dropdown
@@ -1893,22 +2180,18 @@ const SampleInfor = () => {
 		const { active, over } = event;
 
 		if (active.id !== over.id) {
-			const oldIndex = customerInfoOrder.indexOf(active.id);
-			const newIndex = customerInfoOrder.indexOf(over.id);
+			setCustomerInfo((items) => {
+				const oldIndex = customerInfoOrder.indexOf(active.id);
+				const newIndex = customerInfoOrder.indexOf(over.id);
 
-			const newOrder = arrayMove(customerInfoOrder, oldIndex, newIndex);
-			setCustomerInfoOrder(newOrder);
+				const reorderedItems = arrayMove(items, oldIndex, newIndex);
 
-			// Reorder customerInfo array based on the new order
-			const reorderedCustomerInfo = newOrder.map((id) => {
-				const originalIndex = parseInt(id.split('-')[1]);
-				return customerInfo[originalIndex];
+				// Update order array to match new positions
+				const updatedOrder = reorderedItems.map((_, index) => `customer-${index}`);
+				setCustomerInfoOrder(updatedOrder);
+
+				return reorderedItems;
 			});
-			setCustomerInfo(reorderedCustomerInfo);
-
-			// Update customerInfoOrder to reflect new positions
-			const updatedOrder = reorderedCustomerInfo.map((_, index) => `customer-${index}`);
-			setCustomerInfoOrder(updatedOrder);
 			setIsReportChanged(true);
 		}
 	};
@@ -1918,23 +2201,18 @@ const SampleInfor = () => {
 		const { active, over } = event;
 
 		if (active.id !== over.id) {
-			const oldIndex = receiptInfoOrder.indexOf(active.id);
-			const newIndex = receiptInfoOrder.indexOf(over.id);
+			setReceiptInfo((items) => {
+				const oldIndex = receiptInfoOrder.indexOf(active.id);
+				const newIndex = receiptInfoOrder.indexOf(over.id);
 
-			const newOrder = arrayMove(receiptInfoOrder, oldIndex, newIndex);
-			setReceiptInfoOrder(newOrder);
+				const reorderedItems = arrayMove(items, oldIndex, newIndex);
 
-			// Reorder receiptInfo array to match the new order
-			const reorderedReceiptInfo = newOrder.map((id) => {
-				const originalIndex = parseInt(id.split('-')[1]);
-				return receiptInfo[originalIndex];
+				// Update order array to match new positions
+				const updatedOrder = reorderedItems.map((_, index) => `receipt-${index}`);
+				setReceiptInfoOrder(updatedOrder);
+
+				return reorderedItems;
 			});
-			setReceiptInfo(reorderedReceiptInfo);
-
-			// Update receiptInfoOrder to be sequential again
-			const updatedOrder = reorderedReceiptInfo.map((_, index) => `receipt-${index}`);
-			setReceiptInfoOrder(updatedOrder);
-
 			setIsReportChanged(true);
 		}
 	};
@@ -2143,8 +2421,8 @@ const SampleInfor = () => {
 							onClick={() => {
 								setIsReportChanged(false); // Reset change tracker
 								// Reset to original values from current sample
-								if (currentSample && currentSample.sample_information) {
-									const sampleInfo = currentSample.sample_information || [];
+								if (currentSample && currentSample.sampleInformation) {
+									const sampleInfo = currentSample.sampleInformation || [];
 
 									// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
 									const receiptStartIndex = sampleInfo.findIndex(
@@ -2189,63 +2467,15 @@ const SampleInfor = () => {
 		);
 	};
 
-	const handleRemoveAnalyte = async (id) => {
-		try {
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/delete/analysis', {
-				id,
-				modified_by_uid: currentUser.identity_uid,
-			});
-
-			if (response.status === 200) {
-				showToast('Analysis deleted successfully!');
-				setListAnalytes(listAnalytes.filter((analyte) => analyte.id !== id));
-			} else {
-				Swal.fire({
-					icon: 'error',
-					title: 'Lỗi',
-					text: response.data?.message || 'Failed to delete analysis.',
-				});
-			}
-		} catch (error) {
-			console.error('Error deleting analysis:', error);
-			Swal.fire({
-				icon: 'error',
-				title: 'Lỗi',
-				text: error.message || 'An error occurred while deleting analysis.',
-			});
-		}
-	};
-
 	const technician = (param) => {
-		// Kiểm tra nếu technician_uid có tồn tại và hợp lệ
-		if (!param || !param.technician_uid || param.technician_uid.trim() === '') {
-			return null;
-		}
-
-		// Kiểm tra nếu technicians array có dữ liệu
-		if (!technicians || technicians.length === 0) {
-			console.warn('Technicians list is empty or not loaded');
-			return null;
-		}
-
-		const iden = technicians.find((identity) => identity.identity_uid === param.technician_uid);
-		if (!iden) {
-			// Nếu không tìm thấy technician, log warning và return null
-			console.warn(
-				`Technician with UID ${param.technician_uid} not found in technicians list. Available technicians:`,
-				technicians.map((t) => ({ uid: t.identity_uid, name: t.identity_name, alias: t.alias })),
-			);
-			return null;
-		}
-
-		const ktv = iden.identity_name + ' (' + iden.alias + ')';
-		return ktv;
+		// Sử dụng technician.identityName từ dữ liệu mới, fallback về technicianId nếu không có
+		return param?.technician?.identityName || param?.technicianId || '';
 	};
 
 	const handleTechnicianClick = (order) => {
 		if (!order) return;
-		setEditingField(`technician_uid-${order.id}`);
-		setInputValue(order.technician_uid || '');
+		setEditingField(`technicianId-${order.id}`);
+		setInputValue(order.technicianId || '');
 		setIsEditorVisible(true);
 	};
 
@@ -2276,9 +2506,22 @@ const SampleInfor = () => {
 	};
 
 	const handleTechnicianChange = async (index, identity_uid) => {
-		// Validate the technician_uid before proceeding
-		const selectedTechnician = technicians.find((tech) => tech.identity_uid === identity_uid);
-		if (!selectedTechnician) {
+		// Validate the technicianId before proceeding
+		let selectedTechnician = null;
+		let selectedGroup = null;
+
+		for (const group of technicians) {
+			if (group.technicians && Array.isArray(group.technicians)) {
+				const tech = group.technicians.find((t) => t.technicianId === identity_uid);
+				if (tech) {
+					selectedTechnician = tech;
+					selectedGroup = group;
+					break;
+				}
+			}
+		}
+
+		if (!selectedTechnician || !selectedGroup) {
 			Swal.fire({
 				icon: 'error',
 				title: 'Lỗi',
@@ -2293,7 +2536,16 @@ const SampleInfor = () => {
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id == index) {
 				// Use loose equality to handle both string and number comparisons
-				return { ...item, technician_uid: identity_uid };
+				// Update with new camelCase fields
+				return {
+					...item,
+					technicianId: identity_uid,
+					technician: {
+						identityId: identity_uid,
+						identityName: selectedTechnician.identityName,
+					},
+					technicianAlias: selectedGroup.alias,
+				};
 			}
 			return item;
 		});
@@ -2306,15 +2558,26 @@ const SampleInfor = () => {
 
 		// Find the updated analysis item
 		const analysis = updatedAnalytes.find((item) => item.id == index); // Use loose equality
+
+		// Prepare additional data
+		const technicianIds = selectedGroup.technicians.map((tech) => tech.technicianId);
+		const technicianAlias = selectedGroup.alias;
+
 		try {
 			// Create minimal update object with only required fields
 			const updateData = {
 				id: analysis.id,
-				sample_id: analysis.sample_id,
-				receipt_id: analysis.receipt_id,
-				technician_uid: identity_uid,
-				modified_by_uid: currentUser.identity_uid,
-				display_style: analysis.display_style || [
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
+				technicianId: identity_uid,
+				technician: {
+					identityId: identity_uid,
+					identityName: selectedTechnician.identityName,
+				},
+				technicianAlias: technicianAlias, // Add group alias
+				identityIds: technicianIds, // Add list of all technician IDs in the group (renamed from technicianIds)
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analysis.displayStyle || [
 					{
 						label: 'default',
 						value: '',
@@ -2327,12 +2590,12 @@ const SampleInfor = () => {
 			};
 
 			// Send the update to the server
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
 			if (response.status === 200) {
-				showToast(`Đã gán ${selectedTechnician.identity_name} (${selectedTechnician.alias}) thực hiện`);
+				showToast(`Đã gán ${selectedTechnician.identityName} (${selectedTechnician.technicianAlias}) thực hiện`);
 			} else {
 				// Rollback the state on error
 				setListAnalytes(originalAnalytes);
@@ -2439,11 +2702,11 @@ const SampleInfor = () => {
 			// Create minimal update object with only required fields
 			const updateData = {
 				id: analysis.id,
-				sample_id: analysis.sample_id,
-				receipt_id: analysis.receipt_id,
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
 				deadline: newDeadline,
-				modified_by_uid: currentUser.identity_uid,
-				display_style: analysis.display_style || [
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analysis.displayStyle || [
 					{
 						label: 'default',
 						value: '',
@@ -2456,7 +2719,7 @@ const SampleInfor = () => {
 			};
 
 			// Send the update to the server
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
@@ -2567,7 +2830,7 @@ const SampleInfor = () => {
 	};
 
 	const handleUnitSelect = (unit) => {
-		if (editingField && editingField.startsWith('result_unit')) {
+		if (editingField && editingField.startsWith('resultUnit')) {
 			setInputValue(unit);
 			handleSaveContent(unit);
 		}
@@ -2577,10 +2840,10 @@ const SampleInfor = () => {
 		setEditingParameterField(id);
 		// Store original value when starting to edit
 		const analysis = listAnalytes.find((item) => item.id === id);
-		const originalKey = `parameter_name_${id}`;
+		const originalKey = `parameterName_${id}`;
 		setOriginalValues((prev) => ({
 			...prev,
-			[originalKey]: analysis?.parameter_name || '',
+			[originalKey]: analysis?.parameterName || '',
 		}));
 	};
 	const handleMatrixClick = (id) => {
@@ -2597,7 +2860,7 @@ const SampleInfor = () => {
 		// Remove dropdown functionality
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
-				return { ...item, parameter_name: newValue, parameter_id: 0 };
+				return { ...item, parameterName: newValue, parameterId: 0 };
 			}
 			return item;
 		});
@@ -2654,10 +2917,10 @@ const SampleInfor = () => {
 		const analysis = listAnalytes.find((item) => item.id === index);
 
 		// Check if value has changed by comparing with original value
-		const originalKey = `parameter_name_${index}`;
+		const originalKey = `parameterName_${index}`;
 		const originalValue = originalValues[originalKey];
 
-		if (analysis.parameter_name === originalValue) {
+		if (analysis.parameterName === originalValue) {
 			// No change, don't call API
 			return;
 		}
@@ -2701,17 +2964,17 @@ const SampleInfor = () => {
 		setEditingProtocolField(id);
 		// Store original value when starting to edit
 		const analysis = listAnalytes.find((item) => item.id === id);
-		const originalKey = `protocol_code_${id}`;
+		const originalKey = `protocolCode_${id}`;
 		setOriginalValues((prev) => ({
 			...prev,
-			[originalKey]: analysis?.protocol_code || '',
+			[originalKey]: analysis?.protocolCode || '',
 		}));
 	};
 
 	const handleProtocolChange = (index, newValue) => {
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
-				return { ...item, protocol_code: newValue };
+				return { ...item, protocolCode: newValue };
 			}
 			return item;
 		});
@@ -2722,10 +2985,10 @@ const SampleInfor = () => {
 		const analysis = listAnalytes.find((item) => item.id === index);
 
 		// Check if value has changed by comparing with original value
-		const originalKey = `protocol_code_${index}`;
+		const originalKey = `protocolCode_${index}`;
 		const originalValue = originalValues[originalKey];
 
-		if (analysis.protocol_code === originalValue) {
+		if (analysis.protocolCode === originalValue) {
 			// No change, don't call API
 			return;
 		}
@@ -2734,11 +2997,11 @@ const SampleInfor = () => {
 			// Create minimal update object with only required fields
 			const updateData = {
 				id: analysis.id,
-				sample_id: analysis.sample_id,
-				receipt_id: analysis.receipt_id,
-				protocol_code: analysis.protocol_code || '',
-				modified_by_uid: currentUser.identity_uid,
-				display_style: analysis.display_style || [
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
+				protocolCode: analysis.protocolCode || '',
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analysis.displayStyle || [
 					{
 						label: 'default',
 						value: '',
@@ -2751,7 +3014,7 @@ const SampleInfor = () => {
 			};
 
 			// Send the update directly to the analysis API
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
@@ -2791,7 +3054,7 @@ const SampleInfor = () => {
 	const handleProtocolSourceChange = async (index, newValue) => {
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
-				return { ...item, protocol_source: newValue };
+				return { ...item, protocolSource: newValue };
 			}
 			return item;
 		});
@@ -2802,11 +3065,11 @@ const SampleInfor = () => {
 			// Create minimal update object with only required fields
 			const updateData = {
 				id: analysis.id,
-				sample_id: analysis.sample_id,
-				receipt_id: analysis.receipt_id,
-				protocol_source: newValue,
-				modified_by_uid: currentUser.identity_uid,
-				display_style: analysis.display_style || [
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
+				protocolSource: newValue,
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analysis.displayStyle || [
 					{
 						label: 'default',
 						value: '',
@@ -2819,7 +3082,7 @@ const SampleInfor = () => {
 			};
 
 			// Send the update to the server
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
@@ -2844,6 +3107,21 @@ const SampleInfor = () => {
 	const [editingExDateField, setEditingExDateField] = useState(null);
 	const [exDateSelected, setExDateSelected] = useState(new Date());
 	const [exOriginalValues, setExOriginalValues] = useState({});
+
+	// Note modal states
+	const [showNoteModal, setShowNoteModal] = useState(false);
+	const [selectedAnalysisForNote, setSelectedAnalysisForNote] = useState(null);
+	const [newNoteText, setNewNoteText] = useState('');
+	const [isUpdatingNote, setIsUpdatingNote] = useState(false);
+
+	// Tooltip state
+	const [tooltip, setTooltip] = useState({
+		visible: false,
+		content: '',
+		x: 0,
+		y: 0,
+		position: 'above',
+	});
 
 	const handleExNameClick = (id) => {
 		setEditingExNameField(id);
@@ -2926,11 +3204,11 @@ const SampleInfor = () => {
 			// Create minimal update object with only required fields
 			const updateData = {
 				id: analysis.id,
-				sample_id: analysis.sample_id,
-				receipt_id: analysis.receipt_id,
-				ex_info: exInfo,
-				modified_by_uid: currentUser.identity_uid,
-				display_style: analysis.display_style || [
+				sampleId: analysis.sampleId,
+				receiptId: analysis.receiptId,
+				exInfo: exInfo,
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analysis.displayStyle || [
 					{
 						label: 'default',
 						value: '',
@@ -2943,7 +3221,7 @@ const SampleInfor = () => {
 			};
 
 			// Send the update to the server
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
@@ -2960,6 +3238,111 @@ const SampleInfor = () => {
 		}
 	};
 
+	// Tooltip functions
+	const showTooltip = (event, content, customPosition = null) => {
+		const rect = event.target.getBoundingClientRect();
+		const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+		const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+		let x, y, position;
+
+		if (customPosition === 'left') {
+			// Position tooltip completely to the left of the element
+			x = rect.left + scrollLeft - 10; // 10px padding from element
+			y = rect.top + scrollTop + rect.height / 2;
+			position = 'left';
+		} else if (customPosition === 'right') {
+			// Position tooltip completely to the right of the element
+			x = rect.right + scrollLeft + 10; // 10px padding from element
+			y = rect.top + scrollTop + rect.height / 2;
+			position = 'right';
+		} else {
+			// Default behavior: above or below (center aligned)
+			const spaceAbove = rect.top;
+			const tooltipHeight = 40; // Approximate tooltip height
+			const shouldShowBelow = spaceAbove < tooltipHeight + 20; // 20px buffer
+
+			x = rect.left + scrollLeft + rect.width / 2;
+			y = shouldShowBelow
+				? rect.bottom + scrollTop + 10 // Show below
+				: rect.top + scrollTop - 10; // Show above
+			position = shouldShowBelow ? 'below' : 'above';
+		}
+
+		setTooltip({
+			visible: true,
+			content,
+			x,
+			y,
+			position,
+		});
+	};
+
+	const hideTooltip = () => {
+		setTooltip({
+			visible: false,
+			content: '',
+			x: 0,
+			y: 0,
+			position: 'above',
+		});
+	};
+
+	// Handle note icon click
+	const handleNoteClick = (analysis, e) => {
+		e.stopPropagation();
+		setSelectedAnalysisForNote(analysis);
+		setNewNoteText('');
+		setShowNoteModal(true);
+	};
+
+	// Handle note update
+	const handleUpdateNote = async () => {
+		if (!selectedAnalysisForNote || !newNoteText.trim()) {
+			showToast('Vui lòng nhập nội dung ghi chú', 'warning');
+			return;
+		}
+
+		setIsUpdatingNote(true);
+		try {
+			const currentNote = selectedAnalysisForNote.note || '';
+			const userName = currentUser?.identity_name || 'Unknown User';
+			const timestamp = new Date().toLocaleString('vi-VN');
+			const newNote = currentNote
+				? `${currentNote}\n[${timestamp}] ${userName}: ${newNoteText.trim()}`
+				: `[${timestamp}] ${userName}: ${newNoteText.trim()}`;
+
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analysis: {
+					id: selectedAnalysisForNote.id,
+					note: newNote,
+				},
+			});
+
+			if (response?.status < 300) {
+				showToast('Cập nhật ghi chú thành công!');
+
+				// Update local data
+				const updatedAnalytes = listAnalytes.map((item) =>
+					item.id === selectedAnalysisForNote.id ? { ...item, note: newNote } : item,
+				);
+				setListAnalytes(updatedAnalytes);
+
+				// Close modal
+				setShowNoteModal(false);
+				setSelectedAnalysisForNote(null);
+				setNewNoteText('');
+			} else {
+				showToast('Lỗi khi cập nhật ghi chú', 'error');
+			}
+		} catch (error) {
+			console.error('Error updating note:', error);
+			showToast('Lỗi khi cập nhật ghi chú: ' + error.message, 'error');
+		} finally {
+			setIsUpdatingNote(false);
+		}
+	};
+
 	const handleDeleteConfirm = (id) => {
 		setDeleteItemId(id);
 		setIsDeleteConfirmVisible(true);
@@ -2973,15 +3356,14 @@ const SampleInfor = () => {
 
 	const handleDeleteSampleConfirmAction = async () => {
 		try {
-			const response = await apiPost('https://black.irdop.org/to82oe92i/db/delete/sample', {
-				id: deleteItemId,
-				sample_uid: sample.sample_uid,
-				modified_by_uid: currentUser.identity_uid,
+			// Use the correct API endpoint and body format
+			const response = await apiPost('https://red.irdop.org/v1/sample/delete', {
+				sampleId: deleteItemId,
 			});
 
 			if (response.status === 200) {
 				showToast('Sample deleted successfully!');
-				navigate(`/dashboard/receipt?receipt_uid=${receipt_uid}`);
+				navigate(`/dashboard/receipt?receiptId=${receiptId}`);
 			} else {
 				Swal.fire({
 					icon: 'error',
@@ -3004,9 +3386,9 @@ const SampleInfor = () => {
 
 	const handleDeleteAnalysisConfirmAction = async () => {
 		try {
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/delete/analysis', {
-				id: deleteItemId,
-				modified_by_uid: currentUser.identity_uid,
+			// Use the correct API endpoint and body format
+			const response = await apiPost('https://red.irdop.org/v1/analysis/delete', {
+				analysisId: deleteItemId,
 			});
 
 			if (response.status === 200) {
@@ -3090,16 +3472,20 @@ const SampleInfor = () => {
 
 	const handleDeleteMultipleConfirmAction = async () => {
 		try {
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/delete/analysis', {
-				ids: selectedAnalytes,
-				modified_by_uid: currentUser.identity_uid,
+			// Get the array of selected analysis IDs
+			const analysisIds = selectedAnalytes;
+
+			// Use the correct API endpoint with analysisIds array
+			const response = await apiPost('https://red.irdop.org/v1/analysis/delete', {
+				analysisIds: analysisIds,
 			});
 
 			if (response.status === 200) {
-				showToast(`${selectedAnalytes.length} analyses deleted successfully!`);
+				// Update the UI by removing deleted items
 				setListAnalytes(listAnalytes.filter((analyte) => !selectedAnalytes.includes(analyte.id)));
 				setSelectedAnalytes([]);
 				setSelectAll(false);
+				showToast(`${selectedAnalytes.length} analyses deleted successfully!`);
 			} else {
 				Swal.fire({
 					icon: 'error',
@@ -3141,66 +3527,99 @@ const SampleInfor = () => {
 			return;
 		}
 
+		// Find the selected technician and group
+		let selectedGroup = null;
+		for (const group of technicians) {
+			if (group.technicians && Array.isArray(group.technicians)) {
+				const tech = group.technicians.find((t) => t.technicianId === selectedTechnician);
+				if (tech) {
+					selectedGroup = group;
+					break;
+				}
+			}
+		}
+
+		if (!selectedGroup) {
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Không tìm thấy thông tin nhóm kỹ thuật viên',
+			});
+			return;
+		}
+
 		try {
 			// Get the selected analytes
 			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
 
-			let successCount = 0;
-			let failCount = 0;
+			// Prepare additional data
+			const technicianIds = selectedGroup.technicians.map((tech) => tech.technicianId);
+			const technicianAlias = selectedGroup.alias;
 
-			// Make API calls for each analyte separately with minimal data
-			for (const analyte of selectedItems) {
-				try {
-					// Create minimal update object
-					const updateData = {
-						id: analyte.id,
-						sample_id: analyte.sample_id,
-						receipt_id: analyte.receipt_id,
-						technician_uid: selectedTechnician,
-						modified_by_uid: currentUser.identity_uid,
-						display_style: analyte.display_style || [
-							{
-								label: 'default',
-								value: '',
-							},
-							{
-								label: 'eng',
-								value: '',
-							},
-						],
-					};
+			// Create array of update objects for bulk update
+			const updateDataArray = selectedItems.map((analyte) => ({
+				id: analyte.id,
+				sampleId: analyte.sampleId,
+				receiptId: analyte.receiptId,
+				technicianId: selectedTechnician,
+				technicianIds: technicianIds, // Add list of all technician IDs in the group
+				technicianAlias: technicianAlias, // Add group alias
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analyte.displayStyle || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
+			}));
 
-					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-						analysis: updateData,
-					});
-					successCount++;
-				} catch (error) {
-					console.error(`Error updating analysis ID ${analyte.id}:`, error);
-					failCount++;
-				}
-			}
-
-			// Update the UI
-			const newAnalytesList = listAnalytes.map((analyte) => {
-				if (selectedAnalytes.includes(analyte.id)) {
-					return { ...analyte, technician_uid: selectedTechnician };
-				}
-				return analyte;
+			// Make a single API call with the analyses array
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analyses: updateDataArray,
 			});
-			setListAnalytes(newAnalytesList);
 
-			if (failCount > 0) {
-				Swal.fire({
-					icon: 'warning',
-					title: 'Kết quả',
-					text: `${successCount} analyses updated successfully, ${failCount} failed`,
+			if (response.status === 200) {
+				// Update the UI
+				const newAnalytesList = listAnalytes.map((analyte) => {
+					if (selectedAnalytes.includes(analyte.id)) {
+						// Find technician info for updating UI
+						const selectedTech = selectedGroup.technicians.find((t) => t.technicianId === selectedTechnician);
+						return {
+							...analyte,
+							technicianId: selectedTechnician,
+							technician: {
+								identityId: selectedTechnician,
+								identityName: selectedTech?.identityName || '',
+							},
+							technicianAlias: selectedGroup.alias,
+						};
+					}
+					return analyte;
 				});
+				setListAnalytes(newAnalytesList);
+
+				// Find technician name from new structure
+				let technicianName = '';
+				for (const group of technicians) {
+					if (group.technicians && Array.isArray(group.technicians)) {
+						const tech = group.technicians.find((t) => t.technicianId === selectedTechnician);
+						if (tech) {
+							technicianName = tech.identityName;
+							break;
+						}
+					}
+				}
+				showToast(`Successfully transferred ${selectedAnalytes.length} analyses to ${technicianName}`);
 			} else {
-				showToast(
-					`Successfully transferred ${selectedAnalytes.length} analyses to ${
-						technicians.find((tech) => tech.identity_uid === selectedTechnician)?.identity_name
-					}`,
-				);
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi bàn giao chỉ tiêu',
+				});
 			}
 
 			setIsTransferMultipleVisible(false);
@@ -3222,19 +3641,85 @@ const SampleInfor = () => {
 				<div className="overflow-auto mb-4 flex-1">
 					<p className="font-medium mb-2">Chọn người thực hiện:</p>
 					<div className="grid grid-cols-4 gap-3">
-						{technicians.map((tech) => (
-							<div
-								key={tech.identity_uid}
-								className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 text-center ${
-									selectedTechnician === tech.identity_uid ? 'border-primary bg-blue-50' : 'border-gray-300'
-								}`}
-								onClick={() => setSelectedTechnician(tech.identity_uid)}
-							>
-								<p className="font-bold text-primary text-sm mb-1">{tech.alias || ''}</p>
-								<p className="text-xs text-gray-600 leading-tight">{tech.identity_name || ''}</p>
-							</div>
-						))}
+						{technicians.map((group) => {
+							const primaryTechnician = group.technicians?.[0];
+							if (!primaryTechnician) return null;
+
+							return (
+								<div
+									key={group.alias}
+									className={`relative p-3 border rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 text-center ${
+										selectedTechnician === primaryTechnician.technicianId
+											? 'border-primary bg-blue-50'
+											: 'border-gray-300'
+									}`}
+									onClick={() => setSelectedTechnician(primaryTechnician.technicianId)}
+									onMouseEnter={(e) => {
+										if (group.technicians && group.technicians.length > 1) {
+											const rect = e.currentTarget.getBoundingClientRect();
+											setDropdownRect({
+												top: rect.top,
+												left: rect.left,
+												width: rect.width,
+												height: rect.height,
+											});
+											setHoveredGroup(group.alias);
+										}
+									}}
+								>
+									<p className="font-bold text-primary text-sm mb-1">
+										{group.alias}: {group.groupName}
+									</p>
+									<p className="text-xs text-gray-600 leading-tight">{primaryTechnician.identityName}</p>
+								</div>
+							);
+						})}
 					</div>
+
+					{/* Portal for hover dropdown */}
+					{hoveredGroup &&
+						dropdownRect &&
+						createPortal(
+							<div
+								className="fixed z-[9999]"
+								style={{
+									top: `${dropdownRect.top}px`,
+									left: `${dropdownRect.left - 200}px`,
+									width: '200px',
+									height: `${dropdownRect.height}px`,
+								}}
+								onMouseLeave={() => {
+									setHoveredGroup(null);
+									setDropdownRect(null);
+								}}
+							>
+								{/* Bridge area - invisible but hoverable to prevent gap issues */}
+								<div className="absolute right-0 top-0 w-12 h-full bg-transparent"></div>
+
+								{/* Actual dropdown */}
+								<div className="absolute left-0 top-0 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-48">
+									<p className="text-xs font-medium text-gray-500 mb-2">Tất cả thành viên:</p>
+									{technicians
+										.find((g) => g.alias === hoveredGroup)
+										?.technicians?.map((tech) => (
+											<div
+												key={tech.technicianId}
+												className="p-2 hover:bg-gray-100 rounded cursor-pointer text-left"
+												onClick={(e) => {
+													e.stopPropagation();
+													setSelectedTechnician(tech.technicianId);
+													setHoveredGroup(null);
+													setDropdownRect(null);
+												}}
+											>
+												<p className="text-sm font-medium">{tech.identityName}</p>
+												<p className="text-xs text-gray-500">{tech.technicianAlias}</p>
+											</div>
+										))}
+								</div>
+							</div>,
+							document.body,
+						)}
 				</div>
 				<div className="flex justify-end">
 					<button
@@ -3266,15 +3751,15 @@ const SampleInfor = () => {
 		}
 
 		try {
-			// Create array of objects with id and reviewed_by fields (toggle logic)
+			// Create array of objects with id and reviewedBy fields (toggle logic)
 			const analysesToConfirm = selectedAnalytes.map((id) => {
 				const analysis = listAnalytes.find((item) => item.id === id);
 				// If already reviewed, set to empty string, otherwise set to current user
-				const reviewed_by = analysis?.reviewed_by && analysis.reviewed_by.trim() !== '' ? '' : currentUser.identity_uid;
+				const reviewedBy = analysis?.reviewed_by && analysis.reviewed_by.trim() !== '' ? '' : currentUser.identity_uid;
 
 				return {
 					id,
-					reviewed_by,
+					reviewedBy,
 				};
 			});
 
@@ -3287,11 +3772,11 @@ const SampleInfor = () => {
 				const newAnalytesList = listAnalytes.map((analyte) => {
 					if (selectedAnalytes.includes(analyte.id)) {
 						const analysisToConfirm = analysesToConfirm.find((item) => item.id === analyte.id);
-						const newReviewedBy = analysisToConfirm.reviewed_by;
+						const newReviewedBy = analysisToConfirm.reviewedBy;
 
 						return {
 							...analyte,
-							reviewed_by: newReviewedBy,
+							reviewedBy: newReviewedBy,
 							reviewerName: newReviewedBy ? (currentUserName ? currentUserName.identity_name : 'Unknown') : null,
 						};
 					}
@@ -3300,7 +3785,7 @@ const SampleInfor = () => {
 				setListAnalytes(newAnalytesList);
 
 				// Count how many were reviewed vs unreviewed
-				const reviewedCount = analysesToConfirm.filter((item) => item.reviewed_by !== '').length;
+				const reviewedCount = analysesToConfirm.filter((item) => item.reviewedBy !== '').length;
 				const unreviewedCount = analysesToConfirm.length - reviewedCount;
 
 				if (reviewedCount > 0 && unreviewedCount > 0) {
@@ -3355,14 +3840,17 @@ const SampleInfor = () => {
 			return;
 		}
 
+		// Create inputOptions dynamically from scientificFields
+		const inputOptions = scientificFields.reduce((acc, field) => {
+			acc[field] = field;
+			return acc;
+		}, {});
+
 		// Prompt for the field value
 		const { value: field } = await Swal.fire({
 			title: 'Chọn lĩnh vực',
 			input: 'select',
-			inputOptions: {
-				'Hóa lý': 'Hóa lý',
-				'Vi sinh': 'Vi sinh',
-			},
+			inputOptions: inputOptions,
 			inputPlaceholder: 'Chọn lĩnh vực',
 			showCancelButton: true,
 			cancelButtonText: 'Hủy bỏ',
@@ -3379,58 +3867,47 @@ const SampleInfor = () => {
 				// Get the selected analytes
 				const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
 
-				let successCount = 0;
-				let failCount = 0;
+				// Create array of update objects for bulk update
+				const updateDataArray = selectedItems.map((analyte) => ({
+					id: analyte.id,
+					sampleId: analyte.sampleId,
+					receiptId: analyte.receiptId,
+					scientificField: field,
+					modifiedByUid: currentUser.identityUid,
+					displayStyle: analyte.displayStyle || [
+						{
+							label: 'default',
+							value: '',
+						},
+						{
+							label: 'eng',
+							value: '',
+						},
+					],
+				}));
 
-				// Make API calls for each analyte separately with minimal data
-				for (const analyte of selectedItems) {
-					try {
-						// Create minimal update object
-						const updateData = {
-							id: analyte.id,
-							sample_id: analyte.sample_id,
-							receipt_id: analyte.receipt_id,
-							field: field,
-							modified_by_uid: currentUser.identity_uid,
-							display_style: analyte.display_style || [
-								{
-									label: 'default',
-									value: '',
-								},
-								{
-									label: 'eng',
-									value: '',
-								},
-							],
-						};
-
-						await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-							analysis: updateData,
-						});
-						successCount++;
-					} catch (error) {
-						console.error(`Error updating analysis ID ${analyte.id}:`, error);
-						failCount++;
-					}
-				}
-
-				// Update the UI
-				const newAnalytesList = listAnalytes.map((analyte) => {
-					if (selectedAnalytes.includes(analyte.id)) {
-						return { ...analyte, field: field };
-					}
-					return analyte;
+				// Make a single API call with the analyses array
+				const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+					analyses: updateDataArray,
 				});
-				setListAnalytes(newAnalytesList);
 
-				if (failCount > 0) {
-					Swal.fire({
-						icon: 'warning',
-						title: 'Kết quả',
-						text: `${successCount} chỉ tiêu cập nhật thành công, ${failCount} thất bại`,
+				if (response.status === 200) {
+					// Update the UI
+					const newAnalytesList = listAnalytes.map((analyte) => {
+						if (selectedAnalytes.includes(analyte.id)) {
+							return { ...analyte, scientificField: field };
+						}
+						return analyte;
 					});
-				} else {
+					setListAnalytes(newAnalytesList);
+
 					showToast(`Đã cập nhật lĩnh vực "${field}" cho ${selectedAnalytes.length} chỉ tiêu`);
+				} else {
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: response.data?.message || 'Có lỗi xảy ra khi cập nhật lĩnh vực',
+					});
 				}
 			} catch (error) {
 				console.error('Error updating fields:', error);
@@ -3450,58 +3927,47 @@ const SampleInfor = () => {
 			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
 			const newDeadline = adjustDateForApiSubmission(bulkDeadlineDate);
 
-			let successCount = 0;
-			let failCount = 0;
+			// Create array of update objects for bulk update
+			const updateDataArray = selectedItems.map((analyte) => ({
+				id: analyte.id,
+				sampleId: analyte.sampleId,
+				receiptId: analyte.receiptId,
+				deadline: newDeadline,
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analyte.displayStyle || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
+			}));
 
-			// Make API calls for each analyte separately with minimal data
-			for (const analyte of selectedItems) {
-				try {
-					// Create minimal update object
-					const updateData = {
-						id: analyte.id,
-						sample_id: analyte.sample_id,
-						receipt_id: analyte.receipt_id,
-						deadline: newDeadline,
-						modified_by_uid: currentUser.identity_uid,
-						display_style: analyte.display_style || [
-							{
-								label: 'default',
-								value: '',
-							},
-							{
-								label: 'eng',
-								value: '',
-							},
-						],
-					};
-
-					await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-						analysis: updateData,
-					});
-					successCount++;
-				} catch (error) {
-					console.error(`Error updating analysis ID ${analyte.id}:`, error);
-					failCount++;
-				}
-			}
-
-			// Update the UI
-			const newAnalytesList = listAnalytes.map((analyte) => {
-				if (selectedAnalytes.includes(analyte.id)) {
-					return { ...analyte, deadline: newDeadline };
-				}
-				return analyte;
+			// Make a single API call with the analyses array
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analyses: updateDataArray,
 			});
-			setListAnalytes(newAnalytesList);
 
-			if (failCount > 0) {
-				Swal.fire({
-					icon: 'warning',
-					title: 'Kết quả',
-					text: `${successCount} analyses updated successfully, ${failCount} failed`,
+			if (response.status === 200) {
+				// Update the UI
+				const newAnalytesList = listAnalytes.map((analyte) => {
+					if (selectedAnalytes.includes(analyte.id)) {
+						return { ...analyte, deadline: newDeadline };
+					}
+					return analyte;
 				});
-			} else {
+				setListAnalytes(newAnalytesList);
+
 				showToast(`Đã cập nhật hạn trả cho ${selectedAnalytes.length} chỉ tiêu thành ${formatDate(bulkDeadlineDate)}`);
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi cập nhật hạn trả',
+				});
 			}
 
 			setIsBulkDeadlineVisible(false);
@@ -3549,6 +4015,40 @@ const SampleInfor = () => {
 		.react-datepicker__input-container {
 			width: 100%;
 		}
+		/* Custom Tooltip Styles */
+		.custom-tooltip {
+			position: absolute;
+			background: rgba(0, 0, 0, 0.9);
+			color: white;
+			padding: 10px 14px;
+			border-radius: 6px;
+			font-size: 13px;
+			font-weight: 500;
+			white-space: pre-wrap;
+			pointer-events: none;
+			z-index: 10000;
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+			opacity: 0;
+			transition: opacity 0.2s ease-in-out;
+			max-width: 350px;
+			min-width: 200px;
+			word-wrap: break-word;
+		}
+		.custom-tooltip.visible {
+			opacity: 1;
+		}
+		.custom-tooltip.left {
+			transform: translateX(-100%) translateY(-50%);
+		}
+		.custom-tooltip.right {
+			transform: translateX(0) translateY(-50%);
+		}
+		.custom-tooltip.above {
+			transform: translateX(-50%) translateY(-100%);
+		}
+		.custom-tooltip.below {
+			transform: translateX(-50%) translateY(0);
+		}
 		`;
 		document.head.appendChild(style);
 
@@ -3571,114 +4071,104 @@ const SampleInfor = () => {
 			// Get the selected analytes
 			const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
 
-			// Format the data as required by the API: {analysis: parameter_name, matrix: matrix}
-			const formattedData = selectedItems.map((item) => ({
-				analysis: item.parameter_name,
-				matrix: item.matrix,
-			}));
-
-			// Call API to match parameters
-			const response = await apiPost('https://black.irdop.org/trelw82ki/match/analysis/matrix', {
-				listAnalysis: formattedData,
-			});
-
-			let updatedAnalytes = [];
-			if (response.status === 200) {
-				// Update UI with matched parameters
-				updatedAnalytes = listAnalytes.map((analyte) => {
-					if (selectedAnalytes.includes(analyte.id)) {
-						const matchedAnalysis = response.data.find(
-							(item) => item.parameter_name === analyte.parameter_name && item.matrix === analyte.matrix,
-						);
-						if (matchedAnalysis) {
-							const updatedAnalyte = {
-								...analyte, // Keep all original properties
-								parameter_name: matchedAnalysis.parameter_name,
-								parameter_uid: matchedAnalysis.parameter_uid || analyte.parameter_uid,
-								parameter_id: matchedAnalysis.parameter_id || analyte.parameter_id,
-								protocol_code: matchedAnalysis.protocol_code || analyte.protocol_code,
-								protocol_source: matchedAnalysis.protocol_source || analyte.protocol_source,
-								field: matchedAnalysis.field || analyte.field,
-								display_style: matchedAnalysis.display_style || analyte.display_style,
-								technician_uid: matchedAnalysis.technician_uid || analyte.technician_uid,
-							};
-
-							return updatedAnalyte;
-						}
-					}
-					return analyte;
+			// Check if any item is missing matrix
+			const missingMatrixItems = selectedItems.filter((item) => !item.matrix || item.matrix.trim() === '');
+			if (missingMatrixItems.length > 0) {
+				const result = await Swal.fire({
+					icon: 'warning',
+					title: 'Cảnh báo',
+					text: `Có ${missingMatrixItems.length} chỉ tiêu thiếu thông tin nền mẫu. Vui lòng bổ sung thông tin nền mẫu trước khi đối soát.`,
+					showCancelButton: true,
+					confirmButtonText: 'Tiếp tục đối soát',
+					cancelButtonText: 'Hủy bỏ',
 				});
 
-				// Update the UI first for better UX
-				setListAnalytes(updatedAnalytes);
-
-				// Force re-render to ensure technician display updates
-				setRefreshTrigger((prev) => prev + 1);
-
-				// Now update each analysis in the database
-				let successCount = 0;
-				let failCount = 0;
-				for (const analyte of updatedAnalytes.filter((a) => selectedAnalytes.includes(a.id))) {
-					try {
-						if (analyte.parameter_uid || analyte.parameter_id) {
-							// Create minimal update object with only required fields, including display_style from matched analyte API
-							const updateData = {
-								id: analyte.id,
-								sample_id: analyte.sample_id,
-								receipt_id: analyte.receipt_id,
-								parameter_name: analyte.parameter_name,
-								parameter_uid: analyte.parameter_uid || '',
-								parameter_id: analyte.parameter_id || 0,
-								protocol_code: analyte.protocol_code || '',
-								protocol_source: analyte.protocol_source || '',
-								field: analyte.field || '',
-								matrix: analyte.matrix || '',
-								technician_uid: analyte.technician_uid || '',
-								modified_by_uid: currentUser.identity_uid,
-								// Ensure display_style from analyte API match is properly included
-								display_style: analyte.display_style || [
-									{
-										label: 'default',
-										value: '',
-									},
-									{
-										label: 'eng',
-										value: '',
-									},
-								],
-							};
-
-							// Update the analysis in the database
-							await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-								analysis: updateData,
-							});
-
-							successCount++;
-						}
-					} catch (error) {
-						console.error(`Error updating analysis ID ${analyte.id}:`, error);
-						failCount++;
-					}
+				if (!result.isConfirmed) {
+					return;
 				}
+			}
 
-				if (failCount > 0) {
-					Swal.fire({
-						icon: 'warning',
-						title: 'Kết quả',
-						text: `${successCount} chỉ tiêu đồng bộ thành công, ${failCount} thất bại`,
+			// Call match API to get updated parameter information
+			const matchData = selectedItems.map((item) => ({
+				parameterName: item.parameterName || item.parameter_name,
+				matrix: item.matrix || sample?.matrix || '',
+			}));
+
+			const matchResponse = await apiPost('https://red.irdop.org/v1/analysis/match/parameter', {
+				analyses: matchData,
+			});
+
+			if (matchResponse.status === 200) {
+				// Create array of update objects for bulk update using matched data
+				const updateDataArray = selectedItems.map((analyte) => {
+					// Find the corresponding matched data
+					const matchedData = matchResponse.data.find((item) => {
+						const apiParamName = (item.parameterName || '').toLowerCase().trim();
+						const analyteParamName = (analyte.parameterName || analyte.parameter_name || '').toLowerCase().trim();
+						const apiMatrix = (item.matrix || '').toLowerCase().trim();
+						const analyteMatrix = (analyte.matrix || sample?.matrix || '').toLowerCase().trim();
+						return apiParamName === analyteParamName && (apiMatrix === analyteMatrix || (!apiMatrix && !analyteMatrix));
 					});
-				} else {
-					showToast(`Đã đồng bộ và cập nhật thành công ${successCount} chỉ tiêu`);
-				}
 
-				// Clear selection
-				setSelectedAnalytes([]);
-				setSelectAll(false);
+					// Create update object with matched data or original data
+					return {
+						id: analyte.id,
+						sampleId: analyte.sampleId,
+						receiptId: analyte.receiptId,
+						parameterName: matchedData?.parameterName || analyte.parameterName,
+						parameterId: matchedData?.parameterId || analyte.parameterId,
+						parameterUid: matchedData?.parameterUid || analyte.parameterUid || analyte.parameter_uid || '',
+						protocolCode: matchedData?.protocolCode || analyte.protocolCode,
+						protocolSource: matchedData?.protocolSource || analyte.protocolSource,
+						matrix: matchedData?.matrix || analyte.matrix,
+						scientificField: matchedData?.scientificField || analyte.scientificField,
+						technicianAlias: matchedData?.technicianAlias || analyte.technicianAlias,
+						modifiedByUid: currentUser.identityUid,
+						displayStyle: analyte.displayStyle || [
+							{
+								label: 'default',
+								value: '',
+							},
+							{
+								label: 'eng',
+								value: '',
+							},
+						],
+					};
+				});
+
+				// Make bulk update API call
+				const updateResponse = await apiPost('https://red.irdop.org/v1/analysis/update', {
+					analyses: updateDataArray,
+				});
+
+				if (updateResponse.status === 200) {
+					// Update the UI
+					const newAnalytesList = listAnalytes.map((analyte) => {
+						if (selectedAnalytes.includes(analyte.id)) {
+							const updateData = updateDataArray.find((item) => item.id === analyte.id);
+							return {
+								...analyte,
+								...updateData,
+							};
+						}
+						return analyte;
+					});
+					setListAnalytes(newAnalytesList);
+
+					showToast(`Đã đồng bộ dữ liệu cho ${selectedAnalytes.length} chỉ tiêu`);
+				} else {
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: updateResponse.data?.message || 'Có lỗi xảy ra khi cập nhật dữ liệu',
+					});
+				}
 			} else {
 				Swal.fire({
 					icon: 'error',
 					title: 'Lỗi',
-					text: response.data?.message || 'Có lỗi xảy ra khi đồng bộ dữ liệu',
+					text: matchResponse.data?.message || 'Có lỗi xảy ra khi đối soát thông số',
 				});
 			}
 		} catch (error) {
@@ -3690,6 +4180,7 @@ const SampleInfor = () => {
 			});
 		}
 	};
+
 	const handleUpdateDatabase = async () => {
 		try {
 			// Use selected analyses if any are selected, otherwise find analyses that need database updates
@@ -3699,13 +4190,18 @@ const SampleInfor = () => {
 				// Use selected analyses for update
 				analysesToUpdate = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
 			} else {
-				// Find analyses that need database updates (missing parameter_uid but have other required fields)
+				// Find analyses that need database updates (missing parameterUid but have other required fields)
 				analysesToUpdate = listAnalytes.filter(
 					(analysis) =>
-						(!analysis.parameter_uid || analysis.parameter_uid === '') &&
+						((!analysis.parameterUid && !analysis.parameterUid) ||
+							analysis.parameterUid === '' ||
+							analysis.parameterUid === '') &&
 						analysis.matrix &&
-						((analysis.protocol_source !== 'EX' && analysis.protocol_code) || analysis.protocol_source === 'EX') &&
-						analysis.protocol_source &&
+						((analysis.protocolSource !== 'EX' && analysis.protocolCode) ||
+							(analysis.protocolSource !== 'EX' && analysis.protocolCode) ||
+							analysis.protocolSource === 'EX' ||
+							analysis.protocolSource === 'EX') &&
+						(analysis.protocolSource || analysis.protocolSource) &&
 						analysis.field,
 				);
 			}
@@ -3727,107 +4223,57 @@ const SampleInfor = () => {
 
 			if (!confirmResult.isConfirmed) return;
 
-			// Process each analysis one by one
-			let successCount = 0;
-			let failCount = 0;
-			let updatedAnalytes = [...listAnalytes];
+			// Create array of update objects for bulk update
+			const updateDataArray = analysesToUpdate.map((analyte) => ({
+				id: analyte.id,
+				sampleId: analyte.sampleId,
+				receiptId: analyte.receiptId,
+				parameterName: analyte.parameter_name || analyte.parameterName,
+				parameterUid: analyte.parameter_uid || analyte.parameterUid || '',
+				parameterId: analyte.parameterId,
+				protocolCode: analyte.protocol_code || analyte.protocolCode,
+				protocolSource: analyte.protocol_source || analyte.protocolSource,
+				matrix: analyte.matrix || sample?.matrix || '',
+				scientificField: analyte.field || analyte.scientificField,
+				modifiedByUid: currentUser.identityUid,
+				displayStyle: analyte.displayStyle || [
+					{
+						label: 'default',
+						value: '',
+					},
+					{
+						label: 'eng',
+						value: '',
+					},
+				],
+			}));
 
-			for (const analysis of analysesToUpdate) {
-				try {
-					// First update the parameter database with the analysis information
-					if (
-						analysis.parameter_name ||
-						analysis.matrix ||
-						analysis.protocol_code ||
-						analysis.protocol_source ||
-						analysis.field
-					) {
-						// Ensure matrix is not null or undefined before sending
-						const matrixToUse = analysis.matrix || sample.matrix || '';
+			// Make a single API call with the analyses array
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analyses: updateDataArray,
+			});
 
-						const parameterResponse = await apiPost('https://black.irdop.org/ha8i0uw2/db/upsert/parameter', {
-							parameter: {
-								parameter_uid: analysis.parameter_uid || '',
-								parameter_name: analysis.parameter_name,
-								matrix: matrixToUse, // Use the guaranteed non-null value
-								protocol_code: analysis.protocol_code,
-								protocol_source: analysis.protocol_source,
-								field: analysis.field,
-							},
-						});
-
-						if (parameterResponse.status === 200 && parameterResponse.data) {
-							// Update the analysis with the returned parameter data
-							const updatedAnalysisData = {
-								...analysis,
-								parameter_uid: parameterResponse.data.parameter_uid || analysis.parameter_uid,
-								parameter_id: parameterResponse.data.id || analysis.parameter_id,
-								parameter_name: parameterResponse.data.parameter_name || analysis.parameter_name,
-								protocol_code: parameterResponse.data.protocol_code || analysis.protocol_code,
-								protocol_source: parameterResponse.data.protocol_source || analysis.protocol_source,
-								field: parameterResponse.data.field || analysis.field,
-								modified_by_uid: currentUser.identity_uid,
-							};
-
-							// Update the analysis in the database with the new parameter info
-							const analysisResponse = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-								analysis: updatedAnalysisData,
-							});
-
-							if (analysisResponse.status === 200) {
-								// Update the list with the returned analysis
-								updatedAnalytes = updatedAnalytes.map((item) => {
-									if (item.id === analysis.id) {
-										return {
-											...item,
-											parameter_uid: parameterResponse.data.parameter_uid || item.parameter_uid,
-											parameter_id: parameterResponse.data.id || item.parameter_id,
-											parameter_name: parameterResponse.data.parameter_name || item.parameter_name,
-											protocol_code: parameterResponse.data.protocol_code || item.protocol_code,
-											protocol_source: parameterResponse.data.protocol_source || item.protocol_source,
-											field: parameterResponse.data.field || item.field,
-										};
-									}
-									return item;
-								});
-								successCount++;
-							}
-						}
-					} else {
-						// Fallback to original update method if required fields are missing
-						const updatedAnalysis = await updateAnalysis(analysis);
-
-						updatedAnalytes = updatedAnalytes.map((item) => {
-							if (item.id === analysis.id) {
-								return updatedAnalysis;
-							}
-							return item;
-						});
-						successCount++;
+			if (response.status === 200) {
+				// Update the UI
+				const newAnalytesList = listAnalytes.map((analyte) => {
+					const updateData = updateDataArray.find((item) => item.id === analyte.id);
+					if (updateData) {
+						return {
+							...analyte,
+							...updateData,
+						};
 					}
-				} catch (error) {
-					console.error(`Error updating analysis ID ${analysis.id}:`, error);
-					failCount++;
-				}
-			}
-
-			// Update UI
-			setListAnalytes(updatedAnalytes);
-
-			if (failCount > 0) {
-				Swal.fire({
-					icon: 'warning',
-					title: 'Kết quả',
-					text: `${successCount} chỉ tiêu cập nhật thành công, ${failCount} thất bại`,
+					return analyte;
 				});
-			} else {
-				showToast(`Đã cập nhật thành công ${successCount} chỉ tiêu vào CSDL`);
-			}
+				setListAnalytes(newAnalytesList);
 
-			// If we were using selections, clear them after updating
-			if (selectedAnalytes.length > 0) {
-				setSelectedAnalytes([]);
-				setSelectAll(false);
+				showToast(`Đã cập nhật CSDL cho ${analysesToUpdate.length} chỉ tiêu`);
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi cập nhật CSDL',
+				});
 			}
 		} catch (error) {
 			console.error('Error updating database:', error);
@@ -3840,7 +4286,17 @@ const SampleInfor = () => {
 	};
 
 	if (!sample) {
-		return <div>Loading...</div>;
+		return (
+			<div className="flex items-center justify-center min-h-screen">
+				<div className="text-center">
+					<div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto"></div>
+					<p className="mt-4 text-gray-600">Đang tải thông tin mẫu...</p>
+					{!sampleId && (
+						<p className="mt-2 text-red-500">Không tìm thấy sampleId trong URL. Vui lòng kiểm tra đường dẫn.</p>
+					)}
+				</div>
+			</div>
+		);
 	}
 
 	return (
@@ -3886,40 +4342,24 @@ const SampleInfor = () => {
 				paths={[
 					{ name: 'Danh sách', link: '/' },
 					{
-						name: `${receipt_uid}`,
-						link: `/dashboard/receipt?receipt_uid=${receipt_uid}`,
+						name: `${receiptId}`,
+						link: `/dashboard/receipt?receiptId=${receiptId}`,
 					},
 					{
-						name: `${sample.sample_uid}`,
-						link: `/dashboard/sample?receipt_uid=${receipt_uid}&sample_uid=${sample.sample_uid}`,
+						name: `${sample.sampleId}`,
+						link: `/dashboard/sample?receiptId=${receiptId}&sampleId=${sample.sampleId}`,
 					},
 				]}
-				sample_uids={listSampleByReceipt.map((sample) => sample.sample_uid)}
+				sampleIds={listSampleByReceipt} // Now it's directly an array of sampleId strings
 				showSearch={true}
 			/>
 			<div className="flex justify-end mb-1">
-				<button
-					className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-start active:bg-sky-100 focus:outline-none mr-2"
-					onClick={openPKQWindow}
-				>
-					<div className="flex items-center justify-between">
-						{'PKQ'} <GrDocumentText size={15} className="ml-1.5" />
-					</div>
-				</button>
 				<button
 					className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-start active:bg-sky-100 focus:outline-none mr-2"
 					onClick={openPPTWindow}
 				>
 					<div className="flex items-center justify-between">
 						{'PPT'} <GrDocumentText size={15} className="ml-1.5" />
-					</div>
-				</button>
-				<button
-					className="text-primary border-gray-300 bg-background text-sm rounded-lg p-1 w-fit self-start active:bg-sky-100 focus:outline-none  mr-2"
-					onClick={handleEditSample}
-				>
-					<div className="flex items-center justify-between">
-						{'Sửa'} <RiEdit2Line size={15} className="ml-1.5" />
 					</div>
 				</button>
 				<button
@@ -3937,18 +4377,18 @@ const SampleInfor = () => {
 						<>
 							<button
 								className="text-primary border-gray-300 rounded-lg px-2 py-0.5 mr-2"
-								onClick={() => navigate(`/dashboard/receipt?receipt_uid=${receipt_uid}`)}
+								onClick={() => navigate(`/dashboard/receipt?receiptId=${receiptId}`)}
 							>
-								{receipt_uid}
+								{receiptId}
 							</button>
 							<select
 								className="bg-sky-400 hover:border-purple-500 hover:cursor-pointer border rounded-lg p-1 w-fit self-start focus:outline-none"
 								onChange={(e) => handleSampleSelect(e.target.value)}
-								defaultValue={sample.sample_uid}
+								defaultValue={sample.sampleId}
 							>
 								{listSampleByReceipt.map((sample) => (
-									<option className="bg-white" key={sample.sample_uid} value={sample.sample_uid}>
-										{sample.sample_uid}
+									<option className="bg-white" key={sample.sampleId} value={sample.sampleId}>
+										{sample.sampleId}
 									</option>
 								))}
 							</select>
@@ -3965,12 +4405,12 @@ const SampleInfor = () => {
 										<td className="w-full text-start p-1 md:min-w-80 min-m-w-40 relative">
 											<input
 												type="text"
-												value={sample?.sample_uid || ''}
+												value={sample?.sampleId || ''}
 												className="w-full bg-white border rounded p-1"
 												disabled
 											/>
 											<CopyButton
-												textToCopy={sample?.sample_uid || ''}
+												textToCopy={sample?.sampleId || ''}
 												className="absolute right-2 top-1/2 transform -translate-y-1/2"
 											/>
 										</td>
@@ -3980,16 +4420,16 @@ const SampleInfor = () => {
 										<td className="w-full text-start p-1">
 											<input
 												type="text"
-												value={sample?.sample_name || ''}
+												value={sample?.sampleName || ''}
 												className="w-full bg-white border rounded p-1 editable-field"
 												onChange={(e) =>
 													setSample({
 														...sample,
-														sample_name: e.target.value,
+														sampleName: e.target.value,
 													})
 												}
-												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_name', e.target.value)}
-												onBlur={(e) => handleFieldBlur('sample_name', e.target.value, originalSampleValues.sample_name)}
+												onKeyDown={(e) => handleFieldKeyDown(e, 'sampleName', e.target.value)}
+												onBlur={(e) => handleFieldBlur('sampleName', e.target.value, originalSampleValues.sampleName)}
 											/>
 										</td>
 									</tr>{' '}
@@ -4086,18 +4526,18 @@ const SampleInfor = () => {
 										</td>
 										<td className="w-full text-start p-1 flex">
 											<textarea
-												value={sample?.sample_description || ''}
+												value={sample?.sampleDescription || ''}
 												className="w-full resize-none bg-white border rounded p-1 overflow-hidden hover:overflow-y-auto editable-field"
 												rows={2}
 												onChange={(e) =>
 													setSample({
 														...sample,
-														sample_description: e.target.value,
+														sampleDescription: e.target.value,
 													})
 												}
-												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_description', e.target.value)}
+												onKeyDown={(e) => handleFieldKeyDown(e, 'sampleDescription', e.target.value)}
 												onBlur={(e) =>
-													handleFieldBlur('sample_description', e.target.value, originalSampleValues.sample_description)
+													handleFieldBlur('sampleDescription', e.target.value, originalSampleValues.sampleDescription)
 												}
 											/>
 										</td>
@@ -4113,17 +4553,17 @@ const SampleInfor = () => {
 										<td className="w-full text-start p-1 md:min-w-80 min-w-40">
 											<input
 												type="text"
-												value={sample?.sample_volume || ''}
+												value={sample?.sampleVolume || ''}
 												className="w-full bg-white border rounded p-1 editable-field"
 												onChange={(e) =>
 													setSample({
 														...sample,
-														sample_volume: e.target.value,
+														sampleVolume: e.target.value,
 													})
 												}
-												onKeyDown={(e) => handleFieldKeyDown(e, 'sample_volume', e.target.value)}
+												onKeyDown={(e) => handleFieldKeyDown(e, 'sampleVolume', e.target.value)}
 												onBlur={(e) =>
-													handleFieldBlur('sample_volume', e.target.value, originalSampleValues.sample_volume)
+													handleFieldBlur('sampleVolume', e.target.value, originalSampleValues.sampleVolume)
 												}
 											/>
 										</td>
@@ -4169,18 +4609,18 @@ const SampleInfor = () => {
 										</td>
 										<td className="w-full text-start p-1 flex">
 											<textarea
-												value={sample?.additional_request || ''}
+												value={sample?.additionalRequest || ''}
 												className="w-full resize-none bg-white border rounded p-1 overflow-hidden hover:overflow-y-auto editable-field h-full"
 												rows={2}
 												onChange={(e) =>
 													setSample({
 														...sample,
-														additional_request: e.target.value,
+														additionalRequest: e.target.value,
 													})
 												}
-												onKeyDown={(e) => handleFieldKeyDown(e, 'additional_request', e.target.value)}
+												onKeyDown={(e) => handleFieldKeyDown(e, 'additionalRequest', e.target.value)}
 												onBlur={(e) =>
-													handleFieldBlur('additional_request', e.target.value, originalSampleValues.additional_request)
+													handleFieldBlur('additionalRequest', e.target.value, originalSampleValues.additionalRequest)
 												}
 											/>
 										</td>
@@ -4191,22 +4631,6 @@ const SampleInfor = () => {
 					</div>
 				</div>
 				{/* Remove the edit buttons since we now have inline editing */}
-				{isEditingSample && (
-					<div className="flex justify-end mt-4">
-						<button
-							className="bg-gray-500 text-white text-sm rounded-lg p-1 active:bg-gray-600 focus:outline-none mr-2"
-							onClick={handleCancelEdit}
-						>
-							Hủy bỏ
-						</button>
-						<button
-							className="bg-green-500 text-white text-sm rounded-lg p-1 active:bg-green-600 focus:outline-none"
-							onClick={handleConfirmEdit}
-						>
-							Xác nhận
-						</button>
-					</div>
-				)}
 				<div className="mt-2 flex flex-col">
 					{!isTechnician() && (
 						<div className="flex justify-between items-center">
@@ -4222,15 +4646,15 @@ const SampleInfor = () => {
 									<div className="absolute right-0 mt-1 bg-white border rounded shadow-lg z-10 min-w-40 sample-dropdown-container">
 										<div className="p-2 bg-gray-100 font-medium">Chọn mẫu để sao chép thông tin:</div>
 										<ul>
-											{listSampleByReceipt.map((sample) => (
+											{listSampleByReceipt.map((sampleId) => (
 												<li
-													key={sample.sample_uid}
+													key={sampleId}
 													className={`p-2 cursor-pointer hover:bg-gray-100 ${
-														sample.sample_uid === sample_uid ? 'bg-gray-200' : ''
+														sampleId === sampleId ? 'bg-gray-200' : ''
 													}`}
-													onClick={() => handleCopySampleInfo(sample.sample_uid)}
+													onClick={() => handleCopySampleInfo(sampleId)}
 												>
-													{sample.sample_uid}
+													{sampleId}
 												</li>
 											))}
 										</ul>
@@ -4239,7 +4663,6 @@ const SampleInfor = () => {
 							</div>
 						</div>
 					)}
-
 					{!isTechnician() && renderNewReport()}
 				</div>
 			</div>
@@ -4405,7 +4828,6 @@ const SampleInfor = () => {
 					<table className="text-black w-full border-2 analytes-table">
 						<thead>
 							<tr className="border-y-2">
-								<th className="p-2 border-x w-[100px] min-w-[100px] text-left">Mã chỉ tiêu </th>
 								<th className="p-2 border-x w-[24%] min-w-60 text-left">Chỉ tiêu</th>
 								<th className="p-2 border-x w-32 min-w-32 text-left">Nền mẫu</th>
 								<th className="p-2 border-x w-[25%] min-w-44 text-left">Phương pháp</th>
@@ -4414,6 +4836,7 @@ const SampleInfor = () => {
 								<th className="p-2 border-x w-1/12 min-w-28 text-left">Hạn trả</th>
 								<th className="p-2 border-x w-[5%] min-w-24 text-left ">Lĩnh vực</th>
 								<th className="p-2 border-x w-[10%] min-w-32 text-left">Thực hiện</th>
+								<th className="p-2 border-x w-[15%] min-w-40 text-left">Ghi chú</th>
 								<th className="py-2 border-x w-10 min-w-10 cursor-pointer" onClick={handleSelectAll}>
 									<input
 										type="checkbox"
@@ -4430,37 +4853,10 @@ const SampleInfor = () => {
 									<td className="p-1 border relative">
 										<input
 											type="text"
-											className="w-full bg-white border rounded p-1 text-left text-gray-500"
-											placeholder="Mã chỉ tiêu"
-											value={newParameter.parameter_uid || ''}
-											onChange={(e) => handleNewParameterChange('parameter_uid', e.target.value)}
-										/>
-									</td>
-									<td className="p-1 border relative">
-										<input
-											type="text"
 											className="w-full bg-white border rounded p-1 text-left"
 											placeholder="Tên chỉ tiêu"
-											value={newParameter.parameter_name || ''}
-											onChange={(e) => handleNewParameterChange('parameter_name', e.target.value)}
-										/>
-									</td>
-									<td className="p-1 border relative">
-										<input
-											type="text"
-											className="w-full bg-white border rounded p-1 text-left"
-											placeholder="Tên mặc định"
-											value={newParameter.display_style.find((item) => item.label === 'default')?.value || ''}
-											onChange={(e) => handleNewParameterDisplayStyleChange('default', e.target.value)}
-										/>
-									</td>
-									<td className="p-1 border relative">
-										<input
-											type="text"
-											className="w-full bg-white border rounded p-1 text-left"
-											placeholder="Tên tiếng Anh"
-											value={newParameter.display_style.find((item) => item.label === 'eng')?.value || ''}
-											onChange={(e) => handleNewParameterDisplayStyleChange('eng', e.target.value)}
+											value={newParameter.parameterName || ''}
+											onChange={(e) => handleNewParameterChange('parameterName', e.target.value)}
 										/>
 									</td>
 									<td className="p-1 border relative">
@@ -4476,8 +4872,8 @@ const SampleInfor = () => {
 										<div className="flex items-center gap-0.5">
 											<select
 												className="min-w-24 max-w-fit p-1 py-[5px] max-h-fit font-semibold text-slate-500 bg-white border rounded text-sm focus:outline-none text-left"
-												onChange={(e) => handleNewParameterChange('protocol_source', e.target.value)}
-												value={newParameter.protocol_source || '--'}
+												onChange={(e) => handleNewParameterChange('protocolSource', e.target.value)}
+												value={newParameter.protocolSource || '--'}
 											>
 												<option value={'IRDOP'}>{'IRDOP'}</option>
 												<option value={'IRDOP VS'}>{'IRDOP VS'}</option>
@@ -4487,8 +4883,8 @@ const SampleInfor = () => {
 												type="text"
 												className="w-full bg-white border rounded p-1 text-left"
 												placeholder="Mã phương pháp"
-												value={newParameter.protocol_code || ''}
-												onChange={(e) => handleNewParameterChange('protocol_code', e.target.value)}
+												value={newParameter.protocolCode || ''}
+												onChange={(e) => handleNewParameterChange('protocolCode', e.target.value)}
 											/>
 										</div>
 									</td>
@@ -4507,16 +4903,23 @@ const SampleInfor = () => {
 									<td className="p-1 border relative">
 										<select
 											className="w-full bg-white border rounded p-1 text-left"
-											value={newParameter.field || ''}
-											onChange={(e) => handleNewParameterChange('field', e.target.value)}
+											value={newParameter.scientificField || ''}
+											onChange={(e) => handleNewParameterChange('scientificField', e.target.value)}
 										>
 											<option value="">-- Chọn --</option>
-											<option value="Hóa lý">Hóa lý</option>
-											<option value="Vi sinh">Vi sinh</option>
+											{scientificFields.map((field) => (
+												<option key={field} value={field}>
+													{field}
+												</option>
+											))}
 										</select>
 									</td>
 									<td className="p-1 border relative">
 										<div className="p-1 text-gray-400 italic text-center">Chưa xác định</div>
+									</td>
+									<td className="p-1 border relative">
+										{/* Ghi chú - không nhập */}
+										<div className="p-1 text-gray-400 italic text-center">--</div>
 									</td>
 									<td className="pt-[5px] pb-0 border align-top text-center">
 										<div className="flex flex-col gap-0.5 items-center">
@@ -4551,15 +4954,34 @@ const SampleInfor = () => {
 													{order.accreditation}
 												</div>
 											)}
-											<input
-												type="text"
-												className={`w-full font-normal bg-white border-none p-1 hover:cursor-pointer hover:outline hover:outline-1 rounded hover:outline-indigo-500 text-left ${
-													order.parameter_id ? 'text-gray-700' : 'text-gray-400'
-												}`}
-												value={order.parameter_uid || ''}
-												readOnly
-												onDoubleClick={() => handleAccreditationToggle(order.id)}
-											/>
+											{editingParameterField === order.id ? (
+												<>
+													<input
+														type="text"
+														id={`parameter-name-${order.id}`}
+														className="w-full bg-white border rounded py-0 px-1 text-left"
+														placeholder="Tên chỉ tiêu"
+														value={order.parameterName || ''}
+														onChange={(e) => handleParameterNameChange(order.id, e.target.value)}
+														onBlur={() => handleParameterBlur(order.id)}
+														onKeyDown={(e) => handleParameterKeyDown(e, order.id)}
+														autoFocus
+													/>
+												</>
+											) : (
+												<div
+													className={`py-0 px-1 cursor-pointer hover:border-indigo-500 border 
+													${!order.parameterName || order.parameterName.trim() === '' ? 'border-yellow-400' : 'border-white'} 
+													rounded overflow-y-auto 
+													${order.parameterName && order.parameterName.trim() !== '' ? 'text-left' : 'center'}
+													`}
+													onClick={() => handleParameterNameClick(order.id)}
+												>
+													<span>
+														{order.parameterName && order.parameterName.trim() !== '' ? order.parameterName : '--'}
+													</span>
+												</div>
+											)}
 											{order.reviewed_by && (
 												<div className="absolute right-1 top-1" title="Đã được kiểm tra">
 													<FaStar className="text-yellow-400" size={14} />
@@ -4568,47 +4990,18 @@ const SampleInfor = () => {
 										</div>
 									</td>{' '}
 									<td className="p-1 border relative align-top">
-										{editingParameterField === order.id ? (
-											<>
-												<input
-													type="text"
-													id={`parameter-name-${order.id}`}
-													className="w-full bg-white border rounded py-0 px-1 text-left"
-													placeholder="Tên chỉ tiêu"
-													value={order.parameter_name || ''}
-													onChange={(e) => handleParameterNameChange(order.id, e.target.value)}
-													onBlur={() => handleParameterBlur(order.id)}
-													onKeyDown={(e) => handleParameterKeyDown(e, order.id)}
-													autoFocus
-												/>
-											</>
-										) : (
-											<div
-												className={`py-0 px-1 cursor-pointer hover:border-indigo-500 border 
-												${!order.parameter_name || order.parameter_name.trim() === '' ? 'border-yellow-400' : 'border-white'} 
-												rounded overflow-y-auto 
-												${order.parameter_name && order.parameter_name.trim() !== '' ? 'text-left' : 'center'}
-												`}
-												onClick={() => handleParameterNameClick(order.id)}
-											>
-												<span>
-													{order.parameter_name && order.parameter_name.trim() !== '' ? order.parameter_name : '--'}
-												</span>
-											</div>
-										)}
-									</td>{' '}
-									<td className="p-1 border relative align-top">
 										<div
 											className={`py-0 px-1 text-left border rounded overflow-y-auto
-											${
-												(!order.matrix || order.matrix.trim() === '') &&
-												(!sample?.matrix || sample.matrix.trim() === '')
-													? 'border-yellow-400'
-													: 'border-white'
-											}
+											${!order.matrix || order.matrix.trim() === '' ? 'border-yellow-400' : 'border-white'}
 										`}
 										>
-											<span>{order.matrix && order.matrix.trim() !== '' ? order.matrix : sample?.matrix || '--'}</span>
+											<span>{order.matrix && order.matrix.trim() !== '' ? order.matrix : '--'}</span>
+											{/* Show warning if no matrix available */}
+											{(!order.matrix || order.matrix.trim() === '') && (
+												<span className="text-red-500 text-xs ml-1" title="Thiếu thông tin nền mẫu">
+													⚠
+												</span>
+											)}
 										</div>
 									</td>{' '}
 									<td className="p-1 border relative align-top">
@@ -4617,10 +5010,10 @@ const SampleInfor = () => {
 												{' '}
 												<select
 													className={`w-fit min-w-24 cursor-pointer p-1 py-[5px] font-semibold text-slate-500 bg-white border rounded text-sm hover:border-indigo-500 hover:border focus:outline-none text-left ${
-														!order.protocol_source || order.protocol_source.trim() === '' ? 'border-yellow-400' : ''
+														!order.protocolSource || order.protocolSource.trim() === '' ? 'border-yellow-400' : ''
 													}`}
 													onChange={(e) => handleProtocolSourceChange(order.id, e.target.value)}
-													value={order.protocol_source || '--'}
+													value={order.protocolSource || '--'}
 												>
 													<option value={''}>{'--'}</option>
 													<option value={'IRDOP'}>{'IRDOP'}</option>
@@ -4632,7 +5025,7 @@ const SampleInfor = () => {
 														type="text"
 														className="w-full bg-white border rounded py-0 px-1 text-left"
 														placeholder="Mã phương pháp"
-														value={order.protocol_code || ''}
+														value={order.protocolCode || ''}
 														onChange={(e) => handleProtocolChange(order.id, e.target.value)}
 														onBlur={() => handleProtocolBlur(order.id)}
 														onKeyDown={(e) => handleProtocolKeyDown(e, order.id)}
@@ -4641,19 +5034,19 @@ const SampleInfor = () => {
 												) : (
 													<div
 														className={`w-full py-0 px-1 cursor-pointer hover:border-indigo-500 border rounded overflow-y-auto 
-														${!order.protocol_code || order.protocol_code.trim() === '' ? 'border-yellow-400' : ''}
-														${order.protocol_code && order.protocol_code.trim() !== '' ? 'text-left' : 'center'}
+														${!order.protocolCode || order.protocolCode.trim() === '' ? 'border-yellow-400' : ''}
+														${order.protocolCode && order.protocolCode.trim() !== '' ? 'text-left' : 'center'}
 													`}
 														onClick={() => handleProtocolClick(order.id)}
 													>
 														<span>
-															{order.protocol_code && order.protocol_code.trim() !== '' ? order.protocol_code : '--'}
+															{order.protocolCode && order.protocolCode.trim() !== '' ? order.protocolCode : '--'}
 														</span>
 													</div>
 												)}
 											</div>
 
-											{order.protocol_source === 'EX' && (
+											{order.protocolSource === 'EX' && (
 												<>
 													<div className="mt-1">
 														{editingExNameField === order.id ? (
@@ -4709,7 +5102,7 @@ const SampleInfor = () => {
 											) : (
 												<div
 													dangerouslySetInnerHTML={{
-														__html: order?.result_value ? order.result_value : '--',
+														__html: order?.resultValue ? order.resultValue : '--',
 													}}
 													className="p-1"
 												/>
@@ -4816,7 +5209,7 @@ const SampleInfor = () => {
 													if (!order) return;
 													const fieldKey = `result_unit-${order.id}`;
 													setEditingField(fieldKey);
-													const originalValue = order.result_unit || '';
+													const originalValue = order.resultUnit || '';
 													setInputValue(originalValue);
 													// Store original value for comparison
 													setOriginalValues((prev) => ({
@@ -4827,7 +5220,7 @@ const SampleInfor = () => {
 											>
 												<div
 													dangerouslySetInnerHTML={{
-														__html: order?.result_unit ? order.result_unit : '--',
+														__html: order?.resultUnit ? order.resultUnit : '--',
 													}}
 													className="py-0 px-1 cursor-pointer"
 												/>
@@ -4886,14 +5279,17 @@ const SampleInfor = () => {
 									<td className="p-1 border relative align-top">
 										<select
 											className={`w-full bg-white border rounded p-1 text-left ${
-												!order.field || order.field.trim() === '' ? 'border-yellow-400' : ''
+												!order.scientificField || order.scientificField.trim() === '' ? 'border-yellow-400' : ''
 											}`}
-											value={order.field || ''}
+											value={order.scientificField || ''}
 											onChange={(e) => handleFieldColumnChange(order.id, e.target.value)}
 										>
 											<option value="">-- Chọn --</option>
-											<option value="Hóa lý">Hóa lý</option>
-											<option value="Vi sinh">Vi sinh</option>
+											{scientificFields.map((field) => (
+												<option key={field} value={field}>
+													{field}
+												</option>
+											))}
 										</select>
 									</td>{' '}
 									<td className="p-1 border relative align-top">
@@ -4903,9 +5299,13 @@ const SampleInfor = () => {
 													technicianDropdownVisible === order.id && 'border border-slate-200'
 												} p-1 rounded bg-white text-left h-fit`}
 												onClick={(event) => toggleTechnicianDropdown(order.id, event)}
-												title={order.technician_uid ? `Người thực hiện: ${technician(order)}` : 'Chọn người thực hiện'}
+												title={
+													order.technician?.identityName
+														? `Người thực hiện: ${order.technician.identityName}`
+														: 'Chọn người thực hiện'
+												}
 											>
-												{technician(order) || 'Chọn KTV'}
+												{order.technician?.identityName || 'Chọn KTV'}
 											</button>
 										</div>
 
@@ -4923,20 +5323,61 @@ const SampleInfor = () => {
 													}}
 												>
 													<div className="grid grid-cols-3 md:grid-cols-4 gap-3 max-h-96 overflow-y-auto">
-														{technicians.map((identity) => (
-															<div
-																key={identity.alias}
-																className="p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 hover:border-primary transition-all duration-200 min-w-[100px] text-center"
-																onClick={() => handleTechnicianChange(order.id, identity.identity_uid)}
-															>
-																<p className="font-bold text-primary text-sm mb-1">{identity.alias || ''}</p>
-																<p className="text-xs text-gray-600 leading-tight">{identity.identity_name || ''}</p>
-															</div>
-														))}
+														{technicians.map((group) => {
+															const primaryTechnician = group.technicians?.[0];
+															if (!primaryTechnician) return null;
+
+															return (
+																<div
+																	key={group.alias}
+																	className="p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 hover:border-primary transition-all duration-200 min-w-[100px] text-center"
+																	onClick={() => handleTechnicianChange(order.id, primaryTechnician.technicianId)}
+																	onMouseEnter={(e) => {
+																		if (group.technicians && group.technicians.length > 1) {
+																			const rect = e.currentTarget.getBoundingClientRect();
+																			setIndividualDropdownRect({
+																				top: rect.top,
+																				left: rect.left,
+																				width: rect.width,
+																				height: rect.height,
+																			});
+																			setHoveredIndividualGroup(group.alias);
+																			setCurrentAnalysisId(order.id);
+																		}
+																	}}
+																>
+																	<p className="font-bold text-primary text-sm mb-1">
+																		{group.alias}: {group.groupName}
+																	</p>
+																	<p className="text-xs text-gray-600 leading-tight">
+																		{primaryTechnician.identityName}
+																	</p>
+																</div>
+															);
+														})}
 													</div>
 												</div>,
 												document.body,
 											)}
+									</td>
+									<td className="p-1 border relative align-top">
+										<div
+											className="flex items-center justify-center cursor-pointer hover:scale-110 transition-transform"
+											onClick={(e) => handleNoteClick(order, e)}
+											onMouseEnter={(e) => {
+												if (order.note) {
+													showTooltip(e, order.note, 'left');
+												}
+											}}
+											onMouseLeave={hideTooltip}
+											title={order.note ? 'Click để xem/thêm ghi chú' : 'Click để thêm ghi chú'}
+										>
+											{order.note ? (
+												<span className="text-2xl">📝</span>
+											) : (
+												<span className="text-2xl text-gray-400">📋</span>
+											)}
+										</div>
 									</td>
 									<td
 										className="pt-[5px] pb-0 border align-top text-center cursor-pointer"
@@ -4955,6 +5396,53 @@ const SampleInfor = () => {
 					</table>
 				</div>
 			</div>
+			{/* Portal for individual technician hover dropdown */}
+			{hoveredIndividualGroup &&
+				individualDropdownRect &&
+				currentAnalysisId &&
+				createPortal(
+					<div
+						className="fixed z-[9999]"
+						style={{
+							top: `${individualDropdownRect.top}px`,
+							left: `${individualDropdownRect.left - 200}px`,
+							width: '200px',
+							height: `${individualDropdownRect.height}px`,
+						}}
+						onMouseLeave={() => {
+							setHoveredIndividualGroup(null);
+							setIndividualDropdownRect(null);
+							setCurrentAnalysisId(null);
+						}}
+					>
+						{/* Bridge area - invisible but hoverable to prevent gap issues */}
+						<div className="absolute right-0 top-0 w-12 h-full bg-transparent"></div>
+
+						{/* Actual dropdown */}
+						<div className="absolute left-0 top-0 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-48">
+							<p className="text-xs font-medium text-gray-500 mb-2">Tất cả thành viên:</p>
+							{technicians
+								.find((g) => g.alias === hoveredIndividualGroup)
+								?.technicians?.map((tech) => (
+									<div
+										key={tech.technicianId}
+										className="p-2 hover:bg-gray-100 rounded cursor-pointer text-left"
+										onClick={(e) => {
+											e.stopPropagation();
+											handleTechnicianChange(currentAnalysisId, tech.technicianId);
+											setHoveredIndividualGroup(null);
+											setIndividualDropdownRect(null);
+											setCurrentAnalysisId(null);
+										}}
+									>
+										<p className="text-sm font-medium">{tech.identityName}</p>
+										<p className="text-xs text-gray-500">{tech.technicianAlias}</p>
+									</div>
+								))}
+						</div>
+					</div>,
+					document.body,
+				)}
 			{isTransferMultipleVisible && renderBulkTransferForm()}
 			{isDeleteConfirmVisible &&
 				renderDeleteConfirm(
@@ -4970,6 +5458,103 @@ const SampleInfor = () => {
 						: handleDeleteAnalysisConfirmAction,
 				)}
 			{isBulkDeadlineVisible && renderBulkDeadlinePicker()}
+			{/* Tooltip Portal */}
+			{tooltip.visible &&
+				createPortal(
+					<div
+						className={`custom-tooltip ${tooltip.visible ? 'visible' : ''} ${tooltip.position}`}
+						style={{
+							left: `${tooltip.x}px`,
+							top: `${tooltip.y}px`,
+							whiteSpace: 'pre-wrap',
+						}}
+					>
+						{tooltip.content}
+					</div>,
+					document.body,
+				)}
+			{/* Modal Ghi chú */}
+			{showNoteModal && selectedAnalysisForNote && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
+						<div className="px-6 py-4 border-b border-gray-200">
+							<h3 className="text-lg font-semibold text-blue-600">Ghi chú</h3>
+							<p className="text-sm text-gray-600 mt-1">
+								Mẫu: {selectedAnalysisForNote.sampleId} - Chỉ tiêu: {selectedAnalysisForNote.parameterName}
+							</p>
+						</div>
+
+						<div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
+							{/* Ghi chú cũ - chỉ xem */}
+							{selectedAnalysisForNote.note && (
+								<div className="mb-4">
+									<label className="block text-sm font-medium text-gray-700 mb-2">Ghi chú hiện tại:</label>
+									<div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-sm text-gray-700 whitespace-pre-wrap">
+										{selectedAnalysisForNote.note}
+									</div>
+								</div>
+							)}
+
+							{/* Thêm ghi chú mới */}
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2">
+									{selectedAnalysisForNote.note ? 'Thêm ghi chú mới:' : 'Ghi chú:'}
+								</label>
+								<textarea
+									value={newNoteText}
+									onChange={(e) => setNewNoteText(e.target.value)}
+									placeholder="Nhập nội dung ghi chú..."
+									className="w-full bg-white border border-gray-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+									rows={4}
+								/>
+							</div>
+						</div>
+
+						<div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+							<button
+								onClick={() => {
+									setShowNoteModal(false);
+									setSelectedAnalysisForNote(null);
+									setNewNoteText('');
+								}}
+								className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+								disabled={isUpdatingNote}
+							>
+								Hủy
+							</button>
+							<button
+								onClick={handleUpdateNote}
+								disabled={isUpdatingNote || !newNoteText.trim()}
+								className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
+							>
+								{isUpdatingNote ? (
+									<>
+										<span className="mr-2">Đang cập nhật...</span>
+										<svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+											<circle
+												className="opacity-25"
+												cx="12"
+												cy="12"
+												r="10"
+												stroke="currentColor"
+												strokeWidth="4"
+												fill="none"
+											/>
+											<path
+												className="opacity-75"
+												fill="currentColor"
+												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+											/>
+										</svg>
+									</>
+								) : (
+									'Cập nhật'
+								)}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };

@@ -26,6 +26,7 @@ const Breadcrumb = ({
 	const isDashboard = location.pathname.includes('dashboard') || location.pathname === '/';
 	const isMainDashboard =
 		location.pathname === '/' || location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard?');
+	const isProgressDashboard = location.pathname.includes('/dashboard/progress');
 	const shouldShowSearch = showSearch || isMainDashboard;
 
 	// Sync tempSearchValue with searchTerm when searchTerm changes from outside
@@ -50,19 +51,27 @@ const Breadcrumb = ({
 									// Trigger search when Enter is pressed
 									const trimmedValue = e.target.value.trim();
 									if (trimmedValue) {
-										// If we're on dashboard and have setSearchTerm, update the search term
-										if (isMainDashboard && setSearchTerm) {
+										// Update search term if available
+										if (setSearchTerm) {
 											setSearchTerm(trimmedValue);
 										}
-										// Always navigate to dashboard with search parameter
-										navigate(`/dashboard?search=${encodeURIComponent(trimmedValue)}`);
+										// Navigate based on current location
+										if (isProgressDashboard) {
+											navigate(`/dashboard/progress?searchTerm=${encodeURIComponent(trimmedValue)}`);
+										} else {
+											navigate(`/dashboard?searchTerm=${encodeURIComponent(trimmedValue)}`);
+										}
 									} else {
 										// Clear search parameter
-										if (isMainDashboard && setSearchTerm) {
+										if (setSearchTerm) {
 											setSearchTerm('');
 										}
-										// Go to dashboard without search parameter
-										navigate('/dashboard');
+										// Navigate to appropriate page without search parameter
+										if (isProgressDashboard) {
+											navigate('/dashboard/progress');
+										} else {
+											navigate('/dashboard');
+										}
 									}
 								}
 							}}
@@ -89,7 +98,7 @@ const Breadcrumb = ({
 											</span>
 											{showDropdown && (
 												<div
-													className="absolute top-full left-0 bg-white border border-gray-300 rounded-md shadow-md z-10"
+													className="absolute top-5 -left-1 bg-white border border-gray-300 rounded-md shadow-md z-10"
 													onMouseEnter={() => setShowDropdown(true)}
 													onMouseLeave={() => setShowDropdown(false)}
 												>

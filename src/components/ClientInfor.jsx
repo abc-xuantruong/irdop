@@ -60,7 +60,7 @@ const ClientInfor = () => {
 				// Add modified_by_uid to the client object and remove null properties
 				let clientWithAuth = {
 					...client,
-					modified_by_uid: currentUser?.identity_uid,
+					modifiedById: currentUser?.identity_uid,
 				};
 
 				// Remove null or undefined properties
@@ -153,7 +153,7 @@ const ClientInfor = () => {
 		if (window.confirm('Bạn có chắc chắn muốn xóa khách hàng này?')) {
 			apiPost('https://black.irdop.org/hli1o7az/db/delete/client', {
 				id: clientId,
-				modified_by_uid: currentUser?.identity_uid,
+				modifiedById: currentUser?.identity_uid,
 			})
 				.then((response) => {
 					if (response.status === 200) {
@@ -276,7 +276,7 @@ const ClientInfor = () => {
 		// Create a copy of the client object
 		let clientWithAuth = {
 			...client,
-			modified_by_uid: currentUser?.identity_uid,
+			modifiedById: currentUser?.identity_uid,
 		};
 
 		// Remove null or undefined properties
@@ -331,8 +331,8 @@ const ClientInfor = () => {
 			client_name: newClient.client_name || '',
 			client_address: newClient.client_address || '',
 			legal_id: newClient.legal_id || '',
-			created_by_uid: currentUser?.identity_uid,
-			modified_by_uid: currentUser?.identity_uid,
+			createdById: currentUser?.identity_uid,
+			modifiedById: currentUser?.identity_uid,
 		};
 
 		// Remove empty string properties

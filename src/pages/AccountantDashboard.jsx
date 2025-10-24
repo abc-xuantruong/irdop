@@ -398,7 +398,7 @@ const AccountantDashboard = () => {
 										>
 											{getUniqueSalesRecorders().map((recorder, index) => (
 												<div
-													key={index}
+													key={recorder}
 													className={`px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
 														salesRecorderFilter === recorder ? 'bg-blue-100 text-blue-700 font-medium' : ''
 													}`}
@@ -478,7 +478,10 @@ const AccountantDashboard = () => {
 										{receipt.transactions && receipt.transactions.length > 0 ? (
 											<div className="space-y-1">
 												{receipt.transactions.map((transaction, index) => (
-													<div key={index} className="text-xs border rounded p-1 bg-gray-50">
+													<div
+														key={`${receipt.id}-transaction-${index}`}
+														className="text-xs border rounded p-1 bg-gray-50"
+													>
 														<div className="flex justify-between items-center">
 															<span className="font-medium">{formatDate(transaction.transactionDate)}</span>
 															<span

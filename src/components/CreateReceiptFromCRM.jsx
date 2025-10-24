@@ -142,14 +142,14 @@ const CreateReceiptFromCRM = () => {
 
 				const sample = updatedSamples[index];
 				// Create list of analyses with their parameter names and the new matrix
-				const listAnalysis = sample.analysis.map((item) => ({
-					analysis: item.parameter_name,
+				const analyses = sample.analysis.map((item) => ({
+					analysis: item.parameterName,
 					matrix: matrix,
 				}));
 
 				// Send API request to match analyses with matrix
-				const response = await apiPost('https://black.irdop.org/trelw82ki/match/analysis/matrix', {
-					listAnalysis,
+				const response = await apiPost('https://red.irdop.org/v1/analysis/match/parameter', {
+					analyses,
 				});
 
 				// Update the sample with the response data
@@ -279,80 +279,75 @@ const CreateReceiptFromCRM = () => {
 			// Format the code before sending to API
 			const formattedCode = formatCode(code);
 
-			// Convert code to uppercase before sending to API
-			let response;
-			let dataFound = false;
+			// Use the new unified API
+			const response = await apiPost('https://red.irdop.org/v1/order/get/info', {
+				orderId: formattedCode,
+				loadCrm: false,
+			});
 
-			// First try the database API
-			try {
-				response = await apiPost('https://black.irdop.org/db/generate_receipt', { code: formattedCode });
+			// Check if the response contains an error
+			if (response && response.data && response.data.error) {
+				setError(response.data.message || 'Đã xảy ra lỗi khi lấy dữ liệu.');
+				setCrmData(null);
+			} else if (response && response.data) {
+				// Transform the new API response to match the expected structure
+				const transformedData = {
+					orderId: response.data.orderId,
+					quoteId: response.data.quoteId, // If available in response
+					salePerson: response.data.salePerson, // If available in response
+					totalFeeBeforeTax: response.data.totalFeeBeforeTax, // If available in response
+					client: response.data.client,
+					contact: response.data.contactPerson,
+					receiver: response.data.reportRecipient,
+					samples: response.data.samples.map((sample) => ({
+						sampleName: sample.sampleName,
+						matrix: sample.matrix,
+						sampleInformation: sample.sampleInformation,
+						analysis: sample.analyses.map((analysis) => ({
+							parameterName: analysis.parameterName,
+							protocolCode: analysis.protocolCode,
+							parameterId: analysis.parameterId || '',
+							protocolSource: analysis.protocolSource || 'IRDOP',
+							resultUnit: analysis.resultUnit || '',
+							field: analysis.field || '',
+							matrix: analysis.matrix || sample.matrix,
+						})),
+					})),
+				};
 
-				// Check if the response contains data
-				if (
-					response &&
-					response.data &&
-					!response.data.error &&
-					response.data.samples &&
-					response.data.samples.length > 0
-				) {
-					dataFound = true;
-					setCrmData(response.data);
-					setError(null);
+				setCrmData(transformedData);
+				setError(null);
 
-					// Set deadline if it exists in the response
-					if (response.data.deadline) {
-						setDeadline(response.data.deadline);
-					}
-
-					// Set defaultSampleInformation based on response
-					if (response.data.default_information !== undefined) {
-						setDefaultSampleInformation(response.data.default_information);
-					}
-
-					// Load existing sample information if default_information is false
-					if (response.data.default_information === false && response.data.samples) {
-						const loadedCustomerInfo = {};
-						response.data.samples.forEach((sample, index) => {
-							if (sample.sample_information && Array.isArray(sample.sample_information)) {
-								loadedCustomerInfo[index] = sample.sample_information.map((info) => ({
-									fname: info.fname || '',
-									fvalue: info.fvalue || '',
-								}));
-							}
-						});
-						setCustomerInfo(loadedCustomerInfo);
-					}
-
-					// Initialize urgent samples state
-					const initialUrgentState = {};
-					response.data.samples.forEach((_, index) => {
-						initialUrgentState[index] = false;
-					});
-					setUrgentSamples(initialUrgentState);
+				// Set deadline if it exists in the response
+				if (response.data.deadline) {
+					setDeadline(response.data.deadline);
 				}
-			} catch (dbError) {
-				console.log('Database API failed, trying CRM API:', dbError);
-			}
 
-			// If no data found from database API, try CRM API
-			if (!dataFound) {
-				response = await apiPost('https://black.irdop.org/crm/generate_receipt', { code: formattedCode });
-
-				// Check if the response contains an error
-				if (response && response.data && response.data.error) {
-					setError(response.data.message || 'Đã xảy ra lỗi khi lấy dữ liệu từ CRM.');
-					setCrmData(null);
-				} else if (response && response.data) {
-					setCrmData(response.data);
-					setError(null);
-
-					// Initialize urgent samples state
-					const initialUrgentState = {};
-					response.data.samples.forEach((_, index) => {
-						initialUrgentState[index] = false;
-					});
-					setUrgentSamples(initialUrgentState);
+				// Set defaultSampleInformation based on response
+				if (response.data.default_information !== undefined) {
+					setDefaultSampleInformation(response.data.default_information);
 				}
+
+				// Load existing sample information if default_information is false
+				if (response.data.default_information === false && response.data.samples) {
+					const loadedCustomerInfo = {};
+					response.data.samples.forEach((sample, index) => {
+						if (sample.sampleInformation && Array.isArray(sample.sampleInformation)) {
+							loadedCustomerInfo[index] = sample.sampleInformation.map((info) => ({
+								fname: info.fname || '',
+								fvalue: info.fvalue || '',
+							}));
+						}
+					});
+					setCustomerInfo(loadedCustomerInfo);
+				}
+
+				// Initialize urgent samples state
+				const initialUrgentState = {};
+				transformedData.samples.forEach((_, index) => {
+					initialUrgentState[index] = false;
+				});
+				setUrgentSamples(initialUrgentState);
 			}
 		} catch (error) {
 			console.error('Error fetching data:', error);
@@ -449,14 +444,14 @@ const CreateReceiptFromCRM = () => {
 		setIsCreating(true); // Add status property to samples based on urgentSamples state and ensure all analysis items have required properties
 		const samplesWithStatus = crmData.samples.map((sample, index) => {
 			// Make sure each analysis has all required properties
-			const updatedAnalysis = sample.analysis.map((item) => ({
-				parameter_uid: item.parameter_uid || '',
-				parameter_name: item.parameter_name || '',
-				protocol_source: item.protocol_source || '',
-				protocol_code: item.protocol_code || '',
+			const updatedAnalyses = sample.analysis.map((item) => ({
+				parameterId: item.parameterId || '',
+				parameterName: item.parameterName || '',
+				protocolSource: item.protocolSource || '',
+				protocolCode: item.protocolCode || '',
 				matrix: item.matrix || sample.matrix || '',
 				field: item.field || '',
-				result_unit: item.result_unit || '',
+				resultUnit: item.resultUnit || '',
 				// Keep any other properties that might be present
 				...item,
 			}));
@@ -475,7 +470,7 @@ const CreateReceiptFromCRM = () => {
 				// Default customer information if none provided
 				sampleInformation.push({
 					fname: 'Tên mẫu thử / name.',
-					fvalue: sample?.sample_name || '',
+					fvalue: sample?.sampleName || '',
 				});
 			}
 
@@ -493,13 +488,12 @@ const CreateReceiptFromCRM = () => {
 			);
 
 			return {
-				...sample,
-				// Update the analysis array with the complete objects
-				analysis: updatedAnalysis,
-				// Add sample_information to each sample
-				sample_information: sampleInformation,
+				sampleName: sample.sampleName,
+				matrix: sample.matrix,
+				sampleInformation: sampleInformation,
 				status: urgentSamples[index] ? 1 : 0,
 				purpose: selectedPurpose, // Add purpose to each sample
+				analyses: updatedAnalyses,
 			};
 		});
 		try {
@@ -510,25 +504,17 @@ const CreateReceiptFromCRM = () => {
 			}
 			const payload = {
 				client: crmData.client,
-				contact: crmData.contact,
-				receiver: receiverInfo,
+				contactPerson: crmData.contact,
+				reportRecipient: receiverInfo,
 				samples: samplesWithStatus,
-				created_by_uid: currentUser.identity_uid,
-				modified_by_uid: currentUser.identity_uid,
-				order_code: crmData.order_code,
-				quote_code: crmData.quote_code,
-				sale_recorder: crmData.sale_recorder,
-				total_amount: crmData.total_amount,
-				discount_summary: crmData.discount_summary,
+				orderId: crmData.orderId,
+				quoteId: crmData.quoteId,
+				salePerson: crmData.salePerson,
+				totalFeeBeforeTax: crmData.totalFeeBeforeTax,
 				deadline: deadline, // Add deadline to payload
 			};
 
-			// Add file_id if it exists in the loaded data
-			if (crmData.file_id) {
-				payload.fileId = crmData.file_id;
-			}
-
-			const response = await apiPost('https://black.irdop.org/crm/create_receipt', payload); // Check if the response contains an error
+			const response = await apiPost('https://red.irdop.org/v1/receipt/create/full', payload); // Check if the response contains an error
 			if (response && response.data && response.data.error) {
 				setError(response.data.message || 'Đã xảy ra lỗi khi tạo tiếp nhận mẫu.');
 			} else if (response && response.data) {
@@ -541,7 +527,7 @@ const CreateReceiptFromCRM = () => {
 
 				// Show brief notification and navigate after delay
 				await showBriefNotification('Tạo tiếp nhận mẫu thành công!');
-				navigate(`/dashboard/receipt?receipt_uid=${response.data.receipt_uid}`);
+				navigate(`/dashboard/receipt?receiptId=${response.data.receiptId}`);
 			}
 		} catch (error) {
 			console.error('Error creating receipt:', error);
@@ -574,7 +560,7 @@ const CreateReceiptFromCRM = () => {
 					// Default customer information if none provided
 					sampleInformation.push({
 						fname: 'Tên mẫu thử / name.',
-						fvalue: sample?.sample_name || '',
+						fvalue: sample?.sampleName || '',
 					});
 				}
 
@@ -599,8 +585,8 @@ const CreateReceiptFromCRM = () => {
 			const requestData = {
 				...crmData,
 				samples: samplesWithInfo,
-				created_at: new Date().toISOString(),
-				created_by_uid: currentUser.identity_uid,
+				createdAt: new Date().toISOString(),
+				createdById: currentUser.identity_uid,
 				...(deadline && { deadline: deadline }), // Add deadline if selected
 			};
 
@@ -637,12 +623,12 @@ const CreateReceiptFromCRM = () => {
 
 				// For IE/Edge browsers
 				if (window.navigator && window.navigator.msSaveOrOpenBlob) {
-					window.navigator.msSaveOrOpenBlob(excelBlob, `Phieu_Yeu_Cau_${crmData.order_code || 'CRM'}.xlsx`);
+					window.navigator.msSaveOrOpenBlob(excelBlob, `Phieu_Yeu_Cau_${crmData.orderId || 'CRM'}.xlsx`);
 				} else {
 					// For modern browsers
 					const link = document.createElement('a');
 					link.href = url;
-					link.setAttribute('download', `Phieu_Yeu_Cau_${crmData.order_code || 'CRM'}.xlsx`);
+					link.setAttribute('download', `Phieu_Yeu_Cau_${crmData.orderId || 'CRM'}.xlsx`);
 					link.style.display = 'none';
 
 					// Append to body, click and remove
@@ -752,7 +738,7 @@ const CreateReceiptFromCRM = () => {
 				...selectedParameters,
 				{
 					...parameter,
-					parameter_uid: parameter.parameter_uid || '',
+					parameterId: parameter.parameterId || '',
 				},
 			]);
 		}
@@ -780,13 +766,13 @@ const CreateReceiptFromCRM = () => {
 			analysis: [
 				...updatedSamples[currentSampleIndex].analysis,
 				...selectedParameters.map((param) => ({
-					parameter_id: param.id,
-					parameter_name: param.parameter_name,
-					parameter_uid: param.parameter_uid || '',
+					parameterId: param.id,
+					parameterName: param.parameterName,
+					parameterId: param.parameterId || '',
 					matrix: param.matrix || updatedSamples[currentSampleIndex].matrix,
-					protocol_code: param.protocol_code,
-					protocol_source: param.protocol_source || 'IRDOP',
-					result_unit: param.result_unit || '',
+					protocolCode: param.protocolCode,
+					protocolSource: param.protocolSource || 'IRDOP',
+					resultUnit: param.resultUnit || '',
 				})),
 			],
 		};
@@ -917,10 +903,10 @@ const CreateReceiptFromCRM = () => {
 														Nền mẫu: {parameter.matrix}
 													</p>
 													<p className="text-start text-primary font-medium w-full line-clamp-1">
-														{parameter.parameter_name}
+														{parameter.parameterName}
 													</p>
 													<p className="text-start text-text-secondary w-full line-clamp-1">
-														{parameter.protocol_code}
+														{parameter.protocolCode}
 														{parameter?.accreditation && <b>{` (${parameter.accreditation})`}</b>}
 													</p>
 												</div>
@@ -939,9 +925,9 @@ const CreateReceiptFromCRM = () => {
 								>
 									<div>
 										<p className="text-xs font-medium w-full line-clamp-1">Nền mẫu: {parameter.matrix}</p>
-										<p className="text-primary font-medium w-full line-clamp-1">{parameter.parameter_name}</p>
+										<p className="text-primary font-medium w-full line-clamp-1">{parameter.parameterName}</p>
 										<p className="text-start text-text-secondary w-full line-clamp-1">
-											{parameter.protocol_code}
+											{parameter.protocolCode}
 											{parameter?.accreditation && <b>{` (${parameter.accreditation})`}</b>}
 										</p>
 									</div>
@@ -1010,7 +996,7 @@ const CreateReceiptFromCRM = () => {
 			const updatedSamples = [...crmData.samples];
 			updatedSamples[editingField.index] = {
 				...updatedSamples[editingField.index],
-				sample_name: editValue,
+				sampleName: editValue,
 			};
 			setCrmData({
 				...crmData,
@@ -1081,14 +1067,14 @@ const CreateReceiptFromCRM = () => {
 			}
 
 			// Create list of analyses with their parameter names and the new matrix
-			const listAnalysis = sample.analysis.map((item) => ({
-				analysis: item.parameter_name,
+			const analyses = sample.analysis.map((item) => ({
+				analysis: item.parameterName,
 				matrix: matrix,
 			}));
 
 			// Send API request to match analyses with matrix
-			const response = await apiPost('https://black.irdop.org/trelw82ki/match/analysis/matrix', {
-				listAnalysis,
+			const response = await apiPost('https://red.irdop.org/v1/analysis/match/parameter', {
+				analyses,
 			});
 
 			// Update the sample with the response data
@@ -1340,13 +1326,13 @@ const CreateReceiptFromCRM = () => {
 				// Initialize with default fields if defaultSampleInformation is false
 				updatedCustomerInfo[sampleIndex] = defaultCustomerFields.map((field) => ({
 					...field,
-					fvalue: field.fname === 'Tên mẫu thử / name.' ? crmData.samples[sampleIndex].sample_name || '' : field.fvalue,
+					fvalue: field.fname === 'Tên mẫu thử / name.' ? crmData.samples[sampleIndex].sampleName || '' : field.fvalue,
 				}));
 			} else {
 				updatedCustomerInfo[sampleIndex] = [
 					{
 						fname: 'Tên mẫu thử / name.',
-						fvalue: crmData?.samples[sampleIndex]?.sample_name || '',
+						fvalue: crmData?.samples[sampleIndex]?.sampleName || '',
 					},
 				];
 			}
@@ -1364,7 +1350,7 @@ const CreateReceiptFromCRM = () => {
 					...defaultField,
 					fvalue:
 						defaultField.fname === 'Tên mẫu thử / name.'
-							? crmData.samples[sampleIndex].sample_name || ''
+							? crmData.samples[sampleIndex].sampleName || ''
 							: defaultField.fvalue,
 				}));
 			} else {
@@ -1426,7 +1412,7 @@ const CreateReceiptFromCRM = () => {
 			crmData.samples.forEach((sample, index) => {
 				const defaultFields = defaultCustomerFields.map((field) => ({
 					...field,
-					fvalue: field.fname === 'Tên mẫu thử / name.' ? sample.sample_name || '' : field.fvalue,
+					fvalue: field.fname === 'Tên mẫu thử / name.' ? sample.sampleName || '' : field.fvalue,
 				}));
 				updatedCustomerInfo[index] = [...defaultFields];
 			});
@@ -1505,20 +1491,48 @@ const CreateReceiptFromCRM = () => {
 			// Format the code before sending to API
 			const formattedCode = formatCode(code);
 
-			// Load data from CRM API
-			const response = await apiPost('https://black.irdop.org/crm/generate_receipt', { code: formattedCode });
+			// Load data from CRM using the new API
+			const response = await apiPost('https://red.irdop.org/v1/order/get/info', {
+				orderId: formattedCode,
+				loadCrm: true,
+			});
 
 			// Check if the response contains an error
 			if (response && response.data && response.data.error) {
 				setError(response.data.message || 'Đã xảy ra lỗi khi lấy dữ liệu từ CRM.');
 				setCrmData(null);
 			} else if (response && response.data) {
-				setCrmData(response.data);
+				// Transform the new API response to match the expected structure
+				const transformedData = {
+					orderId: response.data.orderId,
+					quoteId: response.data.quoteId, // If available in response
+					salePerson: response.data.salePerson, // If available in response
+					totalFeeBeforeTax: response.data.totalFeeBeforeTax, // If available in response
+					client: response.data.client,
+					contact: response.data.contactPerson,
+					receiver: response.data.reportRecipient,
+					samples: response.data.samples.map((sample) => ({
+						sampleName: sample.sampleName,
+						matrix: sample.matrix,
+						sampleInformation: sample.sampleInformation,
+						analysis: sample.analyses.map((analysis) => ({
+							parameterName: analysis.parameterName,
+							protocolCode: analysis.protocolCode,
+							parameterId: analysis.parameterId || '',
+							protocolSource: analysis.protocolSource || 'IRDOP',
+							resultUnit: analysis.resultUnit || '',
+							field: analysis.field || '',
+							matrix: analysis.matrix || sample.matrix,
+						})),
+					})),
+				};
+
+				setCrmData(transformedData);
 				setError(null);
 
 				// Initialize urgent samples state
 				const initialUrgentState = {};
-				response.data.samples.forEach((_, index) => {
+				transformedData.samples.forEach((_, index) => {
 					initialUrgentState[index] = false;
 				});
 				setUrgentSamples(initialUrgentState);
@@ -1555,13 +1569,13 @@ const CreateReceiptFromCRM = () => {
 
 			// Prepare the order data
 			const orderData = {
-				order_code: crmData.order_code || '',
-				quote_code: crmData.quote_code || '',
-				sale_recorder: crmData.sale_recorder || '',
+				order_code: crmData.orderId || '',
+				quote_code: crmData.quoteId || '',
+				sale_recorder: crmData.salePerson || '',
 				client: crmData.client,
 				contact: crmData.contact,
 				receiver: receiverInfo,
-				total_amount: crmData.total_amount || 0,
+				total_amount: crmData.totalFeeBeforeTax || 0,
 				samples: crmData.samples.map((sample, index) => {
 					// Include sample_information if it exists for this sample
 					const sampleData = { ...sample };
@@ -1600,7 +1614,7 @@ const CreateReceiptFromCRM = () => {
 			return;
 		}
 
-		const orderCode = crmData.order_code;
+		const orderCode = crmData.orderId;
 		if (!orderCode) {
 			Swal.fire({
 				icon: 'error',
@@ -1723,24 +1737,24 @@ const CreateReceiptFromCRM = () => {
 											<h3 className="font-semibold text-lg mb-2">Thông tin đơn hàng</h3>
 											<p>
 												<span className="font-medium text-gray-500">Mã đơn hàng: </span>
-												{crmData.order_code || '--'}
+												{crmData.orderId || '--'}
 											</p>
 											<p>
 												<span className="font-medium text-gray-500">Mã báo giá: </span>
-												{crmData.quote_code || '--'}
+												{crmData.quoteId || '--'}
 											</p>
 											<p>
 												<span className="font-medium text-gray-500">Ghi nhận doanh số: </span>
-												{crmData.sale_recorder || '--'}
+												{crmData.salePerson || '--'}
 											</p>
 
 											<p>
 												<span className="font-medium text-gray-500">Tổng tiền: </span>
-												{crmData.total_amount
+												{crmData.totalFeeBeforeTax
 													? new Intl.NumberFormat('vi-VN', {
 															style: 'currency',
 															currency: 'VND',
-													  }).format(crmData.total_amount)
+													  }).format(crmData.totalFeeBeforeTax)
 													: '--'}
 											</p>
 										</div>
@@ -2139,10 +2153,10 @@ const CreateReceiptFromCRM = () => {
 															) : (
 																<h2
 																	className="font-medium text-start text-lg cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded"
-																	onClick={() => startEditing('sample', 'sample_name', sample.sample_name, index)}
+																	onClick={() => startEditing('sample', 'sampleName', sample.sampleName, index)}
 																	title="Nhấn để chỉnh sửa tên mẫu"
 																>
-																	{sample.sample_name}
+																	{sample.sampleName}
 																</h2>
 															)}
 															<button
@@ -2294,7 +2308,7 @@ const CreateReceiptFromCRM = () => {
 																								...field,
 																								fvalue:
 																									field.fname === 'Tên mẫu thử / name.'
-																										? sample.sample_name || ''
+																										? sample.sampleName || ''
 																										: field.fvalue,
 																						  }))
 																						: [])
@@ -2412,12 +2426,12 @@ const CreateReceiptFromCRM = () => {
 																<tbody>
 																	{sample.analysis.map((item, idx) => (
 																		<tr key={idx} className="border-b">
-																			<td className="p-1 text-start">{item.parameter_uid}</td>
-																			<td className="p-1 text-start">{item.parameter_name}</td>{' '}
+																			<td className="p-1 text-start">{item.parameterId}</td>
+																			<td className="p-1 text-start">{item.parameterName}</td>{' '}
 																			<td className="p-1 text-start w-28">
 																				{editingAnalysis.sampleIndex === index &&
 																				editingAnalysis.analysisIndex === idx &&
-																				editingAnalysis.field === 'protocol_source' ? (
+																				editingAnalysis.field === 'protocolSource' ? (
 																					<select
 																						value={editAnalysisValue}
 																						onChange={handleAnalysisEditChange}
@@ -2435,18 +2449,18 @@ const CreateReceiptFromCRM = () => {
 																					<span
 																						className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
 																						onClick={() =>
-																							startEditingAnalysis(index, idx, 'protocol_source', item.protocol_source)
+																							startEditingAnalysis(index, idx, 'protocolSource', item.protocolSource)
 																						}
 																						title="Nhấn để chỉnh sửa"
 																					>
-																						{item.protocol_source || '--'}
+																						{item.protocolSource || '--'}
 																					</span>
 																				)}
 																			</td>
 																			<td className="p-1 text-start">
 																				{editingAnalysis.sampleIndex === index &&
 																				editingAnalysis.analysisIndex === idx &&
-																				editingAnalysis.field === 'protocol_code' ? (
+																				editingAnalysis.field === 'protocolCode' ? (
 																					<input
 																						type="text"
 																						value={editAnalysisValue}
@@ -2460,15 +2474,15 @@ const CreateReceiptFromCRM = () => {
 																					<span
 																						className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
 																						onClick={() =>
-																							startEditingAnalysis(index, idx, 'protocol_code', item.protocol_code)
+																							startEditingAnalysis(index, idx, 'protocolCode', item.protocolCode)
 																						}
 																						title="Nhấn để chỉnh sửa"
 																					>
-																						{item.protocol_code || '--'}
+																						{item.protocolCode || '--'}
 																					</span>
 																				)}
-																				{/* Add the EX info fields if protocol_source is EX */}
-																				{item.protocol_source === 'EX' && (
+																				{/* Add the EX info fields if protocolSource is EX */}
+																				{item.protocolSource === 'EX' && (
 																					<>
 																						<div className="mt-1">
 																							{editingAnalysis.sampleIndex === index &&
@@ -2533,7 +2547,7 @@ const CreateReceiptFromCRM = () => {
 																			<td className="p-1 text-start w-24">
 																				{editingAnalysis.sampleIndex === index &&
 																				editingAnalysis.analysisIndex === idx &&
-																				editingAnalysis.field === 'field' ? (
+																				editingAnalysis.field === 'scientificField' ? (
 																					<select
 																						value={editAnalysisValue}
 																						onChange={handleAnalysisEditChange}
@@ -2550,17 +2564,19 @@ const CreateReceiptFromCRM = () => {
 																				) : (
 																					<span
 																						className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
-																						onClick={() => startEditingAnalysis(index, idx, 'field', item.field)}
+																						onClick={() =>
+																							startEditingAnalysis(index, idx, 'scientificField', item.scientificField)
+																						}
 																						title="Nhấn để chỉnh sửa"
 																					>
-																						{item.field || '--'}
+																						{item.scientificField || '--'}
 																					</span>
 																				)}
 																			</td>
 																			<td className="p-1 text-start w-24">
 																				{editingAnalysis.sampleIndex === index &&
 																				editingAnalysis.analysisIndex === idx &&
-																				editingAnalysis.field === 'result_unit' ? (
+																				editingAnalysis.field === 'resultUnit' ? (
 																					<input
 																						type="text"
 																						value={editAnalysisValue}
@@ -2575,11 +2591,11 @@ const CreateReceiptFromCRM = () => {
 																					<span
 																						className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
 																						onClick={() =>
-																							startEditingAnalysis(index, idx, 'result_unit', item.result_unit)
+																							startEditingAnalysis(index, idx, 'resultUnit', item.resultUnit)
 																						}
 																						title="Nhấn để chỉnh sửa đơn vị"
 																					>
-																						{item.result_unit || '--'}
+																						{item.resultUnit || '--'}
 																					</span>
 																				)}
 																			</td>

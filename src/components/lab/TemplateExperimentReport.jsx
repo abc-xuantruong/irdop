@@ -118,7 +118,7 @@ const TemplateExperimentReport = ({
 	// Columns management state
 	const [templateColumns, setTemplateColumns] = useState([
 		{ objectKey: 'auto', columnName: 'TT', width: 4 },
-		{ objectKey: 'sampleId', columnName: 'Mã mẫu thử', width: 10 },
+		{ objectKey: 'sampleId', columnName: 'Mã mẫu thử', width: 8 },
 		{ objectKey: 'id', columnName: 'Mã phép thử', width: 10 },
 	]);
 	const [newColumn, setNewColumn] = useState({ objectKey: '', columnName: '' });
@@ -441,8 +441,8 @@ const TemplateExperimentReport = ({
 	const recalculateColumnWidths = (columns) => {
 		if (columns.length <= 3) return columns;
 
-		// Reserve space for default columns (4% + 9% + 8% = 21%)
-		const availableWidth = 100 - 21; // 79% available for custom columns
+		// Reserve space for default columns (4% + 8% + 10% = 22%)
+		const availableWidth = 100 - 22; // 78% available for custom columns
 		const customColumnsCount = columns.length - 3;
 
 		// Calculate width per custom column (round to nearest integer)
@@ -501,7 +501,7 @@ const TemplateExperimentReport = ({
 		const nextWidth = initialWidths.current[resizingIndex + 1] - deltaPercent;
 
 		// Ensure minimum width of 5% for both columns
-		if (currentWidth > 5 && nextWidth > 5 && currentWidth < 50 && nextWidth < 50) {
+		if (currentWidth > 5 && nextWidth > 5 && currentWidth < 80 && nextWidth < 80) {
 			newColumns[resizingIndex].width = Math.round(currentWidth);
 			newColumns[resizingIndex + 1].width = Math.round(nextWidth);
 			setTemplateColumns(newColumns);

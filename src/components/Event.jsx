@@ -21,7 +21,7 @@ const Event = () => {
 					identity_uid: currentUser?.identity_uid,
 					sample_id: sampleId,
 					event_uid: 'IRDOP-INTRA-H1Y25-C1',
-					parameter_id: 1,
+					parameterId: 1,
 					sample_name: sample,
 					sample_matrix: 'Thực phẩm (thịt)',
 					parameter_name: 'Tổng số vi sinh vật hiếu khí',
@@ -35,7 +35,7 @@ const Event = () => {
 					identity_uid: currentUser?.identity_uid,
 					sample_id: sampleId,
 					event_uid: 'IRDOP-INTRA-H1Y25-C1',
-					parameter_id: 2,
+					parameterId: 2,
 					sample_name: sample,
 					sample_matrix: 'Thực phẩm (thịt)',
 					parameter_name: 'Định lượng E.coli',
@@ -49,7 +49,7 @@ const Event = () => {
 					identity_uid: currentUser?.identity_uid,
 					sample_id: sampleId,
 					event_uid: 'IRDOP-INTRA-H1Y25-C1',
-					parameter_id: 3,
+					parameterId: 3,
 					sample_name: sample,
 					sample_matrix: 'Thực phẩm (thịt)',
 					parameter_name: 'Định lượng Coliforms',
@@ -74,7 +74,7 @@ const Event = () => {
 						param.identity_uid === defaultParam.identity_uid &&
 						param.sample_id === defaultParam.sample_id &&
 						param.event_uid === defaultParam.event_uid &&
-						param.parameter_id === defaultParam.parameter_id,
+						param.parameterId === defaultParam.parameterId,
 				);
 				return matchingParam || defaultParam;
 			});

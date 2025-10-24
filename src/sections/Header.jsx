@@ -34,7 +34,11 @@ const Header = () => {
 			// Check if the user is a technician but not an admin
 			if (currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin) {
 				// Allow access to /processing and /files, redirect from other pages
-				if (!currentPath.includes('/processing') && !currentPath.includes('/files') && !currentPath.includes('handover')) {
+				if (
+					!currentPath.includes('/processing') &&
+					!currentPath.includes('/files') &&
+					!currentPath.includes('handover')
+				) {
 					navigate('/processing');
 				}
 			}
@@ -70,7 +74,15 @@ const Header = () => {
 	};
 	// Function to navigate and close dropdown
 	const handleNavigate = (path) => {
-		navigate(path);
+		// Get identityId from cookies
+		const identityId = Cookies.get('identityId') || Cookies.get('identityUID');
+
+		// If navigating to /processing and have identityId, add it as filter
+		if (path === '/processing' && identityId) {
+			navigate(`${path}?technicianId=%5B"${identityId}"%5D`);
+		} else {
+			navigate(path);
+		}
 		setDropdownOpen(false);
 	};
 
@@ -95,6 +107,15 @@ const Header = () => {
 		return !(currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin);
 	};
 
+	// Helper function to get link with technicianId filter
+	const getLinkWithFilter = (path) => {
+		const identityId = Cookies.get('identityId') || Cookies.get('identityUID');
+		if (path === '/processing' && identityId) {
+			return `${path}?technicianId=%5B"${identityId}"%5D`;
+		}
+		return path;
+	};
+
 	return (
 		<div className="w-screen bg-white border-b shadow flex justify-center items-center relative z-50">
 			{' '}
@@ -111,7 +132,7 @@ const Header = () => {
 					) : (
 						<>
 							<Link
-								to="/processing"
+								to={getLinkWithFilter('/processing')}
 								className={`cursor-pointer md:text-md ml-4 text-md font-medium ${
 									currentPath.includes('/processing') ? 'text-primary' : 'text-teritary hover:text-primary'
 								}`}
@@ -137,6 +158,14 @@ const Header = () => {
 								}`}
 							>
 								Bàn giao
+							</Link>
+							<Link
+								to="/progress"
+								className={`cursor-pointer md:text-md ml-4 text-md font-medium ${
+									currentPath.includes('/progress') ? 'text-primary' : 'text-teritary hover:text-primary'
+								}`}
+							>
+								Tiến trình
 							</Link>
 							<Link
 								to="/library"
@@ -235,6 +264,12 @@ const Header = () => {
 											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
 										>
 											Bàn giao
+										</button>
+										<button
+											onClick={() => handleNavigate('/progress')}
+											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
+										>
+											Tiến trình
 										</button>
 										{shouldShowReception() && (
 											<button

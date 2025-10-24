@@ -2,15 +2,22 @@ import React, { useState, useEffect, useContext, useRef, useMemo, useCallback } 
 import { createPortal } from 'react-dom';
 import { GlobalContext } from '../../contexts/GlobalContext';
 import { apiGet, apiPost } from '../../contexts/helperFunctionCallAPI';
-import { useLocation } from 'react-router-dom';
+import { convertValueToHTML, convertHTMLToValue } from '../../contexts/formatHelpers';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
-import TinyMceInput from '../Input';
 import { IoIosArrowDown } from 'react-icons/io';
 import { MdAttachFile } from 'react-icons/md';
+import { FaFilter, FaSort, FaSortUp, FaSortDown, FaCalendarAlt, FaTimes } from 'react-icons/fa';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import LabBulkUpdate from './LabBulkUpdate';
-import ExperimentDetail from './ExperimentDetail';
+import LoginPopup from './LoginPopup';
+import ConfirmLabResult from '../noti box/confirmLabResult';
+import Cookies from 'js-cookie';
+import axios from 'axios';
+import Swal from 'sweetalert2';
 
-// Custom CSS for thin scrollbars and enhanced editing experience
+// Custom CSS for thin scrollbars and display experience
 const customScrollbarStyle = `
 .custom-scrollbar::-webkit-scrollbar {
 	width: 3px;
@@ -56,30 +63,61 @@ table td {
 	position: relative !important;
 }
 
-/* Enhanced editing styles */
-.editable-cell {
-	transition: all 0.2s ease-in-out;
+/* Selected row styles */
+.row-selected {
+	background-color: #dbeafe !important;
+	border-left: 4px solid #3b82f6 !important;
+	box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2);
 }
 
-.editable-cell:hover {
-	background-color: #f0f8ff !important;
-	border-color: #7c3aed !important;
-	box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.2);
+.row-selected:hover {
+	background-color: #bfdbfe !important;
 }
 
-.editing-active {
-	background-color: #ffffff !important;
-	border-color: #7c3aed !important;
-	box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+.row-selected td {
+	background-color: inherit !important;
 }
 
-.result-cell-placeholder {
-	color: #9ca3af;
-	font-style: italic;
+/* Ensure non-selected rows don't interfere with selected rows */
+tr:not(.row-selected):hover {
+	background-color: #eff6ff !important;
 }
 
-.save-indicator {
-	animation: pulse 1s infinite;
+tr:not(.row-selected):hover td {
+	background-color: inherit !important;
+}
+
+.user-select-none {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+
+.my-tasks-btn {
+	background: white;
+	color: #10b981;
+	border: 2px solid #10b981;
+	border-radius: 8px;
+	padding: 6px 12px;
+	font-size: 0.875rem;
+	font-weight: 600;
+	transition: all 0.15s ease;
+	box-shadow: 0 2px 4px rgba(16, 185, 129, 0.1);
+	will-change: background, transform, color;
+}
+
+.my-tasks-btn:hover {
+	background: #f0fdf4;
+	transform: translateY(-1px);
+	box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
+}
+
+.my-tasks-btn.active {
+	background: linear-gradient(135deg, #10b981, #059669);
+	color: white;
+	border-color: #059669;
+	box-shadow: 0 4px 6px rgba(16, 185, 129, 0.4);
 }
 
 .sidebar-section-header {
@@ -184,16 +222,19 @@ table td {
 	position: absolute;
 	background: rgba(0, 0, 0, 0.9);
 	color: white;
-	padding: 8px 12px;
+	padding: 10px 14px;
 	border-radius: 6px;
 	font-size: 13px;
 	font-weight: 500;
-	white-space: nowrap;
+	white-space: pre-wrap;
 	pointer-events: none;
 	z-index: 10000;
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	opacity: 0;
 	transition: opacity 0.2s ease-in-out;
+	max-width: 500px;
+	min-width: 350px;
+	word-wrap: break-word;
 }
 
 .custom-tooltip.visible {
@@ -216,6 +257,28 @@ table td {
 .custom-tooltip.below::after {
 	bottom: 100%;
 	border-bottom-color: rgba(0, 0, 0, 0.9);
+}
+
+.custom-tooltip.left {
+	transform: translate(-100%, -50%);
+}
+
+.custom-tooltip.left::after {
+	left: 100%;
+	top: 50%;
+	transform: translateY(-50%);
+	border-left-color: rgba(0, 0, 0, 0.9);
+}
+
+.custom-tooltip.right {
+	transform: translateY(-50%);
+}
+
+.custom-tooltip.right::after {
+	right: 100%;
+	top: 50%;
+	transform: translateY(-50%);
+	border-right-color: rgba(0, 0, 0, 0.9);
 }
 
 /* Sample Tooltip Styles */
@@ -399,9 +462,97 @@ const documentPreviewStyles = `
 }
 `;
 
+// HeaderCell component to manage filter and sort functionality
+const HeaderCell = ({
+	columnName,
+	displayName,
+	isFilterable = true,
+	isSortable = true,
+	isFiltered,
+	sortDirection,
+	onFilter,
+	onSort,
+	onClearFilter,
+	className = '',
+	width = 'auto',
+}) => {
+	const handleHeaderClick = (e) => {
+		// If clicking on filter icon, open filter
+		if (e.target.closest('.filter-icon')) {
+			e.stopPropagation();
+			if (isFilterable && onFilter) {
+				onFilter(columnName, e);
+			}
+			return;
+		}
+
+		// Otherwise, handle sort
+		if (isSortable && onSort) {
+			onSort(columnName);
+		}
+	};
+
+	const handleClearFilter = (e) => {
+		e.stopPropagation();
+		if (onClearFilter) {
+			onClearFilter(columnName);
+		}
+	};
+
+	const getSortIcon = () => {
+		if (!isSortable) return null;
+
+		if (sortDirection === 'ASC') {
+			return <FaSortUp className="text-blue-600" />;
+		} else if (sortDirection === 'DESC') {
+			return <FaSortDown className="text-blue-600" />;
+		} else {
+			return <FaSort className="text-gray-400" />;
+		}
+	};
+
+	return (
+		<th
+			className={`px-2 py-2 text-left text-xs font-semibold uppercase tracking-wider border-b-2 border-blue-700 hover:bg-blue-200 bg-blue-100 relative cursor-pointer ${className}`}
+			style={{ width }}
+			onClick={handleHeaderClick}
+		>
+			<div className="flex items-center justify-between gap-2 overflow-hidden">
+				<span className="truncate cursor-pointer hover:text-gray-600 flex-1">{displayName}</span>
+
+				<div className="flex items-center gap-1 flex-shrink-0">
+					{/* Filter icon - only show if filterable */}
+					{isFilterable && (
+						<button
+							className={`filter-icon p-1 rounded hover:bg-blue-300 transition-colors ${
+								isFiltered ? 'text-blue-600' : 'text-gray-500'
+							}`}
+							onClick={(e) => {
+								e.stopPropagation();
+								onFilter(columnName, e);
+							}}
+							title="Lọc dữ liệu"
+						>
+							<FaFilter className="w-3 h-3" />
+						</button>
+					)}
+
+					{/* Sort icon - only show if sortable */}
+					{isSortable && (
+						<div className="text-xs cursor-pointer" title="Sắp xếp">
+							{getSortIcon()}
+						</div>
+					)}
+				</div>
+			</div>
+		</th>
+	);
+};
+
 const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const { technicians, currentUser } = useContext(GlobalContext);
 	const location = useLocation();
+	const navigate = useNavigate();
 
 	/*
 	FILTERING AND URL MANAGEMENT LOGIC:
@@ -426,8 +577,16 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const [currentPage, setCurrentPage] = useState(1);
 	const [itemsPerPage, setItemsPerPage] = useState(100);
 	const [totalPages, setTotalPages] = useState(1);
-	const [updating, setUpdating] = useState(false);
 	const [error, setError] = useState(null);
+
+	// Selection states
+	const [selectedAnalysisIds, setSelectedAnalysisIds] = useState(new Set());
+	const [selectedRowsData, setSelectedRowsData] = useState(new Map());
+	const [showBulkEdit, setShowBulkEdit] = useState(false);
+
+	// Drag selection states
+	const [isDragging, setIsDragging] = useState(false);
+	const [dragStartId, setDragStartId] = useState(null);
 
 	// Sidebar state
 	const [parameterSearchTerm, setParameterSearchTerm] = useState('');
@@ -441,58 +600,37 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const [selectedParameter, setSelectedParameter] = useState('');
 	const [sidebarExpandedSections, setSidebarExpandedSections] = useState({
 		analysis: true, // Default expanded
-		sample: false,
-		matrix: false,
-		technician: false,
 	});
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
 	// Table state
-	const [selectedRows, setSelectedRows] = useState(new Set());
-	const [selectedRowsData, setSelectedRowsData] = useState(new Map());
-	const [sortConfig, setSortConfig] = useState({ column: 'sample_uid', direction: 'ASC' });
+	const [sortConfig, setSortConfig] = useState({ column: 'sampleId', direction: 'ASC' });
 
-	// Editing state - Updated to match ProcessingSampleV3 approach
-	const [editingCell, setEditingCell] = useState(null);
-	const [editValue, setEditValue] = useState('');
-
-	// New state for improved editing like ProcessingSampleV3
-	const [editableCell, setEditableCell] = useState({ analysisId: null, column: null });
-	const [inputValue, setInputValue] = useState('');
-
-	// State for protocol_source editing
-	const [editingProtocolSource, setEditingProtocolSource] = useState(null);
-
-	// Bulk edit states
-	const [showBulkEditBox, setShowBulkEditBox] = useState(false);
-
-	// ExperimentDetail modal states
-	const [showExperimentDetailModal, setShowExperimentDetailModal] = useState(false);
+	// Bulk edit states - REMOVED
 
 	// Filter states
 	const [filters, setFilters] = useState({
 		columns: [
 			'id',
-			'sample_uid',
-			'sample_name',
-			'parameter_name',
+			'sampleId',
+			'sampleName',
+			'parameterName',
 			'matrix',
-			'protocol_source',
-			'protocol_code',
-			'result_value',
-			'result_unit',
+			'protocolSource',
+			'protocolCode',
+			'resultValue',
+			'resultUnit',
 			'deadline',
-			'technician_uid',
-			'doc_id',
+			'technicianId',
+			'docId',
+			'note',
 		],
 		parameters: [],
 		protocols: [],
 		headerFilters: {},
-		columnSort: 'sample_uid',
+		columnSort: 'sampleId',
 		sortBy: 'ASC',
-	});
-
-	// Filter creation states
+	}); // Filter creation states
 	const [isFilterCreationMode, setIsFilterCreationMode] = useState(false);
 	const [activeFilterColumn, setActiveFilterColumn] = useState(null);
 	const [filterSearchTerm, setFilterSearchTerm] = useState('');
@@ -501,9 +639,45 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const [selectedFilterValues, setSelectedFilterValues] = useState([]);
 	const [filterPosition, setFilterPosition] = useState({ top: 0, left: 0 });
 
-	// Drag selection state
-	const [isDragging, setIsDragging] = useState(false);
-	const [dragStart, setDragStart] = useState(null);
+	// Date filter states for deadline
+	const [startDate, setStartDate] = useState(null);
+	const [endDate, setEndDate] = useState(null);
+	const [showDateRange, setShowDateRange] = useState(false);
+
+	// Inline editing states
+	const [editingCell, setEditingCell] = useState(null); // { analysisId, column }
+	const [editValue, setEditValue] = useState('');
+
+	// Unit autocomplete states
+	const [unitSuggestions, setUnitSuggestions] = useState([]);
+	const [showUnitSuggestions, setShowUnitSuggestions] = useState(false);
+	const [unitInputRect, setUnitInputRect] = useState(null);
+	const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+	const unitInputRef = useRef(null);
+
+	// Login popup states
+	const [showLoginPopup, setShowLoginPopup] = useState(false);
+	const [showReloginConfirm, setShowReloginConfirm] = useState(false);
+	const [pendingEditCell, setPendingEditCell] = useState(null); // Store pending edit until login
+
+	// Result entry session states
+	const [isResultEntrySession, setIsResultEntrySession] = useState(false);
+	const [pendingChanges, setPendingChanges] = useState(new Map()); // Map<analysisId, {resultValue, resultUnit, ...full record}>
+	const [showSessionConfirm, setShowSessionConfirm] = useState(false);
+	const [isSessionUpdating, setIsSessionUpdating] = useState(false); // Loading state for session update
+	const [showEndSessionDialog, setShowEndSessionDialog] = useState(false); // Dialog for confirming end session
+	const [showCancelConfirm, setShowCancelConfirm] = useState(false); // Dialog for confirming cancel changes
+
+	// Session storage key for pending changes
+	const SESSION_STORAGE_KEY = 'processingAnalysis_pendingChanges';
+
+	// Note modal states
+	const [showNoteModal, setShowNoteModal] = useState(false);
+	const [selectedAnalysisForNote, setSelectedAnalysisForNote] = useState(null);
+	const [newNoteText, setNewNoteText] = useState('');
+	const [isUpdatingNote, setIsUpdatingNote] = useState(false);
+
+	// Drag selection state - REMOVED
 
 	// Scroll position state for maintaining position during updates
 	const [scrollPosition, setScrollPosition] = useState(0);
@@ -547,56 +721,16 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const [previewFile, setPreviewFile] = useState(null);
 	const [previewUrl, setPreviewUrl] = useState('');
 
-	// Ref to prevent unnecessary API calls
-	const lastFetchParamsRef = useRef('');
+	// Ref to prevent unnecessary API calls and track request sequence
 	const lastSearchTermRef = useRef('');
 	const isCurrentlyFetchingRef = useRef(false);
+	const requestSequenceRef = useRef(0);
+	const prevLocationSearchRef = useRef('');
 
 	// Handle drag selection
-	const handleMouseDown = (e, index, rowId, item) => {
-		e.preventDefault();
-		setDragStart({ index, rowId, item, y: e.clientY });
-		setIsDragging(false);
-	};
+	// Mouse event handlers - REMOVED
 
-	const handleMouseEnter = (e, index, rowId, item) => {
-		if (dragStart && Math.abs(e.clientY - dragStart.y) > 5) {
-			setIsDragging(true);
-
-			// Select range
-			const startIndex = Math.min(dragStart.index, index);
-			const endIndex = Math.max(dragStart.index, index);
-
-			const newSelectedRows = new Set(selectedRows);
-			const newSelectedRowsData = new Map(selectedRowsData);
-
-			for (let i = startIndex; i <= endIndex && i < data.length; i++) {
-				const currentRowId = String(data[i].id);
-				newSelectedRows.add(currentRowId);
-				newSelectedRowsData.set(currentRowId, data[i]);
-			}
-
-			setSelectedRows(newSelectedRows);
-			setSelectedRowsData(newSelectedRowsData);
-		}
-	};
-
-	const handleMouseUp = () => {
-		setDragStart(null);
-		setIsDragging(false);
-		document.body.style.userSelect = '';
-	};
-
-	// Global mouse up listener
-	useEffect(() => {
-		document.addEventListener('mouseup', handleMouseUp);
-		document.addEventListener('mouseleave', handleMouseUp);
-
-		return () => {
-			document.removeEventListener('mouseup', handleMouseUp);
-			document.removeEventListener('mouseleave', handleMouseUp);
-		};
-	}, []);
+	// Mouse event listeners - REMOVED
 
 	// Click outside to close filter
 	useEffect(() => {
@@ -617,14 +751,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		};
 	}, [activeFilterColumn]);
 
-	// Handle drag styling
-	useEffect(() => {
-		if (isDragging) {
-			document.body.style.userSelect = 'none';
-		} else {
-			document.body.style.userSelect = '';
-		}
-	}, [isDragging]);
+	// Drag styling - REMOVED
 
 	// Load initial data function
 	const loadInitialData = async () => {
@@ -638,13 +765,18 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				'protocols',
 				'columnSort',
 				'sortBy',
-				'sample_uid',
-				'parameter_name',
-				'protocol_code',
+				'sampleId',
+				'parameterName',
+				'protocolCode',
 				'matrix',
 				'deadline',
-				'doc_id',
-				'result_value',
+				'docId',
+				'resultValue',
+				'technicianId',
+				'protocolSource',
+				'deadlineStartAt',
+				'deadlineEndAt',
+				'deadlineType',
 			].includes(key),
 		);
 
@@ -653,46 +785,44 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		let newItemsPerPage = itemsPerPage;
 		let newSortConfig = { ...sortConfig };
 
-		if (hasFilterParams) {
-			// Parse query parameters if they exist
-			searchParams.forEach((value, key) => {
-				if (key === 'itemsPerPage') {
-					newItemsPerPage = parseInt(value) || 100;
-				} else if (key === 'page') {
-					newCurrentPage = parseInt(value) || 1;
-				} else if (key === 'parameters') {
-					try {
-						const parsedParameters = JSON.parse(value);
-						newFilters.parameters = Array.isArray(parsedParameters) ? parsedParameters : [];
-					} catch (e) {
-						newFilters.parameters = [];
-					}
-				} else if (key === 'protocols') {
-					try {
-						const parsedProtocols = JSON.parse(value);
-						newFilters.protocols = Array.isArray(parsedProtocols) ? parsedProtocols : [];
-					} catch (e) {
-						newFilters.protocols = [];
-					}
-				} else if (key === 'columnSort') {
-					newFilters.columnSort = value;
-					newSortConfig.column = value;
-				} else if (key === 'sortBy') {
-					newFilters.sortBy = value;
-					newSortConfig.direction = value;
-				} else if (key !== 'mode') {
-					// Handle header filters
-					try {
-						const parsedValue = JSON.parse(value);
-						newFilters.headerFilters = newFilters.headerFilters || {};
-						newFilters.headerFilters[key] = parsedValue;
-					} catch (e) {
-						newFilters.headerFilters = newFilters.headerFilters || {};
-						newFilters.headerFilters[key] = value;
-					}
+		// Always parse query parameters (not just when hasFilterParams is true)
+		searchParams.forEach((value, key) => {
+			if (key === 'itemsPerPage') {
+				newItemsPerPage = parseInt(value) || 100;
+			} else if (key === 'page') {
+				newCurrentPage = parseInt(value) || 1;
+			} else if (key === 'parameters') {
+				try {
+					const parsedParameters = JSON.parse(value);
+					newFilters.parameters = Array.isArray(parsedParameters) ? parsedParameters : [];
+				} catch (e) {
+					newFilters.parameters = [];
 				}
-			});
-		}
+			} else if (key === 'protocols') {
+				try {
+					const parsedProtocols = JSON.parse(value);
+					newFilters.protocols = Array.isArray(parsedProtocols) ? parsedProtocols : [];
+				} catch (e) {
+					newFilters.protocols = [];
+				}
+			} else if (key === 'columnSort') {
+				newFilters.columnSort = value;
+				newSortConfig.column = value;
+			} else if (key === 'sortBy') {
+				newFilters.sortBy = value;
+				newSortConfig.direction = value;
+			} else if (key !== 'mode') {
+				// Handle header filters
+				try {
+					const parsedValue = JSON.parse(value);
+					newFilters.headerFilters = newFilters.headerFilters || {};
+					newFilters.headerFilters[key] = parsedValue;
+				} catch (e) {
+					newFilters.headerFilters = newFilters.headerFilters || {};
+					newFilters.headerFilters[key] = value;
+				}
+			}
+		});
 
 		// Load data FIRST before updating states to avoid triggering other useEffects
 		await Promise.all([
@@ -709,83 +839,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		setIsInitialDataLoading(false);
 	};
 
-	// Update URL parameters when filters change
-	const updateUrlParams = (newFilters, newPage = currentPage, newItemsPerPage = itemsPerPage) => {
-		// Start with existing URL parameters; only modify controlled keys
-		const searchParams = new URLSearchParams(location.search);
-
-		// Only set pagination params if they differ from defaults
-		if (newItemsPerPage !== 100) {
-			searchParams.set('itemsPerPage', newItemsPerPage.toString());
-		} else {
-			searchParams.delete('itemsPerPage');
-		}
-
-		if (newPage !== 1) {
-			searchParams.set('page', newPage.toString());
-		} else {
-			searchParams.delete('page');
-		}
-
-		// Controlled filter params (arrays serialized as JSON)
-		if (newFilters.parameters && newFilters.parameters.length > 0) {
-			searchParams.set('parameters', JSON.stringify(newFilters.parameters));
-		} else {
-			searchParams.delete('parameters');
-		}
-
-		if (newFilters.protocols && newFilters.protocols.length > 0) {
-			searchParams.set('protocols', JSON.stringify(newFilters.protocols));
-		} else {
-			searchParams.delete('protocols');
-		}
-
-		// Only set sort params if they differ from defaults
-		if (newFilters.columnSort && newFilters.columnSort !== 'sample_uid') {
-			searchParams.set('columnSort', newFilters.columnSort);
-		} else {
-			searchParams.delete('columnSort');
-		}
-
-		if (newFilters.sortBy && newFilters.sortBy !== 'ASC') {
-			searchParams.set('sortBy', newFilters.sortBy);
-		} else {
-			searchParams.delete('sortBy');
-		}
-
-		// Header filter keys we manage (include existing + known set)
-		const managedHeaderKeys = new Set([
-			'sample_uid',
-			'parameter_name',
-			'protocol_code',
-			'matrix',
-			'deadline',
-			'doc_id',
-			'result_value',
-			...Object.keys(newFilters.headerFilters || {}),
-		]);
-
-		managedHeaderKeys.forEach((key) => {
-			const value = newFilters.headerFilters ? newFilters.headerFilters[key] : undefined;
-			if (value === undefined || value === null || (Array.isArray(value) && value.length === 0) || value === '') {
-				// Remove only if we control it
-				searchParams.delete(key);
-			} else {
-				if (Array.isArray(value)) {
-					searchParams.set(key, JSON.stringify(value));
-				} else if (typeof value === 'object') {
-					searchParams.set(key, JSON.stringify(value));
-				} else {
-					searchParams.set(key, value);
-				}
-			}
-		});
-
-		// Push updated state without clearing unrelated params
-		const newUrl = `${window.location.pathname}?${searchParams.toString()}`;
-		window.history.replaceState({}, '', newUrl);
-	};
-
 	// Fetch analysis data
 	const fetchAnalysisData = async (
 		preserveScroll = false,
@@ -799,14 +852,22 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		}
 
 		setLoading(true);
+		setError(null); // Clear any previous errors
+
+		// Don't clear data immediately - keep old data while loading to prevent flickering
+		// Only clear on error or when new data arrives
+
 		try {
 			// Use custom parameters if provided, otherwise use current state
 			const useFilters = customFilters || filters;
 			const useCurrentPage = customCurrentPage || currentPage;
 			const useItemsPerPage = customItemsPerPage || itemsPerPage;
 
+			// Increment request sequence to track this request
+			const currentRequestId = ++requestSequenceRef.current;
+
 			// Prepare columns for API
-			const apiColumns = [...useFilters.columns];
+			const apiColumns = [...useFilters.columns, 'technician'];
 			if (!apiColumns.includes('id')) {
 				apiColumns.push('id');
 			}
@@ -822,63 +883,29 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 			// Add filters
 			if (useFilters.parameters.length > 0) {
-				requestBody.parameters = [...useFilters.parameters];
+				requestBody.parameterName = [...useFilters.parameters];
 			}
 
 			if (useFilters.protocols.length > 0) {
-				requestBody.protocols = [...useFilters.protocols];
+				requestBody.protocolCode = [...useFilters.protocols];
 			}
 
 			// Add header filters
 			Object.keys(useFilters.headerFilters).forEach((column) => {
 				const filterValue = useFilters.headerFilters[column];
 
-				if (column === 'sample_uid' && filterValue) {
-					if (!requestBody.sampleUIDs) requestBody.sampleUIDs = [];
-					const values = Array.isArray(filterValue)
-						? filterValue
-						: filterValue
-								.split(',')
-								.map((s) => s.trim())
-								.filter((s) => s);
-					requestBody.sampleUIDs = requestBody.sampleUIDs.concat(values);
-				} else if (column === 'parameter_name' && filterValue) {
-					if (!requestBody.parameters) {
-						requestBody.parameters = [];
-						const values = Array.isArray(filterValue)
-							? filterValue
-							: filterValue
-									.split(',')
-									.map((s) => s.trim())
-									.filter((s) => s);
-						requestBody.parameters = values;
-					}
+				if (column === 'sampleId' && filterValue) {
+					requestBody.sampleId = Array.isArray(filterValue) ? filterValue : [filterValue];
+				} else if (column === 'parameterName' && filterValue) {
+					requestBody.parameterName = Array.isArray(filterValue) ? filterValue : [filterValue];
 				} else if (column === 'matrix' && filterValue) {
-					requestBody.matrix = filterValue;
-				} else if (column === 'protocol_code' && filterValue) {
-					if (!requestBody.protocols) {
-						requestBody.protocols = [];
-						const values = Array.isArray(filterValue)
-							? filterValue
-							: filterValue
-									.split(',')
-									.map((s) => s.trim())
-									.filter((s) => s);
-						requestBody.protocols = values;
-					}
-				} else if (column === 'protocol_source' && filterValue) {
-					requestBody.sources = Array.isArray(filterValue) ? filterValue : [filterValue];
-				} else if (column === 'technician_uid' && filterValue) {
-					if (!requestBody.technicianUIDs) {
-						requestBody.technicianUIDs = [];
-						const values = Array.isArray(filterValue)
-							? filterValue
-							: filterValue
-									.split(',')
-									.map((s) => s.trim())
-									.filter((s) => s);
-						requestBody.technicianUIDs = values;
-					}
+					requestBody.matrix = Array.isArray(filterValue) ? filterValue : [filterValue];
+				} else if (column === 'protocolCode' && filterValue) {
+					requestBody.protocolCode = Array.isArray(filterValue) ? filterValue : [filterValue];
+				} else if (column === 'protocolSource' && filterValue) {
+					requestBody.protocolSource = Array.isArray(filterValue) ? filterValue : [filterValue];
+				} else if (column === 'technicianId' && filterValue) {
+					requestBody.technicianId = Array.isArray(filterValue) ? filterValue : [filterValue];
 				} else if (column === 'status' && filterValue === 1) {
 					// Handle urgent filter (status = 1)
 					requestBody.status = 1;
@@ -889,62 +916,70 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					// Handle overdue filter (today's deadline)
 					requestBody.overdue = true;
 				} else if (column === 'deadline' && filterValue) {
-					// Use the same deadline filter values as sidebar
+					// Handle header deadline filter only (table filtering)
 					if (Array.isArray(filterValue)) {
-						// Handle multiple deadline values
 						requestBody.deadline = filterValue;
-					} else if (filterValue === 'today') {
-						requestBody.deadline = 'today';
-					} else if (filterValue === 'overdue') {
-						requestBody.deadline = 'overdue';
-					} else if (filterValue === '3days') {
-						requestBody.deadline = '3days';
-					} else if (filterValue === 'week') {
-						requestBody.deadline = 'week';
-					} else if (filterValue === 'future') {
-						requestBody.deadline = 'future';
 					} else {
-						requestBody.deadline = filterValue;
+						requestBody.deadline = [filterValue];
 					}
-				} else if (column === 'doc_id' && filterValue) {
-					if (Array.isArray(filterValue)) {
-						// Handle multiple doc_id values
-						filterValue.forEach((value) => {
-							if (value === 'none') {
-								requestBody.hasDocument = false;
-							} else if (value === 'pending') {
-								requestBody.docStatus = 'pending';
-							} else if (value === 'published') {
-								requestBody.docStatus = 'published';
-							}
-						});
-					} else {
-						if (filterValue === 'none') {
+				} else if (column === 'docId' && filterValue) {
+					// Convert docId to array format and handle special values
+					const docValues = Array.isArray(filterValue) ? filterValue : [filterValue];
+					docValues.forEach((value) => {
+						if (value === 'none') {
 							requestBody.hasDocument = false;
-						} else if (filterValue === 'pending') {
+						} else if (value === 'pending') {
 							requestBody.docStatus = 'pending';
-						} else if (filterValue === 'published') {
+						} else if (value === 'published') {
 							requestBody.docStatus = 'published';
-						} else if (filterValue === 'has_file') {
+						} else if (value === 'has_file') {
 							requestBody.hasDocument = true;
-						} else if (filterValue === 'no_file') {
+						} else if (value === 'no_file') {
 							requestBody.hasDocument = false;
 						}
-					}
-				} else if (column === 'result_value' && filterValue) {
-					if (filterValue === 'hasResult') {
-						requestBody.hasResult = true;
-					} else if (filterValue === 'noResult') {
-						requestBody.hasResult = false;
-					} else {
-						// Handle custom result_value filtering
-						requestBody.result_value = filterValue;
-					}
+					});
+				} else if (column === 'resultValue' && filterValue) {
+					// Convert resultValue to array format for special values
+					const resultValues = Array.isArray(filterValue) ? filterValue : [filterValue];
+					resultValues.forEach((value) => {
+						if (value === 'submitted') {
+							requestBody.hasResult = true;
+						} else if (value === 'not submitted') {
+							requestBody.hasResult = false;
+						} else {
+							// Handle custom resultValue filtering
+							if (!requestBody.resultValue) requestBody.resultValue = [];
+							requestBody.resultValue = requestBody.resultValue.concat(value);
+						}
+					});
 				}
 			});
 
-			// Debug log to check if sources filter is added
-			if (requestBody.sources) {
+			// Handle sidebar deadline filtering (different from header filters)
+			const queryParams = new URLSearchParams(location.search);
+			const deadlineStartAt = queryParams.get('deadlineStartAt');
+			const deadlineEndAt = queryParams.get('deadlineEndAt');
+			const sidebarDeadline = queryParams.get('deadline');
+
+			// Priority: sidebar range filtering > sidebar specific date > header filtering
+			if (deadlineStartAt && deadlineEndAt) {
+				// Sidebar range filtering (3days, week)
+				requestBody.deadlineStartAt = deadlineStartAt;
+				requestBody.deadlineEndAt = deadlineEndAt;
+				// Remove header deadline if present to avoid conflict
+				delete requestBody.deadline;
+			} else if (deadlineEndAt && !deadlineStartAt) {
+				// Sidebar overdue filtering (today)
+				requestBody.deadlineEndAt = deadlineEndAt;
+				// Remove header deadline if present to avoid conflict
+				delete requestBody.deadline;
+			} else if (sidebarDeadline && !useFilters.headerFilters.deadline) {
+				// Sidebar specific date (only if no header filter is active)
+				requestBody.deadline = [sidebarDeadline];
+			}
+
+			// Debug log to check if protocolSource filter is added
+			if (requestBody.protocolSource) {
 			}
 
 			// Add search term if present
@@ -954,30 +989,41 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 			const response = await apiPost(API_ENDPOINT, requestBody);
 
+			// Check if this is still the most recent request
+			if (currentRequestId !== requestSequenceRef.current) {
+				return; // Discard this response as a newer request has been made
+			}
+
 			if (response?.status < 300) {
 				const result = response.data;
 
-				if (result.result) {
-					setData(result.result);
+				// Always update data with API response result, even if empty
+				const apiResults = result?.result || [];
 
-					// Update pagination from API response
-					if (result.pagination) {
-						setCurrentPage(result.pagination.currentPage);
-						setItemsPerPage(result.pagination.itemsPerPage);
-						setTotalItems(result.pagination.totalItems);
-						setTotalPages(result.pagination.totalPages);
-					} else {
-						// Fallback for backward compatibility
-						setTotalItems(result.total || 0);
-						setTotalPages(Math.ceil((result.total || 0) / itemsPerPage));
-					}
+				// Force a clean update by using functional update
+				setData(() => apiResults);
+
+				// Update pagination from API response
+				if (result?.pagination) {
+					setCurrentPage(result.pagination.currentPage);
+					setItemsPerPage(result.pagination.itemsPerPage);
+					setTotalItems(result.pagination.totalItems);
+					setTotalPages(result.pagination.totalPages);
+				} else {
+					// Fallback for backward compatibility
+					const totalCount = result?.total || apiResults.length || 0;
+					setTotalItems(totalCount);
+					setTotalPages(Math.ceil(totalCount / itemsPerPage));
 				}
 			} else {
 				throw new Error(`API request failed with status: ${response.status}`);
 			}
 		} catch (error) {
-			console.error('Error fetching analysis data:', error);
 			setError('Lỗi khi tải dữ liệu: ' + error.message);
+			// Clear data on error to prevent showing stale data
+			setData([]);
+			setTotalItems(0);
+			setTotalPages(0);
 		} finally {
 			setLoading(false);
 
@@ -994,70 +1040,42 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const fetchParameters = async (searchTerm = '', customFilters = null) => {
 		try {
 			const useFilters = customFilters || filters;
-			const requestBody = { searchTerm: searchTerm };
+			const queryParams = new URLSearchParams(location.search);
 
-			// Add all current filters to ensure parameter list is context-aware
-			if (useFilters.headerFilters.sample_uid) {
-				requestBody.sample_uid = useFilters.headerFilters.sample_uid;
-			}
+			const requestBody = {
+				searchTerm: searchTerm,
+				technicianIds: useFilters.headerFilters.technicianId || null,
+			};
 
-			if (useFilters.headerFilters.parameter_name) {
-				requestBody.parameter_name = useFilters.headerFilters.parameter_name;
-			}
+			// Handle deadline filtering - priority to specific deadline params from sidebar
+			const deadlineStartAt = queryParams.get('deadlineStartAt');
+			const deadlineEndAt = queryParams.get('deadlineEndAt');
+			const deadline = queryParams.get('deadline') || useFilters.headerFilters.deadline;
 
-			if (useFilters.headerFilters.protocol_source) {
-				requestBody.protocol_source = useFilters.headerFilters.protocol_source;
-			}
-
-			if (useFilters.headerFilters.protocol_code) {
-				requestBody.protocol_code = useFilters.headerFilters.protocol_code;
-			}
-
-			if (useFilters.headerFilters.matrix) {
-				requestBody.matrix = useFilters.headerFilters.matrix;
-			}
-
-			if (useFilters.headerFilters.technician_uid) {
-				requestBody.technician_uid = useFilters.headerFilters.technician_uid;
-			}
-
-			if (useFilters.headerFilters.status === 1) {
-				requestBody.status = 1;
-			}
-
-			if (useFilters.headerFilters.done === true) {
-				requestBody.done = true;
-			}
-
-			if (useFilters.headerFilters.overdue === true) {
-				requestBody.overdue = true;
-			}
-
-			if (useFilters.headerFilters.deadline) {
-				requestBody.deadline = useFilters.headerFilters.deadline;
-			}
-
-			if (useFilters.headerFilters.doc_id) {
-				requestBody.doc_id = useFilters.headerFilters.doc_id;
-			}
-
-			if (useFilters.headerFilters.result_value) {
-				requestBody.result_value = useFilters.headerFilters.result_value;
+			if (deadlineStartAt && deadlineEndAt) {
+				// Sidebar range filtering (3days, week)
+				requestBody.deadlineStartAt = deadlineStartAt;
+				requestBody.deadlineEndAt = deadlineEndAt;
+			} else if (deadlineEndAt) {
+				// Sidebar overdue filtering (today)
+				requestBody.deadlineEndAt = deadlineEndAt;
+			} else if (deadline) {
+				// Header filtering or sidebar specific date
+				requestBody.deadline = deadline;
 			}
 
 			const response = await apiPost(PARAMETER_API_ENDPOINT, requestBody);
 
 			if (response.status < 300 && response.data) {
 				setParametersData({
-					analysis: response.data.analysis || [],
-					sample: response.data.sample || [],
-					matrix: response.data.matrix || [],
-					technician: response.data.technician || [],
+					analysis: response.data.result || [],
+					sample: [], // Removed as per requirement
+					matrix: [], // Removed as per requirement
+					technician: [], // Removed as per requirement
 					pagination: response.data.pagination || {},
 				});
 			}
 		} catch (error) {
-			console.error('Error fetching parameters:', error);
 			setError('Lỗi khi tải danh sách chỉ tiêu: ' + error.message);
 		}
 	};
@@ -1074,28 +1092,28 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			};
 
 			// Add current filters to request body directly from filters state
-			if (filters.headerFilters.sample_uid) {
-				requestBody.sample_uid = filters.headerFilters.sample_uid;
+			if (filters.headerFilters.sampleId) {
+				requestBody.sampleId = filters.headerFilters.sampleId;
 			}
 
-			if (filters.headerFilters.parameter_name) {
-				requestBody.parameter_name = filters.headerFilters.parameter_name;
+			if (filters.headerFilters.parameterName) {
+				requestBody.parameterName = filters.headerFilters.parameterName;
 			}
 
-			if (filters.headerFilters.protocol_source) {
-				requestBody.protocol_source = filters.headerFilters.protocol_source;
+			if (filters.headerFilters.protocolSource) {
+				requestBody.protocolSource = filters.headerFilters.protocolSource;
 			}
 
-			if (filters.headerFilters.protocol_code) {
-				requestBody.protocol_code = filters.headerFilters.protocol_code;
+			if (filters.headerFilters.protocolCode) {
+				requestBody.protocolCode = filters.headerFilters.protocolCode;
 			}
 
 			if (filters.headerFilters.matrix) {
 				requestBody.matrix = filters.headerFilters.matrix;
 			}
 
-			if (filters.headerFilters.technician_uid) {
-				requestBody.technician_uid = filters.headerFilters.technician_uid;
+			if (filters.headerFilters.technicianId) {
+				requestBody.technicianId = filters.headerFilters.technicianId;
 			}
 
 			if (filters.headerFilters.status === 1) {
@@ -1114,41 +1132,52 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				requestBody.deadline = filters.headerFilters.deadline;
 			}
 
-			if (filters.headerFilters.doc_id) {
-				requestBody.doc_id = filters.headerFilters.doc_id;
+			if (filters.headerFilters.docId) {
+				requestBody.docId = filters.headerFilters.docId;
 			}
 
-			if (filters.headerFilters.result_value) {
-				requestBody.result_value = filters.headerFilters.result_value;
+			if (filters.headerFilters.resultValue) {
+				requestBody.resultValue = filters.headerFilters.resultValue;
 			}
 
-			const response = await apiPost('https://black.irdop.org/v1/analysis/search_filter_column', requestBody);
+			const response = await apiPost('https://red.irdop.org/v1/analysis/get/filter_column', requestBody);
 
 			if (response.status < 300 && response.data) {
-				if (response.data.result && Array.isArray(response.data.result)) {
+				// Handle the new API response format with filterValue and analysisCount
+				let responseData = response.data;
+				if (Array.isArray(responseData)) {
+					// Direct array response
+					responseData = responseData;
+				} else if (responseData.result && Array.isArray(responseData.result)) {
+					// Wrapped in result property
+					responseData = responseData.result;
+				} else if (Array.isArray(response.data)) {
+					// Fallback to data array
+					responseData = response.data;
+				} else {
+					responseData = [];
+				}
+
+				if (Array.isArray(responseData)) {
 					let formattedResults = [];
 
-					if (column === 'doc_id') {
-						// Special handling for doc_id column - predefined options
+					if (column === 'docId') {
+						// Special handling for docId column - predefined options
 						formattedResults = [
 							{ value: 'none', count: 0, label: 'none' },
 							{ value: 'pending', count: 0, label: 'pending' },
 							{ value: 'published', count: 0, label: 'published' },
 						];
-					} else if (column === 'technician_uid') {
-						// For technician filter, convert identity_uid to display name with alias
-						formattedResults = response.data.result.map((item) => {
-							// API returns technician_uid field, not value
-							const technicianUid = item.technician_uid || item.value;
-							const technician = technicians?.find((tech) => tech.identity_uid === technicianUid);
-							const displayName = technician
-								? `${technician.identity_name}${technician.alias ? ` (${technician.alias})` : ''}`
-								: technicianUid || 'Không có người thực hiện';
+					} else if (column === 'technicianId') {
+						// For technician filter, use filterDisplay if available
+						formattedResults = responseData.map((item) => {
+							// Use filterDisplay if available, otherwise fall back to filterValue
+							const displayName = item.filterDisplay || item.filterValue || 'Không có người thực hiện';
 
 							return {
-								value: technicianUid, // Keep original identity_uid as value
-								count: item.total || item.count || 0,
-								label: displayName, // Display name with alias
+								value: item.filterValue, // Keep original identity_uid as value
+								count: item.analysisCount || 0,
+								label: displayName, // Display name from API
 							};
 						});
 					} else if (column === 'deadline') {
@@ -1161,61 +1190,18 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 							future: 'Tương lai',
 						};
 
-						formattedResults = response.data.result.map((item) => ({
-							value: item.deadline,
-							count: item.total || item.count || 0,
-							label: deadlineLabels[item.deadline] || item.deadline,
+						formattedResults = responseData.map((item) => ({
+							value: item.filterValue,
+							count: item.analysisCount || 0,
+							label: deadlineLabels[item.filterValue] || item.filterValue,
 						}));
 					} else {
-						// For other columns, use standard formatting
-						formattedResults = response.data.result.map((item) => {
-							// Handle different column types
-							if (column === 'protocol_code' && item.protocol_code !== undefined) {
-								return {
-									value: item.protocol_code,
-									count: item.total || item.count || 1,
-									label: item.protocol_code,
-								};
-							} else if (column === 'parameter_name' && item.parameter_name !== undefined) {
-								return {
-									value: item.parameter_name,
-									count: item.total || item.count || 1,
-									label: item.parameter_name,
-								};
-							} else if (column === 'sample_uid' && item.sample_uid !== undefined) {
-								return {
-									value: item.sample_uid,
-									count: item.total || item.count || 1,
-									label: item.sample_uid,
-								};
-							} else if (column === 'matrix' && item.matrix !== undefined) {
-								return {
-									value: item.matrix,
-									count: item.total || item.count || 1,
-									label: item.matrix,
-								};
-							} else if (column === 'protocol_source' && item.protocol_source !== undefined) {
-								return {
-									value: item.protocol_source,
-									count: item.total || item.count || 1,
-									label: item.protocol_source,
-								};
-							} else if (column === 'result_unit' && item.result_unit !== undefined) {
-								return {
-									value: item.result_unit,
-									count: item.total || item.count || 1,
-									label: item.result_unit,
-								};
-							} else {
-								// Fallback for other column types or if the item is just a string
-								const value = item[column] || item.parameter_name || item.value || '';
-								return {
-									value: value,
-									count: item.total || item.count || 1,
-									label: value,
-								};
-							}
-						});
+						// For other columns, use the new standard format with filterValue and analysisCount
+						formattedResults = responseData.map((item) => ({
+							value: item.filterValue,
+							count: item.analysisCount || 0,
+							label: item.filterDisplay || item.filterValue || '(Trống)', // Use filterDisplay if available
+						}));
 					}
 
 					setFilterResults(formattedResults);
@@ -1226,7 +1212,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				setFilterResults([]);
 			}
 		} catch (error) {
-			console.error('Error fetching filter values:', error);
 			setError('Lỗi khi tải giá trị lọc: ' + error.message);
 			setFilterResults([]);
 		} finally {
@@ -1246,6 +1231,23 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		documentStyleSheet.textContent = documentPreviewStyles;
 		document.head.appendChild(documentStyleSheet);
 
+		// Restore pending changes from session storage
+		try {
+			const storedChanges = sessionStorage.getItem(SESSION_STORAGE_KEY);
+			if (storedChanges) {
+				const parsedChanges = JSON.parse(storedChanges);
+				const restoredMap = new Map(Object.entries(parsedChanges));
+				setPendingChanges(restoredMap);
+
+				// If there were pending changes, restore session state
+				if (restoredMap.size > 0) {
+					setIsResultEntrySession(true);
+				}
+			}
+		} catch (error) {
+			console.error('Error restoring pending changes from session storage:', error);
+		}
+
 		return () => {
 			// Clean up the style sheets on unmount
 			if (document.head.contains(styleSheet)) {
@@ -1258,8 +1260,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	}, []);
 
 	// API Constants
-	const API_ENDPOINT = 'https://black.irdop.org/v1/analysis/processing/list';
-	const PARAMETER_API_ENDPOINT = 'https://black.irdop.org/v1/lab/get/analysis/by_parameter';
+	const API_ENDPOINT = 'https://red.irdop.org/v1/analysis/get/processing';
+	const PARAMETER_API_ENDPOINT = 'https://red.irdop.org/v1/analysis/get/parameter/current';
 
 	// Parse URL parameters and load initial data
 	useEffect(() => {
@@ -1269,39 +1271,182 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		}
 	}, []);
 
-	// Simple effect with debounce to prevent rapid API calls
+	// Main useEffect to handle all query params changes and call appropriate APIs
 	useEffect(() => {
+		// Don't run during initial load or initial data loading
 		if (isInitialLoad || isInitialDataLoading) {
 			return;
 		}
 
-		const timeoutId = setTimeout(() => {
-			if (!isCurrentlyFetchingRef.current) {
-				isCurrentlyFetchingRef.current = true;
+		const searchParams = new URLSearchParams(location.search);
 
-				// Update URL parameters
-				updateUrlParams(filters, currentPage, itemsPerPage);
+		// Extract all relevant query parameters
+		const pageParam = searchParams.get('page');
+		const itemsPerPageParam = searchParams.get('itemsPerPage');
+		const parametersParam = searchParams.get('parameters');
+		const protocolsParam = searchParams.get('protocols');
+		const columnSortParam = searchParams.get('columnSort');
+		const sortByParam = searchParams.get('sortBy');
 
-				// Fetch data
-				Promise.all([fetchParameters(parameterSearchTerm), fetchAnalysisData()]).finally(() => {
-					isCurrentlyFetchingRef.current = false;
-				});
+		// Header filter parameters
+		const sampleIdParam = searchParams.get('sampleId');
+		const parameterNameParam = searchParams.get('parameterName');
+		const protocolCodeParam = searchParams.get('protocolCode');
+		const matrixParam = searchParams.get('matrix');
+		const deadlineParam = searchParams.get('deadline');
+		const deadlineStartAtParam = searchParams.get('deadlineStartAt');
+		const deadlineEndAtParam = searchParams.get('deadlineEndAt');
+		const deadlineTypeParam = searchParams.get('deadlineType');
+		const docIdParam = searchParams.get('docId');
+		const resultValueParam = searchParams.get('resultValue');
+		const protocolSourceParam = searchParams.get('protocolSource');
+		const technicianIdParam = searchParams.get('technicianId');
+
+		// Update component states based on URL params
+		const pageNumber = pageParam ? parseInt(pageParam, 10) : 1;
+		const itemsPerPageValue = itemsPerPageParam ? parseInt(itemsPerPageParam, 10) : itemsPerPage;
+
+		// Build new filters object from URL parameters
+		let newFilters = { ...filters };
+		let needsUpdate = false;
+
+		// Update pagination if different
+		if (pageNumber !== currentPage) {
+			setCurrentPage(pageNumber);
+			needsUpdate = true;
+		}
+
+		if (itemsPerPageValue !== itemsPerPage) {
+			setItemsPerPage(itemsPerPageValue);
+			needsUpdate = true;
+		}
+
+		// Parse and update filter arrays
+		if (parametersParam) {
+			try {
+				const parsedParameters = JSON.parse(parametersParam);
+				if (JSON.stringify(parsedParameters) !== JSON.stringify(newFilters.parameters)) {
+					newFilters.parameters = Array.isArray(parsedParameters) ? parsedParameters : [];
+					needsUpdate = true;
+				}
+			} catch (e) {
+				newFilters.parameters = [];
+				needsUpdate = true;
 			}
-		}, 100); // 100ms debounce
+		} else if (newFilters.parameters.length > 0) {
+			newFilters.parameters = [];
+			needsUpdate = true;
+		}
 
-		return () => clearTimeout(timeoutId);
-	}, [
-		currentPage,
-		itemsPerPage,
-		filters.columnSort,
-		filters.sortBy,
-		isInitialLoad,
-		isInitialDataLoading, // Add this dependency
-		// Only trigger on filter content changes, not object reference changes
-		JSON.stringify(filters.parameters),
-		JSON.stringify(filters.protocols),
-		JSON.stringify(filters.headerFilters),
-	]);
+		if (protocolsParam) {
+			try {
+				const parsedProtocols = JSON.parse(protocolsParam);
+				if (JSON.stringify(parsedProtocols) !== JSON.stringify(newFilters.protocols)) {
+					newFilters.protocols = Array.isArray(parsedProtocols) ? parsedProtocols : [];
+					needsUpdate = true;
+				}
+			} catch (e) {
+				newFilters.protocols = [];
+				needsUpdate = true;
+			}
+		} else if (newFilters.protocols.length > 0) {
+			newFilters.protocols = [];
+			needsUpdate = true;
+		}
+
+		// Update sort parameters
+		if (columnSortParam && columnSortParam !== newFilters.columnSort) {
+			newFilters.columnSort = columnSortParam;
+			setSortConfig((prev) => ({ ...prev, column: columnSortParam }));
+			needsUpdate = true;
+		}
+
+		if (sortByParam && sortByParam !== newFilters.sortBy) {
+			newFilters.sortBy = sortByParam;
+			setSortConfig((prev) => ({ ...prev, direction: sortByParam }));
+			needsUpdate = true;
+		}
+
+		// Update header filters
+		const newHeaderFilters = { ...newFilters.headerFilters };
+
+		// Helper function to parse and update header filter
+		const updateHeaderFilter = (paramValue, filterKey) => {
+			if (paramValue) {
+				try {
+					const parsedValue = JSON.parse(paramValue);
+					if (JSON.stringify(parsedValue) !== JSON.stringify(newHeaderFilters[filterKey])) {
+						newHeaderFilters[filterKey] = parsedValue;
+						return true;
+					}
+				} catch (e) {
+					if (paramValue !== newHeaderFilters[filterKey]) {
+						newHeaderFilters[filterKey] = paramValue;
+						return true;
+					}
+				}
+			} else if (newHeaderFilters[filterKey] !== undefined) {
+				delete newHeaderFilters[filterKey];
+				return true;
+			}
+			return false;
+		};
+
+		// Update all header filters
+		if (updateHeaderFilter(sampleIdParam, 'sampleId')) needsUpdate = true;
+		if (updateHeaderFilter(parameterNameParam, 'parameterName')) needsUpdate = true;
+		if (updateHeaderFilter(protocolCodeParam, 'protocolCode')) needsUpdate = true;
+		if (updateHeaderFilter(matrixParam, 'matrix')) needsUpdate = true;
+		if (updateHeaderFilter(deadlineParam, 'deadline')) needsUpdate = true;
+		if (updateHeaderFilter(docIdParam, 'docId')) needsUpdate = true;
+		if (updateHeaderFilter(resultValueParam, 'resultValue')) needsUpdate = true;
+		if (updateHeaderFilter(protocolSourceParam, 'protocolSource')) needsUpdate = true;
+		if (updateHeaderFilter(technicianIdParam, 'technicianId')) needsUpdate = true;
+
+		// Check for sidebar deadline params changes (these are handled separately in fetchAnalysisData)
+		// We need to trigger fetch if these change even though they're not in headerFilters
+		const prevSearchParams = new URLSearchParams(prevLocationSearchRef.current || '');
+		const prevDeadlineStartAt = prevSearchParams.get('deadlineStartAt');
+		const prevDeadlineEndAt = prevSearchParams.get('deadlineEndAt');
+		const prevDeadlineType = prevSearchParams.get('deadlineType');
+
+		if (
+			deadlineStartAtParam !== prevDeadlineStartAt ||
+			deadlineEndAtParam !== prevDeadlineEndAt ||
+			deadlineTypeParam !== prevDeadlineType
+		) {
+			needsUpdate = true;
+		}
+
+		// Store current search params for next comparison
+		prevLocationSearchRef.current = location.search;
+
+		newFilters.headerFilters = newHeaderFilters;
+
+		// If any filters changed, update state and fetch data
+		if (needsUpdate) {
+			if (JSON.stringify(newFilters) !== JSON.stringify(filters)) {
+				setFilters(newFilters);
+			}
+
+			// Debounce API calls to prevent rapid successive calls
+			const timeoutId = setTimeout(() => {
+				if (!isCurrentlyFetchingRef.current) {
+					isCurrentlyFetchingRef.current = true;
+
+					// Fetch data with new filters
+					Promise.all([
+						fetchParameters(parameterSearchTerm, newFilters),
+						fetchAnalysisData(false, newFilters, pageNumber, itemsPerPageValue),
+					]).finally(() => {
+						isCurrentlyFetchingRef.current = false;
+					});
+				}
+			}, 100);
+
+			return () => clearTimeout(timeoutId);
+		}
+	}, [location.search]); // Only depend on URL search params
 
 	// Search parameters with debounce (only for search box, doesn't update URL)
 	useEffect(() => {
@@ -1320,12 +1465,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	}, [parameterSearchTerm, isInitialLoad, isInitialDataLoading]); // Add isInitialDataLoading dependency
 	useEffect(() => {
 		if (activeFilterColumn) {
-			// For special filter columns, don't fetch from API
-			if (
-				activeFilterColumn === 'result_value' ||
-				activeFilterColumn === 'deadline' ||
-				activeFilterColumn === 'doc_id'
-			) {
+			// For special filter columns (except deadline), don't fetch from API
+			if (activeFilterColumn === 'resultValue' || activeFilterColumn === 'docId') {
 				return;
 			}
 
@@ -1351,18 +1492,13 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	useEffect(() => {
 		if (!isInitialLoad && !isInitialDataLoading) {
 			const autoRefreshInterval = setInterval(() => {
-				// Only prevent auto-refresh when actively editing a cell, currently fetching, or when filters are active
+				// Only auto-refresh when not fetching and no filters are active
 				if (
-					!updating &&
-					!editingCell &&
-					!editableCell.analysisId &&
-					!editingProtocolSource &&
 					!isCurrentlyFetchingRef.current &&
-					!hasActiveFilters // Thêm điều kiện để không auto-refresh khi có filter
+					!hasActiveFilters // Only refresh when no filters are active
 				) {
 					// Use current state instead of parsing URL to maintain filters
 					fetchAnalysisData(true, filters, currentPage, itemsPerPage);
-				} else if (hasActiveFilters) {
 				}
 			}, 60000); // 60 seconds
 
@@ -1393,37 +1529,33 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	// Keyboard shortcuts
 	useEffect(() => {
 		const handleKeyDown = (e) => {
-			// Escape key to cancel editing (all systems)
-			if (e.key === 'Escape') {
-				if (editingCell) {
-					handleCancelEdit();
-				}
-				if (editableCell.analysisId) {
-					setEditableCell({ analysisId: null, column: null });
-				}
-				if (editingProtocolSource) {
-					cancelProtocolSourceEdit();
-				}
-			}
-			// Enter key to save editing (legacy system only, TinyMce handles its own)
-			// Skip if target is textarea (protocol_code field handles its own Enter)
-			if (e.key === 'Enter' && editingCell && !e.shiftKey && e.target.tagName !== 'TEXTAREA') {
-				e.preventDefault();
-				handleSaveEdit();
-			}
+			// Keyboard shortcuts for non-editing functions can be added here if needed
 		};
 
 		document.addEventListener('keydown', handleKeyDown);
 		return () => document.removeEventListener('keydown', handleKeyDown);
-	}, [editingCell, editableCell.analysisId, editingProtocolSource]);
+	}, [
+		isInitialLoad, // Only depend on isInitialLoad to avoid unnecessary re-creation of interval
+		isInitialDataLoading, // Add isInitialDataLoading dependency
+		hasActiveFilters, // Add hasActiveFilters as dependency to update interval behavior
+	]);
+
+	// Mouse event listeners for drag selection
+	useEffect(() => {
+		// Add global mouse event listeners for drag selection
+		document.addEventListener('mouseup', handleMouseUp);
+		document.addEventListener('mouseleave', handleMouseUp);
+
+		return () => {
+			document.removeEventListener('mouseup', handleMouseUp);
+			document.removeEventListener('mouseleave', handleMouseUp);
+		};
+	}, []);
 
 	// Handle sidebar section toggle
 	const toggleSidebarSection = (section) => {
 		setSidebarExpandedSections((prev) => ({
 			analysis: section === 'analysis' ? !prev.analysis : false,
-			sample: section === 'sample' ? !prev.sample : false,
-			matrix: section === 'matrix' ? !prev.matrix : false,
-			technician: section === 'technician' ? !prev.technician : false,
 		}));
 	};
 
@@ -1439,92 +1571,63 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		if (type === 'analysis') {
 			const normalizedProtocolCode = protocolCode && protocolCode.trim() ? protocolCode : 'null';
 			itemKey = `${type}|${itemName}|${normalizedProtocolCode}`;
-		} else if (type === 'sample') {
-			itemKey = `${type}|${itemName}|${sampleName || ''}`;
-		} else if (type === 'matrix') {
-			itemKey = `${type}|${itemName}`;
-		} else if (type === 'technician') {
-			itemKey = `${type}|${itemName}`;
 		}
 
 		// If same item is selected, clear it
 		if (selectedParameter === itemKey) {
 			setSelectedParameter('');
-			setFilters((prev) => ({
-				...prev,
-				parameters: [],
-				protocols: [],
-				headerFilters: {
-					...prev.headerFilters,
-					parameter_name: undefined,
-					protocol_code: undefined,
-					sample_uid: undefined,
-					matrix: undefined,
-					technician_uid: undefined,
-				},
-			}));
+			// Clear all related filters in URL
+			const queryParams = new URLSearchParams(location.search);
+			queryParams.delete('parameters');
+			queryParams.delete('protocols');
+			queryParams.delete('parameterName');
+			queryParams.delete('protocolCode');
+			queryParams.delete('page');
+			navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
 		} else {
 			// Select new item
 			setSelectedParameter(itemKey);
 
-			let newFilters = {
-				parameters: [],
-				protocols: [],
-				headerFilters: { ...filters.headerFilters },
-			};
+			// Update URL parameters instead of directly setting filters
+			const queryParams = new URLSearchParams(location.search);
+
+			// Clear all existing sidebar filters first
+			queryParams.delete('parameters');
+			queryParams.delete('protocols');
+			queryParams.delete('parameterName');
+			queryParams.delete('protocolCode');
+			queryParams.delete('page');
 
 			if (type === 'analysis') {
 				const normalizedProtocolCode = protocolCode && protocolCode.trim() ? protocolCode : 'null';
-				// Only use headerFilters for analysis selection to avoid duplicates
-				newFilters.headerFilters.parameter_name = [itemName];
-				newFilters.headerFilters.protocol_code = [normalizedProtocolCode];
-				// Clear other filters
-				newFilters.headerFilters.sample_uid = undefined;
-				newFilters.headerFilters.matrix = undefined;
-				newFilters.headerFilters.technician_uid = undefined;
-			} else if (type === 'sample') {
-				newFilters.headerFilters.sample_uid = [itemName];
-				// Clear other filters
-				newFilters.headerFilters.parameter_name = undefined;
-				newFilters.headerFilters.protocol_code = undefined;
-				newFilters.headerFilters.matrix = undefined;
-				newFilters.headerFilters.technician_uid = undefined;
-			} else if (type === 'matrix') {
-				newFilters.headerFilters.matrix = itemName;
-				// Clear other filters
-				newFilters.headerFilters.parameter_name = undefined;
-				newFilters.headerFilters.protocol_code = undefined;
-				newFilters.headerFilters.sample_uid = undefined;
-				newFilters.headerFilters.technician_uid = undefined;
-			} else if (type === 'technician') {
-				newFilters.headerFilters.technician_uid = [itemName];
-				// Clear other filters
-				newFilters.headerFilters.parameter_name = undefined;
-				newFilters.headerFilters.protocol_code = undefined;
-				newFilters.headerFilters.sample_uid = undefined;
-				newFilters.headerFilters.matrix = undefined;
+				// Set new filters for analysis selection
+				queryParams.set('parameterName', JSON.stringify([itemName]));
+				queryParams.set('protocolCode', JSON.stringify([normalizedProtocolCode]));
 			}
 
-			setFilters((prev) => ({
-				...prev,
-				...newFilters,
-			}));
+			navigate(`${location.pathname}?${queryParams.toString()}`);
 		}
 	};
 
 	// Clear parameter
 	const clearParameter = () => {
-		const newFilters = {
-			...filters,
-			parameters: [],
-			protocols: [],
-			headerFilters: {},
-		};
-		setFilters(newFilters);
+		// Clear all filter parameters from URL
+		const queryParams = new URLSearchParams(location.search);
+		queryParams.delete('parameters');
+		queryParams.delete('protocols');
+		queryParams.delete('parameterName');
+		queryParams.delete('protocolCode');
+		queryParams.delete('deadline');
+		queryParams.delete('docId');
+		queryParams.delete('resultValue');
+		queryParams.delete('protocolSource');
+		queryParams.delete('page');
+
+		navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
 		setSelectedParameter('');
 	};
 
-	// Select deadline filter
+	// Select deadline filter (sidebar version)
 	const selectDeadlineFilter = (deadlineType) => {
 		// Clear table filter state when switching to sidebar filtering
 		setIsFilterCreationMode(false);
@@ -1533,25 +1636,54 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		setFilterResults([]);
 		setSelectedFilterValues([]);
 
-		// If same deadline filter is selected, clear it
-		if (filters.headerFilters.deadline === deadlineType) {
-			const newFilters = {
-				...filters,
-				headerFilters: {
-					deadline: undefined,
-				},
-			};
-			setFilters(newFilters);
+		// Update URL parameters instead of directly setting filters
+		const queryParams = new URLSearchParams(location.search);
+
+		// Clear any existing deadline-related query params
+		queryParams.delete('deadline');
+		queryParams.delete('deadlineStartAt');
+		queryParams.delete('deadlineEndAt');
+
+		// Check if same deadline filter is selected, clear it
+		const currentDeadlineType = queryParams.get('deadlineType');
+		if (currentDeadlineType === deadlineType) {
+			queryParams.delete('deadlineType');
 		} else {
-			// Select new deadline filter and clear only table header filters (keep sidebar filters)
-			const newFilters = {
-				...filters,
-				headerFilters: {
-					deadline: deadlineType,
-				},
+			queryParams.set('deadlineType', deadlineType);
+
+			const today = new Date();
+			const formatDate = (date) => {
+				return date.toISOString().split('T')[0]; // YYYY-MM-DD format
 			};
-			setFilters(newFilters);
+
+			// Handle different deadline types with specific query params
+			switch (deadlineType) {
+				case 'overdue':
+					// Today's date for overdue items
+					queryParams.set('deadlineEndAt', formatDate(today));
+					break;
+				case '3days':
+					// From today to 3 days later
+					const threeDaysLater = new Date(today);
+					threeDaysLater.setDate(today.getDate() + 3);
+					queryParams.set('deadlineStartAt', formatDate(today));
+					queryParams.set('deadlineEndAt', formatDate(threeDaysLater));
+					break;
+				case 'week':
+					// From today to 1 week later
+					const oneWeekLater = new Date(today);
+					oneWeekLater.setDate(today.getDate() + 7);
+					queryParams.set('deadlineStartAt', formatDate(today));
+					queryParams.set('deadlineEndAt', formatDate(oneWeekLater));
+					break;
+				default:
+					// For specific date selection, will be handled by date picker
+					break;
+			}
 		}
+
+		queryParams.delete('page'); // Reset to page 1
+		navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
 	};
 
 	// Select my tasks filter
@@ -1564,34 +1696,31 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		setSelectedFilterValues([]);
 
 		// Check if my tasks filter is already active
-		const isMyTasksActive =
-			filters.headerFilters.technician_uid &&
-			Array.isArray(filters.headerFilters.technician_uid) &&
-			filters.headerFilters.technician_uid.includes(currentUser?.identity_uid);
+		const queryParams = new URLSearchParams(location.search);
+		const currentTechnicianId = queryParams.get('technicianId');
+		let isMyTasksActive = false;
+
+		if (currentTechnicianId) {
+			try {
+				const technicianIds = JSON.parse(currentTechnicianId);
+				isMyTasksActive = Array.isArray(technicianIds) && technicianIds.includes(currentUser?.identity_uid);
+			} catch (e) {
+				isMyTasksActive = currentTechnicianId === currentUser?.identity_uid;
+			}
+		}
 
 		if (isMyTasksActive) {
 			// Clear my tasks filter
-			const newFilters = {
-				...filters,
-				headerFilters: {
-					...filters.headerFilters,
-					technician_uid: undefined,
-				},
-			};
-			setFilters(newFilters);
+			queryParams.delete('technicianId');
 			toast.info('Đã tắt bộ lọc chỉ tiêu của bản thân');
 		} else {
 			// Apply my tasks filter
-			const newFilters = {
-				...filters,
-				headerFilters: {
-					...filters.headerFilters,
-					technician_uid: [currentUser?.identity_uid],
-				},
-			};
-			setFilters(newFilters);
+			queryParams.set('technicianId', JSON.stringify([currentUser?.identity_uid]));
 			toast.info('Đã bật bộ lọc chỉ tiêu của bản thân');
 		}
+
+		queryParams.delete('page'); // Reset to page 1
+		navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
 	};
 
 	// State for date picker visibility
@@ -1610,16 +1739,22 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const handleDateSelection = (date) => {
 		if (date) {
 			if (datePickerMode === 'filter') {
+				// Header filter: Use deadline query param (existing behavior)
 				applySpecialFilter('deadline', date);
 			} else {
-				const newFilters = {
-					...filters,
-					headerFilters: {
-						...filters.headerFilters,
-						deadline: date,
-					},
-				};
-				setFilters(newFilters);
+				// Sidebar filter: Use deadline query param for specific date
+				const queryParams = new URLSearchParams(location.search);
+
+				// Clear any existing deadline-related query params
+				queryParams.delete('deadline');
+				queryParams.delete('deadlineStartAt');
+				queryParams.delete('deadlineEndAt');
+				queryParams.delete('deadlineType');
+
+				// Set specific date in deadline param for sidebar
+				queryParams.set('deadline', date);
+				queryParams.delete('page'); // Reset to page 1
+				navigate(`${location.pathname}?${queryParams.toString()}`);
 			}
 		}
 		setShowDatePicker(false);
@@ -1640,428 +1775,189 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	};
 
 	const handleTechnicianSelection = (technicianUid) => {
+		const queryParams = new URLSearchParams(location.search);
+
 		if (technicianUid === null) {
 			// Remove technician filter
-			const newFilters = {
-				...filters,
-				headerFilters: {
-					...filters.headerFilters,
-				},
-			};
-			delete newFilters.headerFilters.technician_uid;
-			setFilters(newFilters);
+			queryParams.delete('technicianId');
 			setSelectedTechnicianName('TOÀN BỘ');
 		} else {
 			// Apply technician filter
 			const technician = technicians?.find((tech) => tech.identity_uid === technicianUid);
 			const technicianName = technician ? technician.identity_name : 'TOÀN BỘ';
 
-			const newFilters = {
-				...filters,
-				headerFilters: {
-					...filters.headerFilters,
-					technician_uid: [technicianUid],
-				},
-			};
-			setFilters(newFilters);
+			queryParams.set('technicianId', JSON.stringify([technicianUid]));
 			setSelectedTechnicianName(technicianName);
 		}
+
+		queryParams.delete('page'); // Reset to page 1
+		navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
 		setTechnicianDropdownOpen(false);
 	};
 
 	// Get current selected technician name for display
 	const getCurrentTechnicianName = () => {
-		if (!filters.headerFilters.technician_uid || filters.headerFilters.technician_uid.length === 0) {
+		const queryParams = new URLSearchParams(location.search);
+		const technicianIdParam = queryParams.get('technicianId');
+
+		if (!technicianIdParam) {
 			return 'TOÀN BỘ';
 		}
 
-		const selectedUid = filters.headerFilters.technician_uid[0];
-		const technician = technicians?.find((tech) => tech.identity_uid === selectedUid);
-		return technician ? technician.identity_name : 'TOÀN BỘ';
+		try {
+			const technicianIds = JSON.parse(technicianIdParam);
+			if (Array.isArray(technicianIds) && technicianIds.length > 0) {
+				const selectedUid = technicianIds[0];
+				const technician = technicians?.find((tech) => tech.identity_uid === selectedUid);
+				return technician ? technician.identity_name : 'TOÀN BỘ';
+			}
+		} catch (e) {
+			// If parsing fails, treat as single value
+			const technician = technicians?.find((tech) => tech.identity_uid === technicianIdParam);
+			return technician ? technician.identity_name : 'TOÀN BỘ';
+		}
+
+		return 'TOÀN BỘ';
 	};
 
-	// Sync selectedTechnicianName with current filters when filters change
+	// Sync selectedTechnicianName with current URL params when they change
 	useEffect(() => {
 		setSelectedTechnicianName(getCurrentTechnicianName());
-	}, [filters.headerFilters.technician_uid, technicians]);
+	}, [location.search, technicians]);
+
+	// Save pending changes to session storage whenever they change
+	useEffect(() => {
+		try {
+			if (pendingChanges.size > 0) {
+				// Convert Map to plain object for storage
+				const changesObject = Object.fromEntries(pendingChanges);
+				sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(changesObject));
+			} else {
+				// Clear session storage if no pending changes
+				sessionStorage.removeItem(SESSION_STORAGE_KEY);
+			}
+		} catch (error) {
+			console.error('Error saving pending changes to session storage:', error);
+		}
+	}, [pendingChanges]);
 
 	// Clear all filters (for selected items indicator)
 	const clearAllFilters = () => {
-		const newFilters = {
-			...filters,
-			parameters: [],
-			protocols: [],
-			headerFilters: {},
-		};
-		setFilters(newFilters);
+		// Navigate to clean URL without any filter parameters
+		navigate(location.pathname);
 		setSelectedParameter('');
-		clearAllSelections();
 	};
 
-	// Helper function to normalize content for comparison (especially for TinyMCE)
-	const normalizeContent = (content) => {
-		if (!content || typeof content !== 'string') return '';
-
-		// Remove leading <p> and trailing </p> tags for TinyMCE content
-		let normalized = content.trim();
-		if (normalized.startsWith('<p>') && normalized.endsWith('</p>')) {
-			normalized = normalized.slice(3, -4);
+	// Result entry session handlers
+	const handleResultEntryToggle = async () => {
+		if (isResultEntrySession) {
+			// End session - show confirmation dialog with pending changes
+			setShowEndSessionDialog(true);
+		} else {
+			// Start session - check authentication first
+			await startResultEntrySession();
 		}
-
-		// Remove other common HTML artifacts that TinyMCE might add
-		normalized = normalized.replace(/&nbsp;/g, ' ').trim();
-
-		return normalized;
 	};
 
-	// Helper function to check if content has actually changed
-	const hasContentChanged = (newContent, currentData, analysisId, column) => {
-		const currentItem = currentData.find((item) => item.id === analysisId);
-		if (!currentItem) return true; // If item not found, assume it changed
+	const startResultEntrySession = async () => {
+		// Check authentication (10 minutes)
+		const now = new Date().getTime();
+		const editExpiredResultAt = Cookies.get('editExpiredResultAt');
 
-		const currentValue = currentItem[column] || '';
-		const normalizedNew = normalizeContent(newContent);
-		const normalizedCurrent = normalizeContent(currentValue);
-
-		return normalizedNew !== normalizedCurrent;
-	};
-
-	// Update analysis field
-	const updateAnalysisField = async (rowId, column, value) => {
-		// Check if content has actually changed
-		if (!hasContentChanged(value, data, rowId, column)) {
-			// Still clear editing state
-			setEditingCell(null);
-			setEditValue('');
+		// Check if editExpiredResultAt cookie exists and is valid (within 10 minutes)
+		if (!editExpiredResultAt || parseInt(editExpiredResultAt) < now) {
+			// Need to login - show login popup
+			setPendingEditCell({ action: 'startSession' });
+			setShowLoginPopup(true);
 			return;
 		}
 
-		setUpdating(true);
-		try {
-			const body = {
-				analysis: {
-					id: rowId,
-					[column]: value,
-				},
-			};
-
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', body);
-
-			if (response && response.status >= 200 && response.status < 300) {
-				// Update local data
-				setData((prevData) => prevData.map((item) => (item.id === rowId ? { ...item, [column]: value } : item)));
-
-				// Show success notification
-				showSuccessNotification('Cập nhật thành công');
-			} else {
-				throw new Error(`API update failed with status: ${response.status}`);
-			}
-		} catch (error) {
-			console.error('Error updating analysis field:', error);
-			showErrorNotification('Cập nhật thất bại: ' + error.message);
-		} finally {
-			setUpdating(false);
-		}
+		// Authentication is valid, show session confirmation
+		setPendingEditCell({ action: 'startSession' });
+		setShowSessionConfirm(true);
 	};
 
-	// Handle cell edit
-	const handleCellEdit = (rowId, column, value) => {
-		setEditingCell({ rowId, column });
-		setEditValue(value || '');
-	};
-
-	// Save cell edit
-	const handleSaveEdit = async () => {
-		if (!editingCell) return;
-
-		const { rowId, column } = editingCell;
-
-		// Check if content has actually changed
-		if (!hasContentChanged(editValue, data, rowId, column)) {
-			// Still clear editing state
-			setEditingCell(null);
-			setEditValue('');
+	const endResultEntrySession = async () => {
+		if (pendingChanges.size === 0) {
+			toast.info('Không có thay đổi nào để lưu');
+			setIsResultEntrySession(false);
 			return;
 		}
 
+		// Show loading state
+		setIsSessionUpdating(true);
+
 		try {
-			await updateAnalysisField(rowId, column, editValue);
-		} catch (error) {
-			console.error('Error updating:', error);
-		} finally {
-			setEditingCell(null);
-			setEditValue('');
-		}
-	};
+			// Prepare analyses array with only id, resultValue, resultUnit
+			const analyses = Array.from(pendingChanges.values()).map((change) => ({
+				id: change.id,
+				resultValue: change.resultValue,
+				resultUnit: change.resultUnit,
+			}));
 
-	// Cancel edit
-	const handleCancelEdit = () => {
-		setEditingCell(null);
-		setEditValue('');
-	};
+			// Send batch update API
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analyses: analyses,
+			});
 
-	// New improved editing functions inspired by ProcessingSampleV3
-	const handleCellClickV3 = (analysisId, column, currentValue) => {
-		openEditorWithAutoSave(analysisId, column, currentValue);
-	};
+			if (response?.status < 300) {
+				const responseData = response?.data;
 
-	const handleKeyDownV3 = (e) => {
-		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault();
-			setEditableCell({ analysisId: null, column: null });
-		} else if (e.key === 'Escape') {
-			setEditableCell({ analysisId: null, column: null });
-		}
-	};
+				// Response data is array of updated analysis records
+				if (Array.isArray(responseData) && responseData.length > 0) {
+					// Update data state with new analysis records
+					setData((prevData) => {
+						// Create a map of updated records by ID for quick lookup
+						const updatedRecordsMap = new Map(responseData.map((record) => [record.id, record]));
 
-	const handleSaveContentV3 = async (content, column, analysisId) => {
-		// Bỏ guard để vẫn lưu được ô cũ khi đã click sang ô mới
-		// if (!editableCell.analysisId || editableCell.column !== column) { return; }
+						// Update each record in prevData with the corresponding updated record
+						return prevData.map((item) => {
+							const updatedRecord = updatedRecordsMap.get(item.id);
+							return updatedRecord ? { ...item, ...updatedRecord } : item;
+						});
+					});
 
-		// Check if content has actually changed
-		if (!hasContentChanged(content, data, analysisId, column)) {
-			// Chỉ reset nếu ô hiện tại vẫn là ô này
-			setEditableCell((prev) => {
-				if (prev.analysisId === analysisId && prev.column === column) {
-					return { analysisId: null, column: null };
+					toast.success(`Đã cập nhật ${analyses.length} kết quả thành công`);
+				} else {
+					// No data or not array, show normal success message
+					toast.success(`Đã cập nhật ${analyses.length} kết quả thành công`);
 				}
-				return prev;
-			});
-			return;
-		}
 
-		try {
-			setUpdating(true);
+				// Set lastEditResultAt in localStorage (now + 2 minutes)
+				const now = new Date().getTime();
+				const lastEditAt = now + 2 * 60 * 1000; // 2 minutes
+				localStorage.setItem('lastEditResultAt', lastEditAt.toString());
 
-			// Validate content for specific columns
-			if (column === 'result_value' && content && content.length > 1000) {
-				toast.error('Kết quả quá dài (tối đa 1000 ký tự)', {
-					position: 'top-right',
-					autoClose: 500,
-					hideProgressBar: true,
-					closeOnClick: true,
-					pauseOnHover: false,
-					draggable: false,
-				});
-				return;
-			}
+				// Clear pending changes
+				setPendingChanges(new Map());
 
-			if (column === 'result_unit' && content && content.length > 50) {
-				toast.error('Đơn vị quá dài (tối đa 50 ký tự)', {
-					position: 'top-right',
-					autoClose: 500,
-					hideProgressBar: true,
-					closeOnClick: true,
-					pauseOnHover: false,
-					draggable: false,
-				});
-				return;
-			}
-
-			const body = {
-				analysis: {
-					id: analysisId,
-					[column]: content,
-				},
-			};
-
-			// Add submit_result_by for result_value updates
-			if (column === 'result_value' && technicians.length > 0) {
-				const currentUser = technicians[0];
-				body.analysis.submit_result_by = currentUser?.identity_name || 'System';
-			}
-
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', body);
-
-			if (response?.status === 200) {
-				toast.success(`Cập nhật ${column === 'result_value' ? 'kết quả' : 'đơn vị'} thành công`, {
-					position: 'top-right',
-					autoClose: 500,
-					hideProgressBar: true,
-					closeOnClick: true,
-					pauseOnHover: false,
-					draggable: false,
-				});
-
-				setData((prevData) =>
-					prevData.map((item) => {
-						if (item.id === analysisId) {
-							const updatedItem = { ...item, [column]: content };
-							if (column === 'result_value') {
-								updatedItem.last_updated = new Date().toISOString();
-							}
-							return updatedItem;
-						}
-						return item;
-					}),
-				);
-
-				setTimeout(() => {
-					fetchAnalysisData(true);
-				}, 1000);
+				// End session
+				setIsResultEntrySession(false);
 			} else {
-				toast.error(`Cập nhật ${column === 'result_value' ? 'kết quả' : 'đơn vị'} thất bại`, {
-					position: 'top-right',
-					autoClose: 500,
-					hideProgressBar: true,
-					closeOnClick: true,
-					pauseOnHover: false,
-					draggable: false,
-				});
+				toast.error('Lỗi khi cập nhật kết quả');
 			}
 		} catch (error) {
-			console.error('Error updating analysis:', error);
-			const isNetworkError = !error.response;
-			toast.error(isNetworkError ? 'Lỗi mạng, vui lòng kiểm tra kết nối' : 'Lỗi khi cập nhật dữ liệu', {
-				position: 'top-right',
-				autoClose: 500,
-				hideProgressBar: true,
-				closeOnClick: true,
-				pauseOnHover: false,
-				draggable: false,
-			});
+			console.error('Error batch updating analyses:', error);
+			toast.error('Lỗi khi cập nhật: ' + error.message);
 		} finally {
-			setUpdating(false);
-			// Chỉ reset nếu vẫn đang ở ô đó
-			setEditableCell((prev) => {
-				if (prev.analysisId === analysisId && prev.column === column) {
-					return { analysisId: null, column: null };
-				}
-				return prev;
-			});
+			// Hide loading state
+			setIsSessionUpdating(false);
 		}
 	};
 
-	// Hàm mở editor với auto-save ô cũ
-	const openEditorWithAutoSave = async (analysisId, column, currentValue) => {
-		if (editableCell.analysisId && (editableCell.analysisId !== analysisId || editableCell.column !== column)) {
-			try {
-				// Lấy content hiện tại từ TinyMCE active editor (nếu có)
-				const activeEditor = window.tinymce?.activeEditor;
-				if (activeEditor) {
-					const prevContent = activeEditor.getContent();
-					await handleSaveContentV3(prevContent, editableCell.column, editableCell.analysisId);
-				}
-			} catch (e) {
-				console.warn('Auto-save previous cell failed or not needed:', e);
-			}
-		}
+	// Handle cancel all pending changes
+	const handleCancelAllChanges = () => {
+		// Clear all pending changes
+		setPendingChanges(new Map());
 
-		// Mở ô mới
-		setEditableCell({ analysisId, column });
-		setInputValue(currentValue || '');
+		// End session
+		setIsResultEntrySession(false);
 
-		setTimeout(() => {
-			const editor = document.querySelector(`[data-edit-id="${analysisId}-${column}"] .tox-edit-area__iframe`);
-			if (editor) editor.focus();
-		}, 100);
-	};
+		// Close dialogs
+		setShowEndSessionDialog(false);
+		setShowCancelConfirm(false);
 
-	// Handle select dropdown changes for protocol_source
-	const handleProtocolSourceChange = async (value, analysisId) => {
-		// Check if value has actually changed
-		if (!hasContentChanged(value, data, analysisId, 'protocol_source')) {
-			// Still close editing state without showing notification
-			setEditingProtocolSource(null);
-			return;
-		}
-
-		try {
-			setUpdating(true);
-
-			const body = {
-				analysis: {
-					id: analysisId,
-					protocol_source: value,
-				},
-			};
-
-			const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', body);
-
-			if (response?.status === 200) {
-				toast.success('Cập nhật nguồn protocal thành công', {
-					position: 'top-right',
-					autoClose: 500,
-					hideProgressBar: true,
-					closeOnClick: true,
-					pauseOnHover: false,
-					draggable: false,
-				});
-
-				// Update local data immediately
-				setData((prevData) =>
-					prevData.map((item) => {
-						if (item.id === analysisId) {
-							return { ...item, protocol_source: value };
-						}
-						return item;
-					}),
-				);
-
-				// Background refresh
-				setTimeout(() => {
-					fetchAnalysisData(true);
-				}, 1000);
-			} else {
-				toast.error('Cập nhật nguồn protocal thất bại', {
-					position: 'top-right',
-					autoClose: 500,
-					hideProgressBar: true,
-					closeOnClick: true,
-					pauseOnHover: false,
-					draggable: false,
-				});
-			}
-		} catch (error) {
-			console.error('Error updating protocol_source:', error);
-			const isNetworkError = !error.response;
-			toast.error(isNetworkError ? 'Lỗi mạng, vui lòng kiểm tra kết nối' : 'Lỗi khi cập nhật nguồn protocal', {
-				position: 'top-right',
-				autoClose: 500,
-				hideProgressBar: true,
-				closeOnClick: true,
-				pauseOnHover: false,
-				draggable: false,
-			});
-		} finally {
-			setUpdating(false);
-			setEditingProtocolSource(null); // Close editing state
-		}
-	};
-
-	// Handle protocol source click to enter edit mode
-	const handleProtocolSourceClick = (analysisId, currentValue) => {
-		setEditingProtocolSource(analysisId);
-	};
-
-	// Cancel protocol source editing
-	const cancelProtocolSourceEdit = () => {
-		setEditingProtocolSource(null);
-	};
-
-	const handleBulkEditClick = () => {
-		setShowBulkEditBox(true);
-	};
-
-	// Handle create experiment detail modal
-	const handleCreateExperimentDetail = () => {
-		setShowExperimentDetailModal(true);
-	};
-
-	const handleCloseExperimentDetail = () => {
-		setShowExperimentDetailModal(false);
-		// Refresh data when closing ExperimentDetail modal
-		setTimeout(() => {
-			fetchAnalysisData(true);
-		}, 500);
-	};
-
-	// Handle bulk update completion
-	const handleBulkUpdateComplete = () => {
-		clearAllSelections();
-		setTimeout(() => {
-			fetchAnalysisData(true);
-		}, 1000);
+		toast.info('Đã hủy tất cả thay đổi');
 	};
 
 	// Show notifications
@@ -2076,16 +1972,23 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		});
 	};
 
-	const showErrorNotification = (message) => {
-		toast.error(message, {
-			position: 'top-right',
-			autoClose: 500,
-			hideProgressBar: true,
-			closeOnClick: true,
-			pauseOnHover: false,
-			draggable: false,
-		});
+	// Pagination handlers
+	const handlePageChange = (newPage) => {
+		if (newPage >= 1 && newPage <= totalPages) {
+			const queryParams = new URLSearchParams(location.search);
+			queryParams.set('page', newPage.toString());
+			navigate(`${location.pathname}?${queryParams.toString()}`);
+		}
 	};
+
+	const handleItemsPerPageChange = (newItemsPerPage) => {
+		const queryParams = new URLSearchParams(location.search);
+		queryParams.set('itemsPerPage', newItemsPerPage.toString());
+		queryParams.delete('page'); // Reset to page 1
+		navigate(`${location.pathname}?${queryParams.toString()}`);
+	};
+
+	// Bulk edit functions - REMOVED
 
 	// Format date
 	const formatDate = (dateString) => {
@@ -2094,87 +1997,466 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	};
 
 	// Get technician name by UID
-	const getTechnicianName = (technician_uid) => {
-		if (!technician_uid || !technicians) return '--';
-		const technician = technicians.find((tech) => tech.identity_uid === technician_uid);
-		return technician ? `${technician.identity_name} (${technician.alias})` : '--';
+	const getTechnicianName = (analysis) => {
+		// Use analysis.technician.identityName if available
+		if (analysis?.technician?.identityName) {
+			return analysis.technician.identityName;
+		}
+		// Fallback to technicianId if no technician object
+		if (analysis?.technicianId) {
+			return analysis.technicianId;
+		}
+		return '--';
 	};
 
-	// Handle cell click
-	const handleCellClick = (rowId, column, value) => {
-		setEditingCell({ rowId, column });
-		setEditValue(value || '');
+	// Helper function to get analysis data by ID
+	const getAnalysisDataById = (analysisId) => {
+		return data.find((item) => item.id === analysisId) || null;
 	};
 
-	// Toggle row selection
-	const toggleRowSelection = (rowId, item) => {
-		const newSelectedRows = new Set(selectedRows);
-		const newSelectedRowsData = new Map(selectedRowsData);
-
-		if (newSelectedRows.has(rowId)) {
-			newSelectedRows.delete(rowId);
-			newSelectedRowsData.delete(rowId);
-		} else {
-			newSelectedRows.add(rowId);
-			newSelectedRowsData.set(rowId, item);
+	// Drag selection handlers
+	const handleMouseDown = (analysisId, event) => {
+		if (event.target.tagName === 'SELECT' || event.target.tagName === 'INPUT' || event.target.tagName === 'BUTTON') {
+			return; // Don't start drag on interactive elements
 		}
 
-		setSelectedRows(newSelectedRows);
-		setSelectedRowsData(newSelectedRowsData);
-	};
+		setIsDragging(true);
+		setDragStartId(analysisId);
 
-	// Clear all selections
-	const clearAllSelections = () => {
-		setSelectedRows(new Set());
-		setSelectedRowsData(new Map());
-	};
+		if (event.ctrlKey || event.metaKey) {
+			// Ctrl+click to toggle selection
+			const newSelection = new Set(selectedAnalysisIds);
+			const newSelectedRowsData = new Map(selectedRowsData);
 
-	// Open editor
-	const openEditor = () => {
-		const selectedData = Array.from(selectedRows)
-			.map((rowId) => selectedRowsData.get(rowId))
-			.filter(Boolean);
-
-		// Check if any selected items have doc_id
-		const itemsWithDocId = selectedData.filter((item) => item.doc_id);
-
-		if (itemsWithDocId.length > 0) {
-			const itemDescriptions = itemsWithDocId.map((item) => {
-				const sampleUid = item.sample_uid || 'N/A';
-				const parameterName = item.parameter_name || 'N/A';
-				return `${sampleUid} - ${parameterName}`;
-			});
-
-			const message = `${itemDescriptions.join(', ')} đã được lập biên bản, vẫn tiếp tục lập biên bản?`;
-
-			if (!window.confirm(message)) {
-				return;
+			if (newSelection.has(analysisId)) {
+				newSelection.delete(analysisId);
+				newSelectedRowsData.delete(analysisId);
+			} else {
+				newSelection.add(analysisId);
+				const analysisData = getAnalysisDataById(analysisId);
+				if (analysisData) {
+					newSelectedRowsData.set(analysisId, analysisData);
+				}
+			}
+			setSelectedAnalysisIds(newSelection);
+			setSelectedRowsData(newSelectedRowsData);
+		} else {
+			// Check if clicking on already selected item to toggle
+			if (selectedAnalysisIds.has(analysisId) && selectedAnalysisIds.size === 1) {
+				// If only this item is selected, deselect it
+				setSelectedAnalysisIds(new Set());
+				setSelectedRowsData(new Map());
+			} else {
+				// Start new selection
+				const analysisData = getAnalysisDataById(analysisId);
+				setSelectedAnalysisIds(new Set([analysisId]));
+				if (analysisData) {
+					setSelectedRowsData(new Map([[analysisId, analysisData]]));
+				}
 			}
 		}
 
-		// Create form data for editor
-		const editorData = {
-			selectedItems: selectedData,
-			count: selectedData.length,
-		};
+		event.preventDefault();
+	};
 
-		// Store in localStorage for editor to access
-		localStorage.setItem('editorData', JSON.stringify(editorData));
+	const handleMouseEnter = (analysisId) => {
+		if (isDragging && dragStartId) {
+			// Get all analysis IDs in order from data
+			const allAnalysisIds = data.map((item) => item.id);
 
-		// Get analysis IDs for URL query
-		const analysisIds = selectedData.map((item) => item.id).filter((id) => id);
+			const startIndex = allAnalysisIds.indexOf(dragStartId);
+			const currentIndex = allAnalysisIds.indexOf(analysisId);
 
-		// Build editor URL with query parameters
-		let editorUrl = '/editor';
-		if (analysisIds.length > 0) {
-			const queryParams = new URLSearchParams();
-			queryParams.set('analysisIds', analysisIds.join(','));
-			editorUrl += '?' + queryParams.toString();
+			if (startIndex !== -1 && currentIndex !== -1) {
+				const minIndex = Math.min(startIndex, currentIndex);
+				const maxIndex = Math.max(startIndex, currentIndex);
+				const selectedRange = allAnalysisIds.slice(minIndex, maxIndex + 1);
+
+				// Update both selectedAnalysisIds and selectedRowsData
+				const newSelectedRowsData = new Map();
+				selectedRange.forEach((id) => {
+					const analysisData = getAnalysisDataById(id);
+					if (analysisData) {
+						newSelectedRowsData.set(id, analysisData);
+					}
+				});
+
+				setSelectedAnalysisIds(new Set(selectedRange));
+				setSelectedRowsData(newSelectedRowsData);
+			}
+		}
+	};
+
+	const handleMouseUp = () => {
+		setIsDragging(false);
+		setDragStartId(null);
+	};
+
+	// Inline editing handlers
+	// Check authentication before editing
+	const checkAuthBeforeEdit = async (analysisId, column, currentValue) => {
+		const now = new Date().getTime();
+		const editExpiredResultAt = Cookies.get('editExpiredResultAt');
+
+		// Check if editExpiredResultAt cookie exists and is valid
+		if (!editExpiredResultAt || parseInt(editExpiredResultAt) < now) {
+			// Need to login - show login popup
+			setPendingEditCell({ analysisId, column, currentValue });
+			setShowLoginPopup(true);
+			return false;
 		}
 
-		// open in new tab to editor page
-		window.open(editorUrl, '_blank');
+		// Cookie is valid, check localStorage
+		const lastEditResultAt = localStorage.getItem('lastEditResultAt');
+
+		if (lastEditResultAt && parseInt(lastEditResultAt) > now) {
+			// User has recently edited, allow direct edit
+			return true;
+		}
+
+		// Need to confirm relogin
+		setPendingEditCell({ analysisId, column, currentValue });
+		setShowReloginConfirm(true);
+		return false;
 	};
+
+	// Handle login form submission
+	// Handle login success callback
+	const handleLoginSuccess = () => {
+		setShowLoginPopup(false);
+		setShowReloginConfirm(false);
+
+		// Set lastEditResultAt to allow immediate editing after login
+		const now = new Date().getTime();
+		const lastEditAt = now + 2 * 60 * 1000; // 2 minutes from now
+		localStorage.setItem('lastEditResultAt', lastEditAt.toString());
+
+		// Get identityId from cookie
+		const identityId = Cookies.get('identityId');
+
+		// Auto-add technician filter after login
+		if (identityId) {
+			const queryParams = new URLSearchParams(location.search);
+
+			// Add or update technicianId filter
+			const existingTechnicianIds = queryParams.get('technicianId');
+			let technicianIds = [];
+
+			if (existingTechnicianIds) {
+				try {
+					technicianIds = JSON.parse(existingTechnicianIds);
+					if (!Array.isArray(technicianIds)) {
+						technicianIds = [existingTechnicianIds];
+					}
+				} catch {
+					technicianIds = [existingTechnicianIds];
+				}
+			}
+
+			// Add identityId if not already in the list
+			if (!technicianIds.includes(identityId)) {
+				technicianIds = [identityId]; // Replace with logged-in user
+				queryParams.set('technicianId', JSON.stringify(technicianIds));
+
+				// Navigate to update URL with new filter
+				navigate(`${location.pathname}?${queryParams.toString()}`, { replace: true });
+			}
+		}
+
+		// Proceed with the pending edit or action
+		if (pendingEditCell) {
+			const { analysisId, column, currentValue, action } = pendingEditCell;
+
+			// Check if this is a session start action
+			if (action === 'startSession') {
+				// Show session confirmation dialog
+				setShowSessionConfirm(true);
+			} else {
+				// Normal edit - proceed with edit
+				proceedWithEdit(analysisId, column, currentValue);
+			}
+
+			setPendingEditCell(null);
+		}
+	};
+
+	// Close login popup
+	const closeLoginPopup = () => {
+		setShowLoginPopup(false);
+		setShowReloginConfirm(false);
+		setPendingEditCell(null);
+	};
+
+	// Proceed with edit after authentication
+	const proceedWithEdit = (analysisId, column, currentValue) => {
+		setEditingCell({ analysisId, column });
+		// Convert HTML tags back to special characters for editing
+		const editableValue = convertHTMLToValue(currentValue || '');
+		setEditValue(editableValue);
+	};
+
+	const handleCellClick = async (analysisId, column, currentValue) => {
+		// Don't edit if cell is already being edited
+		if (editingCell?.analysisId === analysisId && editingCell?.column === column) {
+			return;
+		}
+
+		// Only apply session logic for result and unit columns
+		if (column === 'resultValue' || column === 'resultUnit') {
+			// If not in session, check auth and prompt to start session
+			if (!isResultEntrySession) {
+				// Check authentication (10 minutes)
+				const now = new Date().getTime();
+				const editExpiredResultAt = Cookies.get('editExpiredResultAt');
+
+				// Check if editExpiredResultAt cookie exists and is valid (within 10 minutes)
+				if (!editExpiredResultAt || parseInt(editExpiredResultAt) < now) {
+					// Need to login - show login popup
+					setPendingEditCell({ analysisId, column, currentValue });
+					setShowLoginPopup(true);
+					return;
+				}
+
+				// Authentication is valid, show session confirmation
+				setPendingEditCell({ analysisId, column, currentValue });
+				setShowSessionConfirm(true);
+				return;
+			}
+
+			// Already in session, proceed with edit directly
+			proceedWithEdit(analysisId, column, currentValue);
+		} else {
+			// For other columns, check authentication as before
+			const canEdit = await checkAuthBeforeEdit(analysisId, column, currentValue);
+
+			if (canEdit) {
+				proceedWithEdit(analysisId, column, currentValue);
+			}
+		}
+	};
+
+	const handleCellBlur = async () => {
+		if (!editingCell) return;
+
+		const { analysisId, column } = editingCell;
+
+		// Find the original value to compare
+		const originalAnalysis = data.find((item) => item.id === analysisId);
+		const originalValue = originalAnalysis?.[column] || '';
+		const strippedOriginal = originalValue.replace(/<[^>]*>/g, '');
+
+		// Only update if value changed
+		if (editValue !== strippedOriginal) {
+			// If in result entry session and editing result/unit columns, save to pending changes
+			if (isResultEntrySession && (column === 'resultValue' || column === 'resultUnit')) {
+				// Get existing pending changes for this analysis or create new with full record data
+				const existingChanges = pendingChanges.get(analysisId) || {
+					...originalAnalysis, // Include full record data
+					id: analysisId,
+				};
+
+				// Update the changed column
+				const convertedValue = convertValueToHTML(editValue);
+				if (column === 'resultValue') {
+					existingChanges.resultValue = convertedValue;
+				} else if (column === 'resultUnit') {
+					existingChanges.resultUnit = convertedValue;
+				}
+
+				// Update pending changes
+				setPendingChanges(new Map(pendingChanges.set(analysisId, existingChanges)));
+
+				// Update local data display immediately
+				setData((prevData) =>
+					prevData.map((item) => (item.id === analysisId ? { ...item, [column]: convertedValue } : item)),
+				);
+
+				toast.info('Thay đổi đã được lưu tạm thời');
+			} else {
+				// Normal edit flow - send API immediately
+				try {
+					// Convert value to HTML format before sending
+					const convertedValue = convertValueToHTML(editValue);
+
+					const updateData = {
+						analysis: {
+							id: analysisId,
+						},
+					};
+
+					// Set the appropriate field based on column
+					if (column === 'resultValue') {
+						updateData.analysis.resultValue = convertedValue;
+					} else if (column === 'resultUnit') {
+						updateData.analysis.resultUnit = convertedValue;
+					}
+
+					const response = await apiPost('https://red.irdop.org/v1/analysis/update', updateData);
+
+					if (response?.status < 300) {
+						toast.success('Cập nhật thành công');
+
+						// Set lastEditResultAt in localStorage (now + 2 minutes)
+						const now = new Date().getTime();
+						const lastEditAt = now + 2 * 60 * 1000; // 2 minutes
+						localStorage.setItem('lastEditResultAt', lastEditAt.toString());
+
+						// Refresh data to get updated values
+						fetchAnalysisData(true);
+					} else {
+						toast.error('Lỗi khi cập nhật');
+					}
+				} catch (error) {
+					console.error('Error updating cell:', error);
+					toast.error('Lỗi khi cập nhật: ' + error.message);
+				}
+			}
+		}
+
+		setEditingCell(null);
+		setEditValue('');
+		setShowUnitSuggestions(false);
+		setUnitSuggestions([]);
+		setSelectedSuggestionIndex(-1);
+	};
+
+	// Fetch unit suggestions from API
+	const fetchUnitSuggestions = async (searchTerm) => {
+		if (!searchTerm || searchTerm.trim() === '') {
+			setUnitSuggestions([]);
+			setShowUnitSuggestions(false);
+			return;
+		}
+
+		try {
+			const response = await apiPost('https://red.irdop.org/v1/option/get/list', {
+				listType: 'unit',
+				param: {
+					searchTerm: searchTerm,
+				},
+			});
+
+			if (response?.status < 300 && Array.isArray(response.data)) {
+				setUnitSuggestions(response.data);
+				setShowUnitSuggestions(response.data.length > 0);
+				setSelectedSuggestionIndex(-1);
+			} else {
+				setUnitSuggestions([]);
+				setShowUnitSuggestions(false);
+			}
+		} catch (error) {
+			console.error('Error fetching unit suggestions:', error);
+			setUnitSuggestions([]);
+			setShowUnitSuggestions(false);
+		}
+	};
+
+	// Handle unit input change
+	const handleUnitInputChange = (e) => {
+		const value = e.target.value;
+		setEditValue(value);
+
+		// Fetch suggestions when user types first character
+		if (value.length > 0) {
+			fetchUnitSuggestions(value);
+
+			// Update input rect for portal positioning
+			if (unitInputRef.current) {
+				const rect = unitInputRef.current.getBoundingClientRect();
+				setUnitInputRect(rect);
+			}
+		} else {
+			setShowUnitSuggestions(false);
+			setUnitSuggestions([]);
+		}
+	};
+
+	// Handle suggestion selection
+	const handleSuggestionClick = (suggestion) => {
+		setEditValue(suggestion);
+		setShowUnitSuggestions(false);
+		setUnitSuggestions([]);
+		setSelectedSuggestionIndex(-1);
+		// Keep focus on input
+		if (unitInputRef.current) {
+			unitInputRef.current.focus();
+		}
+	};
+
+	// Close suggestions when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (e) => {
+			if (
+				showUnitSuggestions &&
+				unitInputRef.current &&
+				!unitInputRef.current.contains(e.target) &&
+				!e.target.closest('.unit-suggestions-dropdown')
+			) {
+				setShowUnitSuggestions(false);
+			}
+		};
+
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, [showUnitSuggestions]);
+
+	const handleKeyDown = (e) => {
+		// Handle keyboard navigation for unit suggestions
+		if (editingCell?.column === 'resultUnit' && showUnitSuggestions && unitSuggestions.length > 0) {
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				setSelectedSuggestionIndex((prev) => (prev < unitSuggestions.length - 1 ? prev + 1 : prev));
+			} else if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				setSelectedSuggestionIndex((prev) => (prev > 0 ? prev - 1 : -1));
+			} else if (e.key === 'Enter') {
+				e.preventDefault();
+				if (selectedSuggestionIndex >= 0) {
+					handleSuggestionClick(unitSuggestions[selectedSuggestionIndex]);
+				} else {
+					e.target.blur(); // This will trigger handleCellBlur
+				}
+			} else if (e.key === 'Escape') {
+				setShowUnitSuggestions(false);
+				setUnitSuggestions([]);
+				setSelectedSuggestionIndex(-1);
+			}
+		} else {
+			// Normal key handling for other cells
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				e.target.blur(); // This will trigger handleCellBlur
+			} else if (e.key === 'Escape') {
+				setEditingCell(null);
+				setEditValue('');
+			}
+		}
+	};
+
+	// Bulk edit handlers
+	const handleBulkEdit = (field, value) => {
+		// This function will be called by the LabBulkUpdate component
+		toast.success(`Cập nhật ${selectedAnalysisIds.size} mục thành công`);
+		setSelectedAnalysisIds(new Set());
+		setSelectedRowsData(new Map());
+		setShowBulkEdit(false);
+	};
+
+	const clearSelection = () => {
+		setSelectedAnalysisIds(new Set());
+		setSelectedRowsData(new Map());
+		setShowBulkEdit(false);
+	};
+
+	const handleBulkEditClick = () => {
+		setShowBulkEdit(true);
+	};
+
+	// Check if there are selected samples
+	const hasSelectedSamples = selectedAnalysisIds.size > 0;
+
+	// Toggle row selection
+	// Row selection and editor functions - REMOVED
 
 	// Open document
 	const openDocument = async (docId) => {
@@ -2183,66 +2465,23 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	};
 
 	// Handle sorting
-	const handleSort = (column, event) => {
-		// If in filter creation mode, show filter instead of sorting
-		if (isFilterCreationMode) {
-			// If the same filter column is already active, close it
-			if (activeFilterColumn === column) {
-				cancelFilter();
-				return;
-			}
+	const handleSort = (column) => {
+		// Calculate new sort direction
+		const newDirection = sortConfig.column === column && sortConfig.direction === 'ASC' ? 'DESC' : 'ASC';
 
-			// Calculate filter position from the clicked header
-			const headerElement = event.currentTarget;
-			const rect = headerElement.getBoundingClientRect();
-
-			// For doc_id column, position dropdown to the left to prevent cutoff
-			const dropdownWidth = 320; // Approximate width of filter dropdown
-			let leftPosition = rect.left + window.scrollX;
-
-			if (column === 'doc_id') {
-				// Position dropdown to the left of the column
-				leftPosition = rect.right + window.scrollX - dropdownWidth;
-
-				// Ensure it doesn't go off the left side of the screen
-				if (leftPosition < 10) {
-					leftPosition = 10;
-				}
-			}
-
-			setFilterPosition({
-				top: rect.bottom + window.scrollY,
-				left: leftPosition,
-			});
-
-			setActiveFilterColumn(column);
-			setFilterSearchTerm('');
-			setFilterResults([]);
-
-			// Load existing filter values for this column
-			const existingFilterValues = filters.headerFilters[column];
-			if (existingFilterValues && Array.isArray(existingFilterValues)) {
-				setSelectedFilterValues([...existingFilterValues]);
-			} else {
-				setSelectedFilterValues([]);
-			}
-
-			// For special filter columns, don't fetch from API
-			// The useEffect will handle fetchFilterValues for regular columns
-			return;
-		}
-
-		setSortConfig((prev) => ({
+		// Update local sortConfig state immediately
+		setSortConfig({
 			column,
-			direction: prev.column === column && prev.direction === 'ASC' ? 'DESC' : 'ASC',
-		}));
+			direction: newDirection,
+		});
 
-		const newFilters = {
-			...filters,
-			columnSort: column,
-			sortBy: sortConfig.column === column && sortConfig.direction === 'ASC' ? 'DESC' : 'ASC',
-		};
-		setFilters(newFilters);
+		// Update URL parameters
+		const queryParams = new URLSearchParams(location.search);
+		queryParams.set('columnSort', column);
+		queryParams.set('sortBy', newDirection);
+		queryParams.delete('page'); // Reset to page 1 when sorting changes
+
+		navigate(`${location.pathname}?${queryParams.toString()}`);
 	};
 
 	// Toggle filter creation mode
@@ -2287,28 +2526,28 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			};
 
 			// Add current filters to request body directly from filters state
-			if (filters.headerFilters.sample_uid) {
-				requestBody.sample_uid = filters.headerFilters.sample_uid;
+			if (filters.headerFilters.sampleId) {
+				requestBody.sampleId = filters.headerFilters.sampleId;
 			}
 
-			if (filters.headerFilters.parameter_name) {
-				requestBody.parameter_name = filters.headerFilters.parameter_name;
+			if (filters.headerFilters.parameterName) {
+				requestBody.parameterName = filters.headerFilters.parameterName;
 			}
 
-			if (filters.headerFilters.protocol_source) {
-				requestBody.protocol_source = filters.headerFilters.protocol_source;
+			if (filters.headerFilters.protocolSource) {
+				requestBody.protocolSource = filters.headerFilters.protocolSource;
 			}
 
-			if (filters.headerFilters.protocol_code) {
-				requestBody.protocol_code = filters.headerFilters.protocol_code;
+			if (filters.headerFilters.protocolCode) {
+				requestBody.protocolCode = filters.headerFilters.protocolCode;
 			}
 
 			if (filters.headerFilters.matrix) {
 				requestBody.matrix = filters.headerFilters.matrix;
 			}
 
-			if (filters.headerFilters.technician_uid) {
-				requestBody.technician_uid = filters.headerFilters.technician_uid;
+			if (filters.headerFilters.technicianId) {
+				requestBody.technicianId = filters.headerFilters.technicianId;
 			}
 
 			if (filters.headerFilters.status === 1) {
@@ -2327,31 +2566,31 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				requestBody.deadline = filters.headerFilters.deadline;
 			}
 
-			if (filters.headerFilters.doc_id) {
-				requestBody.doc_id = filters.headerFilters.doc_id;
+			if (filters.headerFilters.docId) {
+				requestBody.docId = filters.headerFilters.docId;
 			}
 
-			if (filters.headerFilters.result_value) {
-				requestBody.result_value = filters.headerFilters.result_value;
+			if (filters.headerFilters.resultValue) {
+				requestBody.resultValue = filters.headerFilters.resultValue;
 			}
 
-			const response = await apiPost('https://black.irdop.org/v1/analysis/search_filter_column', requestBody);
+			const response = await apiPost('https://red.irdop.org/v1/analysis/get/filter_column', requestBody);
 
 			if (response?.status < 300 && response?.data?.result) {
 				let formattedResults = [];
 
-				if (column === 'doc_id') {
-					// Special handling for doc_id column - predefined options
+				if (column === 'docId') {
+					// Special handling for docId column - predefined options
 					formattedResults = [
 						{ value: 'none', count: 0, label: 'none' },
 						{ value: 'pending', count: 0, label: 'pending' },
 						{ value: 'published', count: 0, label: 'published' },
 					];
-				} else if (column === 'technician_uid') {
+				} else if (column === 'technicianId') {
 					// For technician filter, convert identity_uid to display name with alias
 					formattedResults = response.data.result.map((item) => {
-						// API returns technician_uid field, not value
-						const technicianUid = item.technician_uid || item.value;
+						// API returns technicianId field, not value
+						const technicianUid = item.technicianId || item.value;
 						const technician = technicians?.find((tech) => tech.identity_uid === technicianUid);
 						const displayName = technician
 							? `${technician.identity_name}${technician.alias ? ` (${technician.alias})` : ''}`
@@ -2381,9 +2620,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				} else {
 					// For other columns, use standard formatting
 					formattedResults = response.data.result.map((item) => ({
-						value: item[column] || item.parameter_name || item.value,
+						value: item[column] || item.parameterName || item.value,
 						count: item.total || item.count || 0,
-						label: item[column] || item.parameter_name || item.value,
+						label: item[column] || item.parameterName || item.value,
 					}));
 				}
 
@@ -2402,7 +2641,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				setFilterResults([]);
 			}
 		} catch (error) {
-			console.error('Error fetching filter options:', error);
 			setFilterResults([]);
 			toast.error('Lỗi khi tải dữ liệu lọc');
 		} finally {
@@ -2410,13 +2648,13 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		}
 
 		// Set default center position for non-technician filters
-		if (column !== 'technician_uid') {
+		if (column !== 'technicianId') {
 			setFilterPosition({
 				top: window.scrollY + 100,
 				left: window.innerWidth / 2 - 160, // Center the modal
 			});
 		}
-		// technician_uid position is set directly in the button click handler
+		// technicianId position is set directly in the button click handler
 	};
 
 	// Handle filter value selection
@@ -2443,32 +2681,70 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	// Apply filter
 	const applyFilter = () => {
-		if (activeFilterColumn && selectedFilterValues.length > 0) {
-			const newFilters = {
-				...filters,
-				headerFilters: {
-					...filters.headerFilters,
-					[activeFilterColumn]: selectedFilterValues,
-				},
-			};
-			setFilters(newFilters);
+		// Special handling for deadline with date range
+		if (activeFilterColumn === 'deadline' && (startDate || endDate || selectedFilterValues.length > 0)) {
+			const queryParams = new URLSearchParams(location.search);
+			let filterValue = [];
+
+			if (selectedFilterValues.length > 0) {
+				filterValue = [...selectedFilterValues];
+			}
+
+			if (startDate || endDate) {
+				const dateRange = {};
+				if (startDate) {
+					dateRange.start = startDate.toISOString().split('T')[0];
+				}
+				if (endDate) {
+					dateRange.end = endDate.toISOString().split('T')[0];
+				}
+				filterValue.push(dateRange);
+			}
+
+			if (filterValue.length > 0) {
+				queryParams.set('deadline', JSON.stringify(filterValue));
+			} else {
+				queryParams.delete('deadline');
+			}
+			queryParams.delete('page'); // Reset to page 1 when filter changes
+
+			navigate(`${location.pathname}?${queryParams.toString()}`);
+
+			setActiveFilterColumn(null);
+			setFilterResults([]);
+			setSelectedFilterValues([]);
+			setStartDate(null);
+			setEndDate(null);
+			setShowDateRange(false);
+			setFilterSearchTerm('');
+		} else if (activeFilterColumn && selectedFilterValues.length > 0) {
+			// Regular filter handling
+			const queryParams = new URLSearchParams(location.search);
+			queryParams.set(activeFilterColumn, JSON.stringify(selectedFilterValues));
+			queryParams.delete('page'); // Reset to page 1 when filter changes
+
+			navigate(`${location.pathname}?${queryParams.toString()}`);
+
+			setActiveFilterColumn(null);
+			setFilterSearchTerm('');
+			setFilterResults([]);
+			setSelectedFilterValues([]);
 		}
-		setActiveFilterColumn(null);
-		setFilterSearchTerm('');
-		setFilterResults([]);
-		setSelectedFilterValues([]);
 	};
 
-	// Apply special filter (for result_value, deadline, doc_id)
+	// Apply special filter (for resultValue, deadline, docId)
 	const applySpecialFilter = (column, value) => {
-		const newFilters = {
-			...filters,
-			headerFilters: {
-				...filters.headerFilters,
-				[column]: value,
-			},
-		};
-		setFilters(newFilters);
+		// Update URL parameters instead of directly setting filters
+		const queryParams = new URLSearchParams(location.search);
+		if (value !== null && value !== undefined && value !== '') {
+			queryParams.set(column, typeof value === 'object' ? JSON.stringify(value) : value);
+		} else {
+			queryParams.delete(column);
+		}
+		queryParams.delete('page'); // Reset to page 1 when filter changes
+
+		navigate(`${location.pathname}?${queryParams.toString()}`);
+
 		setActiveFilterColumn(null);
 		setFilterSearchTerm('');
 		setFilterResults([]);
@@ -2481,63 +2757,140 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		setFilterSearchTerm('');
 		setFilterResults([]);
 		setSelectedFilterValues([]);
+		setStartDate(null);
+		setEndDate(null);
+		setShowDateRange(false);
 	};
 
 	// Remove filter for specific column
 	const removeColumnFilter = (column) => {
-		const newFilters = {
-			...filters,
-			headerFilters: {
-				...filters.headerFilters,
-			},
-		};
+		// Update URL parameters instead of directly setting filters
+		const queryParams = new URLSearchParams(location.search);
+		queryParams.delete(column);
 
-		// Remove the specific column filter
-		delete newFilters.headerFilters[column];
-
-		// Also clear related sidebar filters if needed
-		if (column === 'parameter_name') {
-			newFilters.parameters = [];
-		} else if (column === 'protocol_code') {
-			newFilters.protocols = [];
-		} else if (column === 'deadline') {
-			// Clear deadline filter completely
-			delete newFilters.headerFilters.deadline;
-		} else if (column === 'matrix' || column === 'sample_uid') {
-			// Clear the selected parameter if it's related to matrix or sample
-			if (
-				selectedParameter &&
-				((column === 'matrix' && selectedParameter.includes('matrix|')) ||
-					(column === 'sample_uid' && selectedParameter.includes('sample|')))
-			) {
-				setSelectedParameter('');
-			}
+		// Handle deadline-specific cleanup
+		if (column === 'deadline') {
+			// Clear all deadline-related params (both header and sidebar)
+			queryParams.delete('deadline');
+			queryParams.delete('deadlineStartAt');
+			queryParams.delete('deadlineEndAt');
+			queryParams.delete('deadlineType');
 		}
 
-		setFilters(newFilters);
+		// Also clear related sidebar filters if needed
+		if (column === 'parameterName') {
+			queryParams.delete('parameters');
+		} else if (column === 'protocolCode') {
+			queryParams.delete('protocols');
+		}
 
-		// Clear selected parameter if all filters are cleared
-		if (
-			Object.keys(newFilters.headerFilters).length === 0 &&
-			newFilters.parameters.length === 0 &&
-			newFilters.protocols.length === 0
-		) {
+		queryParams.delete('page'); // Reset to page 1 when filter changes
+		navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
+
+		// Clear selected parameter if all related filters are cleared
+		const hasParameterFilters = queryParams.get('parameters') || queryParams.get('parameterName');
+		const hasProtocolFilters = queryParams.get('protocols') || queryParams.get('protocolCode');
+		const hasDeadlineFilters =
+			queryParams.get('deadline') ||
+			queryParams.get('deadlineStartAt') ||
+			queryParams.get('deadlineEndAt') ||
+			queryParams.get('deadlineType');
+
+		if (!hasParameterFilters && !hasProtocolFilters && !hasDeadlineFilters) {
 			setSelectedParameter('');
 		}
 	};
 
+	// HeaderCell handlers
+	const handleHeaderFilter = (columnName, event) => {
+		if (activeFilterColumn === columnName) {
+			setActiveFilterColumn(null);
+		} else {
+			// Calculate filter position from the clicked header
+			const headerElement = event ? event.currentTarget.closest('th') : null;
+			if (headerElement) {
+				const rect = headerElement.getBoundingClientRect();
+
+				// For docId and technicianId columns, position dropdown to the left to prevent cutoff
+				const dropdownWidth = 320; // Approximate width of filter dropdown
+				let leftPosition = rect.left + window.scrollX;
+
+				if (columnName === 'docId' || columnName === 'technicianId') {
+					// Position dropdown to the left of the column
+					leftPosition = rect.right + window.scrollX - dropdownWidth;
+
+					// Ensure it doesn't go off the left side of the screen
+					if (leftPosition < 10) {
+						leftPosition = 10;
+					}
+				}
+
+				setFilterPosition({
+					top: rect.bottom + window.scrollY,
+					left: leftPosition,
+				});
+			}
+
+			setActiveFilterColumn(columnName);
+			setFilterSearchTerm('');
+			setFilterResults([]);
+
+			// Load existing filter values for this column
+			const existingFilterValues = filters.headerFilters[columnName];
+			if (existingFilterValues && Array.isArray(existingFilterValues)) {
+				setSelectedFilterValues([...existingFilterValues]);
+			} else {
+				setSelectedFilterValues([]);
+			}
+		}
+	};
+
+	const handleClearColumnFilter = (columnName) => {
+		removeColumnFilter(columnName);
+	};
+
+	// Check if column is filtered
+	const isColumnFiltered = (column) => {
+		const queryParams = new URLSearchParams(location.search);
+
+		if (column === 'deadline') {
+			// Check both header and sidebar deadline filters
+			return (
+				filters.headerFilters[column] ||
+				queryParams.get('deadline') ||
+				queryParams.get('deadlineStartAt') ||
+				queryParams.get('deadlineEndAt') ||
+				queryParams.get('deadlineType')
+			);
+		}
+
+		return (
+			filters.headerFilters[column] ||
+			(column === 'parameterName' && filters.parameters.length > 0) ||
+			(column === 'protocolCode' && filters.protocols.length > 0)
+		);
+	};
+
+	// Get sort direction for column
+	const getSortDirection = (column) => {
+		if (sortConfig.column === column) {
+			return sortConfig.direction;
+		}
+		return null;
+	};
+
 	// Available columns
 	const availableColumns = {
-		sample_uid: 'Mã mẫu',
-		parameter_name: 'Tên chỉ tiêu',
+		sampleId: 'Mã mẫu',
+		parameterName: 'Tên chỉ tiêu',
 		matrix: 'Nền mẫu',
-		protocol_source: 'Nguồn',
-		protocol_code: 'Phương pháp',
-		result_value: 'Kết quả',
-		result_unit: 'Đơn vị',
+		protocolSource: 'Nguồn',
+		protocolCode: 'Phương pháp',
+		resultValue: 'Kết quả',
+		resultUnit: 'Đơn vị',
 		deadline: 'Hạn trả',
-		technician_uid: 'Người thực hiện',
-		doc_id: 'Doc',
+		technicianId: 'Người thực hiện',
+		docId: 'Doc',
 		document: 'Tài liệu',
 		id: 'ID',
 		lodq: 'LOD/LOQ',
@@ -2549,24 +2902,42 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const endIndex = Math.min(currentPage * itemsPerPage, totalItems);
 
 	// Tooltip functions
-	const showTooltip = (event, content) => {
+	const showTooltip = (event, content, customPosition = null) => {
 		const rect = event.target.getBoundingClientRect();
 		const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
 		const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
-		// Check if there's enough space above the element (at least 100px)
-		const spaceAbove = rect.top;
-		const tooltipHeight = 40; // Approximate tooltip height
-		const shouldShowBelow = spaceAbove < tooltipHeight + 20; // 20px buffer
+		let x, y, position;
+
+		if (customPosition === 'left') {
+			// Position tooltip completely to the left of the element
+			x = rect.left + scrollLeft - 10; // 10px padding from element
+			y = rect.top + scrollTop + rect.height / 2;
+			position = 'left';
+		} else if (customPosition === 'right') {
+			// Position tooltip completely to the right of the element
+			x = rect.right + scrollLeft + 10; // 10px padding from element
+			y = rect.top + scrollTop + rect.height / 2;
+			position = 'right';
+		} else {
+			// Default behavior: above or below (center aligned)
+			const spaceAbove = rect.top;
+			const tooltipHeight = 40; // Approximate tooltip height
+			const shouldShowBelow = spaceAbove < tooltipHeight + 20; // 20px buffer
+
+			x = rect.left + scrollLeft + rect.width / 2;
+			y = shouldShowBelow
+				? rect.bottom + scrollTop + 10 // Show below
+				: rect.top + scrollTop - 10; // Show above
+			position = shouldShowBelow ? 'below' : 'above';
+		}
 
 		setTooltip({
 			visible: true,
 			content,
-			x: rect.left + scrollLeft + rect.width / 2,
-			y: shouldShowBelow
-				? rect.bottom + scrollTop + 10 // Show below
-				: rect.top + scrollTop - 10, // Show above
-			position: shouldShowBelow ? 'below' : 'above',
+			x,
+			y,
+			position,
 		});
 	};
 
@@ -2616,6 +2987,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const handleDocumentPreview = async (docId) => {
 		if (!docId) return;
 
+		// Show loading state
 		setDocumentPreview({
 			visible: true,
 			content: '',
@@ -2628,25 +3000,66 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				id: docId,
 			});
 
-			if (response?.status < 300 && response?.data) {
-				setDocumentPreview({
-					visible: true,
-					content: response.data,
-					loading: false,
-					docId: docId,
-				});
+			if (response?.status < 300) {
+				const data = response?.data;
+
+				// Check if data is an array of URLs (Google Docs links)
+				if (Array.isArray(data) && data.length > 0) {
+					// Close the modal
+					setDocumentPreview({
+						visible: false,
+						content: '',
+						loading: false,
+						docId: null,
+					});
+
+					// Open each URL in a new tab
+					data.forEach((url, index) => {
+						// Add small delay between opening tabs to avoid browser blocking
+						setTimeout(() => {
+							window.open(url, '_blank', 'noopener,noreferrer');
+						}, index * 100); // 100ms delay between each tab
+					});
+
+					// Show success notification
+					toast.success(`Đã mở ${data.length} tài liệu Google Docs`);
+				}
+				// If data is a single URL string
+				else if (typeof data === 'string' && (data.includes('docs.google.com') || data.includes('drive.google.com'))) {
+					// Close the modal
+					setDocumentPreview({
+						visible: false,
+						content: '',
+						loading: false,
+						docId: null,
+					});
+
+					// Open the URL in a new tab
+					window.open(data, '_blank', 'noopener,noreferrer');
+					toast.success('Đã mở tài liệu Google Docs');
+				}
+				// If data is HTML content (original behavior)
+				else if (data) {
+					setDocumentPreview({
+						visible: true,
+						content: data,
+						loading: false,
+						docId: docId,
+					});
+				} else {
+					throw new Error('Không có dữ liệu tài liệu');
+				}
 			} else {
 				throw new Error('Failed to load document');
 			}
 		} catch (error) {
-			console.error('Error loading document:', error);
 			setDocumentPreview({
 				visible: true,
 				content: '<div class="text-red-600 p-4">Lỗi khi tải tài liệu: ' + error.message + '</div>',
 				loading: false,
 				docId: docId,
 			});
-			showErrorNotification('Lỗi khi tải tài liệu');
+			toast.error('Lỗi khi tải tài liệu: ' + error.message);
 		}
 	};
 
@@ -2784,8 +3197,89 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				throw new Error('Failed to get document details');
 			}
 		} catch (error) {
-			console.error(`${mode} failed:`, error);
 			showErrorNotification(`Lỗi khi ${mode === 'view' ? 'xem' : 'tải'} file: ${error.message}`);
+		}
+	};
+
+	// Handle click on docId to open Google Docs
+	const handleDocIdClick = async (docId) => {
+		if (!docId) return;
+
+		try {
+			// Call API to get Google Docs URL
+			const response = await apiPost('https://red.irdop.org/v1/option/get/url', {
+				urlType: 'googleDoc',
+				urlId: docId,
+			});
+
+			if (response?.status < 300 && response?.data) {
+				// Open the URL in a new tab
+				window.open(response.data, '_blank', 'noopener,noreferrer');
+				toast.success('Đã mở tài liệu Google Docs');
+			} else {
+				throw new Error('Không thể lấy URL tài liệu');
+			}
+		} catch (error) {
+			toast.error('Lỗi khi mở tài liệu: ' + error.message);
+		}
+	};
+
+	// Handle note icon click
+	const handleNoteClick = (analysis, e) => {
+		e.stopPropagation();
+		setSelectedAnalysisForNote(analysis);
+		setNewNoteText('');
+		setShowNoteModal(true);
+	};
+
+	// Handle note update
+	const handleUpdateNote = async () => {
+		if (!selectedAnalysisForNote || !newNoteText.trim()) {
+			toast.warning('Vui lòng nhập nội dung ghi chú');
+			return;
+		}
+
+		setIsUpdatingNote(true);
+		try {
+			const currentNote = selectedAnalysisForNote.note || '';
+			const userName = currentUser?.identity_name || 'Unknown User';
+			const timestamp = new Date().toLocaleString('vi-VN');
+			const newNote = currentNote
+				? `${currentNote}\n[${timestamp}] ${userName}: ${newNoteText.trim()}`
+				: `[${timestamp}] ${userName}: ${newNoteText.trim()}`;
+
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analysis: {
+					id: selectedAnalysisForNote.id,
+					note: newNote,
+				},
+			});
+
+			if (response?.status < 300) {
+				toast.success('Cập nhật ghi chú thành công');
+
+				// Update local data
+				setData((prevData) =>
+					prevData.map((analysis) =>
+						analysis.id === selectedAnalysisForNote.id ? { ...analysis, note: newNote } : analysis,
+					),
+				);
+
+				// Close modal
+				setShowNoteModal(false);
+				setSelectedAnalysisForNote(null);
+				setNewNoteText('');
+
+				// Reload data to get fresh data
+				fetchAnalysisData(true);
+			} else {
+				toast.error('Lỗi khi cập nhật ghi chú');
+			}
+		} catch (error) {
+			console.error('Error updating note:', error);
+			toast.error('Lỗi khi cập nhật ghi chú: ' + error.message);
+		} finally {
+			setIsUpdatingNote(false);
 		}
 	};
 
@@ -2797,16 +3291,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 	return (
 		<div className="flex h-full bg-gray-100 relative overflow-y-hidden">
-			{/* Loading overlay when updating */}
-			{updating && (
-				<div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50">
-					<div className="bg-white rounded-lg p-4 shadow-lg flex items-center space-x-3">
-						<div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-						<span className="text-gray-700">Đang cập nhật...</span>
-					</div>
-				</div>
-			)}
-
 			{/* Fixed Header with breadcrumb - đè lên toàn bộ chiều rộng */}
 			<div className="fixed top-0 left-16 right-0 z-40 bg-white p-2 shadow-md">
 				<div className="flex justify-between items-center w-full">
@@ -2877,17 +3361,24 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					<div className="flex items-center space-x-3 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 flex-shrink-0">
 						{/* Action buttons */}
 						<div className="flex items-center space-x-2 flex-shrink-0">
-							{/* Selected items indicator */}
-							{(selectedRows?.size || 0) > 0 && (
-								<div
-									className="px-3 py-2 bg-yellow-100 text-yellow-800 rounded-md text-sm font-medium border border-yellow-200 cursor-pointer hover:bg-yellow-200 transition-colors"
-									onClick={clearAllFilters}
-									onMouseEnter={(e) => showTooltip(e, 'Click để xóa tất cả bộ lọc và bỏ chọn')}
-									onMouseLeave={hideTooltip}
-								>
-									<span>{selectedRows?.size || 0} mục đã chọn</span>
-								</div>
+							{/* Selection actions */}
+							{hasSelectedSamples && (
+								<>
+									<button
+										onClick={clearSelection}
+										className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors whitespace-nowrap focus:outline-none"
+									>
+										Hủy chọn ({selectedAnalysisIds.size})
+									</button>
+									<button
+										onClick={handleBulkEditClick}
+										className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors whitespace-nowrap focus:outline-none"
+									>
+										Sửa hàng loạt
+									</button>
+								</>
 							)}
+
 							{(filters.parameters.length > 0 || Object.keys(filters.headerFilters).length > 0) && (
 								<button
 									className="px-3 py-2 bg-white border-2 border-gray-400 text-gray-700 rounded-md text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm"
@@ -2898,29 +3389,11 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 							)}
 
 							<button
-								className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm ${
-									isFilterCreationMode
-										? 'bg-blue-500 border-blue-700 text-white hover:bg-blue-600'
-										: 'bg-white border-gray-400 text-gray-700 hover:bg-gray-50'
-								}`}
-								onClick={toggleFilterCreationMode}
-							>
-								<span>Tạo bộ lọc</span>
-							</button>
-
-							<button
-								className="px-3 py-2 bg-white border-2 border-gray-400 text-gray-700 rounded-md text-sm font-bold hover:bg-gray-50 transition-colors shadow-sm"
-								onClick={openEditor}
-							>
-								<span>Lập biên bản</span>
-							</button>
-
-							<button
 								onClick={selectMyTasksFilter}
 								className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm my-tasks-btn ${
-									filters.headerFilters.technician_uid &&
-									Array.isArray(filters.headerFilters.technician_uid) &&
-									filters.headerFilters.technician_uid.includes(currentUser?.identity_uid)
+									filters.headerFilters.technicianId &&
+									Array.isArray(filters.headerFilters.technicianId) &&
+									filters.headerFilters.technicianId.includes(currentUser?.identity_uid)
 										? 'active'
 										: ''
 								}`}
@@ -2928,27 +3401,50 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								<span>Chỉ tiêu của tôi</span>
 							</button>
 
-							{(selectedRows?.size || 0) > 0 && (
-								<>
-									<button
-										className="px-3 py-2 bg-green-500 border-2 border-green-700 text-white rounded-md text-sm font-bold hover:bg-green-600 transition-colors shadow-sm"
-										onClick={handleBulkEditClick}
-									>
-										<span>Cập nhật({selectedRows?.size || 0})</span>
-									</button>
-									<button
-										className="px-3 py-2 bg-blue-500 border-2 border-blue-700 text-white rounded-md text-sm font-bold hover:bg-blue-600 transition-colors shadow-sm"
-										onClick={handleCreateExperimentDetail}
-									>
-										<span>Dữ liệu thử nghiệm ({selectedRows?.size || 0})</span>
-									</button>
-								</>
-							)}
+							{/* Result Entry Session Button */}
+							<button
+								onClick={handleResultEntryToggle}
+								disabled={isSessionUpdating}
+								className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm flex items-center gap-2 ${
+									isResultEntrySession
+										? 'bg-green-600 text-white border-green-600 hover:bg-green-700 disabled:opacity-70 disabled:cursor-not-allowed'
+										: 'bg-white border-purple-600 text-purple-600 hover:bg-purple-50 disabled:opacity-70 disabled:cursor-not-allowed'
+								}`}
+							>
+								{isSessionUpdating ? (
+									<>
+										<svg
+											className="animate-spin h-4 w-4 text-white"
+											xmlns="http://www.w3.org/2000/svg"
+											fill="none"
+											viewBox="0 0 24 24"
+										>
+											<circle
+												className="opacity-25"
+												cx="12"
+												cy="12"
+												r="10"
+												stroke="currentColor"
+												strokeWidth="4"
+											></circle>
+											<path
+												className="opacity-75"
+												fill="currentColor"
+												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+											></path>
+										</svg>
+										<span>Đang xử lý...</span>
+									</>
+								) : isResultEntrySession ? (
+									<span>Kết thúc nhập ({pendingChanges.size})</span>
+								) : (
+									<span>Bắt đầu nhập KQ</span>
+								)}
+							</button>
 						</div>
 					</div>
 				</div>
-			</div>
-
+			</div>{' '}
 			{/* Sidebar - nằm dưới breadcrumb */}
 			<div
 				className={`bg-gray-100 border-gray-300 z-30 flex flex-col box-border transition-all duration-300 ${
@@ -2993,7 +3489,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								<button
 									onClick={() => selectDeadlineFilter('overdue')}
 									className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
-										filters.headerFilters.deadline === 'overdue'
+										new URLSearchParams(location.search).get('deadlineType') === 'overdue'
 											? 'bg-red-600 text-white'
 											: 'bg-gray-100 text-black hover:bg-gray-200'
 									}`}
@@ -3003,7 +3499,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								<button
 									onClick={() => selectDeadlineFilter('3days')}
 									className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
-										filters.headerFilters.deadline === '3days'
+										new URLSearchParams(location.search).get('deadlineType') === '3days'
 											? 'bg-yellow-600 text-white'
 											: 'bg-gray-100 text-black hover:bg-gray-200'
 									}`}
@@ -3013,7 +3509,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								<button
 									onClick={() => selectDeadlineFilter('week')}
 									className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
-										filters.headerFilters.deadline === 'week'
+										new URLSearchParams(location.search).get('deadlineType') === 'week'
 											? 'bg-blue-600 text-white'
 											: 'bg-gray-100 text-black hover:bg-gray-200'
 									}`}
@@ -3022,12 +3518,14 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								</button>
 								<button
 									onClick={openDatePicker}
-									className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
-										filters.headerFilters.deadline &&
-										!['overdue', '3days', 'week'].includes(filters.headerFilters.deadline)
+									className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${(() => {
+										const queryParams = new URLSearchParams(location.search);
+										const deadline = queryParams.get('deadline');
+										const deadlineType = queryParams.get('deadlineType');
+										return deadline && !deadlineType && !filters.headerFilters.deadline
 											? 'bg-purple-600 text-white'
-											: 'bg-gray-100 text-black hover:bg-gray-200'
-									}`}
+											: 'bg-gray-100 text-black hover:bg-gray-200';
+									})()}`}
 								>
 									Chọn
 								</button>
@@ -3056,23 +3554,23 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								</div>
 								{sidebarExpandedSections.analysis && (
 									<div className="ml-2  pr-2 space-y-1 max-h-[calc(100vh-350px)] overflow-y-auto overflow-x-hidden custom-scrollbar">
-										{parametersData.analysis.map((param) => {
-											const protocolCode = param.protocol_code || '';
+										{parametersData.analysis.map((param, index) => {
+											const protocolCode = param.protocolCode || '';
 											const normalizedProtocolCode = protocolCode && protocolCode.trim() ? protocolCode : 'null';
-											const itemKey = `analysis|${param.parameter_name}|${normalizedProtocolCode}`;
+											const itemKey = `analysis|${param.parameterName}|${normalizedProtocolCode}`;
 											const isSelected = selectedParameter === itemKey;
 
 											return (
 												<div
-													key={`${param.parameter_name}-${protocolCode}`}
+													key={`${param.parameterName}-${normalizedProtocolCode}-${index}`}
 													className={`sidebar-item py-1 cursor-pointer transition-all duration-200 flex items-center justify-between ${
 														isSelected ? 'text-blue-600 font-bold underline' : 'text-gray-700'
 													}`}
-													onClick={() => selectItem('analysis', param.parameter_name, protocolCode)}
+													onClick={() => selectItem('analysis', param.parameterName, protocolCode)}
 												>
 													<div className="flex-1 min-w-0 text-left">
 														<p className="text-xs font-medium text-left">
-															<span className="text-left">{param.parameter_name}</span>
+															<span className="text-left">{param.parameterName}</span>
 															{protocolCode && <span className="ml-1 text-left text-gray-500">{protocolCode}</span>}
 														</p>
 													</div>
@@ -3082,97 +3580,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 										})}
 										{parametersData.analysis.length === 0 && (
 											<div className="text-center py-4 text-gray-500 text-xs">Không có dữ liệu chỉ tiêu</div>
-										)}
-									</div>
-								)}
-							</div>
-
-							{/* Sample Section */}
-							<div className="mb-1">
-								<div
-									className={`sidebar-section-header flex items-center justify-between py-2 cursor-pointer ${
-										sidebarExpandedSections.sample ? 'active' : ''
-									}`}
-									onClick={() => toggleSidebarSection('sample')}
-								>
-									<h3 className="text-sm font-bold text-gray-800">MẪU THỬ</h3>
-									<div className="flex items-center space-x-2 pr-2">
-										<span className="sidebar-subtitle text-green-800">{parametersData.sample.length}</span>
-										<span className="text-gray-500">{sidebarExpandedSections.sample ? '▼' : '▶'}</span>
-									</div>
-								</div>
-								{sidebarExpandedSections.sample && (
-									<div className="ml-2 pr-2 space-y-1 max-h-[calc(100vh-350px)] overflow-y-auto overflow-x-hidden custom-scrollbar">
-										{parametersData.sample.map((sample) => {
-											const itemKey = `sample|${sample.sample_uid}|${sample.sample_name || ''}`;
-											const isSelected = selectedParameter === itemKey;
-
-											return (
-												<div
-													key={sample.sample_uid}
-													className={`sidebar-item py-1 cursor-pointer transition-all duration-200 flex items-center justify-between ${
-														isSelected ? 'text-green-600 font-bold underline' : 'text-gray-700'
-													}`}
-													onClick={() => selectItem('sample', sample.sample_uid, null, sample.sample_name)}
-												>
-													<div className="flex-1 min-w-0 text-left">
-														<p className="text-xs font-medium text-left">
-															<span className="text-left">{sample.sample_uid}</span>
-															{sample.sample_name && (
-																<span className="ml-1 text-left text-gray-500">{sample.sample_name}</span>
-															)}
-														</p>
-													</div>
-													<div className="item-count text-xs font-semibold text-gray-600">{sample.total}</div>
-												</div>
-											);
-										})}
-										{parametersData.sample.length === 0 && (
-											<div className="text-center py-4 text-gray-500 text-xs">Không có dữ liệu mẫu thử</div>
-										)}
-									</div>
-								)}
-							</div>
-
-							{/* Matrix Section */}
-							<div className="mb-1">
-								<div
-									className={`sidebar-section-header flex items-center justify-between py-2 cursor-pointer ${
-										sidebarExpandedSections.matrix ? 'active' : ''
-									}`}
-									onClick={() => toggleSidebarSection('matrix')}
-								>
-									<h3 className="text-sm font-bold text-gray-800">NỀN MẪU</h3>
-									<div className="flex items-center space-x-2 pr-2">
-										<span className="sidebar-subtitle text-orange-800">{parametersData.matrix.length}</span>
-										<span className="text-gray-500">{sidebarExpandedSections.matrix ? '▼' : '▶'}</span>
-									</div>
-								</div>
-								{sidebarExpandedSections.matrix && (
-									<div className="ml-2 pr-2 space-y-1 max-h-[calc(100vh-350px)] overflow-y-auto overflow-x-hidden custom-scrollbar">
-										{parametersData.matrix.map((matrix) => {
-											const itemKey = `matrix|${matrix.matrix}`;
-											const isSelected = selectedParameter === itemKey;
-
-											return (
-												<div
-													key={matrix.matrix}
-													className={`sidebar-item py-1 cursor-pointer transition-all duration-200 flex items-center justify-between ${
-														isSelected ? 'text-orange-600 font-bold underline' : 'text-gray-700'
-													}`}
-													onClick={() => selectItem('matrix', matrix.matrix)}
-												>
-													<div className="flex-1 min-w-0 text-left">
-														<p className="text-xs font-medium text-left">
-															<span className="text-left">{matrix.matrix}</span>
-														</p>
-													</div>
-													<div className="item-count text-xs font-semibold text-gray-600">{matrix.total}</div>
-												</div>
-											);
-										})}
-										{parametersData.matrix.length === 0 && (
-											<div className="text-center py-4 text-gray-500 text-xs">Không có dữ liệu nền mẫu</div>
 										)}
 									</div>
 								)}
@@ -3190,78 +3597,36 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			>
 				{/* Scrollable content area */}
 				<div className="flex-1 overflow-y-auto flex flex-col custom-scrollbar" ref={scrollContainerRef}>
-					<div className="flex-1 p-4 overflow-auto custom-scrollbar">
+					<div className="flex-1 p-4 overflow-auto custom-scrollbar relative">
+						{/* Loading indicator - small, non-intrusive */}
+						{loading && data.length > 0 && (
+							<div className="absolute top-6 right-6 z-50 bg-white rounded-full shadow-lg px-4 py-2 flex items-center gap-2 border border-gray-200">
+								<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+								<span className="text-sm text-gray-600">Đang tải...</span>
+							</div>
+						)}
+
 						{/* Table container without stretching rows */}
 						<div className="w-full">
 							<table className="w-full bg-white border-collapse min-w-[1050px] border-2 border-gray-300 rounded-lg overflow-hidden shadow-sm">
 								<thead className="bg-blue-100">
 									<tr>
 										{filters.columns
-											.filter((col) => col !== 'id' && col !== 'sample_name')
+											.filter((col) => col !== 'id' && col !== 'sampleName')
 											.map((column) => (
-												<th
+												<HeaderCell
 													key={column}
-													className={`px-2 py-2 text-left text-xs font-semibold uppercase tracking-wider border-b-2 border-blue-700 hover:bg-blue-200 relative ${
-														isFilterCreationMode ? 'cursor-pointer text-blue-600' : 'cursor-pointer text-black'
-													}`}
-													data-filter-column={column}
-													onClick={(e) => handleSort(column, e)}
-												>
-													<div className="flex items-center justify-between text-left">
-														<span
-															className={`text-left ${
-																isFilterCreationMode
-																	? activeFilterColumn === column
-																		? 'underline font-bold'
-																		: filters.headerFilters[column] ||
-																		  (column === 'parameter_name' && filters.parameters.length > 0) ||
-																		  (column === 'protocol_code' && filters.protocols.length > 0) ||
-																		  (column === 'matrix' && filters.parameters.some((p) => p.includes('matrix|'))) ||
-																		  (column === 'sample_uid' &&
-																				filters.parameters.some((p) => p.includes('sample|'))) ||
-																		  (column === 'deadline' && filters.headerFilters.deadline)
-																		? 'underline font-black'
-																		: 'underline'
-																	: filters.headerFilters[column] ||
-																	  (column === 'parameter_name' && filters.parameters.length > 0) ||
-																	  (column === 'protocol_code' && filters.protocols.length > 0) ||
-																	  (column === 'matrix' && filters.parameters.some((p) => p.includes('matrix|'))) ||
-																	  (column === 'sample_uid' &&
-																			filters.parameters.some((p) => p.includes('sample|'))) ||
-																	  (column === 'deadline' && filters.headerFilters.deadline)
-																	? 'text-blue-600 font-bold underline'
-																	: ''
-															}`}
-														>
-															{availableColumns[column] || column}
-														</span>
-														<div className="flex items-center space-x-1">
-															{/* Clear filter button - only show if filter is active */}
-															{(filters.headerFilters[column] ||
-																(column === 'parameter_name' && filters.parameters.length > 0) ||
-																(column === 'protocol_code' && filters.protocols.length > 0) ||
-																(column === 'matrix' && filters.parameters.some((p) => p.includes('matrix|'))) ||
-																(column === 'sample_uid' && filters.parameters.some((p) => p.includes('sample|'))) ||
-																(column === 'deadline' && filters.headerFilters.deadline)) && (
-																<button
-																	className="text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full p-1 text-xs leading-none"
-																	onClick={(e) => {
-																		e.stopPropagation();
-																		removeColumnFilter(column);
-																	}}
-																	title={`Xóa bộ lọc ${availableColumns[column] || column}`}
-																>
-																	✕
-																</button>
-															)}
-															{!isFilterCreationMode && sortConfig.column === column && (
-																<span className="text-blue-600">{sortConfig.direction === 'ASC' ? '↑' : '↓'}</span>
-															)}
-														</div>
-													</div>
-													{/* Filter box */}
-													{activeFilterColumn === column && <div className="relative" />}
-												</th>
+													columnName={column}
+													displayName={availableColumns[column] || column}
+													isFilterable={true}
+													isSortable={true}
+													isFiltered={isColumnFiltered(column)}
+													sortDirection={getSortDirection(column)}
+													onFilter={handleHeaderFilter}
+													onSort={handleSort}
+													onClearFilter={handleClearColumnFilter}
+													className="text-black"
+												/>
 											))}
 									</tr>
 								</thead>
@@ -3277,26 +3642,25 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									) : (
 										data.map((row, index) => {
 											const rowId = String(row.id);
-											const isSelected = selectedRows.has(rowId);
 											const isHighPriority = row.status === 1;
+											const isSelected = selectedAnalysisIds.has(row.id);
+											const hasPendingChanges = pendingChanges.has(row.id);
 
 											return (
 												<tr
-													key={row.id}
-													className={`cursor-pointer transition-colors  ${
+													key={`${row.id}-${row.sampleId || 'unknown'}-${row.parameterName || 'unknown'}-${index}`}
+													className={`transition-colors cursor-pointer user-select-none ${
 														isSelected
-															? 'selected-row bg-blue-100 border-l-4 border-blue-500'
-															: index % 2 === 0
-															? 'bg-white hover:bg-blue-50'
-															: 'bg-gray-50 hover:bg-blue-50'
+															? 'row-selected'
+															: hasPendingChanges
+															? 'bg-yellow-50 border-l-4 border-yellow-500'
+															: `${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50`
 													} ${isHighPriority ? 'font-bold text-red-600' : ''}`}
-													onClick={() => toggleRowSelection(rowId, row)}
-													onMouseDown={(e) => handleMouseDown(e, index, rowId, row)}
-													onMouseEnter={(e) => handleMouseEnter(e, index, rowId, row)}
-													style={{ userSelect: 'none' }}
+													onMouseDown={(e) => handleMouseDown(row.id, e)}
+													onMouseEnter={() => handleMouseEnter(row.id)}
 												>
 													{filters.columns
-														.filter((col) => col !== 'id' && col !== 'sample_name')
+														.filter((col) => col !== 'id' && col !== 'sampleName' && col !== 'technician')
 														.map((column) => (
 															<td
 																key={column}
@@ -3304,253 +3668,107 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																	isHighPriority ? 'text-red-600 font-bold' : 'text-gray-900'
 																}`}
 															>
-																{column === 'sample_uid' ? (
+																{column === 'sampleId' ? (
 																	<div
 																		className="relative text-left w-full cursor-pointer hover:bg-blue-50 p-1 rounded"
 																		onMouseEnter={(e) => {
-																			if (row.sample_uid) {
+																			if (row.sampleId) {
 																				showSampleTooltip(e, {
-																					sample_uid: row.sample_uid,
-																					sample_name: row.sample_name,
+																					sampleId: row.sampleId,
+																					sampleName: row.sampleName,
 																					sample_description: row.sample_description,
 																				});
 																			}
 																		}}
 																		onMouseLeave={hideSampleTooltip}
 																	>
-																		<span className="text-left">{row.sample_uid || ''}</span>
+																		<span className="text-left">{row.sampleId || ''}</span>
 																	</div>
-																) : column === 'parameter_name' ? (
+																) : column === 'parameterName' ? (
 																	<div className="relative text-left w-full p-1 rounded">
-																		<span className="text-left">{row.parameter_name || ''}</span>
+																		<span className="text-left">{row.parameterName || ''}</span>
 																	</div>
 																) : column === 'matrix' ? (
 																	<div className="relative text-left w-full p-1 rounded">
 																		<span className="text-left">{row.matrix || ''}</span>
 																	</div>
-																) : column === 'protocol_source' ? (
-																	<div
-																		className="protocol-source-container w-full h-full min-h-[30px] relative"
-																		onClick={(e) => e.stopPropagation()}
-																	>
-																		{editingProtocolSource === row.id ? (
-																			<>
-																				<select
-																					value={row.protocol_source || ''}
-																					onChange={(e) => {
-																						e.stopPropagation();
-																						handleProtocolSourceChange(e.target.value, row.id);
-																					}}
-																					onMouseDown={(e) => e.stopPropagation()}
-																					onFocus={(e) => e.stopPropagation()}
-																					onBlur={cancelProtocolSourceEdit}
-																					className="w-full h-full text-xs border border-blue-500 rounded px-2 bg-white text-black text-left focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none relative z-[1000]"
-																					onClick={(e) => e.stopPropagation()}
-																					autoFocus
-																					style={{
-																						minHeight: '30px',
-																						position: 'relative',
-																						zIndex: 1000,
-																					}}
-																				>
-																					<option value="">-- Chọn nguồn --</option>
-																					<option value="IRDOP">IRDOP</option>
-																					<option value="IRDOP VS">IRDOP VS</option>
-																					<option value="EX">EX</option>
-																				</select>
-																				{/* Custom dropdown arrow */}
-																				<div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none z-[999]">
-																					<svg
-																						className="w-3 h-3 text-gray-400"
-																						fill="none"
-																						stroke="currentColor"
-																						viewBox="0 0 24 24"
-																					>
-																						<path
-																							strokeLinecap="round"
-																							strokeLinejoin="round"
-																							strokeWidth="2"
-																							d="M19 9l-7 7-7-7"
-																						/>
-																					</svg>
-																				</div>
-																			</>
-																		) : (
-																			<div
-																				className="w-full h-full min-h-[30px] cursor-pointer hover:bg-blue-50 p-1  rounded text-xs text-black text-left border border-transparent hover:border-blue-200 flex "
-																				onClick={(e) => {
-																					e.stopPropagation();
-																					handleProtocolSourceClick(row.id, row.protocol_source);
-																				}}
-																				onMouseEnter={(e) => showTooltip(e, 'Nhấp để chỉnh sửa nguồn')}
-																				onMouseLeave={hideTooltip}
-																			>
-																				{row.protocol_source || '--'}
-																			</div>
-																		)}
+																) : column === 'protocolSource' ? (
+																	<div className="relative text-left w-full p-1 rounded">
+																		<span className="text-left">{row.protocolSource || '--'}</span>
 																	</div>
-																) : column === 'protocol_code' ? (
-																	editingCell?.rowId === row.id && editingCell?.column === 'protocol_code' ? (
-																		<textarea
-																			ref={(el) => {
-																				if (el) {
-																					// Đặt cursor ở cuối khi textarea được focus
-																					setTimeout(() => {
-																						el.selectionStart = el.selectionEnd = el.value.length;
-																					}, 0);
-																				}
-																			}}
+																) : column === 'protocolCode' ? (
+																	<div className="relative text-left w-full p-1 rounded">
+																		<span className="text-left">{row.protocolCode || '--'}</span>
+																	</div>
+																) : column === 'resultValue' ? (
+																	editingCell &&
+																	editingCell.analysisId === row.id &&
+																	editingCell.column === 'resultValue' ? (
+																		<input
+																			type="text"
 																			value={editValue}
 																			onChange={(e) => setEditValue(e.target.value)}
-																			className="w-full h-full min-h-[20px] p-1 border border-blue-500 rounded text-xs bg-white text-black text-left resize-none"
+																			onBlur={() => handleCellBlur(row)}
+																			onKeyDown={handleKeyDown}
 																			autoFocus
-																			placeholder="Mã Phương pháp thử"
+																			className="w-full px-2 py-1 border rounded bg-white"
 																			onClick={(e) => e.stopPropagation()}
-																			onKeyDown={(e) => {
-																				if (e.key === 'Enter' && !e.shiftKey) {
-																					e.preventDefault();
-																					e.target.blur(); // Chỉ blur, để onBlur xử lý save
-																				} else if (e.key === 'Escape') {
-																					handleCancelEdit();
-																				}
-																			}}
-																			onBlur={handleSaveEdit}
 																		/>
 																	) : (
 																		<div
-																			className="w-full h-full min-h-[30px] cursor-pointer hover:bg-blue-50 p-1 rounded text-xs text-black text-left border border-transparent hover:border-blue-200"
+																			className="relative text-left w-full p-1 rounded cursor-pointer hover:bg-blue-50"
 																			onClick={(e) => {
 																				e.stopPropagation();
-																				handleCellEdit(row.id, 'protocol_code', row.protocol_code);
+																				handleCellClick(row.id, 'resultValue', row.resultValue || '');
 																			}}
 																		>
-																			{row.protocol_code || '--'}
+																			{row.resultValue ? (
+																				<div dangerouslySetInnerHTML={{ __html: row.resultValue }} />
+																			) : (
+																				<span className="text-gray-400">--</span>
+																			)}
 																		</div>
 																	)
-																) : column === 'result_value' ? (
-																	<div className="w-full h-full min-h-[30px]" onClick={(e) => e.stopPropagation()}>
+																) : column === 'resultUnit' ? (
+																	editingCell &&
+																	editingCell.analysisId === row.id &&
+																	editingCell.column === 'resultUnit' ? (
+																		<input
+																			ref={unitInputRef}
+																			type="text"
+																			value={editValue}
+																			onChange={handleUnitInputChange}
+																			onBlur={() => handleCellBlur(row)}
+																			onKeyDown={handleKeyDown}
+																			autoFocus
+																			className="w-full px-2 py-1 border rounded bg-white"
+																			onClick={(e) => e.stopPropagation()}
+																		/>
+																	) : (
 																		<div
-																			className={`editable-cell border rounded transition-all duration-200 cursor-not-allowed h-full ${
-																				editableCell.analysisId === row.id && editableCell.column === 'result_value'
-																					? 'editing-active border-purple-500'
-																					: 'border-transparent'
-																			}`}
+																			className="relative text-left w-full p-1 rounded cursor-pointer hover:bg-blue-50"
+																			onClick={(e) => {
+																				e.stopPropagation();
+																				handleCellClick(row.id, 'resultUnit', row.resultUnit || '');
+																			}}
 																		>
-																			{editableCell.analysisId === row.id && editableCell.column === 'result_value' ? (
-																				<div className="relative" data-edit-id={`${row.id}-result_value`}>
-																					<TinyMceInput
-																						value={inputValue}
-																						onUpdate={(content) => handleSaveContentV3(content, 'result_value', row.id)}
-																						onKey={handleKeyDownV3}
-																						placeholder="Nhập kết quả..."
-																					/>
-																					{updating && (
-																						<div className="absolute top-1 right-1 text-purple-600 save-indicator">
-																							<svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-																								<path
-																									fillRule="evenodd"
-																									d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-																									clipRule="evenodd"
-																								/>
-																							</svg>
-																						</div>
-																					)}
-																				</div>
+																			{row.resultUnit ? (
+																				<div dangerouslySetInnerHTML={{ __html: row.resultUnit }} />
 																			) : (
-																				<div
-																					className="w-full h-full p-1 text-xs text-black text-left cursor-not-allowed rounded min-h-[30px] flex items-center"
-																					onClick={(e) => {
-																						e.stopPropagation();
-																						showErrorNotification(
-																							'Phần nhập kết quả chuyển qua dữ liệu thử nghiệm, liên hệ IT để biết thêm thông tin!',
-																						);
-																					}}
-																					onMouseEnter={(e) => showTooltip(e, 'Đã khóa chỉnh sửa')}
-																					onMouseLeave={hideTooltip}
-																				>
-																					{row.result_value ? (
-																						<div dangerouslySetInnerHTML={{ __html: row.result_value }} />
-																					) : (
-																						<span className="result-cell-placeholder">Nhấp để nhập kết quả...</span>
-																					)}
-																				</div>
+																				<span className="text-gray-400">--</span>
 																			)}
 																		</div>
-																	</div>
-																) : column === 'result_unit' ? (
-																	<div className="w-full h-full min-h-[30px]" onClick={(e) => e.stopPropagation()}>
-																		<div
-																			className={`editable-cell border rounded transition-all duration-200 cursor-pointer h-full ${
-																				editableCell.analysisId === row.id && editableCell.column === 'result_unit'
-																					? 'editing-active border-purple-500'
-																					: 'border-transparent hover:border-purple-300'
-																			}`}
-																		>
-																			{editableCell.analysisId === row.id && editableCell.column === 'result_unit' ? (
-																				<div className="relative" data-edit-id={`${row.id}-result_unit`}>
-																					<TinyMceInput
-																						value={inputValue}
-																						onUpdate={(content) => handleSaveContentV3(content, 'result_unit', row.id)}
-																						onKey={handleKeyDownV3}
-																						placeholder="Nhập đơn vị..."
-																					/>
-																					{updating && (
-																						<div className="absolute top-1 right-1 text-purple-600 save-indicator">
-																							<svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-																								<path
-																									fillRule="evenodd"
-																									d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-																									clipRule="evenodd"
-																								/>
-																							</svg>
-																						</div>
-																					)}
-																				</div>
-																			) : (
-																				<div
-																					className="w-full h-full p-1 text-xs text-black text-left cursor-pointer hover:bg-blue-50 rounded min-h-[30px] flex items-center group"
-																					onClick={(e) => {
-																						e.stopPropagation();
-																						handleCellClickV3(row.id, 'result_unit', row.result_unit);
-																					}}
-																					onMouseEnter={(e) => showTooltip(e, 'Nhấp để chỉnh sửa đơn vị')}
-																					onMouseLeave={hideTooltip}
-																				>
-																					{row.result_unit ? (
-																						<div dangerouslySetInnerHTML={{ __html: row.result_unit }} />
-																					) : (
-																						<span className="result-cell-placeholder group-hover:text-gray-600">
-																							Nhấp để nhập đơn vị...
-																						</span>
-																					)}
-																					<div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-																						<svg
-																							className="w-3 h-3 text-purple-500"
-																							fill="none"
-																							stroke="currentColor"
-																							viewBox="0 0 24 24"
-																						>
-																							<path
-																								strokeLinecap="round"
-																								strokeLinejoin="round"
-																								strokeWidth="2"
-																								d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-																							/>
-																						</svg>
-																					</div>
-																				</div>
-																			)}
-																		</div>
-																	</div>
-																) : column === 'doc_id' ? (
-																	row.doc_id ? (
+																	)
+																) : column === 'docId' ? (
+																	row.docId ? (
 																		<div
 																			className="flex items-center justify-center cursor-pointer hover:bg-blue-50 p-1 rounded"
 																			onClick={(e) => {
 																				e.stopPropagation();
-																				handleFileAction({ docId: row.doc_id }, 'view');
+																				handleDocIdClick(row.docId);
 																			}}
-																			title="Xem tài liệu đính kèm"
+																			onMouseEnter={(e) => showTooltip(e, row.docId, 'left')}
+																			onMouseLeave={hideTooltip}
 																		>
 																			<MdAttachFile className="w-5 h-5 text-blue-600" />
 																		</div>
@@ -3559,10 +3777,26 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																			<span className="text-gray-300">--</span>
 																		</div>
 																	)
-																) : column === 'technician_uid' ? (
-																	<div className="text-xs text-gray-900 p-1">
-																		{getTechnicianName(row.technician_uid)}
+																) : column === 'note' ? (
+																	<div
+																		className="flex items-center justify-center cursor-pointer hover:scale-110 transition-transform"
+																		onClick={(e) => handleNoteClick(row, e)}
+																		onMouseEnter={(e) => {
+																			if (row.note) {
+																				showTooltip(e, row.note, 'left');
+																			}
+																		}}
+																		onMouseLeave={hideTooltip}
+																		title={row.note ? 'Click để xem/thêm ghi chú' : 'Click để thêm ghi chú'}
+																	>
+																		{row.note ? (
+																			<span className="text-2xl">📝</span>
+																		) : (
+																			<span className="text-2xl text-gray-400">📋</span>
+																		)}
 																	</div>
+																) : column === 'technicianId' ? (
+																	<div className="text-xs text-gray-900 p-1">{getTechnicianName(row)}</div>
 																) : column === 'deadline' ? (
 																	<div className="relative text-left w-full p-1 rounded">
 																		<span className="text-left">{formatDate(row.deadline) || ''}</span>
@@ -3590,8 +3824,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									value={itemsPerPage}
 									onChange={(e) => {
 										const newItemsPerPage = Number(e.target.value);
-										setItemsPerPage(newItemsPerPage);
-										setCurrentPage(1); // Reset to first page when changing items per page
+										handleItemsPerPageChange(newItemsPerPage);
 									}}
 									className="border border-gray-300 rounded-md p-2 bg-white text-black focus:ring-2 focus:ring-blue-500"
 								>
@@ -3607,7 +3840,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 							</div>
 							<div className="flex items-center space-x-2">
 								<button
-									onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+									onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
 									disabled={currentPage === 1}
 									className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:opacity-50 disabled:bg-gray-300 hover:bg-blue-600 transition-colors"
 								>
@@ -3617,7 +3850,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 									Trang {currentPage} / {totalPages}
 								</span>
 								<button
-									onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+									onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
 									disabled={currentPage === totalPages}
 									className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:opacity-50 disabled:bg-gray-300 hover:bg-blue-600 transition-colors"
 								>
@@ -3628,7 +3861,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					</div>
 				</div>
 			</div>
-
 			{/* Filter Box Portal */}
 			{activeFilterColumn &&
 				createPortal(
@@ -3642,97 +3874,248 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 						onClick={(e) => e.stopPropagation()}
 					>
 						<div className="p-3">
-							{/* Special filters for result_value, deadline, doc_id */}
-							{activeFilterColumn === 'result_value' ? (
+							{/* Special filters for resultValue, deadline, docId */}
+							{activeFilterColumn === 'resultValue' ? (
 								<div className="space-y-2">
 									<h4 className="text-sm font-semibold text-gray-700 mb-3">Lọc theo kết quả</h4>
 									<div className="space-y-2">
 										<button
-											onClick={() => applySpecialFilter('result_value', 'hasResult')}
+											onClick={() => applySpecialFilter('resultValue', 'submitted')}
 											className="w-full text-left p-2 rounded hover:bg-blue-50 border border-gray-200 text-sm"
 										>
 											Đã có kết quả
 										</button>
 										<button
-											onClick={() => applySpecialFilter('result_value', 'noResult')}
+											onClick={() => applySpecialFilter('resultValue', 'not submitted')}
 											className="w-full text-left p-2 rounded hover:bg-blue-50 border border-gray-200 text-sm"
 										>
 											Chưa có kết quả
 										</button>
 									</div>
-									<div className="flex justify-end mt-3 pt-3 border-t border-gray-200">
+									<div className="flex justify-end space-x-2 mt-3 pt-3 border-t border-gray-200">
 										<button
 											onClick={cancelFilter}
 											className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
 										>
 											Hủy
 										</button>
+										{/* Clear filter button - only show if filter is applied */}
+										{isColumnFiltered(activeFilterColumn) && (
+											<button
+												onClick={() => {
+													handleClearColumnFilter(activeFilterColumn);
+													setActiveFilterColumn(null);
+												}}
+												className="px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50"
+											>
+												Hủy lọc
+											</button>
+										)}
 									</div>
 								</div>
 							) : activeFilterColumn === 'deadline' ? (
-								<div className="space-y-2">
+								<>
 									<h4 className="text-sm font-semibold text-gray-700 mb-3">Lọc theo hạn trả</h4>
-									<div className="space-y-2">
-										<button
-											onClick={() => applySpecialFilter('deadline', 'overdue')}
-											className="w-full text-left p-2 rounded hover:bg-red-50 border border-gray-200 text-sm text-red-700"
-										>
-											Quá hạn
-										</button>
-										<button
-											onClick={() => applySpecialFilter('deadline', '3days')}
-											className="w-full text-left p-2 rounded hover:bg-yellow-50 border border-gray-200 text-sm text-yellow-700"
-										>
-											3 ngày
-										</button>
-										<button
-											onClick={() => applySpecialFilter('deadline', 'week')}
-											className="w-full text-left p-2 rounded hover:bg-blue-50 border border-gray-200 text-sm text-blue-700"
-										>
-											7 ngày
-										</button>
-										<button
-											onClick={() => {
-												openDatePicker('filter');
-											}}
-											className="w-full text-left p-2 rounded hover:bg-purple-50 border border-gray-200 text-sm text-purple-700"
-										>
-											Chọn ngày cụ thể
-										</button>
+
+									{/* Date Range Picker */}
+									<div className="mb-4 p-3 bg-gray-50 rounded-lg">
+										<div className="flex items-center justify-between mb-2">
+											<span className="text-sm font-medium text-gray-700">Chọn khoảng thời gian</span>
+											<button
+												onClick={() => setShowDateRange(!showDateRange)}
+												className="text-sm text-blue-600 hover:text-blue-800"
+											>
+												<FaCalendarAlt className="inline mr-1" />
+												{showDateRange ? 'Ẩn' : 'Hiện'} chọn ngày
+											</button>
+										</div>
+
+										{showDateRange && (
+											<div className="grid grid-cols-2 gap-2">
+												<div>
+													<label className="text-xs text-gray-600 mb-1 block">Từ ngày:</label>
+													<DatePicker
+														selected={startDate}
+														onChange={(date) => setStartDate(date)}
+														selectsStart
+														startDate={startDate}
+														endDate={endDate}
+														placeholderText="Chọn ngày bắt đầu"
+														className="w-full p-2 bg-white border border-gray-300 rounded text-sm focus:border-blue-500"
+														dateFormat="dd/MM/yyyy"
+													/>
+												</div>
+												<div>
+													<label className="text-xs text-gray-600 mb-1 block">Đến ngày:</label>
+													<DatePicker
+														selected={endDate}
+														onChange={(date) => setEndDate(date)}
+														selectsEnd
+														startDate={startDate}
+														endDate={endDate}
+														minDate={startDate}
+														placeholderText="Chọn ngày kết thúc"
+														className="w-full p-2 bg-white border border-gray-300 rounded text-sm focus:border-blue-500"
+														dateFormat="dd/MM/yyyy"
+													/>
+												</div>
+											</div>
+										)}
+
+										{(startDate || endDate) && (
+											<div className="mt-2 flex justify-between">
+												<span className="text-xs text-gray-600">
+													{startDate && endDate
+														? `Từ ${startDate.toLocaleDateString('vi-VN')} đến ${endDate.toLocaleDateString('vi-VN')}`
+														: startDate
+														? `Từ ${startDate.toLocaleDateString('vi-VN')}`
+														: endDate
+														? `Đến ${endDate.toLocaleDateString('vi-VN')}`
+														: ''}
+												</span>
+												<button
+													onClick={() => {
+														setStartDate(null);
+														setEndDate(null);
+													}}
+													className="text-xs text-red-600 hover:text-red-800"
+												>
+													Xóa ngày
+												</button>
+											</div>
+										)}
 									</div>
-									<div className="flex justify-end mt-3 pt-3 border-t border-gray-200">
+
+									{/* Search input */}
+									<div className="flex items-center space-x-2 mb-3">
+										<input
+											type="text"
+											placeholder="Tìm kiếm trong Hạn trả..."
+											value={filterSearchTerm}
+											onChange={(e) => setFilterSearchTerm(e.target.value)}
+											className="flex-1 p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+											autoFocus
+										/>
+									</div>
+
+									{/* Select All / Unselect All */}
+									{filterResults.length > 0 && (
+										<div className="flex items-center space-x-2 mb-3 pb-2 border-b border-gray-200">
+											<button
+												onClick={selectAllFilterValues}
+												className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+											>
+												Chọn tất cả
+											</button>
+											<button
+												onClick={unselectAllFilterValues}
+												className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+											>
+												Bỏ chọn tất cả
+											</button>
+											<span className="text-xs text-gray-500">
+												({selectedFilterValues.length}/{filterResults.length})
+											</span>
+										</div>
+									)}
+
+									{/* Filter results */}
+									<div className="max-h-60 overflow-y-auto">
+										{filterLoading ? (
+											<div className="p-4 text-center text-gray-500">
+												<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mx-auto mb-2"></div>
+												Đang tải...
+											</div>
+										) : filterResults.length === 0 ? (
+											<div className="p-4 text-center text-gray-500">Không có dữ liệu</div>
+										) : (
+											<div className="space-y-1">
+												{filterResults.map((result, index) => (
+													<label
+														key={`${activeFilterColumn}-${result.value || 'empty'}-${index}`}
+														className="flex items-center space-x-2 p-1 rounded cursor-pointer transition-colors hover:bg-gray-100"
+													>
+														<input
+															type="checkbox"
+															checked={selectedFilterValues.includes(result.value)}
+															onChange={() => handleFilterValueSelect(result.value)}
+															className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+														/>
+														<span className="flex-1 text-sm text-black">
+															{result.label || result.value || '(Trống)'}
+														</span>
+														<span className="text-xs text-gray-500 flex-shrink-0">({result.count})</span>
+													</label>
+												))}
+											</div>
+										)}
+									</div>
+
+									{/* Action buttons */}
+									<div className="flex justify-end space-x-2 mt-3 pt-3 border-t border-gray-200">
 										<button
 											onClick={cancelFilter}
 											className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
 										>
 											Hủy
 										</button>
+										{/* Clear filter button - only show if filter is applied */}
+										{isColumnFiltered(activeFilterColumn) && (
+											<button
+												onClick={() => {
+													handleClearColumnFilter(activeFilterColumn);
+													setActiveFilterColumn(null);
+												}}
+												className="px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50"
+											>
+												Hủy lọc
+											</button>
+										)}
+										<button
+											onClick={applyFilter}
+											disabled={selectedFilterValues.length === 0 && !startDate && !endDate}
+											className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+										>
+											Xác nhận ({selectedFilterValues.length})
+										</button>
 									</div>
-								</div>
-							) : activeFilterColumn === 'doc_id' ? (
+								</>
+							) : activeFilterColumn === 'docId' ? (
 								<div className="space-y-2">
 									<h4 className="text-sm font-semibold text-gray-700 mb-3">Lọc theo tài liệu</h4>
 									<div className="space-y-2">
 										<button
-											onClick={() => applySpecialFilter('doc_id', 'has_file')}
+											onClick={() => applySpecialFilter('docId', 'has_file')}
 											className="w-full text-left p-2 rounded hover:bg-green-50 border border-gray-200 text-sm text-green-700"
 										>
 											Đã có tài liệu
 										</button>
 										<button
-											onClick={() => applySpecialFilter('doc_id', 'no_file')}
+											onClick={() => applySpecialFilter('docId', 'no_file')}
 											className="w-full text-left p-2 rounded hover:bg-red-50 border border-gray-200 text-sm text-red-700"
 										>
 											Chưa có tài liệu
 										</button>
 									</div>
-									<div className="flex justify-end mt-3 pt-3 border-t border-gray-200">
+									<div className="flex justify-end space-x-2 mt-3 pt-3 border-t border-gray-200">
 										<button
 											onClick={cancelFilter}
 											className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
 										>
 											Hủy
 										</button>
+										{/* Clear filter button - only show if filter is applied */}
+										{isColumnFiltered(activeFilterColumn) && (
+											<button
+												onClick={() => {
+													handleClearColumnFilter(activeFilterColumn);
+													setActiveFilterColumn(null);
+												}}
+												className="px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50"
+											>
+												Hủy lọc
+											</button>
+										)}
 									</div>
 								</div>
 							) : (
@@ -3783,7 +4166,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 											<div className="space-y-1">
 												{filterResults.map((result, index) => (
 													<label
-														key={index}
+														key={`${activeFilterColumn}-${result.value || 'empty'}-${index}`}
 														className="flex items-center space-x-2 p-1 rounded cursor-pointer transition-colors hover:bg-gray-100"
 													>
 														<input
@@ -3810,6 +4193,18 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 										>
 											Hủy
 										</button>
+										{/* Clear filter button - only show if filter is applied */}
+										{isColumnFiltered(activeFilterColumn) && (
+											<button
+												onClick={() => {
+													handleClearColumnFilter(activeFilterColumn);
+													setActiveFilterColumn(null);
+												}}
+												className="px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50"
+											>
+												Hủy lọc
+											</button>
+										)}
 										<button
 											onClick={applyFilter}
 											disabled={selectedFilterValues.length === 0}
@@ -3824,7 +4219,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					</div>,
 					document.body,
 				)}
-
 			{/* Toast Container */}
 			<ToastContainer
 				position="top-right"
@@ -3838,21 +4232,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				pauseOnHover={false}
 				style={{ zIndex: 9999 }}
 			/>
-
-			{/* LabBulkUpdate Component */}
-			<LabBulkUpdate
-				isOpen={showBulkEditBox}
-				onClose={() => setShowBulkEditBox(false)}
-				selectedRows={selectedRows}
-				selectedData={Array.from(selectedRows)
-					.map((rowId) => selectedRowsData.get(rowId))
-					.filter(Boolean)}
-				technicians={technicians}
-				onUpdateComplete={handleBulkUpdateComplete}
-				updating={updating}
-				setUpdating={setUpdating}
-			/>
-
 			{/* Custom Tooltip Portal */}
 			{tooltip.visible &&
 				createPortal(
@@ -3861,13 +4240,13 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 						style={{
 							left: `${tooltip.x}px`,
 							top: `${tooltip.y}px`,
+							whiteSpace: 'pre-wrap',
 						}}
 					>
 						{tooltip.content}
 					</div>,
 					document.body,
 				)}
-
 			{/* Sample Tooltip Portal */}
 			{sampleTooltip.visible &&
 				createPortal(
@@ -3881,10 +4260,10 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 						{sampleTooltip.content && (
 							<div className="text-left">
 								<div>
-									<strong>Mã mẫu:</strong> {sampleTooltip.content.sample_uid}
+									<strong>Mã mẫu:</strong> {sampleTooltip.content.sampleId}
 								</div>
 								<div>
-									<strong>Tên mẫu:</strong> {sampleTooltip.content.sample_name || 'Không có'}
+									<strong>Tên mẫu:</strong> {sampleTooltip.content.sampleName || 'Không có'}
 								</div>
 								<div>
 									<strong>Mô tả:</strong> {sampleTooltip.content.sample_description || 'Không có'}
@@ -3894,7 +4273,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					</div>,
 					document.body,
 				)}
-
 			{/* Document Preview Modal */}
 			{documentPreview.visible && (
 				<div
@@ -3932,7 +4310,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					</div>
 				</div>
 			)}
-
 			{/* File Preview Popup */}
 			<FilePreview
 				url={previewUrl}
@@ -3940,7 +4317,6 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				isVisible={!!previewFile}
 				onClose={handleClosePreview}
 			/>
-
 			{/* Date Picker Modal */}
 			{showDatePicker && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -3973,14 +4349,258 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					</div>
 				</div>
 			)}
-
-			{/* ExperimentDetail Modal */}
-			<ExperimentDetail
-				docCopy={null}
-				processingAnalyses={Array.from(selectedRowsData.values())}
-				isOpen={showExperimentDetailModal}
-				onClose={handleCloseExperimentDetail}
+			{/* Bulk Update Component */}
+			<LabBulkUpdate
+				isOpen={showBulkEdit && selectedAnalysisIds.size > 0}
+				onClose={() => {
+					setShowBulkEdit(false);
+					setSelectedAnalysisIds(new Set());
+					setSelectedRowsData(new Map());
+				}}
+				selectedRows={Array.from(selectedAnalysisIds)}
+				selectedData={Array.from(selectedRowsData.values())}
+				technicians={technicians}
+				onUpdateComplete={() => {
+					setShowBulkEdit(false);
+					setSelectedAnalysisIds(new Set());
+					setSelectedRowsData(new Map());
+					// Refresh data
+					setTimeout(() => {
+						fetchAnalysisData(true, filters, currentPage, itemsPerPage);
+					}, 1000);
+				}}
 			/>
+			{/* Login Popup */}
+			<LoginPopup isOpen={showLoginPopup} onClose={closeLoginPopup} onLoginSuccess={handleLoginSuccess} />
+			{/* Relogin Confirmation Dialog */}
+			{showReloginConfirm && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg shadow-xl p-6 w-96">
+						<h2 className="text-xl font-bold mb-4 text-gray-800">Xác nhận đăng nhập lại</h2>
+						<p className="text-sm text-gray-600 mb-6">
+							Phiên làm việc của bạn đã hết hạn. Bạn có muốn đăng nhập lại để tiếp tục chỉnh sửa không?
+						</p>
+						<div className="flex justify-end space-x-3">
+							<button
+								onClick={closeLoginPopup}
+								className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
+							>
+								Không
+							</button>
+							<button
+								onClick={() => {
+									setShowReloginConfirm(false);
+									setShowLoginPopup(true);
+								}}
+								className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+							>
+								Đăng nhập lại
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+			{/* Result Entry Session Confirmation Dialog */}
+			{showSessionConfirm && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg shadow-xl p-6 w-96">
+						<h2 className="text-xl font-bold mb-4 text-gray-800">Bắt đầu phiên nhập kết quả</h2>
+						<p className="text-sm text-gray-600 mb-2">Bạn có muốn bắt đầu phiên nhập kết quả với tài khoản:</p>
+						<p className="text-base font-semibold text-blue-600 mb-6">
+							{currentUser?.identity_name || 'Không xác định'}
+						</p>
+						<p className="text-xs text-gray-500 mb-4 italic">
+							💡 Trong phiên nhập kết quả, các thay đổi sẽ được lưu tạm thời và gửi cùng lúc khi kết thúc phiên.
+						</p>
+						<div className="flex justify-end space-x-3">
+							<button
+								onClick={() => {
+									setShowSessionConfirm(false);
+									setPendingEditCell(null);
+								}}
+								className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
+							>
+								Hủy bỏ
+							</button>
+							<button
+								onClick={() => {
+									setShowSessionConfirm(false);
+									setShowLoginPopup(true);
+									setPendingEditCell(null);
+								}}
+								className="px-4 py-2 text-sm bg-orange-600 text-white rounded hover:bg-orange-700"
+							>
+								Đăng nhập lại
+							</button>
+							<button
+								onClick={() => {
+									setIsResultEntrySession(true);
+									setShowSessionConfirm(false);
+									toast.success('Đã bắt đầu phiên nhập kết quả');
+									// Proceed with the pending edit if exists
+									if (pendingEditCell && pendingEditCell.action !== 'startSession') {
+										const { analysisId, column, currentValue } = pendingEditCell;
+										proceedWithEdit(analysisId, column, currentValue);
+									}
+									setPendingEditCell(null);
+								}}
+								className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+							>
+								Xác nhận
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+			{/* End Session Confirmation Dialog - Using Component */}
+			<ConfirmLabResult
+				isOpen={showEndSessionDialog}
+				onClose={() => setShowEndSessionDialog(false)}
+				onConfirm={async (experimentData) => {
+					setShowEndSessionDialog(false);
+					// TODO: Use experimentData if needed for logging (including editorContent)
+					await endResultEntrySession();
+				}}
+				onCancel={() => setShowCancelConfirm(true)}
+				analyses={Array.from(pendingChanges.values())}
+				isLoading={isSessionUpdating}
+			/>
+			{/* Cancel Confirmation Dialog */}
+			{showCancelConfirm && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+					<div className="bg-white rounded-lg shadow-xl p-6 w-96">
+						<h2 className="text-xl font-bold mb-4 text-red-600">Xác nhận hủy</h2>
+						<p className="text-sm text-gray-700 mb-2">
+							Bạn có chắc chắn muốn hủy tất cả {pendingChanges.size} thay đổi?
+						</p>
+						<p className="text-sm text-red-600 font-semibold mb-6">⚠️ Kết quả sẽ không được lưu!</p>
+						<div className="flex justify-end space-x-3">
+							<button
+								onClick={() => setShowCancelConfirm(false)}
+								className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
+							>
+								Quay lại
+							</button>
+							<button
+								onClick={handleCancelAllChanges}
+								className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+							>
+								Xác nhận hủy
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+			{/* Modal Ghi chú */}
+			{showNoteModal && selectedAnalysisForNote && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
+						<div className="px-6 py-4 border-b border-gray-200">
+							<h3 className="text-lg font-semibold text-blue-600">Ghi chú</h3>
+							<p className="text-sm text-gray-600 mt-1">
+								Mẫu: {selectedAnalysisForNote.sampleId} - Chỉ tiêu: {selectedAnalysisForNote.parameterName}
+							</p>
+						</div>
+
+						<div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
+							{/* Ghi chú cũ - chỉ xem */}
+							{selectedAnalysisForNote.note && (
+								<div className="mb-4">
+									<label className="block text-sm font-medium text-gray-700 mb-2">Ghi chú hiện tại:</label>
+									<div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-sm text-gray-700 whitespace-pre-wrap">
+										{selectedAnalysisForNote.note}
+									</div>
+								</div>
+							)}
+
+							{/* Thêm ghi chú mới */}
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2">
+									{selectedAnalysisForNote.note ? 'Thêm ghi chú mới:' : 'Ghi chú:'}
+								</label>
+								<textarea
+									value={newNoteText}
+									onChange={(e) => setNewNoteText(e.target.value)}
+									placeholder="Nhập nội dung ghi chú..."
+									className="w-full bg-white border border-gray-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+									rows={4}
+								/>
+							</div>
+						</div>
+
+						<div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+							<button
+								onClick={() => {
+									setShowNoteModal(false);
+									setSelectedAnalysisForNote(null);
+									setNewNoteText('');
+								}}
+								className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+								disabled={isUpdatingNote}
+							>
+								Hủy
+							</button>
+							<button
+								onClick={handleUpdateNote}
+								disabled={isUpdatingNote || !newNoteText.trim()}
+								className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
+							>
+								{isUpdatingNote ? (
+									<>
+										<span className="mr-2">Đang cập nhật...</span>
+										<svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+											<circle
+												className="opacity-25"
+												cx="12"
+												cy="12"
+												r="10"
+												stroke="currentColor"
+												strokeWidth="4"
+												fill="none"
+											/>
+											<path
+												className="opacity-75"
+												fill="currentColor"
+												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+											/>
+										</svg>
+									</>
+								) : (
+									'Cập nhật'
+								)}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+			{/* Unit Autocomplete Dropdown Portal */}
+			{showUnitSuggestions &&
+				unitInputRect &&
+				createPortal(
+					<div
+						className="unit-suggestions-dropdown fixed bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto z-[9999]"
+						style={{
+							top: `${unitInputRect.bottom + window.scrollY}px`,
+							left: `${unitInputRect.left + window.scrollX}px`,
+							width: `${unitInputRect.width}px`,
+							minWidth: '150px',
+						}}
+					>
+						{unitSuggestions.map((suggestion, index) => (
+							<div
+								key={index}
+								className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${
+									index === selectedSuggestionIndex ? 'bg-blue-100' : ''
+								}`}
+								onClick={() => handleSuggestionClick(suggestion)}
+								onMouseEnter={() => setSelectedSuggestionIndex(index)}
+							>
+								{suggestion}
+							</div>
+						))}
+					</div>,
+					document.body,
+				)}
 		</div>
 	);
 };

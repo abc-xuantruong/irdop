@@ -10,15 +10,30 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 
 	// Initialize form data based on mode
 	const getInitialFormData = useCallback(() => {
+		let clientAddress = '';
 		// Apply receiver/client priority logic for both modes
-		// Address: receiver.address first, then client.client_address
-		const clientAddress = receipt?.receiver?.address || receipt?.client?.client_address || '';
+		// Address: reportRecipient.address first, then client.clientAddress
+		if(receipt?.reportRecipient?.address && receipt?.reportRecipient?.address.trim !== ''){
+			clientAddress = receipt?.reportRecipient?.address || receipt?.client?.clientAddress || '';
+		} else {
+			clientAddress = receipt?.client?.clientAddress || '';
+		}
 
-		// Contact name: receiver.name first, then contact.name
-		const clientContactName = receipt?.receiver?.name || receipt?.contact?.name || '';
+		let clientContactName = '';
+		// Contact name: reportRecipient.name first, then contactPerson.name
+		if(receipt?.reportRecipient?.name && receipt?.reportRecipient?.name.trim() !== ''){
+			clientContactName = receipt?.reportRecipient?.name || '';
+		} else {
+			clientContactName = receipt?.contactPerson?.name || receipt?.client?.clientName || '';
+		}
 
-		// Phone: if receiver.name exists, leave blank; otherwise use contact.phone
-		const clientContactPhone = receipt?.receiver?.name ? '' : receipt?.contact?.phone || '';
+		let clientContactPhone = '';
+		// Phone: if reportRecipient.name exists, leave blank; otherwise use contactPerson.phone
+		if(receipt?.reportRecipient?.phone && receipt?.reportRecipient?.phone.trim() !== ''){	
+			clientContactPhone = receipt?.reportRecipient?.phone || '';
+		} else {
+			clientContactPhone = receipt?.contactPerson?.phone || receipt?.client?.clientPhone || '';
+		}
 
 		if (mode === 'new') {
 			// For new shipments, use receiver/client data but blank product name
@@ -26,7 +41,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				clientAddress,
 				clientContactName,
 				clientContactPhone,
-				clientContactEmail: receipt?.contact?.email || '',
+				clientContactEmail: receipt?.contactPerson?.email || '',
 				notes: '',
 				// Thông tin người gửi mặc định
 				senderName: 'VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN',
@@ -45,17 +60,17 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				clientAddress,
 				clientContactName,
 				clientContactPhone,
-				clientContactEmail: receipt?.contact?.email || '',
+				clientContactEmail: receipt?.contactPerson?.email || '',
 				notes: '',
 				// Thông tin người gửi mặc định
 				senderName: 'VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN',
 				senderAddress: '12 Phùng Khoang 2',
 				senderPhone: '0868872578',
 				senderEmail: 'kiemnghiem@irdop.org',
-				// Thông tin hàng hóa - format mới: <số lượng sample_uid> x PPT tiếp nhận <receipt_uid> Bao gồm các mã: \n <Danh sách sample_uid xuống dòng> \n <client_name>
-				productName: `${receipt?.samples?.length || 0} x PPT tiếp nhận ${receipt?.receipt_uid || ''} Bao gồm các mã:${
-					receipt?.samples?.length ? `\n${receipt?.samples.map((s) => s.sample_uid).join('\n')}` : ''
-				}${receipt?.client?.client_name ? `\n${receipt?.client?.client_name}` : ''}`,
+				// Thông tin hàng hóa - format mới: <số lượng sampleId> x PPT tiếp nhận <receiptId> Bao gồm các mã: \n <Danh sách sampleId xuống dòng> \n <clientName>
+				productName: `${receipt?.samples?.length || 0} x PPT tiếp nhận ${receipt?.receiptId || ''} Bao gồm các mã:${
+					receipt?.samples?.length ? `\n${receipt?.samples.map((s) => s.sampleId).join('\n')}` : ''
+				}${receipt?.client?.clientName ? `\n${receipt?.client?.clientName}` : ''}`,
 				productQuantity: 1,
 				productWeight: 100,
 				productType: 'HH',
@@ -63,15 +78,15 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 		}
 	}, [
 		mode,
-		receipt?.receiver?.address,
-		receipt?.receiver?.name,
-		receipt?.client?.client_address,
-		receipt?.contact?.name,
-		receipt?.contact?.phone,
-		receipt?.contact?.email,
+		receipt?.reportRecipient?.address,
+		receipt?.reportRecipient?.name,
+		receipt?.client?.clientAddress,
+		receipt?.contactPerson?.name,
+		receipt?.contactPerson?.phone,
+		receipt?.contactPerson?.email,
 		receipt?.samples,
-		receipt?.receipt_uid,
-		receipt?.client?.client_name,
+		receipt?.receiptId,
+		receipt?.client?.clientName,
 	]);
 
 	const [formData, setFormData] = useState(() => getInitialFormData());
@@ -403,8 +418,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 		}));
 	}; // Tính toán các từ khóa liên quan
 	const getRelatedKeywords = () => {
-		const sampleUIDs = receipt?.samples?.map((sample) => sample.sample_uid) || [];
-		const receiptUID = receipt?.receipt_uid ? [receipt.receipt_uid] : [];
+		const sampleUIDs = receipt?.samples?.map((sample) => sample.sampleId) || [];
+		const receiptUID = receipt?.receiptId ? [receipt.receiptId] : [];
 
 		return {
 			sampleUIDs,
@@ -440,10 +455,10 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 		const sampleList = sampleUIDs.filter((uid) => !removedUIDs.has(uid));
 
 		if (foreignKeyUIDs.length > 0) {
-			// Format mới: <số lượng sample_uid> x PPT tiếp nhận <receipt_uid> Bao gồm các mã: \n <Danh sách sample_uid xuống dòng> \n <client_name>
+			// Format mới: <số lượng sampleId> x PPT tiếp nhận <receiptId> Bao gồm các mã: \n <Danh sách sampleId xuống dòng> \n <clientName>
 			const receiptId = receiptUID.length > 0 && !removedUIDs.has(receiptUID[0]) ? receiptUID[0] : '';
 			const sampleListFormatted = sampleList.length > 0 ? sampleList.join('\n') : '';
-			const clientName = receipt?.client?.client_name || '';
+			const clientName = receipt?.client?.clientName || '';
 
 			let productNameFormat = `${sampleList.length || 0} x PPT tiếp nhận ${receiptId} Bao gồm các mã:`;
 			if (sampleListFormatted) {
@@ -527,19 +542,22 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 	const [hasExistingOrder, setHasExistingOrder] = useState(false); // Load existing order data if tracking number exists
 	useEffect(() => {
 		// Only load existing order if mode is 'auto' and we have a single tracking number
-		if (mode === 'auto' && receipt?.tracking_number && !receipt?.tracking_number.includes(',')) {
+		if (mode === 'auto' && receipt?._deprecated_trackingNumber && !receipt?._deprecated_trackingNumber.includes(',')) {
 			// Skip API call for direct pickup tracking numbers (starting with TT)
-			if (receipt.tracking_number.startsWith('TT')) {
+			if (receipt._deprecated_trackingNumber.startsWith('TT')) {
 				setHasExistingOrder(true); // Set as existing to show direct pickup status
 			} else {
-				loadExistingOrder(receipt.tracking_number);
+				loadExistingOrder(receipt._deprecated_trackingNumber);
 			}
-		} else if (mode === 'new' || (receipt?.tracking_number && receipt?.tracking_number.includes(','))) {
+		} else if (
+			mode === 'new' ||
+			(receipt?._deprecated_trackingNumber && receipt?._deprecated_trackingNumber.includes(','))
+		) {
 			// For 'new' mode or multiple tracking numbers, don't load existing order data
 			// Just show the form for creating a new shipment
 			setHasExistingOrder(false);
 		}
-	}, [receipt?.tracking_number, mode]);
+	}, [receipt?._deprecated_trackingNumber, mode]);
 	const loadExistingOrder = async (trackingNumber) => {
 		try {
 			// Only load for the first tracking number if there are multiple
@@ -562,21 +580,21 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 					}));
 				}
 
-				if (orderInfo.receiver) {
+				if (orderInfo.reportRecipient) {
 					setFormData((prev) => ({
 						...prev,
-						clientContactName: orderInfo.receiver.name || prev.clientContactName,
-						clientAddress: orderInfo.receiver.address || prev.clientAddress,
-						clientContactPhone: orderInfo.receiver.phone || prev.clientContactPhone,
-						clientContactEmail: orderInfo.receiver.email || prev.clientContactEmail,
+						clientContactName: orderInfo.reportRecipient.name || prev.clientContactName,
+						clientAddress: orderInfo.reportRecipient.address || prev.clientAddress,
+						clientContactPhone: orderInfo.reportRecipient.phone || prev.clientContactPhone,
+						clientContactEmail: orderInfo.reportRecipient.email || prev.clientContactEmail,
 					}));
 
-					// Set address data for receiver
+					// Set address data for reportRecipient
 					setAddressData({
-						address: orderInfo.receiver.address || '',
-						province_id: orderInfo.receiver.province_id || '',
-						district_id: orderInfo.receiver.district_id || '',
-						wards_id: orderInfo.receiver.wards_id || '',
+						address: orderInfo.reportRecipient.address || '',
+						province_id: orderInfo.reportRecipient.provinceId || '',
+						district_id: orderInfo.reportRecipient.districtId || '',
+						wards_id: orderInfo.reportRecipient.wardsId || '',
 					});
 				}
 
@@ -607,8 +625,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 	}; // Handle cancel order
 	const handleCancelOrder = async () => {
 		// Get the current tracking number being viewed and the original full tracking number
-		const currentTrackingNumber = receipt?.tracking_number;
-		const originalTrackingNumber = receipt?.original_tracking_number || receipt?.tracking_number;
+		const currentTrackingNumber = receipt?._deprecated_trackingNumber;
+		const originalTrackingNumber = receipt?._deprecated_originalTrackingNumber || receipt?._deprecated_trackingNumber;
 
 		if (!currentTrackingNumber) return;
 
@@ -638,17 +656,17 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							const payload = {
 								receipt: {
 									id: receipt.id,
-									receipt_uid: receipt.receipt_uid,
-									tracking_number: updatedTrackingNumber,
+									receiptId: receipt.receiptId,
+									_deprecated_trackingNumber: updatedTrackingNumber,
 								},
 							};
-							await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+							await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 							// Call onOrderUpdate to refresh dashboard data
 							if (onOrderUpdate) {
 								const updatedReceipt = {
 									...receipt,
-									tracking_number: updatedTrackingNumber,
+									_deprecated_trackingNumber: updatedTrackingNumber,
 								};
 								onOrderUpdate(updatedReceipt);
 							}
@@ -657,10 +675,10 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							const payload = {
 								receipt: {
 									id: receipt.id,
-									receipt_uid: receipt.receipt_uid,
-									ppt_send_at: null,
-									ppt_send_by: null,
-									tracking_number: '',
+									receiptId: receipt.receiptId,
+									_deprecated_pptSendAt: null,
+									_deprecated_pptSendBy: null,
+									_deprecated_trackingNumber: '',
 								},
 							};
 							await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
@@ -669,9 +687,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							if (onOrderUpdate) {
 								const updatedReceipt = {
 									...receipt,
-									ppt_send_at: null,
-									ppt_send_by: null,
-									tracking_number: '',
+									_deprecated_pptSendAt: null,
+									_deprecated_pptSendBy: null,
+									_deprecated_trackingNumber: '',
 								};
 								onOrderUpdate(updatedReceipt);
 							}
@@ -681,10 +699,10 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						const payload = {
 							receipt: {
 								id: receipt.id,
-								receipt_uid: receipt.receipt_uid,
-								ppt_send_at: null,
-								ppt_send_by: null,
-								tracking_number: '',
+								receiptId: receipt.receiptId,
+								_deprecated_pptSendAt: null,
+								_deprecated_pptSendBy: null,
+								_deprecated_trackingNumber: '',
 							},
 						};
 						await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
@@ -693,9 +711,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						if (onOrderUpdate) {
 							const updatedReceipt = {
 								...receipt,
-								ppt_send_at: null,
-								ppt_send_by: null,
-								tracking_number: '',
+								_deprecated_pptSendAt: null,
+								_deprecated_pptSendBy: null,
+								_deprecated_trackingNumber: '',
 							};
 							onOrderUpdate(updatedReceipt);
 						}
@@ -800,7 +818,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				// Lấy trackingNumber từ response
 				const trackingNumber = response.data?.trackingNumber || response.trackingNumber;
 
-				if (trackingNumber && receipt?.id && receipt?.receipt_uid) {
+				if (trackingNumber && receipt?.id && receipt?.receiptId) {
 					// Update receipt với tracking number theo format handlePptSendChangeAPI
 					try {
 						// Add 7 hours to account for GMT+7
@@ -809,9 +827,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						const formattedDate = adjustedDate.toISOString().split('T')[0];
 						// Append new tracking number to existing ones (if any)
 						let updatedTrackingNumber = trackingNumber;
-						if (receipt.tracking_number && receipt.tracking_number.trim() !== '') {
+						if (receipt._deprecated_trackingNumber && receipt._deprecated_trackingNumber.trim() !== '') {
 							// Split existing tracking numbers, clean them, and add the new one
-							const existingNumbers = receipt.tracking_number
+							const existingNumbers = receipt._deprecated_trackingNumber
 								.split(',')
 								.map((num) => num.trim())
 								.filter((num) => num !== '');
@@ -822,10 +840,10 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						const payload = {
 							receipt: {
 								id: receipt.id,
-								receipt_uid: receipt.receipt_uid,
-								ppt_send_at: formattedDate,
-								ppt_send_by: currentUser?.identity_uid,
-								tracking_number: updatedTrackingNumber,
+								receiptId: receipt.receiptId,
+								_deprecated_pptSendAt: formattedDate,
+								_deprecated_pptSendBy: currentUser?.identityId,
+								_deprecated_trackingNumber: updatedTrackingNumber,
 							},
 						};
 
@@ -835,9 +853,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							if (onOrderUpdate) {
 								const updatedReceipt = {
 									...receipt,
-									ppt_send_at: formattedDate,
-									ppt_send_by: currentUser?.identity_uid,
-									tracking_number: updatedTrackingNumber,
+									_deprecated_pptSendAt: formattedDate,
+									_deprecated_pptSendBy: currentUser?.identityId,
+									_deprecated_trackingNumber: updatedTrackingNumber,
 								};
 								onOrderUpdate(updatedReceipt);
 							}
@@ -868,7 +886,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 
 	// Handle direct customer pickup
 	const handleDirectPickup = async () => {
-		if (!receipt?.id || !receipt?.receipt_uid) {
+		if (!receipt?.id || !receipt?.receiptId) {
 			alert('Không có thông tin phiếu tiếp nhận để cập nhật');
 			return;
 		}
@@ -890,9 +908,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 
 			// Append new tracking number to existing ones (if any)
 			let updatedTrackingNumber = trackingNumber;
-			if (receipt.tracking_number && receipt.tracking_number.trim() !== '') {
+			if (receipt._deprecated_trackingNumber && receipt._deprecated_trackingNumber.trim() !== '') {
 				// Split existing tracking numbers, clean them, and add the new one
-				const existingNumbers = receipt.tracking_number
+				const existingNumbers = receipt._deprecated_trackingNumber
 					.split(',')
 					.map((num) => num.trim())
 					.filter((num) => num !== '');
@@ -903,10 +921,10 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 			const payload = {
 				receipt: {
 					id: receipt.id,
-					receipt_uid: receipt.receipt_uid,
-					ppt_send_at: formattedDate,
-					ppt_send_by: currentUser?.identity_uid,
-					tracking_number: updatedTrackingNumber,
+					receiptId: receipt.receiptId,
+					_deprecated_pptSendAt: formattedDate,
+					_deprecated_pptSendBy: currentUser?.identityId,
+					_deprecated_trackingNumber: updatedTrackingNumber,
 				},
 			};
 
@@ -919,9 +937,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				if (onOrderUpdate) {
 					const updatedReceipt = {
 						...receipt,
-						ppt_send_at: formattedDate,
-						ppt_send_by: currentUser?.identity_uid,
-						tracking_number: updatedTrackingNumber,
+						_deprecated_pptSendAt: formattedDate,
+						_deprecated_pptSendBy: currentUser?.identityId,
+						_deprecated_trackingNumber: updatedTrackingNumber,
 					};
 					onOrderUpdate(updatedReceipt);
 				}
@@ -942,7 +960,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 
 	// Handle removing direct pickup status
 	const handleRemoveDirectPickup = async () => {
-		if (!receipt?.id || !receipt?.receipt_uid || !receipt?.tracking_number) {
+		if (!receipt?.id || !receipt?.receiptId || !receipt?._deprecated_trackingNumber) {
 			alert('Không có thông tin phiếu tiếp nhận để cập nhật');
 			return;
 		}
@@ -952,8 +970,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				setIsSubmitting(true);
 
 				// Get the current tracking number being viewed
-				const currentTrackingNumber = receipt.tracking_number;
-				const originalTrackingNumber = receipt.original_tracking_number || receipt.tracking_number;
+				const currentTrackingNumber = receipt._deprecated_trackingNumber;
+				const originalTrackingNumber = receipt._deprecated_originalTrackingNumber || receipt._deprecated_trackingNumber;
 
 				// Remove the current tracking number from the list
 				if (originalTrackingNumber && originalTrackingNumber.includes(',')) {
@@ -971,8 +989,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						const payload = {
 							receipt: {
 								id: receipt.id,
-								receipt_uid: receipt.receipt_uid,
-								tracking_number: updatedTrackingNumber,
+								receiptId: receipt.receiptId,
+								_deprecated_trackingNumber: updatedTrackingNumber,
 							},
 						};
 						await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
@@ -981,7 +999,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						if (onOrderUpdate) {
 							const updatedReceipt = {
 								...receipt,
-								tracking_number: updatedTrackingNumber,
+								_deprecated_trackingNumber: updatedTrackingNumber,
 							};
 							onOrderUpdate(updatedReceipt);
 						}
@@ -990,10 +1008,10 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						const payload = {
 							receipt: {
 								id: receipt.id,
-								receipt_uid: receipt.receipt_uid,
-								ppt_send_at: null,
-								ppt_send_by: null,
-								tracking_number: '',
+								receiptId: receipt.receiptId,
+								_deprecated_pptSendAt: null,
+								_deprecated_pptSendBy: null,
+								_deprecated_trackingNumber: '',
 							},
 						};
 						await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
@@ -1002,9 +1020,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						if (onOrderUpdate) {
 							const updatedReceipt = {
 								...receipt,
-								ppt_send_at: null,
-								ppt_send_by: null,
-								tracking_number: '',
+								_deprecated_pptSendAt: null,
+								_deprecated_pptSendBy: null,
+								_deprecated_trackingNumber: '',
 							};
 							onOrderUpdate(updatedReceipt);
 						}
@@ -1014,10 +1032,10 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 					const payload = {
 						receipt: {
 							id: receipt.id,
-							receipt_uid: receipt.receipt_uid,
-							ppt_send_at: null,
-							ppt_send_by: null,
-							tracking_number: '',
+							receiptId: receipt.receiptId,
+							_deprecated_pptSendAt: null,
+							_deprecated_pptSendBy: null,
+							_deprecated_trackingNumber: '',
 						},
 					};
 					await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
@@ -1026,9 +1044,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 					if (onOrderUpdate) {
 						const updatedReceipt = {
 							...receipt,
-							ppt_send_at: null,
-							ppt_send_by: null,
-							tracking_number: '',
+							_deprecated_pptSendAt: null,
+							_deprecated_pptSendBy: null,
+							_deprecated_trackingNumber: '',
 						};
 						onOrderUpdate(updatedReceipt);
 					}
@@ -1056,7 +1074,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 			return;
 		}
 
-		if (!receipt?.id || !receipt?.receipt_uid) {
+		if (!receipt?.id || !receipt?.receiptId) {
 			alert('Không có thông tin phiếu tiếp nhận để cập nhật');
 			return;
 		}
@@ -1071,9 +1089,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 
 			// Append new tracking number to existing ones (if any)
 			let updatedTrackingNumber = newTrackingNumber.trim();
-			if (receipt.tracking_number && receipt.tracking_number.trim() !== '') {
+			if (receipt._deprecated_trackingNumber && receipt._deprecated_trackingNumber.trim() !== '') {
 				// Split existing tracking numbers, clean them, and add the new one
-				const existingNumbers = receipt.tracking_number
+				const existingNumbers = receipt._deprecated_trackingNumber
 					.split(',')
 					.map((num) => num.trim())
 					.filter((num) => num !== '');
@@ -1091,10 +1109,10 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 			const payload = {
 				receipt: {
 					id: receipt.id,
-					receipt_uid: receipt.receipt_uid,
-					ppt_send_at: formattedDate,
-					ppt_send_by: currentUser?.identity_uid,
-					tracking_number: updatedTrackingNumber,
+					receiptId: receipt.receiptId,
+					_deprecated_pptSendAt: formattedDate,
+					_deprecated_pptSendBy: currentUser?.identityId,
+					_deprecated_trackingNumber: updatedTrackingNumber,
 				},
 			};
 
@@ -1107,9 +1125,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				if (onOrderUpdate) {
 					const updatedReceipt = {
 						...receipt,
-						ppt_send_at: formattedDate,
-						ppt_send_by: currentUser?.identity_uid,
-						tracking_number: updatedTrackingNumber,
+						_deprecated_pptSendAt: formattedDate,
+						_deprecated_pptSendBy: currentUser?.identityId,
+						_deprecated_trackingNumber: updatedTrackingNumber,
 					};
 					onOrderUpdate(updatedReceipt);
 				}
@@ -1133,8 +1151,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 	// Check if this is a direct pickup tracking number - but only for existing tracking, not new shipments
 	const isDirectPickup =
 		mode !== 'new' &&
-		receipt?.tracking_number &&
-		receipt.tracking_number.split(',').some((tn) => tn.trim().startsWith('TT'));
+		receipt?._deprecated_trackingNumber &&
+		receipt._deprecated_trackingNumber.split(',').some((tn) => tn.trim().startsWith('TT'));
 
 	return (
 		<div
@@ -1147,7 +1165,9 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				<h2 className={`font-bold text-gray-800 ${isDirectPickup ? 'text-3xl' : 'text-2xl'}`}>
 					{isDirectPickup ? 'Lấy trực tiếp' : 'Thông tin gửi hàng'}
 				</h2>
-				{isDirectPickup && <p className="text-lg text-green-600 mt-2">Mã tracking: {receipt.tracking_number}</p>}
+				{isDirectPickup && (
+					<p className="text-lg text-green-600 mt-2">Mã tracking: {receipt._deprecated_trackingNumber}</p>
+				)}
 			</div>{' '}
 			{/* Grid layout for sender and receiver info */}
 			{!isDirectPickup && (

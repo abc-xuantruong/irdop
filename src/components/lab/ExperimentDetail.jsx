@@ -42,10 +42,32 @@ const customEditingStyles = `
 		opacity: 0.5;
 	}
 }
+
+/* Styles for disabled rows in FilterableTable */
+.custom-filterable-table tr[data-displayed="true"] {
+	background-color: #f3f4f6 !important;
+	opacity: 0.6;
+	pointer-events: none;
+	cursor: not-allowed !important;
+}
+
+.custom-filterable-table tr[data-displayed="true"]:hover {
+	background-color: #f3f4f6 !important;
+}
+
+.custom-filterable-table tr[data-displayed="true"] td {
+	color: #9ca3af !important;
+}
+
+/* Override row selection for disabled rows */
+.custom-filterable-table tr[data-displayed="true"].row-selected {
+	background-color: #f3f4f6 !important;
+	border-color: #d1d5db !important;
+}
 `;
 
 const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
-	const { currentUser, getIdenByUid } = useContext(GlobalContext);
+	const { currentUser, getIdenByUid, technicians } = useContext(GlobalContext);
 
 	// Utility functions
 	const isAdmin = () => {
@@ -178,6 +200,20 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 	const [filePreviewUrl, setFilePreviewUrl] = useState('');
 	const [isLoadingFilePreview, setIsLoadingFilePreview] = useState(false);
 
+	// States for FilterableTable
+	const [tableData, setTableData] = useState([]);
+	const [tableSelectedRows, setTableSelectedRows] = useState(new Set());
+	const [tableFilters, setTableFilters] = useState({});
+	const [tableSortConfig, setTableSortConfig] = useState({ column: null, direction: null });
+	const [tableLoading, setTableLoading] = useState(false);
+
+	// Pagination states for FilterableTable
+	const [tableCurrentPage, setTableCurrentPage] = useState(1);
+	const [tableTotalPages, setTableTotalPages] = useState(1);
+	const [tableTotalItems, setTableTotalItems] = useState(0);
+	const [tableItemsPerPage, setTableItemsPerPage] = useState(20);
+	const [displayedAnalysisIds, setDisplayedAnalysisIds] = useState(new Set());
+
 	// Function to reset all state when closing modal
 	const resetAllStates = () => {
 		setIsEditing(false);
@@ -230,6 +266,13 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 		// Reset attachment data
 		setAttachmentData({});
 		setLoadingAttachments(false);
+		// Reset FilterableTable states
+		setTableData([]);
+		setTableSelectedRows(new Set());
+		setTableFilters({});
+		setTableSortConfig({ column: null, direction: null });
+		setTableLoading(false);
+		setDisplayedAnalysisIds(new Set());
 	};
 
 	// Function to close file preview popup
@@ -929,7 +972,7 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 	const docAnalysisToBlackAnalysis = (docAnalysis) => {
 		return {
 			id: docAnalysis.testId || docAnalysis.id,
-			sample_uid: docAnalysis.sampleId,
+			_deprecated_sampleUid: docAnalysis.sampleId,
 			parameter_name: docAnalysis.testName,
 			result_value: docAnalysis.testResult,
 			result_unit: docAnalysis.testUnit,
@@ -942,7 +985,7 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 		const result = {
 			id: blackAnalysis.id,
 			testId: blackAnalysis.id,
-			sampleId: blackAnalysis.sample_uid,
+			sampleId: blackAnalysis._deprecated_sampleUid,
 			testName: blackAnalysis.parameter_name,
 			testResult: blackAnalysis.result_value,
 			testUnit: blackAnalysis.result_unit,
@@ -1477,7 +1520,7 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 			// Prepare analyses data for bulk update
 			const analysesToUpdate = editableData.analyses.map((analysis) => ({
 				id: analysis.testId,
-				sample_uid: analysis.sampleId,
+				_deprecated_sampleUid: analysis.sampleId,
 				parameter_name: analysis.name,
 				result_value: analysis.result,
 				result_unit: analysis.unit,
@@ -1857,6 +1900,164 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 			fetchIdentityName(doc.identityUID);
 		}
 	}, [createdDoc?.identityUID, currentDocCopy?.identityUID]);
+
+	// Function to update displayed analysis IDs from current analyses
+	const updateDisplayedAnalysisIds = () => {
+		const analyses = isEditing
+			? editedAnalyses
+			: comparedAnalyses.length > 0
+			? comparedAnalyses
+			: convertedAnalyses.length > 0 && !currentDocCopy
+			? convertedAnalyses
+			: currentDocCopy?.metadata?.qualifiedAnalyses || currentDocCopy?.jsonContent?.analyses || [];
+
+		const ids = new Set();
+		analyses.forEach((analysis) => {
+			// Use multiple possible ID combinations to match
+			const sampleId = analysis.sampleId || analysis.sample_id;
+			const testId = analysis.testId || analysis.test_id || analysis.parameter_code;
+
+			if (testId && sampleId) {
+				ids.add(`${sampleId}-${testId}`);
+			}
+			// Also add with original analysis ID if available
+			if (analysis.id) {
+				ids.add(String(analysis.id));
+			}
+		});
+		setDisplayedAnalysisIds(ids);
+	};
+
+	// Function to load all available analyses for the table
+	const loadTableData = async () => {
+		setTableLoading(true);
+		try {
+			// Call the same API as ProcessingSample.jsx to get all processing data
+			const requestBody = {
+				itemsPerPage: tableItemsPerPage,
+				page: tableCurrentPage,
+				columnSort: '_deprecated_sampleUid',
+				sortBy: 'ASC',
+			};
+
+			const response = await apiPost('https://black.irdop.org/v1/sample/processing/list', requestBody);
+
+			if (response?.status < 300 && response?.data?.result) {
+				const processingSampleData = response.data.result;
+				const formattedData = [];
+
+				console.log('API Response:', {
+					totalReceipts: processingSampleData.length,
+					pagination: response.data.pagination,
+					firstReceipt: processingSampleData[0],
+				});
+
+				// Transform the nested structure from ProcessingSample API
+				processingSampleData.forEach((receipt) => {
+					receipt.samples?.forEach((sample) => {
+						sample.analysis?.forEach((analysis) => {
+							// Check if this analysis is displayed above using multiple matching criteria
+							const isDisplayed =
+								displayedAnalysisIds.has(String(analysis.id)) ||
+								displayedAnalysisIds.has(`${sample._deprecated_sampleUid}-${analysis.parameter_code}`) ||
+								displayedAnalysisIds.has(`${sample._deprecated_sampleUid}-${analysis.id}`);
+
+							formattedData.push({
+								id: analysis.id,
+								// Sample information (for grouping in column 1)
+								_deprecated_sampleUid: sample._deprecated_sampleUid || '--',
+								sample_name: sample.sample_name || '--',
+								matrix: sample.matrix || '--',
+								sample_description: sample.sample_description || '--',
+								sample_status: sample.status || 0,
+								// Analysis information
+								parameter_name: analysis.parameter_name || '--',
+								parameter_code: analysis.parameter_code || '--',
+								protocol_source: analysis.protocol_source || '--',
+								protocol_code: analysis.protocol_code || '--',
+								result_value: analysis.result_value || '--',
+								result_unit: analysis.result_unit || '--',
+								deadline: analysis.deadline || '--',
+								technicianId: analysis.technician_uid || '--',
+								// Additional fields for reference
+								receiptUid: receipt.receipt_uid || '--',
+								receiptId: receipt.id,
+								createdAt: analysis.created_at || sample.handover_info?.handover_date || '--',
+								handover_info: sample.handover_info || [],
+								// Mark if this analysis is already displayed in the main table
+								isDisplayed: isDisplayed,
+							});
+						});
+					});
+				});
+
+				console.log('Formatted Data:', {
+					totalAnalysis: formattedData.length,
+					sampleUids: [...new Set(formattedData.map((item) => item._deprecated_sampleUid))],
+					firstFewItems: formattedData.slice(0, 3),
+				});
+
+				setTableData(formattedData);
+
+				// Update pagination info from API response
+				if (response.data.pagination) {
+					setTableTotalItems(response.data.pagination.totalItems || formattedData.length);
+					setTableTotalPages(
+						response.data.pagination.totalPages || Math.ceil(formattedData.length / tableItemsPerPage),
+					);
+				} else {
+					// If no pagination info from API, calculate locally
+					setTableTotalItems(formattedData.length);
+					setTableTotalPages(Math.ceil(formattedData.length / tableItemsPerPage));
+				}
+			} else {
+				setTableData([]);
+				setTableTotalItems(0);
+				setTableTotalPages(1);
+			}
+		} catch (error) {
+			console.error('Error loading table data from processing API:', error);
+			setTableData([]);
+		} finally {
+			setTableLoading(false);
+		}
+	};
+
+	// Update displayed analysis IDs when analyses change
+	useEffect(() => {
+		updateDisplayedAnalysisIds();
+	}, [editedAnalyses, comparedAnalyses, convertedAnalyses, currentDocCopy, isEditing]);
+
+	// Load table data when displayedAnalysisIds changes or component mounts
+	useEffect(() => {
+		loadTableData();
+	}, [displayedAnalysisIds]);
+
+	// Initial load of table data when component mounts
+	useEffect(() => {
+		loadTableData();
+	}, []);
+
+	// Reload data when pagination changes
+	useEffect(() => {
+		loadTableData();
+	}, [tableCurrentPage, tableItemsPerPage]);
+
+	// Pagination handlers
+	const handleTablePageChange = (newPage) => {
+		setTableCurrentPage(newPage);
+	};
+
+	const handleTableItemsPerPageChange = (newItemsPerPage) => {
+		setTableItemsPerPage(newItemsPerPage);
+		setTableCurrentPage(1); // Reset to first page when changing items per page
+	};
+
+	// Handle double-click on table row
+	const handleTableRowDoubleClick = (rowId, rowData, event) => {
+		console.log('Double-clicked row:', rowId, rowData);
+		// TODO: Add specific double-click behavior (edit, view details, etc.)
+	};
 
 	// Check if this is create mode (no document provided)
 	// const isCreateMode = !docCopy; // Removed to use state instead
@@ -2592,6 +2793,197 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 							</div>
 						</div>
 					)}
+
+					{/* FilterableTable cho Create Mode */}
+					{/* <div className="mt-6 border-t-2 border-gray-200 pt-6">
+						{tableData.length > 0 ? (
+							<FilterableTable
+								data={tableData}
+								columns={[
+									'sample_uid',
+									'parameter_name',
+									'protocol_source',
+									'protocol_code',
+									'result_value',
+									'result_unit',
+									'deadline',
+									'technician_uid',
+								]}
+								columnConfig={{
+									sample_uid: { displayName: 'Mẫu thử', width: '180px' },
+									parameter_name: { displayName: 'Chỉ tiêu', width: '200px' },
+									protocol_source: { displayName: 'Nguồn', width: '120px' },
+									protocol_code: { displayName: 'Phương pháp', width: '160px' },
+									result_value: { displayName: 'Kết quả', width: '140px' },
+									result_unit: { displayName: 'Đơn vị', width: '100px' },
+									deadline: { displayName: 'Hạn trả', width: '100px' },
+									technician_uid: { displayName: 'Người thực hiện', width: '150px' },
+								}}
+								selectedRows={tableSelectedRows}
+								loading={tableLoading}
+								height="400px"
+								filters={tableFilters}
+								onFiltersChange={setTableFilters}
+								sortConfig={tableSortConfig}
+								onSortChange={setTableSortConfig}
+								// Pagination props
+								enablePagination={true}
+								serverSidePagination={true}
+								currentPage={tableCurrentPage}
+								totalPages={tableTotalPages}
+								totalItems={tableTotalItems}
+								itemsPerPage={tableItemsPerPage}
+								onPageChange={handleTablePageChange}
+								onItemsPerPageChange={handleTableItemsPerPageChange}
+								// Row interaction props
+								onRowDoubleClick={handleTableRowDoubleClick}
+								// Grouping props
+								enableGrouping={true}
+								groupBy="sample_uid"
+								renderCustomCell={(row, column) => {
+									// Mark displayed analyses as disabled
+									const isRowDisplayed = row.isDisplayed;
+
+									if (column === 'sample_uid') {
+										return (
+											<div className={`text-sm ${isRowDisplayed ? 'text-gray-400' : ''}`}>
+												<div className={`font-semibold ${isRowDisplayed ? 'text-gray-400' : 'text-blue-800'}`}>
+													{row.sample_uid}
+												</div>
+												<div className={isRowDisplayed ? 'text-gray-400' : 'text-gray-700'}>
+													{row.sample_name || 'N/A'}
+												</div>
+												<div className={`text-xs ${isRowDisplayed ? 'text-gray-400' : 'text-gray-600'}`}>
+													<span className="font-medium">Nền mẫu:</span> {row.matrix || 'N/A'}
+												</div>
+												{row.sample_description && (
+													<div className={`text-xs ${isRowDisplayed ? 'text-gray-400' : 'text-gray-600'}`}>
+														<span className="font-medium">Mô tả:</span> {row.sample_description}
+													</div>
+												)}
+												{row.handover_info && row.handover_info.length > 0 && (
+													<div
+														className={`text-xs mt-2 border-t border-gray-200 pt-2 ${
+															isRowDisplayed ? 'text-gray-400' : 'text-gray-600'
+														}`}
+													>
+														<div className="font-medium mb-1">Bàn giao:</div>
+														{row.handover_info.slice(0, 2).map((info, index) => (
+															<p key={index} className="mb-1 last:mb-0">
+																- <span className="font-semibold">{info.handover_by_name}</span> nhận bàn giao
+																{info.volume && info.volume !== '' && (
+																	<span className="font-semibold"> {info.volume} mẫu</span>
+																)}{' '}
+																vào lúc{' '}
+																<span className="font-semibold">
+																	{new Date(new Date(info.handover_at).getTime() + 7 * 60 * 60 * 1000).toLocaleString(
+																		'vi-VN',
+																		{
+																			day: '2-digit',
+																			month: '2-digit',
+																			year: 'numeric',
+																			hour: '2-digit',
+																			minute: '2-digit',
+																		},
+																	)}
+																</span>
+															</p>
+														))}
+													</div>
+												)}
+											</div>
+										);
+									}
+
+									if (column === 'deadline') {
+										const deadlineDate = row[column];
+										if (!deadlineDate)
+											return <span className={isRowDisplayed ? 'text-gray-400' : 'text-gray-700'}>--</span>;
+
+										const deadline = new Date(deadlineDate);
+										const today = new Date();
+										deadline.setHours(0, 0, 0, 0);
+										today.setHours(0, 0, 0, 0);
+
+										let colorClass = isRowDisplayed ? 'text-gray-400' : 'text-gray-700';
+										if (!isRowDisplayed) {
+											if (deadline < today) {
+												colorClass = 'text-red-600 font-semibold'; // Overdue
+											} else if (deadline.getTime() === today.getTime()) {
+												colorClass = 'text-yellow-600 font-semibold'; // Today
+											}
+										}
+
+										return <span className={colorClass}>{deadline.toLocaleDateString('vi-VN')}</span>;
+									}
+
+									if (column === 'result_value') {
+										return (
+											<div
+												className={isRowDisplayed ? 'text-gray-400' : 'text-gray-700'}
+												dangerouslySetInnerHTML={{ __html: row[column] || '--' }}
+											/>
+										);
+									}
+
+									if (column === 'technician_uid') {
+										// Get technician name from context
+										const technicianName = row.technician_uid
+											? technicians?.find((tech) => tech.identity_uid === row.technician_uid)?.identity_name ||
+											  row.technician_uid
+											: '--';
+										return <span className={isRowDisplayed ? 'text-gray-400' : 'text-gray-700'}>{technicianName}</span>;
+									}
+
+									return (
+										<span className={isRowDisplayed ? 'text-gray-400' : 'text-gray-700'}>{row[column] || '--'}</span>
+									);
+								}}
+								// Custom row props to handle disabled state
+								customRowProps={(row) => ({
+									'data-displayed': row.isDisplayed,
+									style: row.isDisplayed
+										? {
+												backgroundColor: '#f3f4f6',
+												opacity: 0.6,
+												pointerEvents: 'none',
+												cursor: 'not-allowed',
+										  }
+										: {},
+								})}
+								// Override row selection to prevent selecting displayed rows
+								onRowSelect={(selectedRows, rowsData) => {
+									// Filter out displayed rows from selection
+									const filteredRows = new Set();
+									const filteredData = new Map();
+
+									selectedRows.forEach((rowId) => {
+										const rowData = tableData.find((row) => String(row.id) === rowId);
+										if (rowData && !rowData.isDisplayed) {
+											filteredRows.add(rowId);
+											filteredData.set(rowId, rowData);
+										}
+									});
+
+									setTableSelectedRows(filteredRows);
+								}}
+								className={`custom-filterable-table ${
+									tableData.some((row) => row.isDisplayed) ? 'has-disabled-rows' : ''
+								}`}
+							/>
+						) : (
+							<div className="p-4 text-center text-gray-500">
+								{tableLoading ? (
+									<p>Đang tải dữ liệu từ API...</p>
+								) : (
+									<>
+										<p>Không có dữ liệu phân tích từ API</p>
+										<p className="text-sm mt-1">API: v1/sample/processing/list</p>
+									</>
+								)}
+							</div>
+						)}
+					</div> */}
 				</div>
 			</div>
 		);
@@ -3331,7 +3723,7 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 								</div>
 
 								{/* Action Buttons at Bottom */}
-								<div className="mt-4 pb-20 flex justify-end gap-3">
+								<div className="mt-4 pb-6 flex justify-end gap-3">
 									{analyses.length > 0 && !isEditing && (
 										<button
 											onClick={handleUpdateResults}
@@ -3347,6 +3739,245 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 											)}
 											{isUpdatingResults ? 'Đang cập nhật...' : 'Cập nhật kết quả'}
 										</button>
+									)}
+								</div>
+
+								{/* FilterableTable cho normal mode */}
+								<div className="mt-6 border-t-2 border-gray-200 pt-6">
+									{/* Debug information */}
+									<div className="mb-2 p-2 bg-yellow-100 border border-yellow-300 rounded text-xs">
+										<p>
+											<strong>Debug Info:</strong>
+										</p>
+										<p>API Source: v1/sample/processing/list</p>
+										<p>tableData: {tableData.length} items</p>
+										<p>displayedAnalysisIds: {displayedAnalysisIds.size} items</p>
+										<p>tableLoading: {tableLoading ? 'true' : 'false'}</p>
+									</div>
+									{tableData.length > 0 ? (
+										<>
+											<div className="mb-4 flex justify-between items-start">
+												<div>
+													<h3 className="font-semibold text-gray-900 text-left mb-2">
+														Tất cả dữ liệu phân tích ({tableData.length} mục)
+													</h3>
+													<p className="text-sm text-gray-600 text-left">
+														Các hàng màu xám đậm đã được hiển thị ở bảng trên và không thể chọn
+													</p>
+													{tableSelectedRows.size > 0 && (
+														<p className="text-sm text-blue-600 text-left mt-1">
+															Đã chọn: {tableSelectedRows.size} hàng
+														</p>
+													)}
+													{tableData.length > 0 && (
+														<p className="text-xs text-gray-500 text-left mt-1">
+															Đã hiển thị: {tableData.filter((row) => row.isDisplayed).length} | Có thể chọn:{' '}
+															{tableData.filter((row) => !row.isDisplayed).length}
+														</p>
+													)}
+												</div>
+												<button
+													onClick={() => {
+														updateDisplayedAnalysisIds();
+														loadTableData();
+													}}
+													className="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors flex items-center gap-1"
+													title="Làm mới dữ liệu"
+												>
+													<FaSync className="w-3 h-3" />
+													Làm mới
+												</button>
+											</div>
+											<FilterableTable
+												data={tableData}
+												columns={[
+													'sample_uid',
+													'parameter_name',
+													'protocol_source',
+													'protocol_code',
+													'result_value',
+													'result_unit',
+													'deadline',
+													'technicianId',
+												]}
+												columnConfig={{
+													_deprecated_sampleUid: { displayName: 'Mẫu thử', width: '180px' },
+													parameter_name: { displayName: 'Chỉ tiêu', width: '200px' },
+													protocol_source: { displayName: 'Nguồn', width: '120px' },
+													protocol_code: { displayName: 'Phương pháp', width: '160px' },
+													result_value: { displayName: 'Kết quả', width: '140px' },
+													result_unit: { displayName: 'Đơn vị', width: '100px' },
+													deadline: { displayName: 'Hạn trả', width: '100px' },
+													technicianId: { displayName: 'Người thực hiện', width: '150px' },
+												}}
+												selectedRows={tableSelectedRows}
+												loading={tableLoading}
+												height="400px"
+												filters={tableFilters}
+												onFiltersChange={setTableFilters}
+												sortConfig={tableSortConfig}
+												onSortChange={setTableSortConfig}
+												// Pagination props
+												enablePagination={true}
+												serverSidePagination={true}
+												currentPage={tableCurrentPage}
+												totalPages={tableTotalPages}
+												totalItems={tableTotalItems}
+												itemsPerPage={tableItemsPerPage}
+												onPageChange={handleTablePageChange}
+												onItemsPerPageChange={handleTableItemsPerPageChange}
+												// Row interaction props
+												onRowDoubleClick={handleTableRowDoubleClick}
+												// Grouping props
+												enableGrouping={true}
+												groupBy="_deprecated_sampleUid"
+												renderCustomCell={(row, column) => {
+													// Mark displayed analyses as disabled
+													const isRowDisplayed = row.isDisplayed;
+
+													if (column === '_deprecated_sampleUid') {
+														return (
+															<div className={`text-sm ${isRowDisplayed ? 'text-gray-400' : ''}`}>
+																<div className={`font-semibold ${isRowDisplayed ? 'text-gray-400' : 'text-blue-800'}`}>
+																	{row._deprecated_sampleUid}
+																</div>
+																<div className={isRowDisplayed ? 'text-gray-400' : 'text-gray-700'}>
+																	{row.sample_name || 'N/A'}
+																</div>
+																<div className={`text-xs ${isRowDisplayed ? 'text-gray-400' : 'text-gray-600'}`}>
+																	<span className="font-medium">Nền mẫu:</span> {row.matrix || 'N/A'}
+																</div>
+																{row.sample_description && (
+																	<div className={`text-xs ${isRowDisplayed ? 'text-gray-400' : 'text-gray-600'}`}>
+																		<span className="font-medium">Mô tả:</span> {row.sample_description}
+																	</div>
+																)}
+																{row.handover_info && row.handover_info.length > 0 && (
+																	<div
+																		className={`text-xs mt-2 border-t border-gray-200 pt-2 ${
+																			isRowDisplayed ? 'text-gray-400' : 'text-gray-600'
+																		}`}
+																	>
+																		<div className="font-medium mb-1">Bàn giao:</div>
+																		{row.handover_info.slice(0, 2).map((info, index) => (
+																			<p key={index} className="mb-1 last:mb-0">
+																				- <span className="font-semibold">{info.handover_by_name}</span> nhận bàn giao
+																				{info.volume && info.volume !== '' && (
+																					<span className="font-semibold"> {info.volume} mẫu</span>
+																				)}{' '}
+																				vào lúc{' '}
+																				<span className="font-semibold">
+																					{new Date(
+																						new Date(info.handover_at).getTime() + 7 * 60 * 60 * 1000,
+																					).toLocaleString('vi-VN', {
+																						day: '2-digit',
+																						month: '2-digit',
+																						year: 'numeric',
+																						hour: '2-digit',
+																						minute: '2-digit',
+																					})}
+																				</span>
+																			</p>
+																		))}
+																	</div>
+																)}
+															</div>
+														);
+													}
+
+													if (column === 'deadline') {
+														const deadlineDate = row[column];
+														if (!deadlineDate)
+															return <span className={isRowDisplayed ? 'text-gray-400' : 'text-gray-700'}>--</span>;
+
+														const deadline = new Date(deadlineDate);
+														const today = new Date();
+														deadline.setHours(0, 0, 0, 0);
+														today.setHours(0, 0, 0, 0);
+
+														let colorClass = isRowDisplayed ? 'text-gray-400' : 'text-gray-700';
+														if (!isRowDisplayed) {
+															if (deadline < today) {
+																colorClass = 'text-red-600 font-semibold'; // Overdue
+															} else if (deadline.getTime() === today.getTime()) {
+																colorClass = 'text-yellow-600 font-semibold'; // Today
+															}
+														}
+
+														return <span className={colorClass}>{deadline.toLocaleDateString('vi-VN')}</span>;
+													}
+
+													if (column === 'result_value') {
+														return (
+															<div
+																className={isRowDisplayed ? 'text-gray-400' : 'text-gray-700'}
+																dangerouslySetInnerHTML={{ __html: row[column] || '--' }}
+															/>
+														);
+													}
+
+													if (column === 'technicianId') {
+														// Get technician name from context
+														const technicianName = row.technicianId
+															? technicians?.find((tech) => tech.identity_uid === row.technicianId)?.identity_name ||
+															  row.technicianId
+															: '--';
+														return (
+															<span className={isRowDisplayed ? 'text-gray-400' : 'text-gray-700'}>
+																{technicianName}
+															</span>
+														);
+													}
+													return (
+														<span className={isRowDisplayed ? 'text-gray-400' : 'text-gray-700'}>
+															{row[column] || '--'}
+														</span>
+													);
+												}}
+												// Custom row props to handle disabled state
+												customRowProps={(row) => ({
+													'data-displayed': row.isDisplayed,
+													style: row.isDisplayed
+														? {
+																backgroundColor: '#f3f4f6',
+																opacity: 0.6,
+																pointerEvents: 'none',
+																cursor: 'not-allowed',
+														  }
+														: {},
+												})}
+												// Override row selection to prevent selecting displayed rows
+												onRowSelect={(selectedRows, rowsData) => {
+													// Filter out displayed rows from selection
+													const filteredRows = new Set();
+													const filteredData = new Map();
+
+													selectedRows.forEach((rowId) => {
+														const rowData = tableData.find((row) => String(row.id) === rowId);
+														if (rowData && !rowData.isDisplayed) {
+															filteredRows.add(rowId);
+															filteredData.set(rowId, rowData);
+														}
+													});
+
+													setTableSelectedRows(filteredRows);
+												}}
+												className={`custom-filterable-table ${
+													tableData.some((row) => row.isDisplayed) ? 'has-disabled-rows' : ''
+												}`}
+											/>
+										</>
+									) : (
+										<div className="p-4 text-center text-gray-500">
+											{tableLoading ? (
+												<p>Đang tải dữ liệu từ API...</p>
+											) : (
+												<>
+													<p>Không có dữ liệu phân tích từ API</p>
+													<p className="text-sm mt-1">API: v1/sample/processing/list</p>
+												</>
+											)}
+										</div>
 									)}
 								</div>
 							</div>

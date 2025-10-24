@@ -41,6 +41,7 @@ const HandoverSampleDash = () => {
 	const [selectedAnalyses, setSelectedAnalyses] = useState(new Set());
 	const [identityNames, setIdentityNames] = useState({});
 	const [showOnlyWithTemplates, setShowOnlyWithTemplates] = useState(false);
+	const [selectAllChecked, setSelectAllChecked] = useState(false);
 
 	// Search state
 	const [searchTerm, setSearchTerm] = useState('');
@@ -326,6 +327,19 @@ const HandoverSampleDash = () => {
 		}
 	}, [data, analysisData, loading]);
 
+	// Update selectAllChecked when selectedAnalyses or analysisData changes
+	useEffect(() => {
+		if (analysisData && analysisData.result) {
+			const allSelectable = analysisData.result.flatMap((parameter) =>
+				parameter.templates && parameter.templates.length > 0
+					? parameter.analyses.filter((a) => a.id).map((a) => a.id)
+					: [],
+			);
+			const isAllSelected = allSelectable.length > 0 && allSelectable.every((id) => selectedAnalyses.has(id));
+			setSelectAllChecked(isAllSelected);
+		}
+	}, [analysisData, selectedAnalyses]);
+
 	// Close dropdown when clicking outside
 	useEffect(() => {
 		const handleClickOutside = (event) => {
@@ -605,6 +619,27 @@ const HandoverSampleDash = () => {
 		setSelectedAnalyses(newSelected);
 	};
 
+	// Handle select all for all selectable analyses
+	const handleSelectAll = (checked) => {
+		const newSelected = new Set(selectedAnalyses);
+		if (analysisData && analysisData.result) {
+			analysisData.result.forEach((parameter) => {
+				if (parameter.templates && parameter.templates.length > 0) {
+					parameter.analyses.forEach((analysis) => {
+						if (analysis.id) {
+							if (checked) {
+								newSelected.add(analysis.id);
+							} else {
+								newSelected.delete(analysis.id);
+							}
+						}
+					});
+				}
+			});
+		}
+		setSelectedAnalyses(newSelected);
+	};
+
 	// Handle close template modal
 	const handleCloseTemplateModal = () => {
 		setShowTemplateModal(false);
@@ -680,16 +715,6 @@ const HandoverSampleDash = () => {
 				window.open(url, '_blank');
 			}, index * 400);
 		});
-	};
-
-	// Format time to AM/PM format
-	const formatTimeToAMPM = (timeString) => {
-		if (!timeString) return '';
-		const [hours, minutes] = timeString.split(':');
-		const hour = parseInt(hours, 10);
-		const ampm = hour >= 12 ? 'PM' : 'AM';
-		const displayHour = hour % 12 || 12;
-		return `${displayHour}:${minutes} ${ampm}`;
 	};
 
 	// Pagination component for reuse
@@ -1060,6 +1085,19 @@ const HandoverSampleDash = () => {
 			{/* Show content based on view */}
 			{view === 'analysis' && analysisData && (
 				<div className="space-y-4 min-w-[1300px]">
+					{/* Filter Toggle */}
+					<div className="flex justify-end mb-2 px-4">
+						<label className="flex items-center space-x-2 cursor-pointer">
+							<input
+								type="checkbox"
+								checked={showOnlyWithTemplates}
+								onChange={(e) => setShowOnlyWithTemplates(e.target.checked)}
+								className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+							/>
+							<span className="text-sm text-gray-700">Chỉ hiển thị phép thử có mẫu nhật ký</span>
+						</label>
+					</div>
+
 					{/* Header Row for Analysis */}
 					<div className="border-b-2 border-gray-300 pb-3 mb-4 px-4 text-left w-full">
 						<div className="flex">
@@ -1090,11 +1128,10 @@ const HandoverSampleDash = () => {
 										<label className="flex items-center space-x-2 cursor-pointer">
 											<input
 												type="checkbox"
-												checked={showOnlyWithTemplates}
-												onChange={(e) => {
-													setShowOnlyWithTemplates(e.target.checked);
-												}}
+												checked={selectAllChecked}
+												onChange={(e) => handleSelectAll(e.target.checked)}
 												className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+												title="Chọn tất cả phép thử có thể chọn"
 											/>
 										</label>
 									</div>

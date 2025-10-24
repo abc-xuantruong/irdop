@@ -1461,7 +1461,7 @@ const Editor = () => {
 		for (const k in a) {
 			if (k === 'created_at') newA['createdAt'] = a[k];
 			else if (k === 'created_by_uid') newA['createdById'] = a[k];
-			else if (k === 'modified_at') newA['modifiedAt'] = a[k];
+			else if (k === 'modifiedAt') newA['modifiedAt'] = a[k];
 			else if (k === 'modified_by_uid') newA['modifiedById'] = a[k];
 			else if (k === 'receipt_id') newA['receiptId'] = a[k];
 			else if (k === 'sample_id') newA['sampleId'] = a[k];
@@ -1497,7 +1497,7 @@ const Editor = () => {
 			if (k === 'sample_uid') newS['sampleId'] = s[k];
 			else if (k === 'created_at') newS['createdAt'] = s[k];
 			else if (k === 'created_by_uid') newS['createdById'] = s[k];
-			else if (k === 'modified_at') newS['modifiedAt'] = s[k];
+			else if (k === 'modifiedAt') newS['modifiedAt'] = s[k];
 			else if (k === 'modified_by_uid') newS['modifiedById'] = s[k];
 			else if (k === 'receipt_id') newS['receiptId'] = s[k];
 			else if (k === 'client_id') newS['clientId'] = s[k];

@@ -4,10 +4,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
 import ProtocolInfor from '../components/ProtocolInfor';
-import AnalyteInfor from '../components/AnalyteInfor';
 import ClientInfor from '../components/ClientInfor';
 import AccountInfor from '../components/AccountInfor';
 import TechnicianInfo from '../components/TechnicianInfo';
+import ParameterList from '../components/parameter/Parameter';
 import { FaUserAlt, FaBook, FaFlask, FaClipboard } from 'react-icons/fa';
 
 const Library = () => {
@@ -139,7 +139,7 @@ const Library = () => {
 
 				<div className="flex-1 overflow-auto">
 					{activeTab === 'protocol' && <ProtocolInfor />}
-					{activeTab === 'analyte' && <AnalyteInfor />}
+					{activeTab === 'analyte' && <ParameterList />}
 					{activeTab === 'client' && !isTechnician() && <ClientInfor />}
 					{activeTab === 'account' && isSuperAdmin() && <AccountInfor />}
 					{activeTab === 'technician' && showTechnicianTab() && <TechnicianInfo />}

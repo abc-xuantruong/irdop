@@ -177,7 +177,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 	useEffect(() => {
 		// Parse URL parameters and apply them
 		const handleUrlParameters = async () => {
-			const searchQuery = searchParams.get('search') || '';
+			const searchQuery = searchParams.get('searchTerm') || '';
 			const filterQuery = searchParams.get('filter') || '';
 			const sortQuery = searchParams.get('sort') || '';
 
@@ -435,7 +435,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 			if (searchTerm.trim() === '') {
 				setCurrentList(source);
 				setIsFilter && setIsFilter(false);
-				updateUrlParams('search', null);
+				updateUrlParams('searchTerm', null);
 				return;
 			}
 
@@ -444,7 +444,7 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 				// Set isFilter true before navigation (if needed)
 				setIsFilter && setIsFilter(true);
 				// Redirect to dashboard with search query and return immediately
-				navigate(`/dashboard?search=${encodeURIComponent(searchTerm)}`);
+				navigate(`/dashboard?searchTerm=${encodeURIComponent(searchTerm)}`);
 				return;
 			}
 
@@ -457,14 +457,14 @@ const FilterBar = ({ source, setCurrentList, typeSearch, setIsFilter, hide = [] 
 				const mode = typeSearch === 'processing_v1' ? 'v1' : 'v2';
 
 				// Navigate to URL with mode and search parameters
-				navigate(`/processing?mode=${mode}&search=${encodeURIComponent(searchTerm)}`);
+				navigate(`/processing?mode=${mode}&searchTerm=${encodeURIComponent(searchTerm)}`);
 				return;
 			}
 
 			setIsFilter && setIsFilter(true);
 
 			// Update URL with search parameter
-			updateUrlParams('search', searchTerm);
+			updateUrlParams('searchTerm', searchTerm);
 
 			// Continue with other search logic for non-redirecting types
 			// ...existing code...

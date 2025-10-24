@@ -263,12 +263,14 @@ const SampleImageUpload = ({ receiptID, receiptUid, onUploadSuccess }) => {
 						updateData: {
 							objectStatus: 'OK',
 						},
-					}); // 5. Update Receipt với sample_img_uid
-					const receiptUpdateResponse = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', {
+					});
+
+					// 5. Update Receipt với deprecated_sampleImageId
+					const receiptUpdateResponse = await apiPost('https://red.irdop.org/v1/receipt/edit', {
 						receipt: {
 							id: receiptID,
 							receipt_uid: receiptUid,
-							sample_img_uid: id,
+							deprecated_sampleImageId: id,
 						},
 					});
 
