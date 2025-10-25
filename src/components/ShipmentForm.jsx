@@ -681,7 +681,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 									_deprecated_trackingNumber: '',
 								},
 							};
-							await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+							await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 							// Call onOrderUpdate to refresh dashboard data
 							if (onOrderUpdate) {

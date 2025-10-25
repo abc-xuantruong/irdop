@@ -585,16 +585,17 @@ const ReceiptInfor = ({ receipt }) => {
 					'client.invoiceEmail': receiptData.client?.invoiceEmail || '',
 					'client.clientAddress': receiptData.client?.clientAddress || '',
 					'client.legalId': receiptData.client?.legalId || '',
-					'contactPerson.name': receiptData.contactPerson?.name || '',
-					'contactPerson.phone': receiptData.contactPerson?.phone || '',
-					'contactPerson.email': receiptData.contactPerson?.email || '',
-					'reportRecipient.address': receiptData.reportRecipient?.address || '',
-					'reportRecipient.name': receiptData.reportRecipient?.name || '',
+					'contact.name': receiptData.contactPerson?.name || '',
+					'contact.phone': receiptData.contactPerson?.phone || '',
+					'contact.email': receiptData.contactPerson?.email || '',
+					'contact.id': receiptData.contactPerson?.id || '',
+					'contact.id_date': receiptData.contactPerson?.id_date || '',
+					'contact.id_place': receiptData.contactPerson?.id_place || '',
+					'receiver.address': receiptData.reportRecipient?.address || '',
+					'receiver.name': receiptData.reportRecipient?.name || '',
 					'reportRecipient.email': receiptData.reportRecipient?.email || '',
 					'reportRecipient.other': receiptData.reportRecipient?.other || '',
-				});
-
-				// Fetch user information for createdByUid and modifiedByUid
+				}); // Fetch user information for createdByUid and modifiedByUid
 				if (receiptData.createdById) {
 					fetchUserIdentity(receiptData.createdById);
 				}
@@ -2070,16 +2071,24 @@ const ReceiptInfor = ({ receipt }) => {
 				const updatedReceipt = { ...prev };
 				let nestedObject = updatedReceipt;
 
+				// Map 'contact' to 'contactPerson' and 'receiver' to 'reportRecipient'
+				const mappedKeys = [...keys];
+				if (mappedKeys[0] === 'contact') {
+					mappedKeys[0] = 'contactPerson';
+				} else if (mappedKeys[0] === 'receiver') {
+					mappedKeys[0] = 'reportRecipient';
+				}
+
 				// Create nested objects if they don't exist
-				for (let i = 0; i < keys.length - 1; i++) {
-					if (!nestedObject[keys[i]]) {
-						nestedObject[keys[i]] = {};
+				for (let i = 0; i < mappedKeys.length - 1; i++) {
+					if (!nestedObject[mappedKeys[i]]) {
+						nestedObject[mappedKeys[i]] = {};
 					}
-					nestedObject = nestedObject[keys[i]];
+					nestedObject = nestedObject[mappedKeys[i]];
 				}
 
 				// Set the final property
-				nestedObject[keys[keys.length - 1]] = value;
+				nestedObject[mappedKeys[mappedKeys.length - 1]] = value;
 				return updatedReceipt;
 			});
 		} else {
@@ -3030,13 +3039,17 @@ const ReceiptInfor = ({ receipt }) => {
 	// Handle client information update
 	const handleClientApiUpdate = async (field, value) => {
 		try {
-			// Create an updated client object with just the changed field
+			// Create a complete client object with all fields
 			const updatedClient = {
-				...currentReceipt.client,
+				clientName: currentReceipt.client?.clientName || '',
+				clientUID: currentReceipt.client?.clientUID || '',
+				clientPhone: currentReceipt.client?.clientPhone || '',
+				invoiceEmail: currentReceipt.client?.invoiceEmail || '',
+				clientAddress: currentReceipt.client?.clientAddress || '',
+				legalId: currentReceipt.client?.legalId || '',
+				// Update the specific field
 				[field]: value,
 			};
-
-			delete updatedClient.createdById;
 
 			// Update through receipt endpoint with client as a nested property
 			const payload = {
@@ -3076,14 +3089,17 @@ const ReceiptInfor = ({ receipt }) => {
 	// Handle contact information update
 	const handleContactApiUpdate = async (field, value) => {
 		try {
-			// Create an updated contact object with just the changed field
+			// Create a complete contact object with all fields
 			const updatedContact = {
-				...currentReceipt.contact,
+				name: currentReceipt.contactPerson?.name || '',
+				phone: currentReceipt.contactPerson?.phone || '',
+				email: currentReceipt.contactPerson?.email || '',
+				id: currentReceipt.contactPerson?.id || '',
+				id_date: currentReceipt.contactPerson?.id_date || '',
+				id_place: currentReceipt.contactPerson?.id_place || '',
+				// Update the specific field
 				[field]: value,
 			};
-
-			delete updatedContact.createdById;
-			delete updatedContact.search;
 
 			// Update through receipt endpoint with contact as a nested property
 			const payload = {
@@ -3124,13 +3140,15 @@ const ReceiptInfor = ({ receipt }) => {
 	// Handle receiver information update
 	const handleReceiverApiUpdate = async (field, value) => {
 		try {
-			// Create an updated receiver object with just the changed field
+			// Create a complete receiver object with all fields
 			const updatedReceiver = {
-				...currentReceipt.receiver,
+				name: currentReceipt.reportRecipient?.name || '',
+				address: currentReceipt.reportRecipient?.address || '',
+				email: currentReceipt.reportRecipient?.email || '',
+				other: currentReceipt.reportRecipient?.other || '',
+				// Update the specific field
 				[field]: value,
 			};
-
-			delete updatedReceiver.createdById;
 
 			// Update through receipt endpoint with receiver as a nested property
 			const payload = {
@@ -3290,15 +3308,36 @@ const ReceiptInfor = ({ receipt }) => {
 		}
 
 		if (isEditing) {
+			// Get current value from state based on field name
+			let currentValue = value;
+			const keys = fieldName.split('.');
+			if (keys.length > 1) {
+				// Map 'contact' to 'contactPerson' and 'receiver' to 'reportRecipient'
+				const mappedKeys = [...keys];
+				if (mappedKeys[0] === 'contact') {
+					mappedKeys[0] = 'contactPerson';
+				} else if (mappedKeys[0] === 'receiver') {
+					mappedKeys[0] = 'reportRecipient';
+				}
+
+				let nestedValue = currentReceipt;
+				for (const key of mappedKeys) {
+					nestedValue = nestedValue?.[key];
+				}
+				currentValue = nestedValue;
+			} else {
+				currentValue = currentReceipt?.[fieldName];
+			}
+
 			return (
 				<input
 					type={type}
 					name={fieldName}
 					className="w-full bg-white border border-blue-500 px-2 py-0 rounded-lg text-sm focus:outline-none align-top"
-					value={value || ''}
+					value={currentValue || ''}
 					onChange={handleInputChange}
-					onBlur={() => handleFieldBlur(fieldName, value)}
-					onKeyDown={(e) => handleFieldKeyDown(e, fieldName, value)}
+					onBlur={() => handleFieldBlur(fieldName, currentValue)}
+					onKeyDown={(e) => handleFieldKeyDown(e, fieldName, currentValue)}
 					autoFocus
 				/>
 			);
@@ -3307,7 +3346,14 @@ const ReceiptInfor = ({ receipt }) => {
 		return (
 			<div
 				className="w-full px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg align-top break-words overflow-hidden"
-				onClick={() => handleFieldClick(fieldName)}
+				onClick={() => {
+					handleFieldClick(fieldName);
+					// Store original value when starting to edit
+					setOriginalValues((prev) => ({
+						...prev,
+						[fieldName]: value,
+					}));
+				}}
 				title={displayText}
 			>
 				<span className="block truncate">{displayText}</span>
@@ -3330,15 +3376,36 @@ const ReceiptInfor = ({ receipt }) => {
 		}
 
 		if (isEditing) {
+			// Get current value from state based on field name
+			let currentValue = value;
+			const keys = fieldName.split('.');
+			if (keys.length > 1) {
+				// Map 'contact' to 'contactPerson' and 'receiver' to 'reportRecipient'
+				const mappedKeys = [...keys];
+				if (mappedKeys[0] === 'contact') {
+					mappedKeys[0] = 'contactPerson';
+				} else if (mappedKeys[0] === 'receiver') {
+					mappedKeys[0] = 'reportRecipient';
+				}
+
+				let nestedValue = currentReceipt;
+				for (const key of mappedKeys) {
+					nestedValue = nestedValue?.[key];
+				}
+				currentValue = nestedValue;
+			} else {
+				currentValue = currentReceipt?.[fieldName];
+			}
+
 			return (
 				<textarea
 					name={fieldName}
 					className="w-2/3 bg-white border border-blue-500 px-2 py-0 rounded-lg text-sm focus:outline-none resize-none align-top"
 					rows="3"
-					value={value || ''}
+					value={currentValue || ''}
 					onChange={handleInputChange}
-					onBlur={() => handleFieldBlur(fieldName, value)}
-					onKeyDown={(e) => handleFieldKeyDown(e, fieldName, value)}
+					onBlur={() => handleFieldBlur(fieldName, currentValue)}
+					onKeyDown={(e) => handleFieldKeyDown(e, fieldName, currentValue)}
 					autoFocus
 				/>
 			);
@@ -3347,7 +3414,14 @@ const ReceiptInfor = ({ receipt }) => {
 		return (
 			<div
 				className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top break-words overflow-hidden"
-				onClick={() => handleFieldClick(fieldName)}
+				onClick={() => {
+					handleFieldClick(fieldName);
+					// Store original value when starting to edit
+					setOriginalValues((prev) => ({
+						...prev,
+						[fieldName]: value,
+					}));
+				}}
 				title={displayValue(value)}
 			>
 				<span className="block">{displayValue(value)}</span>
@@ -3841,25 +3915,25 @@ const ReceiptInfor = ({ receipt }) => {
 									</div>
 									<div className="flex justify-start items-start mb-1">
 										<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Hóa đơn (khác)</label>
-										{editingGeneralField === 'client.invoice_info' ? (
+										{editingGeneralField === 'client.invoiceInfo' ? (
 											<textarea
-												name="client.invoice_info"
+												name="client.invoiceInfo"
 												className="w-2/3 bg-white border border-blue-500 px-2 py-0 rounded-lg text-sm focus:outline-none resize-none align-top"
 												rows="2"
-												value={currentReceipt?.client?.invoice_info || ''}
+												value={currentReceipt?.client?.invoiceInfo || ''}
 												onChange={handleInputChange}
-												onBlur={() => handleFieldBlur('client.invoice_info', currentReceipt?.client?.invoice_info)}
+												onBlur={() => handleFieldBlur('client.invoiceInfo', currentReceipt?.client?.invoiceInfo)}
 												onKeyDown={(e) =>
-													handleFieldKeyDown(e, 'client.invoice_info', currentReceipt?.client?.invoice_info)
+													handleFieldKeyDown(e, 'client.invoiceInfo', currentReceipt?.client?.invoiceInfo)
 												}
 												autoFocus
 											/>
 										) : (
 											<div
 												className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top"
-												onClick={() => handleFieldClick('client.invoice_info')}
+												onClick={() => handleFieldClick('client.invoiceInfo')}
 											>
-												{displayValue(currentReceipt?.client?.invoice_info)}
+												{displayValue(currentReceipt?.client?.invoiceInfo)}
 											</div>
 										)}
 									</div>

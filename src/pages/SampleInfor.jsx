@@ -646,11 +646,34 @@ const SampleInfor = () => {
 							const analysesWithTempId = response.data.analyses.map((analysis, index) => ({
 								...analysis,
 								tempId: `sample_${value.trim()}_${index}`,
+								// Map snake_case to camelCase
+								createdAt: analysis.createdAt || analysis.created_at,
+								createdById: analysis.createdById || analysis.created_by_uid,
+								modifiedAt: analysis.modifiedAt || analysis.modified_at,
+								modifiedById: analysis.modifiedById || analysis.modified_by_uid,
+								receiptId: analysis.receiptId || analysis.receipt_id,
+								sampleId: analysis.sampleId || analysis.sample_id,
+								protocolId: analysis.protocolId || analysis.protocol_id,
+								parameterId: analysis.parameterId || analysis.parameter_id,
+								technicianId: analysis.technicianId || analysis.technician_uid,
 								parameterName: analysis.parameterName || analysis.parameter_name,
-								matrix: analysis.matrix,
-								protocolCode: analysis.protocolCode || analysis.protocol_code,
 								protocolSource: analysis.protocolSource || analysis.protocol_source,
-								scientificField: analysis.scientificField,
+								protocolCode: analysis.protocolCode || analysis.protocol_code,
+								resultUnit: analysis.resultUnit || analysis.result_unit,
+								resultValue: analysis.resultValue || analysis.result_value,
+								_deprecated_productType: analysis._deprecated_productType || analysis.product_type,
+								_deprecated_parameterUid: analysis._deprecated_parameterUid || analysis.parameter_uid,
+								reviewedById: analysis.reviewedById || analysis.reviewed_by,
+								submitLastResultAt: analysis.submitLastResultAt || analysis.submit_result_at,
+								submitLastResultById: analysis.submitLastResultById || analysis.submit_result_by,
+								resultReference: analysis.resultReference || analysis.reference,
+								scientificField: analysis.scientificField || analysis.field,
+								exInfo: analysis.exInfo || analysis.ex_info,
+								_deprecated_sampleUid: analysis._deprecated_sampleUid || analysis.sample_uid,
+								_deprecated_receiptUid: analysis._deprecated_receiptUid || analysis.receipt_uid,
+								docId: analysis.docId || analysis.doc_id,
+								displayStyle: analysis.displayStyle || analysis.display_style,
+								matrix: analysis.matrix,
 								accreditation: analysis.accreditation,
 							}));
 
@@ -761,21 +784,45 @@ const SampleInfor = () => {
 				// Tạo danh sách analysis để thêm trực tiếp
 				const analyses = response.data.analysis.map((analysis) => {
 					// Tạo object mới không có resultValue và reviewedBy
-					const { resultValue, reviewedBy, ...cleanAnalysis } = analysis;
+					const { resultValue, reviewedBy, result_value, reviewed_by, ...cleanAnalysis } = analysis;
 					return {
 						...cleanAnalysis,
 						tempId: Math.random().toString(36).substr(2, 9),
-						parameterUid: cleanAnalysis.parameterUid || cleanAnalysis.parameter_uid || '',
-						displayStyle: cleanAnalysis.displayStyle || [
-							{
-								label: 'default',
-								value: '',
-							},
-							{
-								label: 'eng',
-								value: '',
-							},
-						],
+						// Map snake_case to camelCase
+						createdAt: cleanAnalysis.createdAt || cleanAnalysis.created_at,
+						createdById: cleanAnalysis.createdById || cleanAnalysis.created_by_uid,
+						modifiedAt: cleanAnalysis.modifiedAt || cleanAnalysis.modified_at,
+						modifiedById: cleanAnalysis.modifiedById || cleanAnalysis.modified_by_uid,
+						receiptId: cleanAnalysis.receiptId || cleanAnalysis.receipt_id,
+						sampleId: cleanAnalysis.sampleId || cleanAnalysis.sample_id,
+						protocolId: cleanAnalysis.protocolId || cleanAnalysis.protocol_id,
+						parameterId: cleanAnalysis.parameterId || cleanAnalysis.parameter_id,
+						technicianId: cleanAnalysis.technicianId || cleanAnalysis.technician_uid,
+						parameterName: cleanAnalysis.parameterName || cleanAnalysis.parameter_name,
+						protocolSource: cleanAnalysis.protocolSource || cleanAnalysis.protocol_source,
+						protocolCode: cleanAnalysis.protocolCode || cleanAnalysis.protocol_code,
+						resultUnit: cleanAnalysis.resultUnit || cleanAnalysis.result_unit,
+						_deprecated_productType: cleanAnalysis._deprecated_productType || cleanAnalysis.product_type,
+						_deprecated_parameterUid: cleanAnalysis._deprecated_parameterUid || cleanAnalysis.parameter_uid,
+						submitLastResultAt: cleanAnalysis.submitLastResultAt || cleanAnalysis.submit_result_at,
+						submitLastResultById: cleanAnalysis.submitLastResultById || cleanAnalysis.submit_result_by,
+						resultReference: cleanAnalysis.resultReference || cleanAnalysis.reference,
+						scientificField: cleanAnalysis.scientificField || cleanAnalysis.field,
+						exInfo: cleanAnalysis.exInfo || cleanAnalysis.ex_info,
+						_deprecated_sampleUid: cleanAnalysis._deprecated_sampleUid || cleanAnalysis.sample_uid,
+						_deprecated_receiptUid: cleanAnalysis._deprecated_receiptUid || cleanAnalysis.receipt_uid,
+						docId: cleanAnalysis.docId || cleanAnalysis.doc_id,
+						displayStyle: cleanAnalysis.displayStyle ||
+							cleanAnalysis.display_style || [
+								{
+									label: 'default',
+									value: '',
+								},
+								{
+									label: 'eng',
+									value: '',
+								},
+							],
 					};
 				});
 
@@ -801,18 +848,19 @@ const SampleInfor = () => {
 					...selectedParameters,
 					{
 						...parameter,
-						parameterId: parameter.parameterId || parameter.id,
-						parameterUid: parameter.parameterUid || parameter.parameter_uid || '',
-						displayStyle: parameter.displayStyle || [
-							{
-								label: 'default',
-								value: '',
-							},
-							{
-								label: 'eng',
-								value: '',
-							},
-						],
+						parameterId: parameter.parameterId || parameter.parameter_id || parameter.id,
+						_deprecated_parameterUid: parameter._deprecated_parameterUid || parameter.parameter_uid || '',
+						displayStyle: parameter.displayStyle ||
+							parameter.display_style || [
+								{
+									label: 'default',
+									value: '',
+								},
+								{
+									label: 'eng',
+									value: '',
+								},
+							],
 					},
 				]);
 			}
@@ -824,17 +872,18 @@ const SampleInfor = () => {
 					{
 						...parameter,
 						parameterId: parameter.id, // Map id to parameterId
-						parameterUid: parameter.parameterUid || '',
-						displayStyle: parameter.displayStyle || [
-							{
-								label: 'default',
-								value: '',
-							},
-							{
-								label: 'eng',
-								value: '',
-							},
-						],
+						_deprecated_parameterUid: parameter._deprecated_parameterUid || parameter.parameter_uid || '',
+						displayStyle: parameter.displayStyle ||
+							parameter.display_style || [
+								{
+									label: 'default',
+									value: '',
+								},
+								{
+									label: 'eng',
+									value: '',
+								},
+							],
 					},
 				]);
 			}
@@ -867,7 +916,7 @@ const SampleInfor = () => {
 					sampleId: currentSample.id,
 					parameterId: parameter.parameterId || 0,
 					parameterName: parameter.parameterName,
-					parameterUid: parameter.parameterUid || '', // Ensure parameterUid is included
+					_deprecated_parameterUid: parameter._deprecated_parameterUid || parameter.parameterUid || '', // Use deprecated field name
 					matrix: parameter.matrix || '', // Include matrix from sample analyses
 					scientificField: parameter.scientificField || '', // Include scientificField from sample analyses
 					displayStyle: parameter.displayStyle || [
@@ -882,7 +931,7 @@ const SampleInfor = () => {
 					],
 					accrenditation: parameter.accrenditation,
 					protocolId: parameter.protocolId,
-					technicianUid: parameter.technicianUid,
+					technicianId: parameter.technicianId || parameter.technicianUid,
 					deadline: parameter.deadline
 						? adjustDateForApiSubmission(new Date(parameter.deadline))
 						: adjustDateForApiSubmission(
@@ -891,8 +940,8 @@ const SampleInfor = () => {
 					protocolCode: parameter.protocolCode,
 					resultUnit: parameter.defaultUnit || parameter.resultUnit,
 					protocolSource: parameter.protocolSource,
-					createdByUid: currentUser.identity_uid,
-					modifiedByUid: currentUser.identity_uid,
+					createdById: currentUser.identity_uid,
+					modifiedById: currentUser.identity_uid,
 				};
 
 				// Only add resultValue if it exists and is not empty

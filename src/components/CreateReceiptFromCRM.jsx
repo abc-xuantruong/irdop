@@ -61,12 +61,12 @@ const CreateReceiptFromCRM = () => {
 
 	// States for direct input editing
 	const [clientInfo, setClientInfo] = useState({
-		client_name: '',
-		client_address: '',
-		legal_id: '',
-		client_phone: '',
-		invoice_email: '',
-		invoice_info: '',
+		clientName: '',
+		clientAddress: '',
+		legalId: '',
+		clientPhone: '',
+		invoiceEmail: '',
+		invoiceInfo: '',
 	});
 	const [contactInfo, setContactInfo] = useState({
 		name: '',
@@ -245,12 +245,12 @@ const CreateReceiptFromCRM = () => {
 		setMatrixPage(1);
 		setCurrentEditingMatrixIndex(null);
 		setClientInfo({
-			client_name: '',
-			client_address: '',
-			legal_id: '',
-			client_phone: '',
-			invoice_email: '',
-			invoice_info: '',
+			clientName: '',
+			clientAddress: '',
+			legalId: '',
+			clientPhone: '',
+			invoiceEmail: '',
+			invoiceInfo: '',
 		});
 		setContactInfo({
 			name: '',
@@ -289,7 +289,7 @@ const CreateReceiptFromCRM = () => {
 			if (response && response.data && response.data.error) {
 				setError(response.data.message || 'Đã xảy ra lỗi khi lấy dữ liệu.');
 				setCrmData(null);
-			} else if (response && response.data) {
+			} else if (response && response.data && response.data.samples && Array.isArray(response.data.samples)) {
 				// Transform the new API response to match the expected structure
 				const transformedData = {
 					orderId: response.data.orderId,
@@ -301,16 +301,16 @@ const CreateReceiptFromCRM = () => {
 					receiver: response.data.reportRecipient,
 					samples: response.data.samples.map((sample) => ({
 						sampleName: sample.sampleName,
-						matrix: sample.matrix,
-						sampleInformation: sample.sampleInformation,
-						analysis: sample.analyses.map((analysis) => ({
+						matrix: sample.matrix || '',
+						sampleInformation: sample.sampleInformation || [],
+						analysis: (sample.analysis || sample.analyses || []).map((analysis) => ({
 							parameterName: analysis.parameterName,
-							protocolCode: analysis.protocolCode,
+							protocolCode: analysis.protocolCode || '',
 							parameterId: analysis.parameterId || '',
 							protocolSource: analysis.protocolSource || 'IRDOP',
 							resultUnit: analysis.resultUnit || '',
 							field: analysis.field || '',
-							matrix: analysis.matrix || sample.matrix,
+							matrix: analysis.matrix || sample.matrix || '',
 						})),
 					})),
 				};
@@ -348,6 +348,10 @@ const CreateReceiptFromCRM = () => {
 					initialUrgentState[index] = false;
 				});
 				setUrgentSamples(initialUrgentState);
+			} else {
+				// If response structure is unexpected
+				setError('Không thể lấy dữ liệu. Vui lòng kiểm tra mã đơn hàng.');
+				setCrmData(null);
 			}
 		} catch (error) {
 			console.error('Error fetching data:', error);
@@ -1211,12 +1215,12 @@ const CreateReceiptFromCRM = () => {
 	useEffect(() => {
 		if (crmData) {
 			setClientInfo({
-				client_name: crmData.client?.client_name || '',
-				client_address: crmData.client?.client_address || '',
-				legal_id: crmData.client?.legal_id || '',
-				client_phone: crmData.client?.client_phone || '',
-				invoice_email: crmData.client?.invoice_email || '',
-				invoice_info: crmData.client?.invoice_info || '',
+				clientName: crmData.client?.clientName || '',
+				clientAddress: crmData.client?.clientAddress || '',
+				legalId: crmData.client?.legalId || '',
+				clientPhone: crmData.client?.clientPhone || '',
+				invoiceEmail: crmData.client?.invoiceEmail || '',
+				invoiceInfo: crmData.client?.invoiceInfo || '',
 			});
 			setContactInfo({
 				name: crmData.contact?.name || '',
@@ -1457,12 +1461,12 @@ const CreateReceiptFromCRM = () => {
 		setMatrixPage(1);
 		setCurrentEditingMatrixIndex(null);
 		setClientInfo({
-			client_name: '',
-			client_address: '',
-			legal_id: '',
-			client_phone: '',
-			invoice_email: '',
-			invoice_info: '',
+			clientName: '',
+			clientAddress: '',
+			legalId: '',
+			clientPhone: '',
+			invoiceEmail: '',
+			invoiceInfo: '',
 		});
 		setContactInfo({
 			name: '',
@@ -1501,7 +1505,7 @@ const CreateReceiptFromCRM = () => {
 			if (response && response.data && response.data.error) {
 				setError(response.data.message || 'Đã xảy ra lỗi khi lấy dữ liệu từ CRM.');
 				setCrmData(null);
-			} else if (response && response.data) {
+			} else if (response && response.data && response.data.samples && Array.isArray(response.data.samples)) {
 				// Transform the new API response to match the expected structure
 				const transformedData = {
 					orderId: response.data.orderId,
@@ -1513,16 +1517,16 @@ const CreateReceiptFromCRM = () => {
 					receiver: response.data.reportRecipient,
 					samples: response.data.samples.map((sample) => ({
 						sampleName: sample.sampleName,
-						matrix: sample.matrix,
-						sampleInformation: sample.sampleInformation,
-						analysis: sample.analyses.map((analysis) => ({
+						matrix: sample.matrix || '',
+						sampleInformation: sample.sampleInformation || [],
+						analysis: (sample.analysis || sample.analyses || []).map((analysis) => ({
 							parameterName: analysis.parameterName,
-							protocolCode: analysis.protocolCode,
+							protocolCode: analysis.protocolCode || '',
 							parameterId: analysis.parameterId || '',
 							protocolSource: analysis.protocolSource || 'IRDOP',
 							resultUnit: analysis.resultUnit || '',
 							field: analysis.field || '',
-							matrix: analysis.matrix || sample.matrix,
+							matrix: analysis.matrix || sample.matrix || '',
 						})),
 					})),
 				};
@@ -1538,6 +1542,10 @@ const CreateReceiptFromCRM = () => {
 				setUrgentSamples(initialUrgentState);
 
 				showBriefNotification('Load từ CRM thành công!', 'success');
+			} else {
+				// If response structure is unexpected
+				setError('Không thể lấy dữ liệu từ CRM. Vui lòng kiểm tra mã đơn hàng.');
+				setCrmData(null);
 			}
 		} catch (error) {
 			console.error('Error loading CRM data:', error);
@@ -1763,15 +1771,15 @@ const CreateReceiptFromCRM = () => {
 											<h3 className="font-semibold text-lg mb-2">Thông tin khách hàng</h3>
 											<p className="mb-2">
 												<span className="font-medium text-gray-500">Mã khách hàng: </span>
-												{crmData.client.client_uid || '--'}
+												{crmData.client.clientId || '--'}
 											</p>
 
 											<div className="mb-2">
 												<label className="font-medium text-gray-500 block mb-1">Tên cá nhân / tổ chức</label>
 												<input
 													type="text"
-													value={clientInfo.client_name}
-													onChange={(e) => handleClientInfoChange('client_name', e.target.value)}
+													value={clientInfo.clientName}
+													onChange={(e) => handleClientInfoChange('clientName', e.target.value)}
 													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 													placeholder="Nhập tên cá nhân / tổ chức"
 												/>
@@ -1781,8 +1789,8 @@ const CreateReceiptFromCRM = () => {
 												<label className="font-medium text-gray-500 block mb-1">Địa chỉ</label>
 												<input
 													type="text"
-													value={clientInfo.client_address}
-													onChange={(e) => handleClientInfoChange('client_address', e.target.value)}
+													value={clientInfo.clientAddress}
+													onChange={(e) => handleClientInfoChange('clientAddress', e.target.value)}
 													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 													placeholder="Nhập địa chỉ"
 												/>
@@ -1792,8 +1800,8 @@ const CreateReceiptFromCRM = () => {
 												<label className="font-medium text-gray-500 block mb-1">Mã số thuế / CCCD</label>
 												<input
 													type="text"
-													value={clientInfo.legal_id}
-													onChange={(e) => handleClientInfoChange('legal_id', e.target.value)}
+													value={clientInfo.legalId}
+													onChange={(e) => handleClientInfoChange('legalId', e.target.value)}
 													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 													placeholder="Nhập mã số thuế / CCCD"
 												/>
@@ -1803,8 +1811,8 @@ const CreateReceiptFromCRM = () => {
 												<label className="font-medium text-gray-500 block mb-1">Điện thoại</label>
 												<input
 													type="tel"
-													value={clientInfo.client_phone}
-													onChange={(e) => handleClientInfoChange('client_phone', e.target.value)}
+													value={clientInfo.clientPhone}
+													onChange={(e) => handleClientInfoChange('clientPhone', e.target.value)}
 													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 													placeholder="Nhập số điện thoại"
 												/>
@@ -1814,8 +1822,8 @@ const CreateReceiptFromCRM = () => {
 												<label className="font-medium text-gray-500 block mb-1">Email hóa đơn</label>
 												<input
 													type="email"
-													value={clientInfo.invoice_email}
-													onChange={(e) => handleClientInfoChange('invoice_email', e.target.value)}
+													value={clientInfo.invoiceEmail}
+													onChange={(e) => handleClientInfoChange('invoiceEmail', e.target.value)}
 													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 													placeholder="Nhập email hóa đơn"
 												/>
@@ -1825,8 +1833,8 @@ const CreateReceiptFromCRM = () => {
 												<label className="font-medium text-gray-500 block mb-1">TT hóa đơn (khác)</label>
 												<input
 													type="text"
-													value={clientInfo.invoice_info}
-													onChange={(e) => handleClientInfoChange('invoice_info', e.target.value)}
+													value={clientInfo.invoiceInfo}
+													onChange={(e) => handleClientInfoChange('invoiceInfo', e.target.value)}
 													className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 													placeholder="Nhập thông tin hóa đơn khác"
 												/>
