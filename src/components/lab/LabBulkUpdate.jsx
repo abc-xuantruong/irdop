@@ -1,8 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FaTimes } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import TinyMceInput from '../Input';
-import { apiPost } from '../../contexts/helperFunctionCallAPI';
+import { convertValueToHTML, convertHTMLToValue } from '../../contexts/formatHelpers';
+import { apiGet } from '../../contexts/helperFunctionCallAPI';
+
+// Session storage key for bulk update pending changes
+const BULK_UPDATE_SESSION_KEY = 'labBulkUpdate_pendingChanges';
+
+// Object key mapping from snake_case to camelCase
+const keyMapping = {
+	receipt_id: 'receiptId',
+	sample_id: 'sampleId',
+	parameter_id: 'parameterId',
+	parameter_name: 'parameterName',
+	protocol_source: 'protocolSource',
+	protocol_code: 'protocolCode',
+	receipt_uid: '_deprecated_receiptUid',
+	doc_id: 'docId',
+	display_style: 'displayStyle',
+	client_uid: 'clientId',
+	client_name: 'clientName',
+	client_address: 'clientAddress',
+	internal_memo: 'internalMemo',
+	legal_id: 'legalId',
+	client_email: 'clientEmail',
+	client_phone: 'clientPhone',
+	invoice_email: 'invoiceEmail',
+	invoice_info: 'invoiceInfo',
+	client_id: 'clientId',
+	receipt_date: 'receiptDate',
+	request_number: '_deprecated_requestNumber',
+	pay_status: 'paymentStatus',
+	order_code: 'orderId',
+	quote_code: 'quoteId',
+	sale_recorder: 'salePerson',
+	total_amount: 'totalFeeBeforeTax',
+	record_code: '_deprecated_recordCode',
+	ppt_send_at: '_deprecated_postalOrderCreatedAt',
+	ppt_send_by: '_deprecated_postalOrderCreatedById',
+	created_by: '_deprecated_createdBy',
+	transactions: '_deprecated_transactions',
+	invoice_number: '_deprecated_invoiceNumber',
+	tracking_number: '_deprecated_trackingNumber',
+	sample_img_uid: '_deprecated_sampleImageId',
+	gmail_thread_id: '_deprecated_gmailThreadId',
+	contact: 'contactPerson',
+	receiver: 'reportRecipient',
+	result_value: 'resultValue',
+	result_unit: 'resultUnit',
+	technician_uid: 'technicianId',
+	sample_uid: 'sampleId',
+	technician_id: 'technicianId',
+};
+
+// Function to convert object keys from snake_case to camelCase
+const convertObjectKeys = (obj) => {
+	if (!obj || typeof obj !== 'object') return obj;
+
+	const converted = {};
+	Object.keys(obj).forEach((key) => {
+		const newKey = keyMapping[key] || key;
+		converted[newKey] = obj[key];
+	});
+	return converted;
+};
 
 const LabBulkUpdate = ({
 	isOpen,
@@ -10,24 +72,165 @@ const LabBulkUpdate = ({
 	selectedRows,
 	selectedData,
 	technicians,
-	onUpdateComplete,
-	updating,
-	setUpdating,
+	onApplyBulkChanges, // Callback to apply bulk changes to parent's pendingChanges
 }) => {
-	const [bulkEditCell, setBulkEditCell] = useState({ column: null, receiptId: null });
 	const [bulkEditValues, setBulkEditValues] = useState({});
+	const [editingField, setEditingField] = useState(null); // Track which field is being edited
+
+	// Unit suggestions states
+	const [uniqueUnits, setUniqueUnits] = useState([]);
+	const [unitInput, setUnitInput] = useState('');
+	const [showUnitDropdown, setShowUnitDropdown] = useState(false);
+	const [unitPage, setUnitPage] = useState(1);
+	const itemsPerPage = 6;
+
+	// Fetch unit suggestions from API
+	useEffect(() => {
+		const fetchUnits = async () => {
+			try {
+				const unitsResponse = await apiGet('https://black.irdop.org/get/list_enum/unit');
+				if (unitsResponse.data && Array.isArray(unitsResponse.data)) {
+					setUniqueUnits(unitsResponse.data.filter(Boolean));
+				}
+			} catch (error) {
+				console.error('Error fetching units:', error);
+			}
+		};
+
+		if (isOpen) {
+			fetchUnits();
+		}
+	}, [isOpen]);
+
+	// Filter and paginate units
+	const filterUnits = (input) => {
+		if (!input || input.trim() === '') return [];
+		return uniqueUnits.filter((unit) => unit && unit.toLowerCase().includes((input || '').toLowerCase()));
+	};
+
+	const getPaginatedUnits = (input) => {
+		const filtered = filterUnits(input);
+		return filtered.slice((unitPage - 1) * itemsPerPage, unitPage * itemsPerPage);
+	};
+
+	const handleUnitPageChange = (pageNumber) => {
+		setUnitPage(pageNumber);
+	};
+
+	// Load pending changes from session storage on mount
+	useEffect(() => {
+		if (isOpen) {
+			const savedChanges = sessionStorage.getItem(BULK_UPDATE_SESSION_KEY);
+			if (savedChanges) {
+				try {
+					const parsed = JSON.parse(savedChanges);
+					setBulkEditValues(parsed);
+				} catch (error) {
+					console.error('Error loading session data:', error);
+				}
+			}
+		}
+	}, [isOpen]);
+
+	// Save pending changes to session storage whenever they change
+	useEffect(() => {
+		if (Object.keys(bulkEditValues).length > 0) {
+			sessionStorage.setItem(BULK_UPDATE_SESSION_KEY, JSON.stringify(bulkEditValues));
+		} else {
+			sessionStorage.removeItem(BULK_UPDATE_SESSION_KEY);
+		}
+	}, [bulkEditValues]);
+
+	// Convert selectedData to use camelCase keys
+	const normalizedSelectedData = selectedData.map((item) => convertObjectKeys(item));
 
 	// Handle bulk edit value changes
 	const handleBulkEditChange = (field, value) => {
-		setBulkEditValues((prev) => ({
-			...prev,
-			[field]: value,
-		}));
+		// For result/unit fields during editing, store as plain text temporarily
+		if ((field === 'resultValue' || field === 'resultUnit') && editingField === field) {
+			setBulkEditValues((prev) => ({
+				...prev,
+				[field]: value, // Store plain text during editing
+			}));
+		} else {
+			setBulkEditValues((prev) => ({
+				...prev,
+				[field]: value,
+			}));
+		}
+	};
+
+	// Handle input field focus for result/unit fields
+	const handleFieldFocus = (field) => {
+		setEditingField(field);
+		// Convert HTML to plain text for editing
+		if (field === 'resultValue' || field === 'resultUnit') {
+			const currentValue = bulkEditValues[field] || '';
+			const editableValue = convertHTMLToValue(currentValue);
+			setBulkEditValues((prev) => ({
+				...prev,
+				[field]: editableValue,
+			}));
+			if (field === 'resultUnit') {
+				setUnitInput(editableValue);
+				setUnitPage(1);
+				setShowUnitDropdown(editableValue.length >= 1);
+			}
+		}
+	};
+
+	// Handle input field blur for result/unit fields
+	const handleFieldBlur = (field, value) => {
+		// Convert value to HTML format when saving
+		if (field === 'resultValue' || field === 'resultUnit') {
+			const htmlValue = convertValueToHTML(value);
+			setBulkEditValues((prev) => ({
+				...prev,
+				[field]: htmlValue,
+			}));
+		}
+		setEditingField(null);
+		if (field === 'resultUnit') {
+			// Delay hiding dropdown to allow click on dropdown items
+			setTimeout(() => {
+				setShowUnitDropdown(false);
+			}, 200);
+		}
+	};
+
+	// Handle key press in input fields
+	const handleKeyDown = (e, field) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			e.target.blur(); // Trigger blur to save
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			setEditingField(null);
+			// Restore previous value
+			setBulkEditValues((prev) => ({
+				...prev,
+				[field]: prev[field] || '',
+			}));
+		}
 	};
 
 	// Handle bulk edit cell click
 	const handleBulkEditCellClick = (column, receiptId) => {
-		setBulkEditCell({ column, receiptId });
+		// Deprecated - no longer needed with input fields
+	};
+
+	// Get display value for input fields
+	const getInputValue = (field) => {
+		const value = bulkEditValues[field];
+		if (!value) return '';
+
+		// If currently editing, show plain text
+		if (editingField === field) {
+			return value;
+		}
+
+		// If not editing, convert HTML to plain text for display
+		return convertHTMLToValue(value);
 	};
 
 	// Format date
@@ -44,7 +247,7 @@ const LabBulkUpdate = ({
 		let normalizedNewValue = newValue || '';
 
 		// Special handling for HTML content fields
-		if (field === 'result_value' || field === 'result_unit') {
+		if (field === 'resultValue' || field === 'resultUnit') {
 			// Remove HTML tags and normalize whitespace for comparison
 			const cleanCurrent = normalizedCurrentValue.replace(/<[^>]*>/g, '').trim();
 			const cleanNew = normalizedNewValue.replace(/<[^>]*>/g, '').trim();
@@ -56,27 +259,30 @@ const LabBulkUpdate = ({
 	};
 
 	// Get technician name by UID
-	const getTechnicianName = (technician_uid) => {
-		if (!technician_uid || !technicians) return '--';
-		const technician = technicians.find((tech) => tech.identity_uid === technician_uid);
+	const getTechnicianName = (technicianId) => {
+		if (!technicianId || !technicians) return '--';
+		const technician = technicians.find((tech) => tech.identity_uid === technicianId);
 		return technician ? `${technician.identity_name} (${technician.alias})` : '--';
 	};
 
-	// Handle bulk update submission
-	const handleBulkUpdate = async () => {
-		const updates = [];
+	// Handle bulk update submission - Just apply changes to session, don't send API
+	const handleBulkUpdate = () => {
+		const bulkChanges = [];
 
-		// Prepare updates for all selected analyses
+		// Prepare bulk changes for all selected analyses
 		const selectedIds = Array.isArray(selectedRows) ? selectedRows : Array.from(selectedRows);
 		selectedIds.forEach((analysisId) => {
-			const currentAnalysis = selectedData.find((item) => item.id === analysisId);
+			const currentAnalysis = normalizedSelectedData.find((item) => item.id === analysisId);
 
 			if (!currentAnalysis) return;
 
-			const updateData = { id: analysisId };
+			const changeData = {
+				id: analysisId,
+				...currentAnalysis, // Include full record
+			};
 			let hasChanges = false;
 
-			// Check each field for actual changes
+			// Apply each bulk edit value to this analysis
 			Object.keys(bulkEditValues).forEach((field) => {
 				const newValue = bulkEditValues[field];
 				const currentValue = currentAnalysis[field];
@@ -90,7 +296,7 @@ const LabBulkUpdate = ({
 				let normalizedCurrentValue = currentValue || '';
 				let normalizedNewValue = newValue || '';
 
-				if (field === 'result_value' || field === 'result_unit') {
+				if (field === 'resultValue' || field === 'resultUnit') {
 					// Remove HTML tags and normalize whitespace for comparison
 					const cleanCurrent = normalizedCurrentValue.replace(/<[^>]*>/g, '').trim();
 					const cleanNew = normalizedNewValue.replace(/<[^>]*>/g, '').trim();
@@ -100,57 +306,41 @@ const LabBulkUpdate = ({
 
 				// Compare normalized values
 				if (normalizedNewValue !== normalizedCurrentValue) {
-					// For HTML fields, keep original HTML content
-					if (field === 'result_value' || field === 'result_unit') {
-						updateData[field] = newValue;
-					} else {
-						updateData[field] = newValue;
-					}
+					changeData[field] = newValue;
 					hasChanges = true;
 				}
 			});
 
-			if (hasChanges && Object.keys(updateData).length > 1) {
-				updates.push(updateData);
+			if (hasChanges) {
+				bulkChanges.push(changeData);
 			}
 		});
 
-		if (updates.length === 0) {
-			toast.warning('Không có thay đổi nào để cập nhật. Tất cả giá trị đã giống với dữ liệu hiện tại.');
+		if (bulkChanges.length === 0) {
+			toast.warning('Không có thay đổi nào để áp dụng. Tất cả giá trị đã giống với dữ liệu hiện tại.');
 			return;
 		}
 
-		try {
-			setUpdating(true);
-			// Update each analysis
-			for (const update of updates) {
-				const response = await apiPost('https://black.irdop.org/trelw82ki/db/update/analysis', {
-					analysis: update,
-				});
-
-				if (response?.status !== 200) {
-					throw new Error(`Failed to update analysis ${update.id}`);
-				}
-			}
-
-			toast.success(`Đã cập nhật ${updates.length} chỉ tiêu thành công`);
-
-			// Clear selections and close modal
-			setBulkEditValues({});
-			setBulkEditCell({ column: null, receiptId: null });
-			onUpdateComplete?.();
-			onClose();
-		} catch (error) {
-			console.error('Error in bulk update:', error);
-			toast.error('Lỗi khi cập nhật hàng loạt');
-		} finally {
-			setUpdating(false);
+		// Apply bulk changes to parent component's pending changes
+		if (onApplyBulkChanges) {
+			onApplyBulkChanges(bulkChanges);
 		}
+
+		toast.success(
+			`Đã áp dụng thay đổi hàng loạt cho ${bulkChanges.length} chỉ tiêu. Thay đổi sẽ được lưu khi kết thúc phiên nhập liệu.`,
+		);
+
+		// Clear session storage after applying changes
+		sessionStorage.removeItem(BULK_UPDATE_SESSION_KEY);
+
+		// Clear selections and close modal
+		setBulkEditValues({});
+		onClose();
 	};
 
 	const handleClose = () => {
+		// Keep session storage intact when closing - only clear on successful update
 		setBulkEditValues({});
-		setBulkEditCell({ column: null, receiptId: null });
 		onClose();
 	};
 
@@ -180,8 +370,8 @@ const LabBulkUpdate = ({
 							<label className="block text-sm font-medium text-gray-700 mb-1">Nguồn</label>
 							<select
 								className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
-								value={bulkEditValues.protocol_source || ''}
-								onChange={(e) => handleBulkEditChange('protocol_source', e.target.value)}
+								value={bulkEditValues.protocolSource || ''}
+								onChange={(e) => handleBulkEditChange('protocolSource', e.target.value)}
 							>
 								<option value="">-- Không thay đổi --</option>
 								<option value="IRDOP">IRDOP</option>
@@ -197,65 +387,111 @@ const LabBulkUpdate = ({
 								type="text"
 								className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
 								placeholder="Nhập mã phương pháp..."
-								value={bulkEditValues.protocol_code || ''}
-								onChange={(e) => handleBulkEditChange('protocol_code', e.target.value)}
+								value={bulkEditValues.protocolCode || ''}
+								onChange={(e) => handleBulkEditChange('protocolCode', e.target.value)}
 							/>
 						</div>
 
 						{/* Result Value */}
 						<div className="flex-grow" style={{ minWidth: '150px' }}>
 							<label className="block text-sm font-medium text-gray-700 mb-1">Kết quả</label>
-							<div
-								className="w-full p-2 border border-gray-300 rounded-md min-h-[38px] cursor-text hover:border-blue-500 flex items-center bg-white"
-								onClick={() => handleBulkEditCellClick('result_value', 'global')}
-							>
-								{bulkEditCell.column === 'result_value' && bulkEditCell.receiptId === 'global' ? (
-									<TinyMceInput
-										value={bulkEditValues.result_value || ''}
-										onUpdate={(content) => handleBulkEditChange('result_value', content)}
-										onKey={(e) => {
-											if (e.key === 'Enter') {
-												setBulkEditCell({ column: null, receiptId: null });
-											}
-										}}
-									/>
-								) : (
-									<div
-										className="text-sm"
-										dangerouslySetInnerHTML={{
-											__html: bulkEditValues.result_value || 'Nhấp để nhập kết quả...',
-										}}
-									/>
-								)}
-							</div>
+							<input
+								type="text"
+								className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
+								placeholder="Nhập kết quả..."
+								value={getInputValue('resultValue')}
+								onChange={(e) => handleBulkEditChange('resultValue', e.target.value)}
+								onFocus={() => handleFieldFocus('resultValue')}
+								onBlur={(e) => handleFieldBlur('resultValue', e.target.value)}
+								onKeyDown={(e) => handleKeyDown(e, 'resultValue')}
+							/>
+							{!editingField && bulkEditValues.resultValue && (
+								<div
+									className="text-xs text-gray-500 mt-1 p-1 bg-gray-50 rounded"
+									dangerouslySetInnerHTML={{ __html: bulkEditValues.resultValue }}
+								/>
+							)}
 						</div>
 
 						{/* Result Unit */}
-						<div className="flex-grow" style={{ minWidth: '120px' }}>
+						<div className="flex-grow relative" style={{ minWidth: '120px' }}>
 							<label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị</label>
-							<div
-								className="w-full p-2 border border-gray-300 rounded-md min-h-[38px] cursor-text hover:border-blue-500 flex items-center bg-white"
-								onClick={() => handleBulkEditCellClick('result_unit', 'global')}
-							>
-								{bulkEditCell.column === 'result_unit' && bulkEditCell.receiptId === 'global' ? (
-									<TinyMceInput
-										value={bulkEditValues.result_unit || ''}
-										onUpdate={(content) => handleBulkEditChange('result_unit', content)}
-										onKey={(e) => {
-											if (e.key === 'Enter') {
-												setBulkEditCell({ column: null, receiptId: null });
-											}
-										}}
-									/>
-								) : (
+							<input
+								id="bulk-unit-input"
+								type="text"
+								className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
+								placeholder="Nhập đơn vị..."
+								value={getInputValue('resultUnit')}
+								onChange={(e) => {
+									const newValue = e.target.value;
+									handleBulkEditChange('resultUnit', newValue);
+									setUnitInput(newValue);
+									setUnitPage(1);
+									setShowUnitDropdown(newValue.length >= 1);
+								}}
+								onFocus={() => handleFieldFocus('resultUnit')}
+								onBlur={(e) => handleFieldBlur('resultUnit', e.target.value)}
+								onKeyDown={(e) => handleKeyDown(e, 'resultUnit')}
+							/>
+							{!editingField && bulkEditValues.resultUnit && (
+								<div
+									className="text-xs text-gray-500 mt-1 p-1 bg-gray-50 rounded"
+									dangerouslySetInnerHTML={{ __html: bulkEditValues.resultUnit }}
+								/>
+							)}
+							{showUnitDropdown &&
+								getPaginatedUnits(unitInput).length > 0 &&
+								createPortal(
 									<div
-										className="text-sm"
-										dangerouslySetInnerHTML={{
-											__html: bulkEditValues.result_unit || 'Nhấp để nhập đơn vị...',
+										className="absolute bg-white border rounded shadow-lg z-[9999]"
+										style={{
+											width: document.getElementById('bulk-unit-input')?.offsetWidth + 'px',
+											top: document.getElementById('bulk-unit-input')?.getBoundingClientRect().bottom + window.scrollY,
+											left: document.getElementById('bulk-unit-input')?.getBoundingClientRect().left + window.scrollX,
 										}}
-									/>
+									>
+										{getPaginatedUnits(unitInput).map((unit, index) => (
+											<div
+												key={index}
+												className="p-2 text-sm cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+												onMouseDown={(e) => {
+													e.preventDefault(); // Prevent blur event
+													handleBulkEditChange('resultUnit', unit);
+													setUnitInput(unit);
+													setShowUnitDropdown(false);
+													// Trigger blur manually to save the value
+													setTimeout(() => {
+														handleFieldBlur('resultUnit', unit);
+													}, 100);
+												}}
+											>
+												<p>{unit}</p>
+											</div>
+										))}
+										{filterUnits(unitInput).length > itemsPerPage && (
+											<div className="flex justify-between p-2 bg-gray-100">
+												<button
+													className="px-2 py-1 border rounded disabled:opacity-50"
+													onClick={() => handleUnitPageChange(unitPage - 1)}
+													disabled={unitPage === 1}
+												>
+													Prev
+												</button>
+												<span className="text-sm">
+													{unitPage}/{Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+												</span>
+												<button
+													className="px-2 py-1 border rounded disabled:opacity-50"
+													onClick={() => handleUnitPageChange(unitPage + 1)}
+													disabled={unitPage >= Math.ceil(filterUnits(unitInput).length / itemsPerPage)}
+												>
+													Next
+												</button>
+											</div>
+										)}
+									</div>,
+									document.body,
 								)}
-							</div>
 						</div>
 
 						{/* Technician */}
@@ -263,8 +499,8 @@ const LabBulkUpdate = ({
 							<label className="block text-sm font-medium text-gray-700 mb-1">Người thực hiện</label>
 							<select
 								className="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-blue-500 bg-white"
-								value={bulkEditValues.technician_uid || ''}
-								onChange={(e) => handleBulkEditChange('technician_uid', e.target.value)}
+								value={bulkEditValues.technicianId || ''}
+								onChange={(e) => handleBulkEditChange('technicianId', e.target.value)}
 							>
 								<option value="">-- Không thay đổi --</option>
 								{technicians?.map((tech) => (
@@ -297,57 +533,53 @@ const LabBulkUpdate = ({
 								</tr>
 							</thead>
 							<tbody>
-								{selectedData.map((foundAnalysis) => (
+								{normalizedSelectedData.map((foundAnalysis) => (
 									<tr key={foundAnalysis.id} className="hover:bg-gray-50">
-										<td className="border border-gray-300 p-2 text-sm text-start">{foundAnalysis.sample_uid}</td>
-										<td className="border border-gray-300 p-2 text-sm text-start">{foundAnalysis.parameter_name}</td>
+										<td className="border border-gray-300 p-2 text-sm text-start">{foundAnalysis.sampleId}</td>
+										<td className="border border-gray-300 p-2 text-sm text-start">{foundAnalysis.parameterName}</td>
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<span
 												className={
-													hasFieldChanged(
-														'protocol_source',
-														foundAnalysis.protocol_source,
-														bulkEditValues.protocol_source,
-													)
+													hasFieldChanged('protocolSource', foundAnalysis.protocolSource, bulkEditValues.protocolSource)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 											>
-												{bulkEditValues.protocol_source || foundAnalysis.protocol_source || '--'}
+												{bulkEditValues.protocolSource || foundAnalysis.protocolSource || '--'}
 											</span>
 										</td>
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<span
 												className={
-													hasFieldChanged('protocol_code', foundAnalysis.protocol_code, bulkEditValues.protocol_code)
+													hasFieldChanged('protocolCode', foundAnalysis.protocolCode, bulkEditValues.protocolCode)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 											>
-												{bulkEditValues.protocol_code || foundAnalysis.protocol_code || '--'}
+												{bulkEditValues.protocolCode || foundAnalysis.protocolCode || '--'}
 											</span>
 										</td>
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<div
 												className={
-													hasFieldChanged('result_value', foundAnalysis.result_value, bulkEditValues.result_value)
+													hasFieldChanged('resultValue', foundAnalysis.resultValue, bulkEditValues.resultValue)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 												dangerouslySetInnerHTML={{
-													__html: bulkEditValues.result_value || foundAnalysis.result_value || '--',
+													__html: bulkEditValues.resultValue || foundAnalysis.resultValue || '--',
 												}}
 											/>
 										</td>
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<div
 												className={
-													hasFieldChanged('result_unit', foundAnalysis.result_unit, bulkEditValues.result_unit)
+													hasFieldChanged('resultUnit', foundAnalysis.resultUnit, bulkEditValues.resultUnit)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 												dangerouslySetInnerHTML={{
-													__html: bulkEditValues.result_unit || foundAnalysis.result_unit || '--',
+													__html: bulkEditValues.resultUnit || foundAnalysis.resultUnit || '--',
 												}}
 											/>
 										</td>
@@ -357,14 +589,14 @@ const LabBulkUpdate = ({
 										<td className="border border-gray-300 p-2 text-sm text-start">
 											<span
 												className={
-													hasFieldChanged('technician_uid', foundAnalysis.technician_uid, bulkEditValues.technician_uid)
+													hasFieldChanged('technicianId', foundAnalysis.technicianId, bulkEditValues.technicianId)
 														? 'font-semibold text-blue-600'
 														: ''
 												}
 											>
-												{bulkEditValues.technician_uid
-													? getTechnicianName(bulkEditValues.technician_uid)
-													: getTechnicianName(foundAnalysis.technician_uid)}
+												{bulkEditValues.technicianId
+													? getTechnicianName(bulkEditValues.technicianId)
+													: getTechnicianName(foundAnalysis.technicianId)}
 											</span>
 										</td>
 									</tr>
@@ -385,18 +617,16 @@ const LabBulkUpdate = ({
 					<button
 						onClick={handleBulkUpdate}
 						className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-						disabled={Object.keys(bulkEditValues).length === 0 || updating}
+						disabled={Object.keys(bulkEditValues).length === 0}
 					>
-						{updating
-							? 'Đang cập nhật...'
-							: `Cập nhật (${Array.isArray(selectedRows) ? selectedRows.length : selectedRows.size} mục)`}
+						Áp dụng ({Array.isArray(selectedRows) ? selectedRows.length : selectedRows.size} mục)
 					</button>
 				</div>
 
 				<div className="mt-4 text-xs text-gray-500">
-					<strong>Lưu ý:</strong> Chỉ những trường có giá trị mới và khác với giá trị hiện tại sẽ được cập nhật. Các
-					trường màu xanh dương trong bảng xem trước cho biết sẽ có thay đổi. Trường để trống hoặc giống với giá trị
-					hiện tại sẽ không được gửi yêu cầu cập nhật.
+					<strong>Lưu ý:</strong> Các thay đổi sẽ được lưu tạm thời vào phiên nhập liệu. Bạn cần{' '}
+					<strong>kết thúc phiên nhập</strong> để lưu các thay đổi vào cơ sở dữ liệu. Các trường màu xanh dương trong
+					bảng xem trước cho biết sẽ có thay đổi.
 				</div>
 			</div>
 		</div>

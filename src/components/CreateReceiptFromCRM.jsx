@@ -324,12 +324,12 @@ const CreateReceiptFromCRM = () => {
 				}
 
 				// Set defaultSampleInformation based on response
-				if (response.data.default_information !== undefined) {
-					setDefaultSampleInformation(response.data.default_information);
+				if (response.data.defaultSampleInformation !== undefined) {
+					setDefaultSampleInformation(response.data.defaultSampleInformation);
 				}
 
-				// Load existing sample information if default_information is false
-				if (response.data.default_information === false && response.data.samples) {
+				// Load existing sample information if defaultSampleInformation is false
+				if (response.data.defaultSampleInformation === false && response.data.samples) {
 					const loadedCustomerInfo = {};
 					response.data.samples.forEach((sample, index) => {
 						if (sample.sampleInformation && Array.isArray(sample.sampleInformation)) {
@@ -487,7 +487,7 @@ const CreateReceiptFromCRM = () => {
 				{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
 				{
 					fname: 'Mô tả / desc.',
-					fvalue: sample?.sample_description || '',
+					fvalue: sample?.sampleDescription || '',
 				},
 			);
 
@@ -577,13 +577,13 @@ const CreateReceiptFromCRM = () => {
 					{ fname: 'Ngày thử nghiệm / test date.', fvalue: '' },
 					{
 						fname: 'Mô tả / desc.',
-						fvalue: sample?.sample_description || '',
+						fvalue: sample?.sampleDescription || '',
 					},
 				);
 
 				return {
 					...sample,
-					sample_information: sampleInformation,
+					sampleInformation: sampleInformation,
 				};
 			});
 			const requestData = {
@@ -604,7 +604,7 @@ const CreateReceiptFromCRM = () => {
 
 			// Race between the actual request and the timeout
 			const response = await Promise.race([
-				fetch('https://black.irdop.org/xlsx/download/request_form', {
+				fetch('https://red.irdop.org/v1/excel/request_form', {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',

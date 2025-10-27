@@ -30,7 +30,14 @@ const Login = () => {
 			// Check if status code is >= 300, show error message
 			if (response.statusCode && response.statusCode >= 300) {
 				const errorMessage = response.message || 'Đăng nhập thất bại. Vui lòng thử lại.';
-				Swal.fire({
+				const Toast = Swal.mixin({
+					toast: true,
+					position: 'top-end',
+					showConfirmButton: false,
+					timer: 3000,
+					timerProgressBar: true,
+				});
+				Toast.fire({
 					icon: 'error',
 					title: 'Đăng nhập thất bại',
 					text: errorMessage,
@@ -53,18 +60,30 @@ const Login = () => {
 			Cookies.set('identityId', identityUID);
 
 			// Show success message with SweetAlert2
-			Swal.fire({
+			const Toast = Swal.mixin({
+				toast: true,
+				position: 'top-end',
+				showConfirmButton: false,
+				timer: 1500,
+				timerProgressBar: true,
+			});
+			Toast.fire({
 				icon: 'success',
 				title: 'Đăng nhập thành công',
 				text: 'Đăng nhập bằng thẻ từ thành công!',
-				timer: 1500,
-				showConfirmButton: false,
 			}).then(() => {
 				navigate('/');
 			});
 		} catch (err) {
 			const errorMessage = err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra thẻ từ.';
-			Swal.fire({
+			const Toast = Swal.mixin({
+				toast: true,
+				position: 'top-end',
+				showConfirmButton: false,
+				timer: 3000,
+				timerProgressBar: true,
+			});
+			Toast.fire({
 				icon: 'error',
 				title: 'Đăng nhập thất bại',
 				text: errorMessage,
@@ -116,7 +135,14 @@ const Login = () => {
 			// Check if status code is >= 300, show error message
 			if (response.statusCode && response.statusCode >= 300) {
 				const errorMessage = response.message || 'Login failed. Please try again.';
-				Swal.fire({
+				const Toast = Swal.mixin({
+					toast: true,
+					position: 'top-end',
+					showConfirmButton: false,
+					timer: 3000,
+					timerProgressBar: true,
+				});
+				Toast.fire({
 					icon: 'error',
 					title: 'Login Failed',
 					text: errorMessage,
@@ -138,19 +164,31 @@ const Login = () => {
 			Cookies.set('identityId', identityUID);
 
 			// Show success message with SweetAlert2
-			Swal.fire({
+			const Toast = Swal.mixin({
+				toast: true,
+				position: 'top-end',
+				showConfirmButton: false,
+				timer: 1500,
+				timerProgressBar: true,
+			});
+			Toast.fire({
 				icon: 'success',
 				title: 'Login Successful',
 				text: 'You have been successfully logged in!',
-				timer: 1500,
-				showConfirmButton: false,
 			}).then(() => {
 				navigate('/');
 			});
 		} catch (err) {
 			// Show error message with SweetAlert2
 			const errorMessage = err.message || 'Login failed. Please check your credentials.';
-			Swal.fire({
+			const Toast = Swal.mixin({
+				toast: true,
+				position: 'top-end',
+				showConfirmButton: false,
+				timer: 3000,
+				timerProgressBar: true,
+			});
+			Toast.fire({
 				icon: 'error',
 				title: 'Login Failed',
 				text: errorMessage,

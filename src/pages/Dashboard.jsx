@@ -110,6 +110,13 @@ const Dashboard = () => {
 		position: { top: 0, left: 0 },
 	});
 
+	// Add state to track analysis summary tooltip (X/Y/Z format)
+	const [analysisSummaryTooltip, setAnalysisSummaryTooltip] = useState({
+		visible: false,
+		analyses: [],
+		position: { top: 0, left: 0 },
+	});
+
 	// Note modal states
 	const [showNoteModal, setShowNoteModal] = useState(false);
 	const [selectedAnalysisForNote, setSelectedAnalysisForNote] = useState(null);
@@ -1691,6 +1698,32 @@ const Dashboard = () => {
 		});
 	};
 
+	// Add function to handle analysis summary tooltip (X/Y/Z format)
+	const handleAnalysisSummaryEnter = (e, sample) => {
+		if (sample?.analyses && sample.analyses.length > 0) {
+			const element = e.currentTarget;
+			const rect = element.getBoundingClientRect();
+
+			// Position tooltip to the left of the cell
+			setAnalysisSummaryTooltip({
+				visible: true,
+				analyses: sample.analyses,
+				position: {
+					top: rect.top + window.scrollY,
+					left: rect.left + window.scrollX - 400 - 10, // 400px width + 10px offset to the left
+				},
+			});
+		}
+	};
+
+	const handleAnalysisSummaryLeave = () => {
+		setAnalysisSummaryTooltip({
+			visible: false,
+			analyses: [],
+			position: { top: 0, left: 0 },
+		});
+	};
+
 	// Tooltip functions for notes
 	const showNoteTooltip = (event, content, customPosition = null) => {
 		const rect = event.target.getBoundingClientRect();
@@ -2363,6 +2396,50 @@ const Dashboard = () => {
 								</div>
 								<div className="truncate" title={history.deadline ? formatDate(history.deadline) : '--'}>
 									{history.deadline ? formatDate(history.deadline) : '--'}
+								</div>
+							</React.Fragment>
+						))}
+					</div>
+				</div>
+			)}
+			{/* Add analysis summary tooltip (X/Y/Z format) */}
+			{analysisSummaryTooltip.visible && analysisSummaryTooltip.analyses.length > 0 && (
+				<div
+					className="fixed bg-white border-2 border-green-500 rounded-lg shadow-lg z-[9999] p-3 text-xs"
+					style={{
+						top: `${analysisSummaryTooltip.position.top}px`,
+						left: `${analysisSummaryTooltip.position.left}px`,
+						width: '400px',
+					}}
+				>
+					<p className="font-semibold mb-2 text-sm">Danh sách chỉ tiêu:</p>
+					<div className="grid grid-cols-3 gap-2 font-semibold mb-2 pb-2 border-b">
+						<div>Tên chỉ tiêu</div>
+						<div>Kết quả</div>
+						<div>Hạn trả</div>
+					</div>
+					<div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+						{analysisSummaryTooltip.analyses.map((analysis, idx) => (
+							<React.Fragment key={`summary-${idx}`}>
+								<div
+									className="truncate whitespace-nowrap overflow-hidden text-ellipsis"
+									title={analysis.parameterName || '--'}
+								>
+									{analysis.parameterName || '--'}
+								</div>
+								<div
+									className="truncate whitespace-nowrap overflow-hidden text-ellipsis"
+									title={analysis.resultValue || '--'}
+								>
+									{analysis.resultValue && analysis.resultValue !== '<p></p>'
+										? analysis.resultValue.replace(/<[^>]*>/g, '')
+										: '--'}
+								</div>
+								<div
+									className="truncate whitespace-nowrap overflow-hidden text-ellipsis"
+									title={analysis.deadline ? formatDate(analysis.deadline) : '--'}
+								>
+									{analysis.deadline ? formatDate(analysis.deadline) : '--'}
 								</div>
 							</React.Fragment>
 						))}
@@ -3138,7 +3215,12 @@ const Dashboard = () => {
 																</div>
 															) : (
 																/* Show summary */
-																<div className="text-sm" onClick={() => handleToggleAnalysisGrid(sample.id)}>
+																<div
+																	className="text-sm"
+																	onClick={() => handleToggleAnalysisGrid(sample.id)}
+																	onMouseEnter={(e) => handleAnalysisSummaryEnter(e, sample)}
+																	onMouseLeave={handleAnalysisSummaryLeave}
+																>
 																	{totalTests > 0 ? (
 																		<span
 																			className={`font-medium ${

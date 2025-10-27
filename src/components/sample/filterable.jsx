@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { GlobalContext } from '../../contexts/GlobalContext';
-import { apiPost } from '../../contexts/helperFunctionCallAPI';
+import { apiPost, apiGet } from '../../contexts/helperFunctionCallAPI';
 import { convertValueToHTML, convertHTMLToValue } from '../../contexts/formatHelpers';
 import { FaSearch, FaFilter, FaSort, FaSortUp, FaSortDown, FaCalendarAlt, FaTimes } from 'react-icons/fa';
 import { MdAttachFile } from 'react-icons/md';
@@ -97,9 +97,15 @@ const FilterableSample = forwardRef(
 		const [editingCell, setEditingCell] = useState(null); // { analysisId, column }
 		const [editValue, setEditValue] = useState('');
 
+		// Unit suggestions states
+		const [uniqueUnits, setUniqueUnits] = useState([]);
+		const [unitInput, setUnitInput] = useState('');
+		const [showUnitDropdown, setShowUnitDropdown] = useState(false);
+		const [unitPage, setUnitPage] = useState(1);
+		const unitItemsPerPage = 6;
+
 		// Login popup states
 		const [showLoginPopup, setShowLoginPopup] = useState(false);
-		const [showReloginConfirm, setShowReloginConfirm] = useState(false);
 		const [pendingEditCell, setPendingEditCell] = useState(null); // Store pending edit until login
 
 		// Result entry session states
@@ -158,6 +164,16 @@ const FilterableSample = forwardRef(
 			endSession: () => {
 				setShowEndSessionDialog(true);
 			},
+			applyBulkChanges: (bulkChanges) => {
+				// Apply bulk changes to pendingChanges Map
+				setPendingChanges((prev) => {
+					const newChanges = new Map(prev);
+					bulkChanges.forEach((change) => {
+						newChanges.set(change.id, change);
+					});
+					return newChanges;
+				});
+			},
 		}));
 
 		// Notify parent when session state changes
@@ -185,6 +201,38 @@ const FilterableSample = forwardRef(
 				console.error('Error saving pending changes to session storage:', error);
 			}
 		}, [pendingChanges]);
+
+		// Fetch unit suggestions from API
+		useEffect(() => {
+			const fetchUnits = async () => {
+				try {
+					const unitsResponse = await apiGet('https://black.irdop.org/get/list_enum/unit');
+					if (unitsResponse.data && Array.isArray(unitsResponse.data)) {
+						setUniqueUnits(unitsResponse.data.filter(Boolean));
+					}
+				} catch (error) {
+					console.error('Error fetching units:', error);
+				}
+			};
+
+			fetchUnits();
+		}, []);
+
+		// Filter and paginate units
+		const filterUnits = (input) => {
+			if (!input || input.trim() === '') return [];
+			return uniqueUnits.filter((unit) => unit && unit.toLowerCase().includes((input || '').toLowerCase()));
+		};
+
+		const getPaginatedUnits = (input) => {
+			const filtered = filterUnits(input);
+			return filtered.slice((unitPage - 1) * unitItemsPerPage, unitPage * unitItemsPerPage);
+		};
+
+		const handleUnitPageChange = (pageNumber) => {
+			setUnitPage(pageNumber);
+		};
+
 		useEffect(() => {
 			const styleElement = document.createElement('style');
 			styleElement.textContent = `
@@ -993,41 +1041,9 @@ const FilterableSample = forwardRef(
 		};
 
 		const startResultEntrySession = async () => {
-			// Check authentication (10 minutes)
-			const now = new Date().getTime();
-			const editExpiredResultAt = Cookies.get('editExpiredResultAt');
-
-			// Check if editExpiredResultAt cookie exists and is valid (within 10 minutes)
-			if (!editExpiredResultAt || parseInt(editExpiredResultAt) < now) {
-				// Need to login - show login popup
-				setPendingEditCell({ action: 'startSession' });
-				setShowLoginPopup(true);
-				return;
-			}
-
-			// Authentication is valid, show session confirmation
-			setPendingEditCell({ action: 'startSession' });
-			setShowSessionConfirm(true);
-		};
-
-		const handleConfirmUser = async () => {
-			// User confirmed - start session
+			// Simply start the session without authentication check
 			setIsResultEntrySession(true);
-			setShowSessionConfirm(false);
-			setPendingEditCell(null);
-			toast.success('Bắt đầu phiên nhập kết quả');
-
-			// If there was a pending edit, proceed with it
-			if (pendingEditCell && pendingEditCell.analysisId) {
-				const { analysisId, column, currentValue } = pendingEditCell;
-				proceedWithEdit(analysisId, column, currentValue);
-			}
-		};
-
-		const handleRelogin = () => {
-			// Close confirm dialog and show login popup
-			setShowSessionConfirm(false);
-			setShowLoginPopup(true);
+			toast.success('Đã bắt đầu phiên nhập kết quả');
 		};
 
 		const handleSaveChange = (analysisId, field, value) => {
@@ -1787,67 +1803,48 @@ const FilterableSample = forwardRef(
 		};
 
 		// Inline editing handlers
-		// Check authentication before editing
-		const checkAuthBeforeEdit = async (analysisId, column, currentValue) => {
-			const now = new Date().getTime();
-			const editExpiredResultAt = Cookies.get('editExpiredResultAt');
-
-			// Check if editExpiredResultAt cookie exists and is valid
-			if (!editExpiredResultAt || parseInt(editExpiredResultAt) < now) {
-				// Need to login - show login popup
-				setPendingEditCell({ analysisId, column, currentValue });
-				setShowLoginPopup(true);
-				return false;
-			}
-
-			// Cookie is valid, check localStorage
-			const lastEditResultAt = localStorage.getItem('lastEditResultAt');
-
-			if (lastEditResultAt && parseInt(lastEditResultAt) > now) {
-				// User has recently edited, allow direct edit
-				return true;
-			}
-
-			// Need to confirm relogin
+		// Show confirmation dialog for user before editing
+		const confirmUserBeforeEdit = (analysisId, column, currentValue) => {
+			// Show confirmation popup with user info and option to re-login
 			setPendingEditCell({ analysisId, column, currentValue });
-			setShowReloginConfirm(true);
-			return false;
+			setShowSessionConfirm(true);
+		};
+
+		// Handle user confirmation (continue as current user)
+		const handleConfirmUser = () => {
+			if (pendingEditCell) {
+				const { analysisId, column, currentValue } = pendingEditCell;
+				proceedWithEdit(analysisId, column, currentValue);
+				setPendingEditCell(null);
+			}
+			setShowSessionConfirm(false);
+		};
+
+		// Handle re-login option
+		const handleRelogin = () => {
+			setShowSessionConfirm(false);
+			setShowLoginPopup(true);
 		};
 
 		// Handle login success callback
 		const handleLoginSuccess = () => {
 			setShowLoginPopup(false);
-			setShowReloginConfirm(false);
 
-			// Set lastEditResultAt to allow immediate editing after login
-			const now = new Date().getTime();
-			const lastEditAt = now + 2 * 60 * 1000; // 2 minutes from now
-			localStorage.setItem('lastEditResultAt', lastEditAt.toString());
-
-			// Proceed with the pending action
+			// Proceed with the pending edit
 			if (pendingEditCell) {
-				const { analysisId, column, currentValue, action } = pendingEditCell;
-
-				// Check if this is a session start action
-				if (action === 'startSession') {
-					// Show session confirmation dialog
-					setShowSessionConfirm(true);
-				} else {
-					// Normal edit - proceed with edit
-					proceedWithEdit(analysisId, column, currentValue);
-					setPendingEditCell(null);
-				}
+				const { analysisId, column, currentValue } = pendingEditCell;
+				proceedWithEdit(analysisId, column, currentValue);
+				setPendingEditCell(null);
 			}
 		};
 
 		// Close login popup
 		const closeLoginPopup = () => {
 			setShowLoginPopup(false);
-			setShowReloginConfirm(false);
 			setPendingEditCell(null);
 		};
 
-		// Proceed with edit after authentication
+		// Proceed with edit after confirmation
 		const proceedWithEdit = (analysisId, column, currentValue) => {
 			setEditingCell({ analysisId, column });
 			// Convert HTML tags back to special characters for editing
@@ -1861,37 +1858,26 @@ const FilterableSample = forwardRef(
 				return;
 			}
 
+			// Close unit dropdown when switching cells
+			setShowUnitDropdown(false);
+
 			// Only apply session logic for result and unit columns
 			if (column === 'resultValue' || column === 'resultUnit') {
-				// If not in session, check auth and prompt to start session
+				// If not in session, start session first
 				if (!isResultEntrySession) {
-					// Check authentication (10 minutes)
-					const now = new Date().getTime();
-					const editExpiredResultAt = Cookies.get('editExpiredResultAt');
-
-					// Check if editExpiredResultAt cookie exists and is valid (within 10 minutes)
-					if (!editExpiredResultAt || parseInt(editExpiredResultAt) < now) {
-						// Need to login - show login popup
-						setPendingEditCell({ analysisId, column, currentValue });
-						setShowLoginPopup(true);
-						return;
-					}
-
-					// Authentication is valid, show session confirmation
-					setPendingEditCell({ analysisId, column, currentValue });
-					setShowSessionConfirm(true);
-					return;
+					await startResultEntrySession();
 				}
 
-				// Already in session, proceed with edit directly
-				proceedWithEdit(analysisId, column, currentValue);
-			} else {
-				// For other columns, check authentication as before
-				const canEdit = await checkAuthBeforeEdit(analysisId, column, currentValue);
-
-				if (canEdit) {
+				// If already in session, proceed directly without confirmation
+				if (isResultEntrySession) {
 					proceedWithEdit(analysisId, column, currentValue);
+				} else {
+					// Show confirmation dialog only when starting new session
+					confirmUserBeforeEdit(analysisId, column, currentValue);
 				}
+			} else if (column === 'note') {
+				// For note column, edit directly without confirmation
+				proceedWithEdit(analysisId, column, currentValue);
 			}
 		};
 
@@ -1899,6 +1885,11 @@ const FilterableSample = forwardRef(
 			if (!editingCell) return;
 
 			const { analysisId, column } = editingCell;
+
+			// Close unit dropdown
+			setTimeout(() => {
+				setShowUnitDropdown(false);
+			}, 200);
 
 			// Find the original value to compare
 			const originalAnalysis = getAnalysisDataById(analysisId);
@@ -2173,13 +2164,14 @@ const FilterableSample = forwardRef(
 		// Auto-refresh every 60 seconds
 		useEffect(() => {
 			const interval = setInterval(() => {
-				if (!isApiCallInProgress && isFetch && !activeFilterColumn) {
+				// Don't auto-refresh if in result entry session, API call in progress, or filter modal is open
+				if (!isApiCallInProgress && isFetch && !activeFilterColumn && !isResultEntrySession) {
 					fetchSampleData(true);
 				}
 			}, 60000);
 
 			return () => clearInterval(interval);
-		}, [isApiCallInProgress, isFetch, activeFilterColumn]);
+		}, [isApiCallInProgress, isFetch, activeFilterColumn, isResultEntrySession]);
 
 		// Search filter values with debounce
 		useEffect(() => {
@@ -2291,6 +2283,37 @@ const FilterableSample = forwardRef(
 					pauseOnHover
 					theme="light"
 				/>
+				{/* Session Active Banner using Portal - doesn't affect layout */}
+				{isResultEntrySession &&
+					createPortal(
+						<div
+							className="fixed top-0 left-0 z-[9999] bg-yellow-400 border-b-2 border-r-2 border-yellow-600 shadow-lg rounded-br-lg"
+							style={{ maxWidth: '500px' }}
+						>
+							<div className="flex items-center gap-3 px-4 py-2">
+								<svg
+									className="w-5 h-5 text-yellow-800 animate-pulse flex-shrink-0"
+									fill="currentColor"
+									viewBox="0 0 20 20"
+								>
+									<path
+										fillRule="evenodd"
+										d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+										clipRule="evenodd"
+									/>
+								</svg>
+								<div className="flex flex-col gap-1 min-w-0">
+									<span className="text-sm font-semibold text-yellow-900 whitespace-nowrap">
+										🔬 Phiên nhập kết quả ({pendingChanges.size})
+									</span>
+									<span className="text-xs text-yellow-800 truncate">
+										{currentUser?.identity_name || 'Không xác định'}
+									</span>
+								</div>
+							</div>
+						</div>,
+						document.body,
+					)}
 				{/* Main content */}
 				<div className="flex-1 overflow-auto custom-scrollbar min-w-[1200px]">
 					{loading ? (
@@ -2492,17 +2515,85 @@ const FilterableSample = forwardRef(
 																}}
 															>
 																{editingCell?.analysisId === item.id && editingCell?.column === 'resultUnit' ? (
-																	<input
-																		type="text"
-																		value={editValue}
-																		onChange={(e) => setEditValue(e.target.value)}
-																		onBlur={handleCellBlur}
-																		onKeyDown={handleKeyDown}
-																		onClick={(e) => e.stopPropagation()}
-																		onMouseDown={(e) => e.stopPropagation()}
-																		className="w-full px-2 py-1 text-sm border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-																		autoFocus
-																	/>
+																	<>
+																		<input
+																			id={`unit-input-${item.id}`}
+																			type="text"
+																			value={editValue}
+																			onChange={(e) => {
+																				const newValue = e.target.value;
+																				setEditValue(newValue);
+																				setUnitInput(newValue);
+																				setUnitPage(1);
+																				setShowUnitDropdown(newValue.length >= 1);
+																			}}
+																			onBlur={handleCellBlur}
+																			onKeyDown={handleKeyDown}
+																			onClick={(e) => e.stopPropagation()}
+																			onMouseDown={(e) => e.stopPropagation()}
+																			className="w-full px-2 py-1 text-sm border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+																			autoFocus
+																		/>
+																		{showUnitDropdown &&
+																			getPaginatedUnits(unitInput).length > 0 &&
+																			createPortal(
+																				<div
+																					className="absolute bg-white border rounded shadow-lg z-[9999]"
+																					style={{
+																						width: document.getElementById(`unit-input-${item.id}`)?.offsetWidth + 'px',
+																						top:
+																							document.getElementById(`unit-input-${item.id}`)?.getBoundingClientRect()
+																								.bottom + window.scrollY,
+																						left:
+																							document.getElementById(`unit-input-${item.id}`)?.getBoundingClientRect()
+																								.left + window.scrollX,
+																					}}
+																				>
+																					{getPaginatedUnits(unitInput).map((unit, index) => (
+																						<div
+																							key={index}
+																							className="p-2 text-sm cursor-pointer hover:bg-gray-200 text-start border-b border-slate-100"
+																							onMouseDown={(e) => {
+																								e.preventDefault();
+																								setEditValue(unit);
+																								setShowUnitDropdown(false);
+																								// Trigger blur to save
+																								setTimeout(() => {
+																									handleCellBlur();
+																								}, 100);
+																							}}
+																						>
+																							<p>{unit}</p>
+																						</div>
+																					))}
+																					{filterUnits(unitInput).length > unitItemsPerPage && (
+																						<div className="flex justify-between p-2 bg-gray-100">
+																							<button
+																								className="px-2 py-1 border rounded disabled:opacity-50"
+																								onClick={() => handleUnitPageChange(unitPage - 1)}
+																								disabled={unitPage === 1}
+																							>
+																								Prev
+																							</button>
+																							<span className="text-sm">
+																								{unitPage}/{Math.ceil(filterUnits(unitInput).length / unitItemsPerPage)}
+																							</span>
+																							<button
+																								className="px-2 py-1 border rounded disabled:opacity-50"
+																								onClick={() => handleUnitPageChange(unitPage + 1)}
+																								disabled={
+																									unitPage >=
+																									Math.ceil(filterUnits(unitInput).length / unitItemsPerPage)
+																								}
+																							>
+																								Next
+																							</button>
+																						</div>
+																					)}
+																				</div>,
+																				document.body,
+																			)}
+																	</>
 																) : (
 																	<span
 																		className="text-sm"
@@ -2967,40 +3058,6 @@ const FilterableSample = forwardRef(
 						document.body,
 					)}
 				{/* Relogin Confirmation Modal */}
-				{showReloginConfirm && (
-					<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
-						<div className="bg-white rounded-lg p-6 w-[450px] relative shadow-xl">
-							<h2 className="text-xl font-semibold mb-4 text-gray-800">Xác nhận</h2>
-							<p className="text-gray-700 mb-6">Bạn có muốn đăng nhập lại để nhập kết quả cho phép thử này?</p>
-
-							<div className="flex justify-end space-x-3">
-								<button
-									onClick={() => {
-										setShowReloginConfirm(false);
-										// Proceed with edit without login
-										if (pendingEditCell) {
-											const { analysisId, column, currentValue } = pendingEditCell;
-											proceedWithEdit(analysisId, column, currentValue);
-											setPendingEditCell(null);
-										}
-									}}
-									className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-								>
-									Không
-								</button>
-								<button
-									onClick={() => {
-										setShowReloginConfirm(false);
-										setShowLoginPopup(true);
-									}}
-									className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-								>
-									Có, đăng nhập
-								</button>
-							</div>
-						</div>
-					</div>
-				)}
 				{/* Session Confirmation Dialog */}
 				{showSessionConfirm && (
 					<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">

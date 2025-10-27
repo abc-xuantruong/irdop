@@ -187,7 +187,16 @@ const ProcessingSampleV2 = ({ onNavigateToLab, filter = {} }) => {
 				selectedRows={selectedAnalyses.map((item) => item.id)}
 				selectedData={selectedAnalyses}
 				technicians={[]}
-				onUpdateComplete={handleBulkEditComplete}
+				onApplyBulkChanges={(bulkChanges) => {
+					// Apply bulk changes via FilterableSample ref
+					if (filterableRef.current && filterableRef.current.applyBulkChanges) {
+						filterableRef.current.applyBulkChanges(bulkChanges);
+					}
+
+					// Close bulk edit modal and clear selections
+					setShowBulkEdit(false);
+					setSelectedAnalyses([]);
+				}}
 			/>
 		</div>
 	);

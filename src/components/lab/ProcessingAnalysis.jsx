@@ -648,16 +648,16 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	const [editingCell, setEditingCell] = useState(null); // { analysisId, column }
 	const [editValue, setEditValue] = useState('');
 
-	// Unit autocomplete states
-	const [unitSuggestions, setUnitSuggestions] = useState([]);
-	const [showUnitSuggestions, setShowUnitSuggestions] = useState(false);
-	const [unitInputRect, setUnitInputRect] = useState(null);
-	const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+	// Unit suggestions states
+	const [uniqueUnits, setUniqueUnits] = useState([]);
+	const [unitInput, setUnitInput] = useState('');
+	const [showUnitDropdown, setShowUnitDropdown] = useState(false);
+	const [unitPage, setUnitPage] = useState(1);
+	const unitItemsPerPage = 6;
 	const unitInputRef = useRef(null);
 
 	// Login popup states
 	const [showLoginPopup, setShowLoginPopup] = useState(false);
-	const [showReloginConfirm, setShowReloginConfirm] = useState(false);
 	const [pendingEditCell, setPendingEditCell] = useState(null); // Store pending edit until login
 
 	// Result entry session states
@@ -1492,10 +1492,11 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	useEffect(() => {
 		if (!isInitialLoad && !isInitialDataLoading) {
 			const autoRefreshInterval = setInterval(() => {
-				// Only auto-refresh when not fetching and no filters are active
+				// Only auto-refresh when not fetching, no filters are active, and NOT in result entry session
 				if (
 					!isCurrentlyFetchingRef.current &&
-					!hasActiveFilters // Only refresh when no filters are active
+					!hasActiveFilters && // Only refresh when no filters are active
+					!isResultEntrySession // Don't refresh during result entry session
 				) {
 					// Use current state instead of parsing URL to maintain filters
 					fetchAnalysisData(true, filters, currentPage, itemsPerPage);
@@ -1508,6 +1509,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		isInitialLoad, // Only depend on isInitialLoad to avoid unnecessary re-creation of interval
 		isInitialDataLoading, // Add isInitialDataLoading dependency
 		hasActiveFilters, // Add hasActiveFilters as dependency to update interval behavior
+		isResultEntrySession, // Add to prevent refresh during session
 	]);
 
 	// Close technician dropdown when clicking outside
@@ -1841,6 +1843,37 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		}
 	}, [pendingChanges]);
 
+	// Fetch unit suggestions from API
+	useEffect(() => {
+		const fetchUnits = async () => {
+			try {
+				const unitsResponse = await apiGet('https://black.irdop.org/get/list_enum/unit');
+				if (unitsResponse.data && Array.isArray(unitsResponse.data)) {
+					setUniqueUnits(unitsResponse.data.filter(Boolean));
+				}
+			} catch (error) {
+				console.error('Error fetching units:', error);
+			}
+		};
+
+		fetchUnits();
+	}, []);
+
+	// Filter and paginate units
+	const filterUnits = (input) => {
+		if (!input || input.trim() === '') return [];
+		return uniqueUnits.filter((unit) => unit && unit.toLowerCase().includes((input || '').toLowerCase()));
+	};
+
+	const getPaginatedUnits = (input) => {
+		const filtered = filterUnits(input);
+		return filtered.slice((unitPage - 1) * unitItemsPerPage, unitPage * unitItemsPerPage);
+	};
+
+	const handleUnitPageChange = (pageNumber) => {
+		setUnitPage(pageNumber);
+	};
+
 	// Clear all filters (for selected items indicator)
 	const clearAllFilters = () => {
 		// Navigate to clean URL without any filter parameters
@@ -1860,21 +1893,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	};
 
 	const startResultEntrySession = async () => {
-		// Check authentication (10 minutes)
-		const now = new Date().getTime();
-		const editExpiredResultAt = Cookies.get('editExpiredResultAt');
-
-		// Check if editExpiredResultAt cookie exists and is valid (within 10 minutes)
-		if (!editExpiredResultAt || parseInt(editExpiredResultAt) < now) {
-			// Need to login - show login popup
-			setPendingEditCell({ action: 'startSession' });
-			setShowLoginPopup(true);
-			return;
-		}
-
-		// Authentication is valid, show session confirmation
-		setPendingEditCell({ action: 'startSession' });
-		setShowSessionConfirm(true);
+		// Simply start the session without authentication check
+		setIsResultEntrySession(true);
+		toast.success('Đã bắt đầu phiên nhập kết quả');
 	};
 
 	const endResultEntrySession = async () => {
@@ -2093,43 +2114,32 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	};
 
 	// Inline editing handlers
-	// Check authentication before editing
-	const checkAuthBeforeEdit = async (analysisId, column, currentValue) => {
-		const now = new Date().getTime();
-		const editExpiredResultAt = Cookies.get('editExpiredResultAt');
-
-		// Check if editExpiredResultAt cookie exists and is valid
-		if (!editExpiredResultAt || parseInt(editExpiredResultAt) < now) {
-			// Need to login - show login popup
-			setPendingEditCell({ analysisId, column, currentValue });
-			setShowLoginPopup(true);
-			return false;
-		}
-
-		// Cookie is valid, check localStorage
-		const lastEditResultAt = localStorage.getItem('lastEditResultAt');
-
-		if (lastEditResultAt && parseInt(lastEditResultAt) > now) {
-			// User has recently edited, allow direct edit
-			return true;
-		}
-
-		// Need to confirm relogin
+	// Show confirmation dialog for user before editing
+	const confirmUserBeforeEdit = (analysisId, column, currentValue) => {
+		// Show confirmation popup with user info and option to re-login
 		setPendingEditCell({ analysisId, column, currentValue });
-		setShowReloginConfirm(true);
-		return false;
+		setShowSessionConfirm(true);
 	};
 
-	// Handle login form submission
+	// Handle user confirmation (continue as current user)
+	const handleConfirmUser = () => {
+		if (pendingEditCell) {
+			const { analysisId, column, currentValue } = pendingEditCell;
+			proceedWithEdit(analysisId, column, currentValue);
+			setPendingEditCell(null);
+		}
+		setShowSessionConfirm(false);
+	};
+
+	// Handle re-login option
+	const handleRelogin = () => {
+		setShowSessionConfirm(false);
+		setShowLoginPopup(true);
+	};
+
 	// Handle login success callback
 	const handleLoginSuccess = () => {
 		setShowLoginPopup(false);
-		setShowReloginConfirm(false);
-
-		// Set lastEditResultAt to allow immediate editing after login
-		const now = new Date().getTime();
-		const lastEditAt = now + 2 * 60 * 1000; // 2 minutes from now
-		localStorage.setItem('lastEditResultAt', lastEditAt.toString());
 
 		// Get identityId from cookie
 		const identityId = Cookies.get('identityId');
@@ -2163,19 +2173,10 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			}
 		}
 
-		// Proceed with the pending edit or action
+		// Proceed with the pending edit
 		if (pendingEditCell) {
-			const { analysisId, column, currentValue, action } = pendingEditCell;
-
-			// Check if this is a session start action
-			if (action === 'startSession') {
-				// Show session confirmation dialog
-				setShowSessionConfirm(true);
-			} else {
-				// Normal edit - proceed with edit
-				proceedWithEdit(analysisId, column, currentValue);
-			}
-
+			const { analysisId, column, currentValue } = pendingEditCell;
+			proceedWithEdit(analysisId, column, currentValue);
 			setPendingEditCell(null);
 		}
 	};
@@ -2183,11 +2184,10 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	// Close login popup
 	const closeLoginPopup = () => {
 		setShowLoginPopup(false);
-		setShowReloginConfirm(false);
 		setPendingEditCell(null);
 	};
 
-	// Proceed with edit after authentication
+	// Proceed with edit after confirmation
 	const proceedWithEdit = (analysisId, column, currentValue) => {
 		setEditingCell({ analysisId, column });
 		// Convert HTML tags back to special characters for editing
@@ -2201,37 +2201,26 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			return;
 		}
 
+		// Close unit dropdown when switching cells
+		setShowUnitDropdown(false);
+
 		// Only apply session logic for result and unit columns
 		if (column === 'resultValue' || column === 'resultUnit') {
-			// If not in session, check auth and prompt to start session
+			// If not in session, start session first
 			if (!isResultEntrySession) {
-				// Check authentication (10 minutes)
-				const now = new Date().getTime();
-				const editExpiredResultAt = Cookies.get('editExpiredResultAt');
-
-				// Check if editExpiredResultAt cookie exists and is valid (within 10 minutes)
-				if (!editExpiredResultAt || parseInt(editExpiredResultAt) < now) {
-					// Need to login - show login popup
-					setPendingEditCell({ analysisId, column, currentValue });
-					setShowLoginPopup(true);
-					return;
-				}
-
-				// Authentication is valid, show session confirmation
-				setPendingEditCell({ analysisId, column, currentValue });
-				setShowSessionConfirm(true);
-				return;
+				await startResultEntrySession();
 			}
 
-			// Already in session, proceed with edit directly
-			proceedWithEdit(analysisId, column, currentValue);
-		} else {
-			// For other columns, check authentication as before
-			const canEdit = await checkAuthBeforeEdit(analysisId, column, currentValue);
-
-			if (canEdit) {
+			// If already in session, proceed directly without confirmation
+			if (isResultEntrySession) {
 				proceedWithEdit(analysisId, column, currentValue);
+			} else {
+				// Show confirmation dialog only when starting new session
+				confirmUserBeforeEdit(analysisId, column, currentValue);
 			}
+		} else if (column === 'note') {
+			// For note column, edit directly without confirmation
+			proceedWithEdit(analysisId, column, currentValue);
 		}
 	};
 
@@ -2239,6 +2228,11 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		if (!editingCell) return;
 
 		const { analysisId, column } = editingCell;
+
+		// Close unit dropdown
+		setTimeout(() => {
+			setShowUnitDropdown(false);
+		}, 200);
 
 		// Find the original value to compare
 		const originalAnalysis = data.find((item) => item.id === analysisId);
@@ -2321,62 +2315,19 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	};
 
 	// Fetch unit suggestions from API
-	const fetchUnitSuggestions = async (searchTerm) => {
-		if (!searchTerm || searchTerm.trim() === '') {
-			setUnitSuggestions([]);
-			setShowUnitSuggestions(false);
-			return;
-		}
-
-		try {
-			const response = await apiPost('https://red.irdop.org/v1/option/get/list', {
-				listType: 'unit',
-				param: {
-					searchTerm: searchTerm,
-				},
-			});
-
-			if (response?.status < 300 && Array.isArray(response.data)) {
-				setUnitSuggestions(response.data);
-				setShowUnitSuggestions(response.data.length > 0);
-				setSelectedSuggestionIndex(-1);
-			} else {
-				setUnitSuggestions([]);
-				setShowUnitSuggestions(false);
-			}
-		} catch (error) {
-			console.error('Error fetching unit suggestions:', error);
-			setUnitSuggestions([]);
-			setShowUnitSuggestions(false);
-		}
-	};
-
 	// Handle unit input change
 	const handleUnitInputChange = (e) => {
 		const value = e.target.value;
 		setEditValue(value);
-
-		// Fetch suggestions when user types first character
-		if (value.length > 0) {
-			fetchUnitSuggestions(value);
-
-			// Update input rect for portal positioning
-			if (unitInputRef.current) {
-				const rect = unitInputRef.current.getBoundingClientRect();
-				setUnitInputRect(rect);
-			}
-		} else {
-			setShowUnitSuggestions(false);
-			setUnitSuggestions([]);
-		}
+		setUnitInput(value);
+		setUnitPage(1);
+		setShowUnitDropdown(value.length >= 1);
 	};
 
 	// Handle suggestion selection
 	const handleSuggestionClick = (suggestion) => {
 		setEditValue(suggestion);
-		setShowUnitSuggestions(false);
-		setUnitSuggestions([]);
-		setSelectedSuggestionIndex(-1);
+		setShowUnitDropdown(false);
 		// Keep focus on input
 		if (unitInputRef.current) {
 			unitInputRef.current.focus();
@@ -2387,49 +2338,28 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	useEffect(() => {
 		const handleClickOutside = (e) => {
 			if (
-				showUnitSuggestions &&
+				showUnitDropdown &&
 				unitInputRef.current &&
 				!unitInputRef.current.contains(e.target) &&
 				!e.target.closest('.unit-suggestions-dropdown')
 			) {
-				setShowUnitSuggestions(false);
+				setShowUnitDropdown(false);
 			}
 		};
 
 		document.addEventListener('mousedown', handleClickOutside);
 		return () => document.removeEventListener('mousedown', handleClickOutside);
-	}, [showUnitSuggestions]);
+	}, [showUnitDropdown]);
 
 	const handleKeyDown = (e) => {
-		// Handle keyboard navigation for unit suggestions
-		if (editingCell?.column === 'resultUnit' && showUnitSuggestions && unitSuggestions.length > 0) {
-			if (e.key === 'ArrowDown') {
-				e.preventDefault();
-				setSelectedSuggestionIndex((prev) => (prev < unitSuggestions.length - 1 ? prev + 1 : prev));
-			} else if (e.key === 'ArrowUp') {
-				e.preventDefault();
-				setSelectedSuggestionIndex((prev) => (prev > 0 ? prev - 1 : -1));
-			} else if (e.key === 'Enter') {
-				e.preventDefault();
-				if (selectedSuggestionIndex >= 0) {
-					handleSuggestionClick(unitSuggestions[selectedSuggestionIndex]);
-				} else {
-					e.target.blur(); // This will trigger handleCellBlur
-				}
-			} else if (e.key === 'Escape') {
-				setShowUnitSuggestions(false);
-				setUnitSuggestions([]);
-				setSelectedSuggestionIndex(-1);
-			}
-		} else {
-			// Normal key handling for other cells
-			if (e.key === 'Enter') {
-				e.preventDefault();
-				e.target.blur(); // This will trigger handleCellBlur
-			} else if (e.key === 'Escape') {
-				setEditingCell(null);
-				setEditValue('');
-			}
+		// Normal key handling for all cells
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			e.target.blur(); // This will trigger handleCellBlur
+		} else if (e.key === 'Escape') {
+			setEditingCell(null);
+			setEditValue('');
+			setShowUnitDropdown(false);
 		}
 	};
 
@@ -3445,6 +3375,37 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					</div>
 				</div>
 			</div>{' '}
+			{/* Session Active Banner using Portal - doesn't affect layout */}
+			{isResultEntrySession &&
+				createPortal(
+					<div
+						className="fixed top-0 left-0 z-[9999] bg-yellow-400 border-b-2 border-r-2 border-yellow-600 shadow-lg rounded-br-lg"
+						style={{ maxWidth: '500px' }}
+					>
+						<div className="flex items-center gap-3 px-4 py-2">
+							<svg
+								className="w-5 h-5 text-yellow-800 animate-pulse flex-shrink-0"
+								fill="currentColor"
+								viewBox="0 0 20 20"
+							>
+								<path
+									fillRule="evenodd"
+									d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+									clipRule="evenodd"
+								/>
+							</svg>
+							<div className="flex flex-col gap-1 min-w-0">
+								<span className="text-sm font-semibold text-yellow-900 whitespace-nowrap">
+									🔬 Phiên nhập kết quả ({pendingChanges.size})
+								</span>
+								<span className="text-xs text-yellow-800 truncate">
+									{currentUser?.identity_name || 'Không xác định'}
+								</span>
+							</div>
+						</div>
+					</div>,
+					document.body,
+				)}
 			{/* Sidebar - nằm dưới breadcrumb */}
 			<div
 				className={`bg-gray-100 border-gray-300 z-30 flex flex-col box-border transition-all duration-300 ${
@@ -4360,57 +4321,36 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				selectedRows={Array.from(selectedAnalysisIds)}
 				selectedData={Array.from(selectedRowsData.values())}
 				technicians={technicians}
-				onUpdateComplete={() => {
+				onApplyBulkChanges={(bulkChanges) => {
+					// Apply bulk changes to pendingChanges Map
+					setPendingChanges((prev) => {
+						const newChanges = new Map(prev);
+						bulkChanges.forEach((change) => {
+							newChanges.set(change.id, change);
+						});
+						return newChanges;
+					});
+
+					// Close bulk edit modal and clear selections
 					setShowBulkEdit(false);
 					setSelectedAnalysisIds(new Set());
 					setSelectedRowsData(new Map());
-					// Refresh data
-					setTimeout(() => {
-						fetchAnalysisData(true, filters, currentPage, itemsPerPage);
-					}, 1000);
 				}}
 			/>
 			{/* Login Popup */}
 			<LoginPopup isOpen={showLoginPopup} onClose={closeLoginPopup} onLoginSuccess={handleLoginSuccess} />
 			{/* Relogin Confirmation Dialog */}
-			{showReloginConfirm && (
-				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-					<div className="bg-white rounded-lg shadow-xl p-6 w-96">
-						<h2 className="text-xl font-bold mb-4 text-gray-800">Xác nhận đăng nhập lại</h2>
-						<p className="text-sm text-gray-600 mb-6">
-							Phiên làm việc của bạn đã hết hạn. Bạn có muốn đăng nhập lại để tiếp tục chỉnh sửa không?
-						</p>
-						<div className="flex justify-end space-x-3">
-							<button
-								onClick={closeLoginPopup}
-								className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
-							>
-								Không
-							</button>
-							<button
-								onClick={() => {
-									setShowReloginConfirm(false);
-									setShowLoginPopup(true);
-								}}
-								className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-							>
-								Đăng nhập lại
-							</button>
-						</div>
-					</div>
-				</div>
-			)}
 			{/* Result Entry Session Confirmation Dialog */}
 			{showSessionConfirm && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
 					<div className="bg-white rounded-lg shadow-xl p-6 w-96">
-						<h2 className="text-xl font-bold mb-4 text-gray-800">Bắt đầu phiên nhập kết quả</h2>
-						<p className="text-sm text-gray-600 mb-2">Bạn có muốn bắt đầu phiên nhập kết quả với tài khoản:</p>
-						<p className="text-base font-semibold text-blue-600 mb-6">
+						<h2 className="text-xl font-bold mb-4 text-gray-800">Xác nhận người nhập kết quả</h2>
+						<p className="text-sm text-gray-600 mb-2">Bạn đang nhập kết quả với tài khoản:</p>
+						<p className="text-base font-semibold text-blue-600 mb-4">
 							{currentUser?.identity_name || 'Không xác định'}
 						</p>
 						<p className="text-xs text-gray-500 mb-4 italic">
-							💡 Trong phiên nhập kết quả, các thay đổi sẽ được lưu tạm thời và gửi cùng lúc khi kết thúc phiên.
+							💡 Các thay đổi sẽ được lưu tạm thời và gửi cùng lúc khi kết thúc phiên nhập.
 						</p>
 						<div className="flex justify-end space-x-3">
 							<button
@@ -4423,27 +4363,13 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 								Hủy bỏ
 							</button>
 							<button
-								onClick={() => {
-									setShowSessionConfirm(false);
-									setShowLoginPopup(true);
-									setPendingEditCell(null);
-								}}
+								onClick={handleRelogin}
 								className="px-4 py-2 text-sm bg-orange-600 text-white rounded hover:bg-orange-700"
 							>
 								Đăng nhập lại
 							</button>
 							<button
-								onClick={() => {
-									setIsResultEntrySession(true);
-									setShowSessionConfirm(false);
-									toast.success('Đã bắt đầu phiên nhập kết quả');
-									// Proceed with the pending edit if exists
-									if (pendingEditCell && pendingEditCell.action !== 'startSession') {
-										const { analysisId, column, currentValue } = pendingEditCell;
-										proceedWithEdit(analysisId, column, currentValue);
-									}
-									setPendingEditCell(null);
-								}}
+								onClick={handleConfirmUser}
 								className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
 							>
 								Xác nhận
@@ -4574,30 +4500,59 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				</div>
 			)}
 			{/* Unit Autocomplete Dropdown Portal */}
-			{showUnitSuggestions &&
-				unitInputRect &&
+			{showUnitDropdown &&
+				unitInputRef.current &&
+				getPaginatedUnits(unitInput).length > 0 &&
 				createPortal(
 					<div
-						className="unit-suggestions-dropdown fixed bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto z-[9999]"
+						className="unit-suggestions-dropdown absolute bg-white border border-gray-300 rounded-md shadow-lg z-[9999]"
 						style={{
-							top: `${unitInputRect.bottom + window.scrollY}px`,
-							left: `${unitInputRect.left + window.scrollX}px`,
-							width: `${unitInputRect.width}px`,
+							top: `${unitInputRef.current.getBoundingClientRect().bottom + window.scrollY}px`,
+							left: `${unitInputRef.current.getBoundingClientRect().left + window.scrollX}px`,
+							width: `${unitInputRef.current.offsetWidth}px`,
 							minWidth: '150px',
 						}}
 					>
-						{unitSuggestions.map((suggestion, index) => (
+						{getPaginatedUnits(unitInput).map((unit, index) => (
 							<div
 								key={index}
-								className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${
-									index === selectedSuggestionIndex ? 'bg-blue-100' : ''
-								}`}
-								onClick={() => handleSuggestionClick(suggestion)}
-								onMouseEnter={() => setSelectedSuggestionIndex(index)}
+								className="px-3 py-2 cursor-pointer hover:bg-blue-100 text-sm border-b border-gray-100"
+								onMouseDown={(e) => {
+									e.preventDefault();
+									setEditValue(unit);
+									setShowUnitDropdown(false);
+									// Trigger blur to save
+									setTimeout(() => {
+										if (unitInputRef.current) {
+											unitInputRef.current.blur();
+										}
+									}, 100);
+								}}
 							>
-								{suggestion}
+								{unit}
 							</div>
 						))}
+						{filterUnits(unitInput).length > unitItemsPerPage && (
+							<div className="flex justify-between p-2 bg-gray-100">
+								<button
+									className="px-2 py-1 border rounded disabled:opacity-50 text-sm"
+									onClick={() => handleUnitPageChange(unitPage - 1)}
+									disabled={unitPage === 1}
+								>
+									Prev
+								</button>
+								<span className="text-sm">
+									{unitPage}/{Math.ceil(filterUnits(unitInput).length / unitItemsPerPage)}
+								</span>
+								<button
+									className="px-2 py-1 border rounded disabled:opacity-50 text-sm"
+									onClick={() => handleUnitPageChange(unitPage + 1)}
+									disabled={unitPage >= Math.ceil(filterUnits(unitInput).length / unitItemsPerPage)}
+								>
+									Next
+								</button>
+							</div>
+						)}
 					</div>,
 					document.body,
 				)}

@@ -28,7 +28,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 // Replace axios import with our helper functions
 import { apiGet, apiPost } from '../contexts/helperFunctionCallAPI';
-import { convertValueToHTML } from '../contexts/formatHelpers';
+import { convertValueToHTML, convertHTMLToValue } from '../contexts/formatHelpers';
 
 // Import @dnd-kit components
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -461,25 +461,10 @@ const SampleInfor = () => {
 		});
 		setListAnalytes(updatedAnalytes);
 		try {
-			const analysis = updatedAnalytes.find((item) => item.id === index);
-
-			// Create minimal update object with only required fields
+			// Cột 7: scientificField - Chỉ gửi id và scientificField
 			const updateData = {
-				id: analysis.id,
-				sampleId: analysis.sampleId,
-				receiptId: analysis.receiptId,
+				id: index,
 				scientificField: newValue,
-				modifiedByUid: currentUser.identityUid,
-				displayStyle: analysis.displayStyle || [
-					{
-						label: 'default',
-						value: '',
-					},
-					{
-						label: 'eng',
-						value: '',
-					},
-				],
 			};
 
 			// Send the update to the server
@@ -1796,9 +1781,12 @@ const SampleInfor = () => {
 	};
 	const handleResultValueClick = (order) => {
 		if (!order) return;
-		const fieldKey = `resultValue-${order.id}`;
+		const fieldKey = `result_value-${order.id}`;
 		setEditingField(fieldKey);
-		const originalValue = order.resultValue ? String(order.resultValue) : '';
+		// Convert HTML to plain text for editing
+		const rawValue = order.resultValue ? String(order.resultValue) : '';
+		const originalValue = convertHTMLToValue(rawValue);
+		console.log('handleResultValueClick:', { rawValue, originalValue });
 		setInputValue(originalValue);
 		// Store original value for comparison
 		setOriginalValues((prev) => ({
@@ -1809,9 +1797,12 @@ const SampleInfor = () => {
 	};
 
 	const handleResultUnitClick = (order) => {
-		const fieldKey = `resultUnit-${order.id}`;
+		const fieldKey = `result_unit-${order.id}`;
 		setEditingField(fieldKey);
-		const originalValue = order.resultUnit ? String(order.resultUnit) : '';
+		// Convert HTML to plain text for editing
+		const rawValue = order.resultUnit ? String(order.resultUnit) : '';
+		const originalValue = convertHTMLToValue(rawValue);
+		console.log('handleResultUnitClick:', { rawValue, originalValue });
 		setInputValue(originalValue);
 		// Store original value for comparison
 		setOriginalValues((prev) => ({
@@ -1826,11 +1817,14 @@ const SampleInfor = () => {
 		const fieldType = fieldParts[0];
 		const analysisId = fieldParts[1]; // Keep as string to handle both numeric and text IDs
 
+		console.log('handleSaveContent called:', { currentField, fieldType, analysisId, newValue });
+
 		// Get original value for comparison
 		const originalValue = originalValues[currentField] || '';
 
 		// Check if value has changed
 		if (newValue === originalValue) {
+			console.log('Value unchanged, skipping API call:', { newValue, originalValue });
 			// No change, just close editor without API call
 			setIsEditorVisible(false);
 			setEditingField(null);
@@ -1847,9 +1841,9 @@ const SampleInfor = () => {
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id == analysisId) {
 				// Use loose equality to handle both string and number comparisons
-				if (fieldType === 'resultValue') {
+				if (fieldType === 'result_value') {
 					return { ...item, resultValue: newValue };
-				} else if (fieldType === 'resultUnit') {
+				} else if (fieldType === 'result_unit') {
 					return { ...item, resultUnit: newValue };
 				} else if (fieldType === 'technicianUid') {
 					return { ...item, technicianId: newValue };
@@ -1864,49 +1858,45 @@ const SampleInfor = () => {
 		try {
 			const analysis = updatedAnalytes.find((item) => item.id == analysisId); // Use loose equality
 
-			// Create minimal update object with only required fields
+			// Chỉ gửi id và field tương ứng
 			const updateData = {
 				id: analysis.id,
-				sampleId: analysis.sampleId,
-				receiptId: analysis.receiptId,
-				modifiedByUid: currentUser.identityUid,
-				displayStyle: analysis.displayStyle || [
-					{
-						label: 'default',
-						value: '',
-					},
-					{
-						label: 'eng',
-						value: '',
-					},
-				],
 			};
+
 			// Add only the field being updated
-			if (fieldType === 'resultValue') {
-				// Only add resultValue if it's not empty
+			if (fieldType === 'result_value') {
+				// Cột 4: resultValue
+				// Convert special characters to HTML format
+				const convertedValue = newValue ? convertValueToHTML(newValue) : '';
+				updateData.resultValue = convertedValue;
+				console.log('Updating resultValue:', { newValue, convertedValue, updateData });
+				// Add submission information when updating result value
 				if (newValue !== '') {
-					// Convert special characters to HTML format
-					updateData.resultValue = convertValueToHTML(newValue);
-					// Add submission information when updating result value
 					updateData.submitResultBy = currentUser?.identity_name;
 					updateData.submitResultAt = adjustDateForApiSubmission(new Date());
 				}
-			} else if (fieldType === 'resultUnit') {
-				// Convert special characters to HTML format
-				updateData.resultUnit = convertValueToHTML(newValue);
+			} else if (fieldType === 'result_unit') {
+				// Cột 5: resultUnit
+				// Convert special characters to HTML format (allow empty values)
+				const convertedValue = newValue ? convertValueToHTML(newValue) : '';
+				updateData.resultUnit = convertedValue;
+				console.log('Updating resultUnit:', { newValue, convertedValue, updateData });
 			} else if (fieldType === 'technicianId') {
+				// Cột 8: technicianId
 				updateData.technicianId = newValue;
 			}
 
+			console.log('Sending API request with payload:', { analysis: updateData });
 			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 				analysis: updateData,
 			});
 
 			if (response.status === 200) {
+				console.log('API response success:', response.data);
 				// Show more specific toast message based on what was updated
-				if (fieldType === 'resultValue') {
+				if (fieldType === 'result_value') {
 					showToast(`Đã cập nhật kết quả thành công!`);
-				} else if (fieldType === 'resultUnit') {
+				} else if (fieldType === 'result_unit') {
 					showToast(`Đã cập nhật đơn vị thành công!`);
 				} else {
 					showToast(`Đã cập nhật thông tin thành công!`);
@@ -2613,29 +2603,16 @@ const SampleInfor = () => {
 		const technicianAlias = selectedGroup.alias;
 
 		try {
-			// Create minimal update object with only required fields
+			// Cột 8: technicianId - Chỉ gửi id và các field liên quan đến technician
 			const updateData = {
 				id: analysis.id,
-				sampleId: analysis.sampleId,
-				receiptId: analysis.receiptId,
 				technicianId: identity_uid,
 				technician: {
 					identityId: identity_uid,
 					identityName: selectedTechnician.identityName,
 				},
 				technicianAlias: technicianAlias, // Add group alias
-				identityIds: technicianIds, // Add list of all technician IDs in the group (renamed from technicianIds)
-				modifiedByUid: currentUser.identityUid,
-				displayStyle: analysis.displayStyle || [
-					{
-						label: 'default',
-						value: '',
-					},
-					{
-						label: 'eng',
-						value: '',
-					},
-				],
+				identityIds: technicianIds, // Add list of all technician IDs in the group
 			};
 
 			// Send the update to the server
@@ -2748,23 +2725,10 @@ const SampleInfor = () => {
 			// Find the analysis item
 			const analysis = listAnalytes.find((item) => item.id === index);
 
-			// Create minimal update object with only required fields
+			// Cột 6: deadline - Chỉ gửi id và deadline
 			const updateData = {
 				id: analysis.id,
-				sampleId: analysis.sampleId,
-				receiptId: analysis.receiptId,
 				deadline: newDeadline,
-				modifiedByUid: currentUser.identityUid,
-				displayStyle: analysis.displayStyle || [
-					{
-						label: 'default',
-						value: '',
-					},
-					{
-						label: 'eng',
-						value: '',
-					},
-				],
 			};
 
 			// Send the update to the server
@@ -2942,17 +2906,34 @@ const SampleInfor = () => {
 			return;
 		}
 
-		const updatedAnalysis = await updateAnalysis(analysis);
+		try {
+			// Cột 2: matrix - Chỉ gửi id và matrix
+			const updateData = {
+				id: analysis.id,
+				matrix: analysis.matrix,
+			};
 
-		// Update the list with the returned analysis
-		const updatedAnalytes = listAnalytes.map((item) => {
-			if (item.id === index) {
-				return updatedAnalysis;
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analysis: updateData,
+			});
+
+			if (response.status === 200) {
+				showToast('Đã cập nhật nền mẫu thành công!');
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi cập nhật nền mẫu',
+				});
 			}
-			return item;
-		});
-
-		setListAnalytes(updatedAnalytes);
+		} catch (error) {
+			console.error('Error updating matrix:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật nền mẫu',
+			});
+		}
 
 		// Clear the original value
 		setOriginalValues((prev) => {
@@ -2974,17 +2955,34 @@ const SampleInfor = () => {
 			return;
 		}
 
-		const updatedAnalysis = await updateAnalysis(analysis);
+		try {
+			// Cột 1: parameterName - Chỉ gửi id và parameterName
+			const updateData = {
+				id: analysis.id,
+				parameterName: analysis.parameterName,
+			};
 
-		// Update the list with the returned analysis
-		const updatedAnalytes = listAnalytes.map((item) => {
-			if (item.id === index) {
-				return updatedAnalysis;
+			const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+				analysis: updateData,
+			});
+
+			if (response.status === 200) {
+				showToast('Đã cập nhật tên chỉ tiêu thành công!');
+			} else {
+				Swal.fire({
+					icon: 'error',
+					title: 'Lỗi',
+					text: response.data?.message || 'Có lỗi xảy ra khi cập nhật tên chỉ tiêu',
+				});
 			}
-			return item;
-		});
-
-		setListAnalytes(updatedAnalytes);
+		} catch (error) {
+			console.error('Error updating parameter name:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: error.message || 'Có lỗi xảy ra khi cập nhật tên chỉ tiêu',
+			});
+		}
 
 		// Clear the original value
 		setOriginalValues((prev) => {
@@ -3043,23 +3041,10 @@ const SampleInfor = () => {
 		}
 
 		try {
-			// Create minimal update object with only required fields
+			// Cột 3: protocolCode - Chỉ gửi id và protocolCode
 			const updateData = {
 				id: analysis.id,
-				sampleId: analysis.sampleId,
-				receiptId: analysis.receiptId,
 				protocolCode: analysis.protocolCode || '',
-				modifiedByUid: currentUser.identityUid,
-				displayStyle: analysis.displayStyle || [
-					{
-						label: 'default',
-						value: '',
-					},
-					{
-						label: 'eng',
-						value: '',
-					},
-				],
 			};
 
 			// Send the update directly to the analysis API
@@ -3111,23 +3096,10 @@ const SampleInfor = () => {
 		try {
 			const analysis = updatedAnalytes.find((item) => item.id === index);
 
-			// Create minimal update object with only required fields
+			// Cột 3: protocolSource - Chỉ gửi id và protocolSource
 			const updateData = {
 				id: analysis.id,
-				sampleId: analysis.sampleId,
-				receiptId: analysis.receiptId,
 				protocolSource: newValue,
-				modifiedByUid: currentUser.identityUid,
-				displayStyle: analysis.displayStyle || [
-					{
-						label: 'default',
-						value: '',
-					},
-					{
-						label: 'eng',
-						value: '',
-					},
-				],
 			};
 
 			// Send the update to the server
@@ -5254,18 +5226,7 @@ const SampleInfor = () => {
 										) : (
 											<div
 												className="hover:border-purple-500 hover:border rounded"
-												onClick={() => {
-													if (!order) return;
-													const fieldKey = `result_unit-${order.id}`;
-													setEditingField(fieldKey);
-													const originalValue = order.resultUnit || '';
-													setInputValue(originalValue);
-													// Store original value for comparison
-													setOriginalValues((prev) => ({
-														...prev,
-														[fieldKey]: originalValue,
-													}));
-												}}
+												onClick={() => handleResultUnitClick(order)}
 											>
 												<div
 													dangerouslySetInnerHTML={{
