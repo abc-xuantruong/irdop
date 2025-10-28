@@ -73,6 +73,8 @@ const LabBulkUpdate = ({
 	selectedData,
 	technicians,
 	onApplyBulkChanges, // Callback to apply bulk changes to parent's pendingChanges
+	onStartSession, // Callback to start result entry session
+	onUpdateTableData, // Callback to update table display data
 }) => {
 	const [bulkEditValues, setBulkEditValues] = useState({});
 	const [editingField, setEditingField] = useState(null); // Track which field is being edited
@@ -117,9 +119,15 @@ const LabBulkUpdate = ({
 		setUnitPage(pageNumber);
 	};
 
-	// Load pending changes from session storage on mount
+	// Start session when modal opens and load pending changes from session storage
 	useEffect(() => {
 		if (isOpen) {
+			// Start result entry session
+			if (onStartSession) {
+				onStartSession();
+			}
+
+			// Load pending changes from session storage
 			const savedChanges = sessionStorage.getItem(BULK_UPDATE_SESSION_KEY);
 			if (savedChanges) {
 				try {
@@ -130,7 +138,7 @@ const LabBulkUpdate = ({
 				}
 			}
 		}
-	}, [isOpen]);
+	}, [isOpen, onStartSession]);
 
 	// Save pending changes to session storage whenever they change
 	useEffect(() => {
@@ -321,9 +329,14 @@ const LabBulkUpdate = ({
 			return;
 		}
 
-		// Apply bulk changes to parent component's pending changes
+		// Apply bulk changes to parent component's pending changes (for session)
 		if (onApplyBulkChanges) {
 			onApplyBulkChanges(bulkChanges);
+		}
+
+		// Update table display data immediately
+		if (onUpdateTableData) {
+			onUpdateTableData(bulkChanges);
 		}
 
 		toast.success(

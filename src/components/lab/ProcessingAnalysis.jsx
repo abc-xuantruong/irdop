@@ -671,6 +671,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	// Session storage key for pending changes
 	const SESSION_STORAGE_KEY = 'processingAnalysis_pendingChanges';
 
+	// Store original analyses before editing for comparison
+	const [originalAnalyses, setOriginalAnalyses] = useState(new Map());
+
 	// Note modal states
 	const [showNoteModal, setShowNoteModal] = useState(false);
 	const [selectedAnalysisForNote, setSelectedAnalysisForNote] = useState(null);
@@ -916,11 +919,42 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					// Handle overdue filter (today's deadline)
 					requestBody.overdue = true;
 				} else if (column === 'deadline' && filterValue) {
-					// Handle header deadline filter only (table filtering)
+					// Separate handling for date range and checkbox values
+					let hasDateRange = false;
+					let checkboxValues = [];
+
 					if (Array.isArray(filterValue)) {
-						requestBody.deadline = filterValue;
-					} else {
-						requestBody.deadline = [filterValue];
+						// Process array to separate date range objects from regular values
+						filterValue.forEach((item) => {
+							if (typeof item === 'object' && item !== null && (item.start || item.end)) {
+								// This is a date range object
+								if (!hasDateRange) {
+									if (item.start) requestBody.deadlineStartAt = item.start;
+									if (item.end) requestBody.deadlineEndAt = item.end;
+									hasDateRange = true;
+								}
+							} else if (item && typeof item === 'string') {
+								// This is a checkbox value
+								checkboxValues.push(item);
+							}
+						});
+					} else if (
+						typeof filterValue === 'object' &&
+						filterValue !== null &&
+						(filterValue.start || filterValue.end)
+					) {
+						// Single date range object
+						if (filterValue.start) requestBody.deadlineStartAt = filterValue.start;
+						if (filterValue.end) requestBody.deadlineEndAt = filterValue.end;
+						hasDateRange = true;
+					} else if (filterValue && typeof filterValue === 'string') {
+						// Single checkbox value
+						checkboxValues.push(filterValue);
+					}
+
+					// Add checkbox values to deadline array if any exist
+					if (checkboxValues.length > 0) {
+						requestBody.deadline = checkboxValues;
 					}
 				} else if (column === 'docId' && filterValue) {
 					// Convert docId to array format and handle special values
@@ -1050,7 +1084,17 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 			// Handle deadline filtering - priority to specific deadline params from sidebar
 			const deadlineStartAt = queryParams.get('deadlineStartAt');
 			const deadlineEndAt = queryParams.get('deadlineEndAt');
-			const deadline = queryParams.get('deadline') || useFilters.headerFilters.deadline;
+			let deadline = queryParams.get('deadline') || useFilters.headerFilters.deadline;
+
+			// Parse deadline if it's a JSON string from query params
+			if (typeof deadline === 'string' && deadline.startsWith('[')) {
+				try {
+					deadline = JSON.parse(deadline);
+				} catch (e) {
+					// If parsing fails, keep as string
+					console.warn('Failed to parse deadline from query params:', e);
+				}
+			}
 
 			if (deadlineStartAt && deadlineEndAt) {
 				// Sidebar range filtering (3days, week)
@@ -1060,10 +1104,40 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				// Sidebar overdue filtering (today)
 				requestBody.deadlineEndAt = deadlineEndAt;
 			} else if (deadline) {
-				// Header filtering or sidebar specific date
-				requestBody.deadline = deadline;
-			}
+				// Header filtering or sidebar specific date - separate date range from checkbox values
+				let hasDateRange = false;
+				let checkboxValues = [];
 
+				if (Array.isArray(deadline)) {
+					// Process array to separate date range objects from regular values
+					deadline.forEach((item) => {
+						if (typeof item === 'object' && item !== null && (item.start || item.end)) {
+							// This is a date range object
+							if (!hasDateRange) {
+								if (item.start) requestBody.deadlineStartAt = item.start;
+								if (item.end) requestBody.deadlineEndAt = item.end;
+								hasDateRange = true;
+							}
+						} else if (item && typeof item === 'string') {
+							// This is a checkbox value
+							checkboxValues.push(item);
+						}
+					});
+				} else if (typeof deadline === 'object' && deadline !== null && (deadline.start || deadline.end)) {
+					// Single date range object
+					if (deadline.start) requestBody.deadlineStartAt = deadline.start;
+					if (deadline.end) requestBody.deadlineEndAt = deadline.end;
+					hasDateRange = true;
+				} else if (deadline && typeof deadline === 'string') {
+					// Single checkbox value
+					checkboxValues.push(deadline);
+				}
+
+				// Add checkbox values to deadline array if any exist
+				if (checkboxValues.length > 0) {
+					requestBody.deadline = checkboxValues;
+				}
+			}
 			const response = await apiPost(PARAMETER_API_ENDPOINT, requestBody);
 
 			if (response.status < 300 && response.data) {
@@ -1893,6 +1967,13 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 	};
 
 	const startResultEntrySession = async () => {
+		// Store original analyses data before starting session
+		const originalData = new Map();
+		data.forEach((analysis) => {
+			originalData.set(analysis.id, { ...analysis });
+		});
+		setOriginalAnalyses(originalData);
+
 		// Simply start the session without authentication check
 		setIsResultEntrySession(true);
 		toast.success('Đã bắt đầu phiên nhập kết quả');
@@ -1909,11 +1990,12 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		setIsSessionUpdating(true);
 
 		try {
-			// Prepare analyses array with only id, resultValue, resultUnit
+			// Prepare analyses array with id, resultValue, resultUnit, and protocolCode
 			const analyses = Array.from(pendingChanges.values()).map((change) => ({
 				id: change.id,
 				resultValue: change.resultValue,
 				resultUnit: change.resultUnit,
+				protocolCode: change.protocolCode,
 			}));
 
 			// Send batch update API
@@ -2204,8 +2286,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		// Close unit dropdown when switching cells
 		setShowUnitDropdown(false);
 
-		// Only apply session logic for result and unit columns
-		if (column === 'resultValue' || column === 'resultUnit') {
+		// Only apply session logic for result, unit, and protocolCode columns
+		if (column === 'resultValue' || column === 'resultUnit' || column === 'protocolCode') {
 			// If not in session, start session first
 			if (!isResultEntrySession) {
 				await startResultEntrySession();
@@ -2241,8 +2323,8 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 		// Only update if value changed
 		if (editValue !== strippedOriginal) {
-			// If in result entry session and editing result/unit columns, save to pending changes
-			if (isResultEntrySession && (column === 'resultValue' || column === 'resultUnit')) {
+			// If in result entry session and editing result/unit/protocolCode columns, save to pending changes
+			if (isResultEntrySession && (column === 'resultValue' || column === 'resultUnit' || column === 'protocolCode')) {
 				// Get existing pending changes for this analysis or create new with full record data
 				const existingChanges = pendingChanges.get(analysisId) || {
 					...originalAnalysis, // Include full record data
@@ -2250,11 +2332,17 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				};
 
 				// Update the changed column
-				const convertedValue = convertValueToHTML(editValue);
-				if (column === 'resultValue') {
-					existingChanges.resultValue = convertedValue;
-				} else if (column === 'resultUnit') {
-					existingChanges.resultUnit = convertedValue;
+				if (column === 'protocolCode') {
+					// For protocolCode, save directly without HTML conversion
+					existingChanges.protocolCode = editValue;
+				} else {
+					// For resultValue and resultUnit, convert to HTML
+					const convertedValue = convertValueToHTML(editValue);
+					if (column === 'resultValue') {
+						existingChanges.resultValue = convertedValue;
+					} else if (column === 'resultUnit') {
+						existingChanges.resultUnit = convertedValue;
+					}
 				}
 
 				// Update pending changes
@@ -2262,16 +2350,20 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 				// Update local data display immediately
 				setData((prevData) =>
-					prevData.map((item) => (item.id === analysisId ? { ...item, [column]: convertedValue } : item)),
+					prevData.map((item) => {
+						if (item.id === analysisId) {
+							// For protocolCode, use editValue directly; for others, use convertedValue
+							const newValue = column === 'protocolCode' ? editValue : convertValueToHTML(editValue);
+							return { ...item, [column]: newValue };
+						}
+						return item;
+					}),
 				);
 
 				toast.info('Thay đổi đã được lưu tạm thời');
 			} else {
 				// Normal edit flow - send API immediately
 				try {
-					// Convert value to HTML format before sending
-					const convertedValue = convertValueToHTML(editValue);
-
 					const updateData = {
 						analysis: {
 							id: analysisId,
@@ -2279,10 +2371,17 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					};
 
 					// Set the appropriate field based on column
-					if (column === 'resultValue') {
-						updateData.analysis.resultValue = convertedValue;
-					} else if (column === 'resultUnit') {
-						updateData.analysis.resultUnit = convertedValue;
+					if (column === 'protocolCode') {
+						// For protocolCode, send directly without HTML conversion
+						updateData.analysis.protocolCode = editValue;
+					} else {
+						// For resultValue and resultUnit, convert to HTML format before sending
+						const convertedValue = convertValueToHTML(editValue);
+						if (column === 'resultValue') {
+							updateData.analysis.resultValue = convertedValue;
+						} else if (column === 'resultUnit') {
+							updateData.analysis.resultUnit = convertedValue;
+						}
 					}
 
 					const response = await apiPost('https://red.irdop.org/v1/analysis/update', updateData);
@@ -3319,16 +3418,10 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 							)}
 
 							<button
-								onClick={selectMyTasksFilter}
-								className={`px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm my-tasks-btn ${
-									filters.headerFilters.technicianId &&
-									Array.isArray(filters.headerFilters.technicianId) &&
-									filters.headerFilters.technicianId.includes(currentUser?.identity_uid)
-										? 'active'
-										: ''
-								}`}
+								onClick={handleRelogin}
+								className="px-3 py-2 border-2 rounded-md text-sm font-bold transition-colors shadow-sm my-tasks-btn bg-white border-blue-600 text-blue-600 hover:bg-blue-50"
 							>
-								<span>Chỉ tiêu của tôi</span>
+								<span>Đổi tài khoản</span>
 							</button>
 
 							{/* Result Entry Session Button */}
@@ -3658,9 +3751,27 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																		<span className="text-left">{row.protocolSource || '--'}</span>
 																	</div>
 																) : column === 'protocolCode' ? (
-																	<div className="relative text-left w-full p-1 rounded">
-																		<span className="text-left">{row.protocolCode || '--'}</span>
-																	</div>
+																	editingCell &&
+																	editingCell.analysisId === row.id &&
+																	editingCell.column === 'protocolCode' ? (
+																		<input
+																			type="text"
+																			value={editValue}
+																			onChange={(e) => setEditValue(e.target.value)}
+																			onBlur={() => handleCellBlur(row)}
+																			onKeyDown={handleKeyDown}
+																			autoFocus
+																			className="w-full px-2 py-1 border rounded bg-white"
+																			onClick={(e) => e.stopPropagation()}
+																		/>
+																	) : (
+																		<div
+																			className="relative text-left w-full p-1 rounded cursor-pointer hover:bg-blue-50"
+																			onClick={() => handleCellClick(row.id, 'protocolCode', row.protocolCode || '')}
+																		>
+																			<span className="text-left">{row.protocolCode || '--'}</span>
+																		</div>
+																	)
 																) : column === 'resultValue' ? (
 																	editingCell &&
 																	editingCell.analysisId === row.id &&
@@ -4321,14 +4432,44 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				selectedRows={Array.from(selectedAnalysisIds)}
 				selectedData={Array.from(selectedRowsData.values())}
 				technicians={technicians}
+				onStartSession={() => {
+					// Start result entry session
+					if (!isResultEntrySession) {
+						setIsResultEntrySession(true);
+						// Load saved session if available
+						const savedSession = sessionStorage.getItem(SESSION_STORAGE_KEY);
+						if (savedSession) {
+							try {
+								const savedChanges = JSON.parse(savedSession);
+								const changesMap = new Map(Object.entries(savedChanges));
+								setPendingChanges(changesMap);
+							} catch (error) {
+								console.error('Error loading session:', error);
+							}
+						}
+					}
+				}}
 				onApplyBulkChanges={(bulkChanges) => {
-					// Apply bulk changes to pendingChanges Map
+					// Apply bulk changes to pendingChanges Map (for session)
 					setPendingChanges((prev) => {
 						const newChanges = new Map(prev);
 						bulkChanges.forEach((change) => {
 							newChanges.set(change.id, change);
 						});
 						return newChanges;
+					});
+				}}
+				onUpdateTableData={(bulkChanges) => {
+					// Update table display data immediately
+					setData((prevData) => {
+						const updatedData = prevData.map((row) => {
+							const change = bulkChanges.find((c) => c.id === row.id);
+							if (change) {
+								return { ...row, ...change };
+							}
+							return row;
+						});
+						return updatedData;
 					});
 
 					// Close bulk edit modal and clear selections
@@ -4389,6 +4530,7 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				}}
 				onCancel={() => setShowCancelConfirm(true)}
 				analyses={Array.from(pendingChanges.values())}
+				originalAnalyses={Array.from(originalAnalyses.values())}
 				isLoading={isSessionUpdating}
 			/>
 			{/* Cancel Confirmation Dialog */}

@@ -690,9 +690,10 @@ ${tableHTML}
 	};
 
 	// Generate header section for a sample with custom showVlas
-	const generateHeaderForSample = (sampleShowVlas, refNumber = null) => {
+	const generateHeaderForSample = (sampleShowVlas, refNumber = null, sampleShowKN = false) => {
 		const displayVlas = sampleShowVlas ? '' : 'display:none;';
 		const refCode = refNumber || 'SƠ BỘ / DRAFT';
+		const title = sampleShowKN ? 'PHIẾU KẾT QUẢ KIỂM NGHIỆM' : 'PHIẾU KẾT QUẢ THỬ NGHIỆM';
 
 		return `
 <div id="header-section" style="position:relative; height: fit-content;">
@@ -716,9 +717,9 @@ ${tableHTML}
 	</div>
 	<div style="padding-top:2mm; position:relative;">
 		<div style="position:relative; text-align:left;">
-			<p style="font-weight:900; font-size:24pt; color:#0058A3; height: 36px;">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>
-			<p style="font-weight:800; font-size:21pt; color:#0058A3; height: 30px;">/ Certificate of Analysis</p>
-			<div style="display: flex; align-items: center; gap: 2mm; font-size:12px; margin-top: 0px; height: 28px;">
+			<p style="font-weight:900; font-size:24pt; color:#0058A3; height: 36px;">${title}</p>
+			<p style="font-weight:800; font-size:21pt; color:#0058A3; height: 36px;">/ Certificate of Analysis</p>
+			<div style="display: flex; align-items: center; gap: 2mm; font-size:12px; margin-top: 0px; height: 20px;">
 				<span>Xuất bản / ref.:</span>
 				<p class="ref_code" style="min-width:5pt; margin: 0; margin-right: 2mm;">${refCode}</p>
 				<span style="min-width:5pt; margin: 0;">Ngày / Date: ${formatDate(new Date())}</span>
@@ -758,8 +759,8 @@ ${tableHTML}
 	<div style="padding-top:2mm; position:relative;">
 		<div style="position:relative; text-align:left;">
 			<p style="font-weight:900; font-size:24pt; color:#0058A3; height: 36px;">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>
-			<p style="font-weight:800; font-size:21pt; color:#0058A3; height: 30px;">/ Certificate of Analysis</p>
-			<div style="display: flex; align-items: center; gap: 2mm; font-size:12px; margin-top: 0px; height: 28px;">
+			<p style="font-weight:800; font-size:21pt; color:#0058A3; height: 36px;">/ Certificate of Analysis</p>
+			<div style="display: flex; align-items: center; gap: 2mm; font-size:12px; margin-top: 0px; height: 20px;">
 				<span>Xuất bản / ref.:</span>
 				<p class="ref_code" style="min-width:5pt; margin: 0; margin-right: 2mm;">SƠ BỘ / DRAFT</p>
 				<span style="min-width:5pt; margin: 0;">Ngày / Date: ${formatDate(new Date())}</span>
@@ -830,94 +831,151 @@ ${tableHTML}
 
 	// Update header based on all dependencies
 	useEffect(() => {
-		// Wait for editor to be ready
-		if (!headerEditorRef.current) {
-			console.log('⏳ Header editor not ready yet');
-			return;
-		}
+		console.log('🔄 Header update triggered:', { showVlas, showKN, currentRefNumber });
 
-		console.log('🔄 useEffect triggered:', { showVlas, showKN, currentRefNumber });
+		// Generate new header HTML with current state
+		const newHeaderHTML = generateHeaderForSample(showVlas, currentRefNumber, showKN);
 
-		// Try direct DOM manipulation in TinyMCE first (most reliable)
-		const updateEditorDOM = () => {
+		// Update the header state
+		setHeader(newHeaderHTML);
+
+		// Wait for editor to be ready, then update it
+		const updateEditor = () => {
+			if (!headerEditorRef.current) {
+				console.log('⏳ Header editor not ready yet');
+				return;
+			}
+
 			try {
-				if (!headerEditorRef.current || typeof headerEditorRef.current.getBody !== 'function') {
-					console.log('⚠️ Editor getBody not available');
-					return false;
+				if (typeof headerEditorRef.current.setContent === 'function') {
+					headerEditorRef.current.setContent(newHeaderHTML);
+					console.log('✅ Header editor content updated with VLAS:', showVlas);
 				}
+			} catch (error) {
+				console.error('❌ Error updating header editor:', error);
+			}
 
+			// Also update title in the content if showKN changed
+			if (headerEditorRef.current && typeof headerEditorRef.current.getBody === 'function') {
 				const editorBody = headerEditorRef.current.getBody();
-				if (!editorBody) {
-					console.log('⚠️ Editor body is null');
-					return false;
+				if (editorBody) {
+					const titleElement = editorBody.querySelector('p[style*="font-size:24pt"]');
+					if (titleElement) {
+						titleElement.textContent = showKN ? 'PHIẾU KẾT QUẢ KIỂM NGHIỆM' : 'PHIẾU KẾT QUẢ THỬ NGHIỆM';
+					}
+				}
+			}
+		};
+
+		// Try immediate update
+		updateEditor();
+
+		// If editor not ready, try again after a delay
+		const timeout = setTimeout(() => {
+			updateEditor();
+		}, 100);
+
+		return () => clearTimeout(timeout);
+	}, [showVlas, showKN, currentRefNumber]);
+
+	// Helper function to add computed widths to table columns
+	const normalizeTableWidths = (htmlContent, editorRef) => {
+		if (!editorRef || !editorRef.getBody) return htmlContent;
+
+		try {
+			const editorBody = editorRef.getBody();
+			const parser = new DOMParser();
+			const doc = parser.parseFromString(htmlContent, 'text/html');
+
+			// Find all tables in the content
+			const tables = doc.querySelectorAll('table');
+
+			tables.forEach((table) => {
+				// Find corresponding table in editor
+				const tableId = table.id || table.querySelector('[id]')?.closest('table')?.id;
+				let editorTable = null;
+
+				if (tableId) {
+					editorTable = editorBody.querySelector(`#${tableId} table, table#${tableId}`);
 				}
 
-				// Update VLAS icon
-				const vlasIcon = editorBody.querySelector('.vlas_icon');
-				if (vlasIcon) {
-					vlasIcon.style.display = showVlas ? '' : 'none';
-				}
+				// If not found by ID, try to find by position/structure
+				if (!editorTable) {
+					const editorTables = editorBody.querySelectorAll('table');
+					// Simple heuristic: match by number of rows/cols
+					const contentRows = table.querySelectorAll('tr').length;
+					const contentCols = table.querySelector('tr')?.querySelectorAll('th, td').length || 0;
 
-				// Update title
-				const titleElement = editorBody.querySelector('p[style*="font-size:24pt"]');
-				if (titleElement) {
-					titleElement.textContent = showKN ? 'PHIẾU KẾT QUẢ KIỂM NGHIỆM' : 'PHIẾU KẾT QUẢ THỬ NGHIỆM';
-				}
-
-				// Find ref_code element in editor DOM
-				let refElement = editorBody.querySelector('.ref_code');
-				if (!refElement) {
-					// Fallback: find by text
-					const allElements = editorBody.querySelectorAll('p, span');
-					for (let el of allElements) {
-						const text = el.textContent?.trim() || '';
-						if (text.includes('SƠ BỘ') || text === 'SƠ BỘ / DRAFT') {
-							refElement = el;
-							console.log('✅ Found ref element by text in editor');
+					for (let et of editorTables) {
+						const editorRows = et.querySelectorAll('tr').length;
+						const editorCols = et.querySelector('tr')?.querySelectorAll('th, td').length || 0;
+						if (editorRows === contentRows && editorCols === contentCols) {
+							editorTable = et;
 							break;
 						}
 					}
 				}
 
-				if (refElement) {
-					const newValue = currentRefNumber || 'SƠ BỘ / DRAFT';
-					refElement.textContent = newValue;
-					console.log('🎯 Direct DOM update in editor:', newValue);
-					return true;
-				} else {
-					console.log('⚠️ ref_code element not found in editor DOM');
-					return false;
+				if (editorTable) {
+					// Get computed widths from editor table
+					const editorHeaderCells = editorTable.querySelectorAll('thead th');
+					const contentHeaderCells = table.querySelectorAll('thead th');
+
+					editorHeaderCells.forEach((editorTh, index) => {
+						if (contentHeaderCells[index]) {
+							const computedWidth = editorTh.offsetWidth;
+							if (computedWidth > 0) {
+								// Check if width is already set
+								const currentStyle = contentHeaderCells[index].getAttribute('style') || '';
+								if (!currentStyle.includes('width:') && !currentStyle.includes('width :')) {
+									contentHeaderCells[index].setAttribute(
+										'style',
+										`${currentStyle}${currentStyle ? ' ' : ''}width: ${computedWidth}px;`,
+									);
+								}
+							}
+						}
+					});
+
+					// Also set width for body cells in each column
+					const contentRows = table.querySelectorAll('tbody tr');
+					contentRows.forEach((row, rowIndex) => {
+						const cells = row.querySelectorAll('td');
+						cells.forEach((cell, colIndex) => {
+							if (editorHeaderCells[colIndex]) {
+								const computedWidth = editorHeaderCells[colIndex].offsetWidth;
+								if (computedWidth > 0) {
+									const currentStyle = cell.getAttribute('style') || '';
+									if (!currentStyle.includes('width:') && !currentStyle.includes('width :')) {
+										cell.setAttribute('style', `${currentStyle}${currentStyle ? ' ' : ''}width: ${computedWidth}px;`);
+									}
+								}
+							}
+						});
+					});
 				}
-			} catch (error) {
-				console.error('❌ Error updating editor DOM:', error);
-				return false;
-			}
-		};
+			});
 
-		// Try immediate update
-		const success = updateEditorDOM();
-
-		// If failed, try again after a delay (editor might still be initializing)
-		if (!success) {
-			console.log('⏳ Retrying DOM update after delay...');
-			const timeout = setTimeout(() => {
-				updateEditorDOM();
-			}, 300);
-
-			return () => clearTimeout(timeout);
+			return doc.body.innerHTML;
+		} catch (error) {
+			console.error('Error normalizing table widths:', error);
+			return htmlContent;
 		}
-	}, [showVlas, showKN, currentRefNumber]);
+	};
 
 	// Preview for single sample mode
 	const handleSinglePreview = async () => {
 		try {
 			const headerHTML = headerEditorRef.current?.getContent() || header;
-			const contentHTML = contentEditorRef.current?.getContent() || content;
+			let contentHTML = contentEditorRef.current?.getContent() || content;
 			const footerHTML = footerEditorRef.current?.getContent() || footer;
+
+			// Normalize table widths in content before preview
+			contentHTML = normalizeTableWidths(contentHTML, contentEditorRef.current);
 
 			const measurementData = await measureSectionsInDOM(headerHTML, contentHTML, footerHTML);
 			const paginatedPages = applyClientSidePagination(headerHTML, contentHTML, footerHTML, measurementData);
-			const finalHTML = generatePreviewHTML(paginatedPages, measurementData, headerHTML, footerHTML);
+			const finalHTML = generatePreviewHTML(paginatedPages, measurementData, headerHTML, footerHTML, currentRefNumber);
 			openPreviewWindow(finalHTML);
 		} catch (error) {
 			console.error('Error generating preview:', error);
@@ -986,6 +1044,17 @@ ${tableHTML}
 
 				console.log('🔧 Processing pagination for sample:', sample.sampleId);
 
+				// Normalize table widths in content before processing
+				contentHTML = normalizeTableWidths(contentHTML, contentRef);
+
+				// Extract refNumber from sample (check selected report or sample.refNumber)
+				let sampleRefNumber = null;
+				if (sample.selectedReportIndex !== null && sample.reports && sample.reports[sample.selectedReportIndex]) {
+					sampleRefNumber = sample.reports[sample.selectedReportIndex].refNumber;
+				} else if (sample.refNumber) {
+					sampleRefNumber = sample.refNumber;
+				}
+
 				try {
 					// Process this sample exactly like single mode
 					const measurementData = await measureSectionsInDOM(headerHTML, contentHTML, footerHTML);
@@ -999,7 +1068,13 @@ ${tableHTML}
 						continue;
 					}
 
-					const sampleHTML = generatePreviewHTML(paginatedPages, measurementData, headerHTML, footerHTML);
+					const sampleHTML = generatePreviewHTML(
+						paginatedPages,
+						measurementData,
+						headerHTML,
+						footerHTML,
+						sampleRefNumber,
+					);
 					console.log('✅ Generated HTML length:', sampleHTML.length);
 
 					// Extract only the pages (body content) from the generated HTML
@@ -1178,35 +1253,97 @@ ${tableHTML}
 						const newUrl = new URL(window.location.href);
 						newUrl.searchParams.set('refNumber', savedReport.refNumber);
 						window.history.pushState({}, '', newUrl);
+
+						// Update currentRefNumber state
+						setCurrentRefNumber(savedReport.refNumber);
 					}
 
-					// Apply saved data to editors
+					// Update toggle states from saved report
+					if (savedReport.isVlas !== undefined) setShowVlas(savedReport.isVlas);
+					if (savedReport.isComment !== undefined) setShowComment(savedReport.isComment);
+					if (savedReport.isReference !== undefined) setShowReference(savedReport.isReference);
+
+					// Helper function to ensure section has proper ID
+					const ensureSectionId = (html, sectionId) => {
+						if (!html) return '';
+						if (html.includes(`id="${sectionId}"`)) return html;
+						const firstTagMatch = html.match(/^(\s*<[^>]+)(>)/);
+						if (firstTagMatch) {
+							return html.replace(firstTagMatch[0], `${firstTagMatch[1]} id="${sectionId}"${firstTagMatch[2]}`);
+						}
+						return html;
+					};
+
+					// Apply saved data to editors with proper section IDs
 					if (savedReport.headerSection) {
-						headerEditorRef.current?.setContent(savedReport.headerSection);
+						const headerWithId = ensureSectionId(savedReport.headerSection, 'header-section');
+						setHeader(headerWithId);
+						setTimeout(() => {
+							if (headerEditorRef.current) {
+								headerEditorRef.current.setContent(headerWithId);
+							}
+						}, 100);
 					}
+
 					if (savedReport.footerSection) {
-						footerEditorRef.current?.setContent(savedReport.footerSection);
+						const footerWithId = ensureSectionId(savedReport.footerSection, 'footer-section');
+						setFooter(footerWithId);
+						setTimeout(() => {
+							if (footerEditorRef.current) {
+								footerEditorRef.current.setContent(footerWithId);
+							}
+						}, 100);
 					}
 
-					// Reconstruct content from saved sections with spacing
-					const spacing = '<div style="height: 15px;"></div>';
+					// Reconstruct content from saved sections with spacing and proper IDs
+					const spacing = '<div style="height: 4mm; margin:0; padding:0;"></div>';
 					const contentParts = [];
-					if (savedReport.customerSection) contentParts.push(savedReport.customerSection);
-					if (savedReport.sampleSection) contentParts.push(savedReport.sampleSection);
-					if (savedReport.analysisSection) contentParts.push(savedReport.analysisSection);
-					if (savedReport.commentSection) contentParts.push(savedReport.commentSection);
-					if (savedReport.noteSection) contentParts.push(savedReport.noteSection);
-					if (savedReport.signatureSection) contentParts.push(savedReport.signatureSection);
+					if (savedReport.customerSection)
+						contentParts.push(ensureSectionId(savedReport.customerSection, 'customer-section'), spacing);
+					if (savedReport.sampleSection)
+						contentParts.push(ensureSectionId(savedReport.sampleSection, 'sample-section'), spacing);
+					if (savedReport.analysisSection)
+						contentParts.push(ensureSectionId(savedReport.analysisSection, 'analysis-section'), spacing);
+					if (savedReport.commentSection && savedReport.isComment)
+						contentParts.push(ensureSectionId(savedReport.commentSection, 'comment-section'), spacing);
+					if (savedReport.noteSection)
+						contentParts.push(ensureSectionId(savedReport.noteSection, 'notes-section'), spacing);
+					if (savedReport.signatureSection)
+						contentParts.push(ensureSectionId(savedReport.signatureSection, 'signature-section'));
 
-					const updatedContent = contentParts.join(spacing);
+					const updatedContent = contentParts.join('');
 					if (updatedContent) {
-						contentEditorRef.current?.setContent(updatedContent);
+						setContent(updatedContent);
+						setTimeout(() => {
+							if (contentEditorRef.current) {
+								contentEditorRef.current.setContent(updatedContent);
+							}
+						}, 100);
 					}
 
-					// Reload sample data to refresh reports list
-					const targetSampleId = sampleData?.sampleId || selectedSampleId || sampleId;
-					if (targetSampleId) {
-						await fetchSampleData(targetSampleId);
+					// Update sampleData with the new report in the reports array
+					if (sampleData && savedReport.refNumber) {
+						const updatedSampleData = { ...sampleData };
+						const existingReportIndex = updatedSampleData.reports.findIndex(
+							(r) => r.refNumber === savedReport.refNumber,
+						);
+
+						const newReport = {
+							refNumber: savedReport.refNumber,
+							createdAt: savedReport.createdAt || new Date().toISOString(),
+							id: savedReport.id,
+						};
+
+						if (existingReportIndex >= 0) {
+							// Update existing report
+							updatedSampleData.reports[existingReportIndex] = newReport;
+						} else {
+							// Add new report at the beginning
+							updatedSampleData.reports.unshift(newReport);
+						}
+
+						setSampleData(updatedSampleData);
+						setSelectedReport(newReport);
 					}
 
 					alert('Lưu báo cáo thành công!');
@@ -1391,35 +1528,97 @@ ${tableHTML}
 						const newUrl = new URL(window.location.href);
 						newUrl.searchParams.set('refNumber', savedReport.refNumber);
 						window.history.pushState({}, '', newUrl);
+
+						// Update currentRefNumber state
+						setCurrentRefNumber(savedReport.refNumber);
 					}
 
-					// Apply saved data to editors
+					// Update toggle states from saved report
+					if (savedReport.isVlas !== undefined) setShowVlas(savedReport.isVlas);
+					if (savedReport.isComment !== undefined) setShowComment(savedReport.isComment);
+					if (savedReport.isReference !== undefined) setShowReference(savedReport.isReference);
+
+					// Helper function to ensure section has proper ID
+					const ensureSectionId = (html, sectionId) => {
+						if (!html) return '';
+						if (html.includes(`id="${sectionId}"`)) return html;
+						const firstTagMatch = html.match(/^(\s*<[^>]+)(>)/);
+						if (firstTagMatch) {
+							return html.replace(firstTagMatch[0], `${firstTagMatch[1]} id="${sectionId}"${firstTagMatch[2]}`);
+						}
+						return html;
+					};
+
+					// Apply saved data to editors with proper section IDs
 					if (savedReport.headerSection) {
-						headerEditorRef.current?.setContent(savedReport.headerSection);
+						const headerWithId = ensureSectionId(savedReport.headerSection, 'header-section');
+						setHeader(headerWithId);
+						setTimeout(() => {
+							if (headerEditorRef.current) {
+								headerEditorRef.current.setContent(headerWithId);
+							}
+						}, 100);
 					}
+
 					if (savedReport.footerSection) {
-						footerEditorRef.current?.setContent(savedReport.footerSection);
+						const footerWithId = ensureSectionId(savedReport.footerSection, 'footer-section');
+						setFooter(footerWithId);
+						setTimeout(() => {
+							if (footerEditorRef.current) {
+								footerEditorRef.current.setContent(footerWithId);
+							}
+						}, 100);
 					}
 
-					// Reconstruct content from saved sections with spacing
-					const spacing = '<div style="height: 15px;"></div>';
+					// Reconstruct content from saved sections with spacing and proper IDs
+					const spacing = '<div style="height: 4mm; margin:0; padding:0;"></div>';
 					const contentParts = [];
-					if (savedReport.customerSection) contentParts.push(savedReport.customerSection);
-					if (savedReport.sampleSection) contentParts.push(savedReport.sampleSection);
-					if (savedReport.analysisSection) contentParts.push(savedReport.analysisSection);
-					if (savedReport.commentSection) contentParts.push(savedReport.commentSection);
-					if (savedReport.noteSection) contentParts.push(savedReport.noteSection);
-					if (savedReport.signatureSection) contentParts.push(savedReport.signatureSection);
+					if (savedReport.customerSection)
+						contentParts.push(ensureSectionId(savedReport.customerSection, 'customer-section'), spacing);
+					if (savedReport.sampleSection)
+						contentParts.push(ensureSectionId(savedReport.sampleSection, 'sample-section'), spacing);
+					if (savedReport.analysisSection)
+						contentParts.push(ensureSectionId(savedReport.analysisSection, 'analysis-section'), spacing);
+					if (savedReport.commentSection && savedReport.isComment)
+						contentParts.push(ensureSectionId(savedReport.commentSection, 'comment-section'), spacing);
+					if (savedReport.noteSection)
+						contentParts.push(ensureSectionId(savedReport.noteSection, 'notes-section'), spacing);
+					if (savedReport.signatureSection)
+						contentParts.push(ensureSectionId(savedReport.signatureSection, 'signature-section'));
 
-					const updatedContent = contentParts.join(spacing);
+					const updatedContent = contentParts.join('');
 					if (updatedContent) {
-						contentEditorRef.current?.setContent(updatedContent);
+						setContent(updatedContent);
+						setTimeout(() => {
+							if (contentEditorRef.current) {
+								contentEditorRef.current.setContent(updatedContent);
+							}
+						}, 100);
 					}
 
-					// Reload sample data to refresh reports list
-					const targetSampleId = sampleData?.sampleId || selectedSampleId || sampleId;
-					if (targetSampleId) {
-						await fetchSampleData(targetSampleId);
+					// Update sampleData with the new report in the reports array
+					if (sampleData && savedReport.refNumber) {
+						const updatedSampleData = { ...sampleData };
+						const existingReportIndex = updatedSampleData.reports.findIndex(
+							(r) => r.refNumber === savedReport.refNumber,
+						);
+
+						const newReport = {
+							refNumber: savedReport.refNumber,
+							createdAt: savedReport.createdAt || new Date().toISOString(),
+							id: savedReport.id,
+						};
+
+						if (existingReportIndex >= 0) {
+							// Update existing report
+							updatedSampleData.reports[existingReportIndex] = newReport;
+						} else {
+							// Add new report at the beginning
+							updatedSampleData.reports.unshift(newReport);
+						}
+
+						setSampleData(updatedSampleData);
+						setSelectedReport(newReport);
 					}
 
 					alert('Xuất bản báo cáo thành công!');
@@ -1860,10 +2059,14 @@ ${tableHTML}
 		updatedSamples[sampleIndex][toggleName] = value;
 		setAllSamplesData(updatedSamples);
 
-		// If toggling showVlas, update the header content immediately
-		if (toggleName === 'showVlas') {
+		// If toggling showVlas or showKN, update the header content immediately
+		if (toggleName === 'showVlas' || toggleName === 'showKN') {
 			const sample = updatedSamples[sampleIndex];
-			const newHeaderContent = generateHeaderForSample(value, sample.currentRefNumber);
+			const newHeaderContent = generateHeaderForSample(
+				toggleName === 'showVlas' ? value : sample.showVlas,
+				sample.currentRefNumber,
+				toggleName === 'showKN' ? value : sample.showKN,
+			);
 
 			// Update stored header content
 			updatedSamples[sampleIndex].headerContent = newHeaderContent;
@@ -2480,7 +2683,10 @@ ${tableHTML}
 								{/* Header Editor */}
 								<div style={{ maxWidth: '720px', margin: '0 auto', marginBottom: '20px' }}>
 									<TinyMCEEditor
-										value={sample.headerContent || generateHeaderForSample(sample.showVlas)}
+										value={
+											sample.headerContent ||
+											generateHeaderForSample(sample.showVlas, sample.currentRefNumber, sample.showKN)
+										}
 										onEditorChange={(content) => {
 											const updated = [...allSamplesData];
 											updated[index].headerContent = content;

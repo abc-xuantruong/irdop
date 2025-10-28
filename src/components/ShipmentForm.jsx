@@ -13,7 +13,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 		let clientAddress = '';
 		// Apply receiver/client priority logic for both modes
 		// Address: reportRecipient.address first, then client.clientAddress
-		if(receipt?.reportRecipient?.address && receipt?.reportRecipient?.address.trim !== ''){
+		if (receipt?.reportRecipient?.address && receipt?.reportRecipient?.address.trim !== '') {
 			clientAddress = receipt?.reportRecipient?.address || receipt?.client?.clientAddress || '';
 		} else {
 			clientAddress = receipt?.client?.clientAddress || '';
@@ -21,7 +21,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 
 		let clientContactName = '';
 		// Contact name: reportRecipient.name first, then contactPerson.name
-		if(receipt?.reportRecipient?.name && receipt?.reportRecipient?.name.trim() !== ''){
+		if (receipt?.reportRecipient?.name && receipt?.reportRecipient?.name.trim() !== '') {
 			clientContactName = receipt?.reportRecipient?.name || '';
 		} else {
 			clientContactName = receipt?.contactPerson?.name || receipt?.client?.clientName || '';
@@ -29,7 +29,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 
 		let clientContactPhone = '';
 		// Phone: if reportRecipient.name exists, leave blank; otherwise use contactPerson.phone
-		if(receipt?.reportRecipient?.phone && receipt?.reportRecipient?.phone.trim() !== ''){	
+		if (receipt?.reportRecipient?.phone && receipt?.reportRecipient?.phone.trim() !== '') {
 			clientContactPhone = receipt?.reportRecipient?.phone || '';
 		} else {
 			clientContactPhone = receipt?.contactPerson?.phone || receipt?.client?.clientPhone || '';
@@ -676,8 +676,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 								receipt: {
 									id: receipt.id,
 									receiptId: receipt.receiptId,
-									_deprecated_pptSendAt: null,
-									_deprecated_pptSendBy: null,
+									_deprecated_postalOrderCreatedAt: null,
+									_deprecated_postalOrderCreatedById: null,
 									_deprecated_trackingNumber: '',
 								},
 							};
@@ -687,8 +687,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							if (onOrderUpdate) {
 								const updatedReceipt = {
 									...receipt,
-									_deprecated_pptSendAt: null,
-									_deprecated_pptSendBy: null,
+									_deprecated_postalOrderCreatedAt: null,
+									_deprecated_postalOrderCreatedById: null,
 									_deprecated_trackingNumber: '',
 								};
 								onOrderUpdate(updatedReceipt);
@@ -700,19 +700,19 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							receipt: {
 								id: receipt.id,
 								receiptId: receipt.receiptId,
-								_deprecated_pptSendAt: null,
-								_deprecated_pptSendBy: null,
+								_deprecated_postalOrderCreatedAt: null,
+								_deprecated_postalOrderCreatedById: null,
 								_deprecated_trackingNumber: '',
 							},
 						};
-						await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+						await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 						// Call onOrderUpdate to refresh dashboard data
 						if (onOrderUpdate) {
 							const updatedReceipt = {
 								...receipt,
-								_deprecated_pptSendAt: null,
-								_deprecated_pptSendBy: null,
+								_deprecated_postalOrderCreatedAt: null,
+								_deprecated_postalOrderCreatedById: null,
 								_deprecated_trackingNumber: '',
 							};
 							onOrderUpdate(updatedReceipt);
@@ -824,7 +824,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						// Add 7 hours to account for GMT+7
 						const adjustedDate = new Date();
 						adjustedDate.setHours(adjustedDate.getHours() + 7);
-						const formattedDate = adjustedDate.toISOString().split('T')[0];
+						const formattedDate = adjustedDate.toISOString();
 						// Append new tracking number to existing ones (if any)
 						let updatedTrackingNumber = trackingNumber;
 						if (receipt._deprecated_trackingNumber && receipt._deprecated_trackingNumber.trim() !== '') {
@@ -841,20 +841,20 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							receipt: {
 								id: receipt.id,
 								receiptId: receipt.receiptId,
-								_deprecated_pptSendAt: formattedDate,
-								_deprecated_pptSendBy: currentUser?.identityId,
+								_deprecated_postalOrderCreatedAt: formattedDate,
+								_deprecated_postalOrderCreatedById: currentUser?.identityId,
 								_deprecated_trackingNumber: updatedTrackingNumber,
 							},
 						};
 
-						const updateResponse = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+						const updateResponse = await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 						if (updateResponse.status === 200) {
 							console.log('Receipt updated successfully with tracking number:', trackingNumber); // Call onOrderUpdate to refresh dashboard data
 							if (onOrderUpdate) {
 								const updatedReceipt = {
 									...receipt,
-									_deprecated_pptSendAt: formattedDate,
-									_deprecated_pptSendBy: currentUser?.identityId,
+									_deprecated_postalOrderCreatedAt: formattedDate,
+									_deprecated_postalOrderCreatedById: currentUser?.identityId,
 									_deprecated_trackingNumber: updatedTrackingNumber,
 								};
 								onOrderUpdate(updatedReceipt);
@@ -904,7 +904,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 			// Add 7 hours to account for GMT+7
 			const adjustedDate = new Date();
 			adjustedDate.setHours(adjustedDate.getHours() + 7);
-			const formattedDate = adjustedDate.toISOString().split('T')[0];
+			const formattedDate = adjustedDate.toISOString();
 
 			// Append new tracking number to existing ones (if any)
 			let updatedTrackingNumber = trackingNumber;
@@ -922,13 +922,13 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				receipt: {
 					id: receipt.id,
 					receiptId: receipt.receiptId,
-					_deprecated_pptSendAt: formattedDate,
-					_deprecated_pptSendBy: currentUser?.identityId,
+					_deprecated_postalOrderCreatedAt: formattedDate,
+					_deprecated_postalOrderCreatedById: currentUser?.identityId,
 					_deprecated_trackingNumber: updatedTrackingNumber,
 				},
 			};
 
-			const updateResponse = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+			const updateResponse = await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 			if (updateResponse.status === 200) {
 				console.log('Receipt updated successfully with direct pickup tracking number:', trackingNumber);
@@ -937,8 +937,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				if (onOrderUpdate) {
 					const updatedReceipt = {
 						...receipt,
-						_deprecated_pptSendAt: formattedDate,
-						_deprecated_pptSendBy: currentUser?.identityId,
+						_deprecated_postalOrderCreatedAt: formattedDate,
+						_deprecated_postalOrderCreatedById: currentUser?.identityId,
 						_deprecated_trackingNumber: updatedTrackingNumber,
 					};
 					onOrderUpdate(updatedReceipt);
@@ -993,7 +993,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 								_deprecated_trackingNumber: updatedTrackingNumber,
 							},
 						};
-						await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+						await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 						// Call onOrderUpdate to refresh dashboard data
 						if (onOrderUpdate) {
@@ -1009,19 +1009,19 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 							receipt: {
 								id: receipt.id,
 								receiptId: receipt.receiptId,
-								_deprecated_pptSendAt: null,
-								_deprecated_pptSendBy: null,
+								_deprecated_postalOrderCreatedAt: null,
+								_deprecated_postalOrderCreatedById: null,
 								_deprecated_trackingNumber: '',
 							},
 						};
-						await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+						await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 						// Call onOrderUpdate to refresh dashboard data
 						if (onOrderUpdate) {
 							const updatedReceipt = {
 								...receipt,
-								_deprecated_pptSendAt: null,
-								_deprecated_pptSendBy: null,
+								_deprecated_postalOrderCreatedAt: null,
+								_deprecated_postalOrderCreatedById: null,
 								_deprecated_trackingNumber: '',
 							};
 							onOrderUpdate(updatedReceipt);
@@ -1033,19 +1033,19 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 						receipt: {
 							id: receipt.id,
 							receiptId: receipt.receiptId,
-							_deprecated_pptSendAt: null,
-							_deprecated_pptSendBy: null,
+							_deprecated_postalOrderCreatedAt: null,
+							_deprecated_postalOrderCreatedById: null,
 							_deprecated_trackingNumber: '',
 						},
 					};
-					await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+					await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 					// Call onOrderUpdate to refresh dashboard data
 					if (onOrderUpdate) {
 						const updatedReceipt = {
 							...receipt,
-							_deprecated_pptSendAt: null,
-							_deprecated_pptSendBy: null,
+							_deprecated_postalOrderCreatedAt: null,
+							_deprecated_postalOrderCreatedById: null,
 							_deprecated_trackingNumber: '',
 						};
 						onOrderUpdate(updatedReceipt);
@@ -1085,7 +1085,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 			// Add 7 hours to account for GMT+7
 			const adjustedDate = new Date();
 			adjustedDate.setHours(adjustedDate.getHours() + 7);
-			const formattedDate = adjustedDate.toISOString().split('T')[0];
+			const formattedDate = adjustedDate.toISOString();
 
 			// Append new tracking number to existing ones (if any)
 			let updatedTrackingNumber = newTrackingNumber.trim();
@@ -1110,13 +1110,13 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				receipt: {
 					id: receipt.id,
 					receiptId: receipt.receiptId,
-					_deprecated_pptSendAt: formattedDate,
-					_deprecated_pptSendBy: currentUser?.identityId,
+					_deprecated_postalOrderCreatedAt: formattedDate,
+					_deprecated_postalOrderCreatedById: currentUser?.identityId,
 					_deprecated_trackingNumber: updatedTrackingNumber,
 				},
 			};
 
-			const updateResponse = await apiPost('https://black.irdop.org/khsi19me/db/update/receipt', payload);
+			const updateResponse = await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 			if (updateResponse.status === 200) {
 				console.log('Receipt updated successfully with existing tracking number:', newTrackingNumber.trim());
@@ -1125,8 +1125,8 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				if (onOrderUpdate) {
 					const updatedReceipt = {
 						...receipt,
-						_deprecated_pptSendAt: formattedDate,
-						_deprecated_pptSendBy: currentUser?.identityId,
+						_deprecated_postalOrderCreatedAt: formattedDate,
+						_deprecated_postalOrderCreatedById: currentUser?.identityId,
 						_deprecated_trackingNumber: updatedTrackingNumber,
 					};
 					onOrderUpdate(updatedReceipt);
@@ -1156,7 +1156,7 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 
 	return (
 		<div
-			className={`shipment-form p-2 bg-gray-50 rounded-lg mx-auto relative mt-16 ${
+			className={`shipment-form p-2 bg-gray-50 rounded-lg mx-auto relative mt-16 max-h-[90vh] overflow-auto ${
 				isDirectPickup ? 'max-w-4xl' : 'max-w-7xl'
 			}`}
 		>

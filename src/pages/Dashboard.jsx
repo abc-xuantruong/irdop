@@ -47,7 +47,6 @@ const Dashboard = () => {
 
 	const [hoveredReceiptId, setHoveredReceiptId] = useState(null);
 	const [hoveredSampleId, setHoveredSampleId] = useState(null);
-	const [isFetch, setIsFetch] = useState(false);
 
 	// Date input state
 	const [dateInputValues, setDateInputValues] = useState({});
@@ -299,15 +298,7 @@ const Dashboard = () => {
 		}
 	};
 
-	const [isClearing, setIsClearing] = useState(false);
-	const searchExecutedRef = useRef(false);
-
 	const handleClearSearch = async () => {
-		// Set flag to prevent useEffects from interfering
-		setIsClearing(true);
-		// Reset search ref
-		searchExecutedRef.current = false;
-
 		// Reset search term and all filters
 		setSearchTerm('');
 		setStatusFilter(null); // Clear status filter as well
@@ -339,9 +330,6 @@ const Dashboard = () => {
 			}
 		} catch (error) {
 			console.error('Error fetching receipts:', error);
-		} finally {
-			// Reset flag after clearing is complete
-			setIsClearing(false);
 		}
 	};
 
@@ -1076,56 +1064,6 @@ const Dashboard = () => {
 			console.error('Error fetching search results:', error);
 		}
 	};
-	useEffect(() => {
-		const queryParams = new URLSearchParams(location.search);
-		const searchParam = queryParams.get('searchTerm');
-
-		if (!isFetch) {
-			if (!searchParam) {
-				// Only fetch all receipts if there's no search param
-				// If there is a search param, let the other useEffect handle it
-				// Use null to let fetchReceipt read page from URL params
-				fetchReceipt(null, receiptsPerPage);
-			}
-			setIsFetch(true);
-		}
-	}, []); // Handle search term from URL on component mount and URL changes
-	useEffect(() => {
-		// Don't run if we're in the middle of clearing search
-		if (isClearing) return;
-
-		const queryParams = new URLSearchParams(location.search);
-		const searchParam = queryParams.get('searchTerm');
-
-		// Only set searchTerm if it's different from current value
-		if (searchParam && searchParam !== searchTerm) {
-			setSearchTerm(searchParam);
-		} else if (!searchParam && searchTerm) {
-			// Clear searchTerm if no search param in URL but we have searchTerm
-			setSearchTerm('');
-		}
-	}, [location.search, isClearing]); // Add useEffect to handle search term changes - chỉ gọi API một lần ở đây
-	useEffect(() => {
-		// Don't run if we're in the middle of clearing search
-		if (isClearing) return;
-
-		if (searchTerm) {
-			// Only call API if we haven't already searched for this term
-			if (!searchExecutedRef.current) {
-				searchExecutedRef.current = true;
-				fetchSearchResults(searchTerm);
-				// Reset flag after a short delay
-				setTimeout(() => {
-					searchExecutedRef.current = false;
-				}, 1000);
-			}
-		} else if (!searchTerm && isFilter) {
-			// If search term is cleared, reset to original data
-			setCurrentList(originalList);
-			setIsFilter(false);
-		}
-	}, [searchTerm, isClearing]);
-
 	// Main useEffect to handle all query params changes and call appropriate APIs
 	useEffect(() => {
 		const queryParams = new URLSearchParams(location.search);
@@ -1147,30 +1085,26 @@ const Dashboard = () => {
 			itemsPerPage: itemsPerPageParam,
 		});
 
-		// Update component states based on URL params
+		// Extract values from URL params
 		const pageNumber = pageParam ? parseInt(pageParam, 10) : 1;
-		if (pageNumber !== currentPage) {
-			setCurrentPage(pageNumber);
-		}
+		const itemsPerPage = itemsPerPageParam ? parseInt(itemsPerPageParam, 10) : receiptsPerPage;
 
-		// Update items per page if provided in URL
+		// Update all states first before making API calls
+		setCurrentPage(pageNumber);
+
 		if (itemsPerPageParam) {
-			const itemsPerPageValue = parseInt(itemsPerPageParam, 10);
-			if (itemsPerPageValue !== receiptsPerPage) {
-				setReceiptsPerPage(itemsPerPageValue);
-			}
+			setReceiptsPerPage(itemsPerPage);
 		}
-
-		// Use the current receiptsPerPage or the one from URL param for API calls
-		const currentItemsPerPage = itemsPerPageParam ? parseInt(itemsPerPageParam, 10) : receiptsPerPage;
 
 		// Determine which API to call based on active filters
 		if (searchTermParam) {
 			// Search is active - call search API
-			if (searchTermParam !== searchTerm) {
-				setSearchTerm(searchTermParam);
-				setIsFilter(true);
-			}
+			setSearchTerm(searchTermParam);
+			setIsFilter(true);
+			setShowOverdueFilter(false);
+			setShowTodayDeadlines(false);
+			setStatusFilter(statusParam ? parseInt(statusParam, 10) : null);
+
 			if (pageNumber > 1) {
 				fetchSearchResultsWithPage(searchTermParam, pageNumber);
 			} else {
@@ -1178,12 +1112,12 @@ const Dashboard = () => {
 			}
 		} else if (overdueParam === 'true') {
 			// Overdue filter is active
-			if (!showOverdueFilter) {
-				setShowOverdueFilter(true);
-				setShowTodayDeadlines(false);
-				setStatusFilter(statusParam ? parseInt(statusParam, 10) : null);
-				setIsFilter(true);
-			}
+			setShowOverdueFilter(true);
+			setShowTodayDeadlines(false);
+			setStatusFilter(statusParam ? parseInt(statusParam, 10) : null);
+			setIsFilter(true);
+			setSearchTerm('');
+
 			if (pageNumber > 1) {
 				fetchOverdueReceiptsWithPage(pageNumber);
 			} else {
@@ -1194,20 +1128,19 @@ const Dashboard = () => {
 			const startDate = new Date(deadlineStartParam);
 			const endDate = new Date(deadlineEndParam);
 
-			if (!showTodayDeadlines || !filterInfo.isFilterActive) {
-				setDateRange([startDate, endDate]);
-				setShowTodayDeadlines(true);
-				setShowOverdueFilter(false);
-				setStatusFilter(statusParam ? parseInt(statusParam, 10) : null);
-				setIsFilter(true);
+			setDateRange([startDate, endDate]);
+			setShowTodayDeadlines(true);
+			setShowOverdueFilter(false);
+			setStatusFilter(statusParam ? parseInt(statusParam, 10) : null);
+			setIsFilter(true);
+			setSearchTerm('');
 
-				setFilterInfo({
-					isFilterActive: true,
-					count: 0,
-					startDate: startDate,
-					endDate: endDate,
-				});
-			}
+			setFilterInfo({
+				isFilterActive: true,
+				count: 0,
+				startDate: startDate,
+				endDate: endDate,
+			});
 
 			if (pageNumber > 1) {
 				fetchReceiptsByDeadlineWithPage(startDate, endDate, pageNumber);
@@ -1217,13 +1150,13 @@ const Dashboard = () => {
 		} else if (statusParam !== null) {
 			// Only status filter is active
 			const statusValue = parseInt(statusParam, 10);
-			if (statusValue !== statusFilter) {
-				setStatusFilter(statusValue);
-				setShowOverdueFilter(false);
-				setShowTodayDeadlines(false);
-				setIsFilter(true);
-			}
-			fetchReceipt(pageNumber, currentItemsPerPage);
+			setStatusFilter(statusValue);
+			setShowOverdueFilter(false);
+			setShowTodayDeadlines(false);
+			setIsFilter(true);
+			setSearchTerm('');
+
+			fetchReceipt(pageNumber, itemsPerPage);
 		} else {
 			// No filters active - fetch normal data
 			setShowOverdueFilter(false);
@@ -1239,7 +1172,7 @@ const Dashboard = () => {
 				endDate: null,
 			});
 
-			fetchReceipt(pageNumber, currentItemsPerPage);
+			fetchReceipt(pageNumber, itemsPerPage);
 		}
 	}, [location.search]); // Only depend on URL search params
 
@@ -1705,12 +1638,13 @@ const Dashboard = () => {
 			const rect = element.getBoundingClientRect();
 
 			// Position tooltip to the left of the cell
+			// Using fixed positioning, so we don't need to add window.scrollY/scrollX
 			setAnalysisSummaryTooltip({
 				visible: true,
 				analyses: sample.analyses,
 				position: {
-					top: rect.top + window.scrollY,
-					left: rect.left + window.scrollX - 400 - 10, // 400px width + 10px offset to the left
+					top: rect.top, // Use rect.top directly for fixed positioning
+					left: rect.left - 410, // 400px width + 10px gap
 				},
 			});
 		}
@@ -2238,7 +2172,7 @@ const Dashboard = () => {
 		}).then((result) => {
 			if (result.isConfirmed) {
 				// If confirmed, set today's date and submit
-				const today = new Date();
+				const today = new Date().toISOString();
 				handlePptSendChangeAPI(receiptId, today);
 
 				// Update local state immediately for better UI feedback
@@ -2467,8 +2401,16 @@ const Dashboard = () => {
 				{/* Updated layout - buttons row with horizontal scrolling */}
 				<div className="w-full overflow-x-auto px-4 py-2">
 					<div className="flex justify-between items-center min-w-fit">
-						{/* Left side - empty now since we removed PPT and Payment buttons */}
-						<div className="flex items-center space-x-2 flex-shrink-0">{/* Empty space */}</div>
+						{/* Left side - Navigation button */}
+						<div className="flex items-center space-x-2 flex-shrink-0">
+							<button
+								className="p-2 rounded-lg border border-gray-300 flex items-center justify-center focus:outline-none gap-2 py-1 text-black hover:bg-gray-100"
+								onClick={() => navigate(`/progress${location.search}`)}
+								title="Chuyển sang trang Tiến độ"
+							>
+								<span className="font-normal">Tiến độ →</span>
+							</button>
+						</div>
 
 						{/* Right side - Deadline and Overdue buttons */}
 						<div className="flex items-center space-x-2 flex-shrink-0">

@@ -66,7 +66,7 @@ const ProgressDashboard = () => {
 		try {
 			const payload = {
 				page: page,
-				limit: limit,
+				itemsPerPage: limit,
 				status: [1, 2, 3, 4, 5],
 				columns: [
 					// Receipt columns
@@ -139,54 +139,42 @@ const ProgressDashboard = () => {
 		const itemsPerPageParam = queryParams.get('itemsPerPage');
 		const trackingNumberFilterParam = queryParams.get('noTrackingNumber');
 
-		// Update component states based on URL params
+		// Extract values from URL params
 		const pageNumber = pageParam ? parseInt(pageParam, 10) : 1;
-		if (pageNumber !== currentPage) {
-			setCurrentPage(pageNumber);
-		}
+		const itemsPerPage = itemsPerPageParam ? parseInt(itemsPerPageParam, 10) : receiptsPerPage;
 
-		// Update items per page if provided in URL
+		// Update all states first before making API calls
+		setCurrentPage(pageNumber);
+
 		if (itemsPerPageParam) {
-			const itemsPerPage = parseInt(itemsPerPageParam, 10);
-			if (itemsPerPage !== receiptsPerPage) {
-				setReceiptsPerPage(itemsPerPage);
-			}
+			setReceiptsPerPage(itemsPerPage);
 		}
 
-		// Update search term from URL
-		if (searchTermParam && searchTermParam !== searchTerm) {
+		if (searchTermParam) {
 			setSearchTerm(searchTermParam);
 		} else if (!searchTermParam && searchTerm) {
 			setSearchTerm('');
 		}
 
-		// Update tracking number filter state
-		if (trackingNumberFilterParam === 'true') {
-			setShowTrackingNumberFilter(true);
-		} else {
-			setShowTrackingNumberFilter(false);
-		}
+		setShowTrackingNumberFilter(trackingNumberFilterParam === 'true');
 
-		// Update deadline filter states
+		// Now make API calls based on the filter type
 		if (deadlineStartParam && deadlineEndParam) {
 			const startDate = new Date(deadlineStartParam);
 			const endDate = new Date(deadlineEndParam);
 			setDateRange([startDate, endDate]);
 			setShowTodayDeadlines(true);
-			fetchReceiptsByDeadlineWithPage(startDate, endDate, pageNumber);
+			setShowOverdueFilter(false);
+			fetchReceiptsByDeadlineWithPage(startDate, endDate, pageNumber, itemsPerPage);
 		} else if (overdueParam === 'true') {
 			setShowOverdueFilter(true);
-			fetchOverdueReceiptsWithPage(pageNumber);
-		} else if (searchTermParam) {
-			// Search mode
-			setShowOverdueFilter(false);
 			setShowTodayDeadlines(false);
-			fetchReceipt(pageNumber, itemsPerPageParam ? parseInt(itemsPerPageParam, 10) : receiptsPerPage);
+			fetchOverdueReceiptsWithPage(pageNumber, itemsPerPage);
 		} else {
-			// Normal mode
+			// Normal mode or search mode
 			setShowOverdueFilter(false);
 			setShowTodayDeadlines(false);
-			fetchReceipt(pageNumber, itemsPerPageParam ? parseInt(itemsPerPageParam, 10) : receiptsPerPage);
+			fetchReceipt(pageNumber, itemsPerPage);
 		}
 	}, [location.search]);
 
@@ -203,6 +191,7 @@ const ProgressDashboard = () => {
 	const handleItemsPerPageChange = (newItemsPerPage) => {
 		setReceiptsPerPage(newItemsPerPage);
 		const queryParams = new URLSearchParams(location.search);
+		queryParams.set('itemsPerPage', newItemsPerPage.toString());
 		queryParams.delete('page'); // Reset to page 1
 		navigate(`${location.pathname}?${queryParams.toString()}`);
 	};
@@ -235,11 +224,11 @@ const ProgressDashboard = () => {
 	};
 
 	// Deadline filter functions
-	const fetchReceiptsByDeadlineWithPage = async (start, end, page) => {
+	const fetchReceiptsByDeadlineWithPage = async (start, end, page, limit = receiptsPerPage) => {
 		try {
 			const payload = {
 				page: page,
-				limit: receiptsPerPage,
+				itemsPerPage: limit,
 				status: ['2', '3', '4', '5'],
 				deadlineStart: start.toISOString(),
 				deadlineEnd: end.toISOString(),
@@ -290,12 +279,12 @@ const ProgressDashboard = () => {
 		}
 	};
 
-	const fetchOverdueReceiptsWithPage = async (page) => {
+	const fetchOverdueReceiptsWithPage = async (page, limit = receiptsPerPage) => {
 		try {
 			const today = new Date();
 			const payload = {
 				page: page,
-				limit: receiptsPerPage,
+				itemsPerPage: limit,
 				status: ['2', '3', '4', '5'],
 				deadlineEndAt: today.toISOString(),
 				columns: [
@@ -357,12 +346,14 @@ const ProgressDashboard = () => {
 		if (update[0] && update[1]) {
 			setIsCalendarOpen(false);
 
-			const queryParams = new URLSearchParams();
+			const queryParams = new URLSearchParams(location.search);
 			queryParams.set('deadlineStart', update[0].toISOString());
 			queryParams.set('deadlineEnd', update[1].toISOString());
 			queryParams.delete('page');
 			queryParams.delete('overdue');
 			queryParams.delete('searchTerm');
+			// Keep itemsPerPage if it exists
+			// queryParams already has itemsPerPage from location.search if it was set
 
 			navigate(`${location.pathname}?${queryParams.toString()}`);
 		}
@@ -507,85 +498,99 @@ const ProgressDashboard = () => {
 				</div>
 
 				{/* Filter buttons */}
-				<div className="flex items-center space-x-2 flex-wrap gap-2 mt-2">
-					{/* Deadline filter button */}
-					<button
-						className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
-							showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black border border-gray-300'
-						}`}
-						onClick={(e) => filterTodayDeadlines(e)}
-						title={
-							showTodayDeadlines
-								? 'Click outside the date picker to cancel'
-								: 'Chọn khoảng thời gian để lọc theo deadline'
-						}
-					>
-						<FaCalendarDay size={18} />
-						<span className="font-normal">Deadline</span>
-						{showTodayDeadlines && (
-							<div
-								className="relative z-1000 text-black datepicker-container flex"
-								onClick={(e) => e.stopPropagation()}
-							>
-								<DatePicker
-									ref={datePickerRef}
-									selected={startDate}
-									onChange={handleDateRangeChange}
-									startDate={startDate}
-									endDate={endDate}
-									selectsRange
-									dateFormat="dd/MM/yyyy"
-									placeholderText="Chọn khoảng thời gian"
-									className="p-2 py-0 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-52 cursor-pointer"
-									open={isCalendarOpen}
-									onInputClick={() => setIsCalendarOpen(true)}
-									onClickOutside={() => {
-										setIsCalendarOpen(false);
-									}}
-									shouldCloseOnSelect={false}
-									popperContainer={({ children }) => createPortal(children, document.body)}
-									popperProps={{
-										positionFixed: true,
-									}}
-									popperModifiers={{
-										preventOverflow: {
-											enabled: true,
-											boundariesElement: 'viewport',
-										},
-										flip: {
-											enabled: true,
-										},
-										offset: {
-											enabled: true,
-											offset: '0, 5',
-										},
-									}}
-								/>
-								<button
-									className="ml-1 p-1 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
-									onClick={(e) => {
-										e.stopPropagation();
-										handleResetDateFilter();
-									}}
-									title="Đóng bộ lọc deadline"
-								>
-									<FaTimes size={14} />
-								</button>
-							</div>
-						)}
-					</button>
+				<div className="flex items-center justify-between flex-wrap gap-2 mt-2">
+					{/* Left side - Navigation button */}
+					<div className="flex items-center gap-2">
+						<button
+							className="p-2 rounded-lg border border-gray-300 flex items-center justify-center focus:outline-none gap-2 py-1 text-black hover:bg-gray-100"
+							onClick={() => navigate(`/dashboard${location.search}`)}
+							title="Chuyển sang trang Tiến trình"
+						>
+							<span className="font-normal">← Tiến trình</span>
+						</button>
+					</div>
 
-					{/* Overdue filter button */}
-					<button
-						className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
-							showOverdueFilter ? 'text-white bg-blue-600' : 'text-black border border-gray-300'
-						}`}
-						onClick={toggleOverdueFilter}
-						title={showOverdueFilter ? 'Hiển thị danh sách bình thường' : 'Hiển thị danh sách quá hạn'}
-					>
-						<FaCalendarDay size={18} />
-						<span className="font-normal">Overdue</span>
-					</button>
+					{/* Right side - Filter buttons */}
+					<div className="flex items-center space-x-2 flex-wrap gap-2">
+						{/* Deadline filter button */}
+						<button
+							className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+								showTodayDeadlines ? 'text-white bg-blue-600' : 'text-black border border-gray-300'
+							}`}
+							onClick={(e) => filterTodayDeadlines(e)}
+							title={
+								showTodayDeadlines
+									? 'Click outside the date picker to cancel'
+									: 'Chọn khoảng thời gian để lọc theo deadline'
+							}
+						>
+							<FaCalendarDay size={18} />
+							<span className="font-normal">Deadline</span>
+							{showTodayDeadlines && (
+								<div
+									className="relative z-1000 text-black datepicker-container flex"
+									onClick={(e) => e.stopPropagation()}
+								>
+									<DatePicker
+										ref={datePickerRef}
+										selected={startDate}
+										onChange={handleDateRangeChange}
+										startDate={startDate}
+										endDate={endDate}
+										selectsRange
+										dateFormat="dd/MM/yyyy"
+										placeholderText="Chọn khoảng thời gian"
+										className="p-2 py-0 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-52 cursor-pointer"
+										open={isCalendarOpen}
+										onInputClick={() => setIsCalendarOpen(true)}
+										onClickOutside={() => {
+											setIsCalendarOpen(false);
+										}}
+										shouldCloseOnSelect={false}
+										popperContainer={({ children }) => createPortal(children, document.body)}
+										popperProps={{
+											positionFixed: true,
+										}}
+										popperModifiers={{
+											preventOverflow: {
+												enabled: true,
+												boundariesElement: 'viewport',
+											},
+											flip: {
+												enabled: true,
+											},
+											offset: {
+												enabled: true,
+												offset: '0, 5',
+											},
+										}}
+									/>
+									<button
+										className="ml-1 p-1 rounded bg-gray-200 hover:bg-gray-300 focus:outline-none"
+										onClick={(e) => {
+											e.stopPropagation();
+											handleResetDateFilter();
+										}}
+										title="Đóng bộ lọc deadline"
+									>
+										<FaTimes size={14} />
+									</button>
+								</div>
+							)}
+						</button>
+
+						{/* Overdue filter button */}
+						<button
+							className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+								showOverdueFilter ? 'text-white bg-blue-600' : 'text-black border border-gray-300'
+							}`}
+							onClick={toggleOverdueFilter}
+							title={showOverdueFilter ? 'Hiển thị danh sách bình thường' : 'Hiển thị danh sách quá hạn'}
+						>
+							<FaCalendarDay size={18} />
+							<span className="font-normal">Overdue</span>
+						</button>
+					</div>
 				</div>
 			</div>
 
@@ -1034,7 +1039,7 @@ const ProgressDashboard = () => {
 							<select
 								value={receiptsPerPage}
 								onChange={(e) => handleItemsPerPageChange(parseInt(e.target.value))}
-								className="px-3 py-2 border rounded"
+								className="px-3 py-2 border rounded bg-white"
 							>
 								<option value={10}>10</option>
 								<option value={20}>20</option>

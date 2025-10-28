@@ -85,7 +85,7 @@ const CreateReceiptFromCRM = () => {
 
 	const { formatDate, currentUser, purposes, hasAuthCookies } = useContext(GlobalContext);
 	const navigate = useNavigate();
-	// Default customer and receipt fields
+	// Default customer fields - only used when "Đầy đủ thông tin mẫu" is clicked
 	const defaultCustomerFields = [
 		{ fname: 'Tên mẫu thử / name.', fvalue: '' },
 		{ fname: 'Số lô / LOT no.', fvalue: '' },
@@ -323,23 +323,31 @@ const CreateReceiptFromCRM = () => {
 					setDeadline(response.data.deadline);
 				}
 
-				// Set defaultSampleInformation based on response
-				if (response.data.defaultSampleInformation !== undefined) {
-					setDefaultSampleInformation(response.data.defaultSampleInformation);
-				}
-
-				// Load existing sample information if defaultSampleInformation is false
-				if (response.data.defaultSampleInformation === false && response.data.samples) {
+				// Load sample information from API response
+				if (response.data.samples) {
 					const loadedCustomerInfo = {};
 					response.data.samples.forEach((sample, index) => {
-						if (sample.sampleInformation && Array.isArray(sample.sampleInformation)) {
+						if (
+							sample.sampleInformation &&
+							Array.isArray(sample.sampleInformation) &&
+							sample.sampleInformation.length > 0
+						) {
+							// Use API data if available
 							loadedCustomerInfo[index] = sample.sampleInformation.map((info) => ({
 								fname: info.fname || '',
 								fvalue: info.fvalue || '',
 							}));
 						}
 					});
-					setCustomerInfo(loadedCustomerInfo);
+					// Only set customerInfo if there's data
+					if (Object.keys(loadedCustomerInfo).length > 0) {
+						setCustomerInfo(loadedCustomerInfo);
+					}
+				}
+
+				// Set defaultSampleInformation based on response
+				if (response.data.defaultSampleInformation !== undefined) {
+					setDefaultSampleInformation(response.data.defaultSampleInformation);
 				}
 
 				// Initialize urgent samples state
@@ -1326,20 +1334,8 @@ const CreateReceiptFromCRM = () => {
 	const handleAddCustomerField = (sampleIndex) => {
 		const updatedCustomerInfo = { ...customerInfo };
 		if (!updatedCustomerInfo[sampleIndex]) {
-			if (!defaultSampleInformation && crmData?.samples[sampleIndex]) {
-				// Initialize with default fields if defaultSampleInformation is false
-				updatedCustomerInfo[sampleIndex] = defaultCustomerFields.map((field) => ({
-					...field,
-					fvalue: field.fname === 'Tên mẫu thử / name.' ? crmData.samples[sampleIndex].sampleName || '' : field.fvalue,
-				}));
-			} else {
-				updatedCustomerInfo[sampleIndex] = [
-					{
-						fname: 'Tên mẫu thử / name.',
-						fvalue: crmData?.samples[sampleIndex]?.sampleName || '',
-					},
-				];
-			}
+			// Initialize with empty array or sample name only
+			updatedCustomerInfo[sampleIndex] = [];
 		}
 		updatedCustomerInfo[sampleIndex] = [...updatedCustomerInfo[sampleIndex], { fname: '', fvalue: '' }];
 		setCustomerInfo(updatedCustomerInfo);
@@ -1347,42 +1343,24 @@ const CreateReceiptFromCRM = () => {
 	const handleCustomerFieldChange = (sampleIndex, fieldIndex, field, value) => {
 		const updatedCustomerInfo = { ...customerInfo };
 
-		// Initialize with default fields if not exists and defaultSampleInformation is false
+		// Initialize with empty array if not exists
 		if (!updatedCustomerInfo[sampleIndex]) {
-			if (!defaultSampleInformation && crmData?.samples[sampleIndex]) {
-				updatedCustomerInfo[sampleIndex] = defaultCustomerFields.map((defaultField) => ({
-					...defaultField,
-					fvalue:
-						defaultField.fname === 'Tên mẫu thử / name.'
-							? crmData.samples[sampleIndex].sampleName || ''
-							: defaultField.fvalue,
-				}));
-			} else {
-				updatedCustomerInfo[sampleIndex] = [];
-			}
+			updatedCustomerInfo[sampleIndex] = [];
 		}
 
 		if (field === 'fname') {
-			const selectedField = defaultCustomerFields.find((item) => item.fname === value);
-			if (selectedField) {
-				// When user selects a predefined field, use that field and clear any 'other' value
-				updatedCustomerInfo[sampleIndex][fieldIndex] = {
-					...selectedField,
-					other: undefined, // Clear other field when selecting predefined option
-				};
-			} else if (value === 'Khác') {
-				// When user selects "Khác", initialize with empty other field
-				updatedCustomerInfo[sampleIndex][fieldIndex] = {
-					...updatedCustomerInfo[sampleIndex][fieldIndex],
-					fname: 'Khác',
-					other: '', // Initialize empty other field
-				};
+			// For fname, directly set the value
+			updatedCustomerInfo[sampleIndex][fieldIndex] = {
+				...updatedCustomerInfo[sampleIndex][fieldIndex],
+				fname: value,
+			};
+
+			// If user selects 'Khác', prepare for other input
+			if (value === 'Khác') {
+				updatedCustomerInfo[sampleIndex][fieldIndex].other = '';
 			} else {
-				updatedCustomerInfo[sampleIndex][fieldIndex] = {
-					...updatedCustomerInfo[sampleIndex][fieldIndex],
-					fname: value,
-					other: undefined, // Clear other field for any other custom value
-				};
+				// Remove 'other' field if it exists
+				delete updatedCustomerInfo[sampleIndex][fieldIndex].other;
 			}
 		} else if (field === 'other') {
 			// When user types in the "other" input, update both 'other' and 'fname' fields
@@ -1410,21 +1388,24 @@ const CreateReceiptFromCRM = () => {
 		if (!crmData || !crmData.samples) return;
 
 		if (!defaultSampleInformation) {
-			// Switch to full sample information mode
+			// Switch to full sample information mode - add default fields
 			const updatedCustomerInfo = { ...customerInfo };
 
 			crmData.samples.forEach((sample, index) => {
-				const defaultFields = defaultCustomerFields.map((field) => ({
-					...field,
-					fvalue: field.fname === 'Tên mẫu thử / name.' ? sample.sampleName || '' : field.fvalue,
-				}));
-				updatedCustomerInfo[index] = [...defaultFields];
+				// Keep existing fields from API if they exist, otherwise use defaults
+				if (!updatedCustomerInfo[index] || updatedCustomerInfo[index].length === 0) {
+					const defaultFields = defaultCustomerFields.map((field) => ({
+						...field,
+						fvalue: field.fname === 'Tên mẫu thử / name.' ? sample.sampleName || '' : field.fvalue,
+					}));
+					updatedCustomerInfo[index] = [...defaultFields];
+				}
 			});
 			setCustomerInfo(updatedCustomerInfo);
 			setDefaultSampleInformation(true);
 			showBriefNotification('Đã bật chế độ thông tin mẫu đầy đủ!', 'success');
 		} else {
-			// Switch back to default mode (sample info shown by default)
+			// Switch back to default mode (clear all sample info)
 			setCustomerInfo({});
 			setDefaultSampleInformation(false);
 			showBriefNotification('Đã tắt chế độ thông tin mẫu đầy đủ!', 'success');

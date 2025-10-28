@@ -495,8 +495,12 @@ const createTableHTML = (headerHTML, rowsHTML) => {
 /**
  * Generate preview HTML
  */
-export const generatePreviewHTML = (pages, measurements, headerHTML, footerHTML) => {
+export const generatePreviewHTML = (pages, measurements, headerHTML, footerHTML, refNumber = null) => {
 	const { A4, headerHeight, footerHeight } = measurements;
+
+	// Check if watermark should be shown
+	const shouldShowWatermark =
+		!refNumber || refNumber === '' || refNumber.includes('DRAFT') || refNumber.includes('SƠ BỘ');
 
 	// Calculate positions in px
 	const topMarginPx = mmToPx(A4.topMargin);
@@ -560,6 +564,21 @@ export const generatePreviewHTML = (pages, measurements, headerHTML, footerHTML)
 			font-family: 'Wix Madefor Display', sans-serif !important;
 		}
 		
+		.watermark {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%) rotate(-45deg);
+			font-size: 80px;
+			font-weight: bold;
+			color: rgba(255, 0, 0, 0.15);
+			white-space: nowrap;
+			pointer-events: none;
+			z-index: 999;
+			user-select: none;
+			text-align: center;
+		}
+		
 		.header { 
 			position: absolute;
 			top: ${headerTop}px;
@@ -617,6 +636,7 @@ export const generatePreviewHTML = (pages, measurements, headerHTML, footerHTML)
 		@media print { 
 			.a4-page { border: none; } 
 			body { -webkit-print-color-adjust: exact; }
+			.watermark { color: rgba(255, 0, 0, 0.15) !important; }
 		}
 	`;
 
@@ -641,8 +661,12 @@ export const generatePreviewHTML = (pages, measurements, headerHTML, footerHTML)
 			})
 			.join('');
 
+		// Add watermark if needed
+		const watermarkHTML = shouldShowWatermark ? '<div class="watermark">DRAFT - SƠ BỘ</div>' : '';
+
 		pagesHTML += `
 <div class="a4-page" style="position: relative; width: 794px; height: 1122px; box-sizing: border-box; page-break-after: always; background-color: white; padding: 0; overflow: hidden; border: 1px solid #000;">
+	${watermarkHTML}
 	<div class="header" style="position: absolute; top: ${headerTop}px; left: ${leftMarginPx}px; width: ${contentWidth}px; box-sizing: border-box; z-index: 2;">
 		${headerHTML}
 	</div>

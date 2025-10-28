@@ -51,6 +51,9 @@ const FilterableSample = forwardRef(
 		const [loading, setLoading] = useState(true);
 		const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+		// Store original analyses before editing for comparison
+		const [originalAnalyses, setOriginalAnalyses] = useState(new Map()); // Map<analysisId, original analysis data>
+
 		// Filter states - match ProcessingSample structure
 		const [filters, setFilters] = useState({
 			columns: [
@@ -693,21 +696,42 @@ const FilterableSample = forwardRef(
 							requestBody.protocolCode = values;
 						}
 					} else if (column === 'deadline' && filterValue) {
+						// Separate handling for date range and checkbox values
+						let hasDateRange = false;
+						let checkboxValues = [];
+
 						if (Array.isArray(filterValue)) {
-							// Handle multiple deadline values
-							requestBody.deadline = filterValue;
-						} else if (filterValue === 'today') {
-							requestBody.deadline = 'today';
-						} else if (filterValue === 'overdue') {
-							requestBody.deadline = 'overdue';
-						} else if (filterValue === '3days') {
-							requestBody.deadline = '3days';
-						} else if (filterValue === 'week') {
-							requestBody.deadline = 'week';
-						} else if (filterValue === 'future') {
-							requestBody.deadline = 'future';
-						} else if (typeof filterValue === 'object' && filterValue.start) {
-							requestBody.deadline = filterValue;
+							// Process array to separate date range objects from regular values
+							filterValue.forEach((item) => {
+								if (typeof item === 'object' && item !== null && (item.start || item.end)) {
+									// This is a date range object
+									if (!hasDateRange) {
+										if (item.start) requestBody.deadlineStartAt = item.start;
+										if (item.end) requestBody.deadlineEndAt = item.end;
+										hasDateRange = true;
+									}
+								} else if (item && typeof item === 'string') {
+									// This is a checkbox value
+									checkboxValues.push(item);
+								}
+							});
+						} else if (
+							typeof filterValue === 'object' &&
+							filterValue !== null &&
+							(filterValue.start || filterValue.end)
+						) {
+							// Single date range object
+							if (filterValue.start) requestBody.deadlineStartAt = filterValue.start;
+							if (filterValue.end) requestBody.deadlineEndAt = filterValue.end;
+							hasDateRange = true;
+						} else if (filterValue && typeof filterValue === 'string') {
+							// Single checkbox value
+							checkboxValues.push(filterValue);
+						}
+
+						// Add checkbox values to deadline array if any exist
+						if (checkboxValues.length > 0) {
+							requestBody.deadline = checkboxValues;
 						}
 					} else if (column === 'technicianId' && filterValue) {
 						if (!requestBody.technicianId) {
@@ -1041,11 +1065,19 @@ const FilterableSample = forwardRef(
 		};
 
 		const startResultEntrySession = async () => {
+			// Store original analyses data before starting session
+			const originalData = new Map();
+			processingSample.forEach((group) => {
+				group.analyses.forEach((analysis) => {
+					originalData.set(analysis.id, { ...analysis });
+				});
+			});
+			setOriginalAnalyses(originalData);
+
 			// Simply start the session without authentication check
 			setIsResultEntrySession(true);
 			toast.success('Đã bắt đầu phiên nhập kết quả');
 		};
-
 		const handleSaveChange = (analysisId, field, value) => {
 			setPendingChanges((prev) => {
 				const newMap = new Map(prev);
@@ -1059,18 +1091,18 @@ const FilterableSample = forwardRef(
 			if (shouldSave && pendingChanges.size > 0) {
 				setIsSessionUpdating(true);
 				try {
-					// Prepare analyses array with only id, resultValue, resultUnit
+					// Prepare analyses array with id, resultValue, resultUnit, and protocolCode
 					const analyses = Array.from(pendingChanges.values()).map((change) => ({
 						id: change.id,
 						resultValue: change.resultValue,
 						resultUnit: change.resultUnit,
+						protocolCode: change.protocolCode,
 					}));
 
 					// Send batch update API
 					const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
 						analyses: analyses,
 					});
-
 					if (response?.status < 300) {
 						const responseData = response?.data;
 
@@ -1861,8 +1893,8 @@ const FilterableSample = forwardRef(
 			// Close unit dropdown when switching cells
 			setShowUnitDropdown(false);
 
-			// Only apply session logic for result and unit columns
-			if (column === 'resultValue' || column === 'resultUnit') {
+			// Only apply session logic for result, unit, and protocol columns
+			if (column === 'resultValue' || column === 'resultUnit' || column === 'protocolCode') {
 				// If not in session, start session first
 				if (!isResultEntrySession) {
 					await startResultEntrySession();
@@ -1880,7 +1912,6 @@ const FilterableSample = forwardRef(
 				proceedWithEdit(analysisId, column, currentValue);
 			}
 		};
-
 		const handleCellBlur = async () => {
 			if (!editingCell) return;
 
@@ -1898,8 +1929,11 @@ const FilterableSample = forwardRef(
 
 			// Only update if value changed
 			if (editValue !== strippedOriginal) {
-				// If in result entry session and editing result/unit columns, save to pending changes
-				if (isResultEntrySession && (column === 'resultValue' || column === 'resultUnit')) {
+				// If in result entry session and editing result/unit/protocol columns, save to pending changes
+				if (
+					isResultEntrySession &&
+					(column === 'resultValue' || column === 'resultUnit' || column === 'protocolCode')
+				) {
 					// Get existing pending changes for this analysis or create new with full record data
 					const existingChanges = pendingChanges.get(analysisId) || {
 						...originalAnalysis, // Include full record data
@@ -1912,6 +1946,8 @@ const FilterableSample = forwardRef(
 						existingChanges.resultValue = convertedValue;
 					} else if (column === 'resultUnit') {
 						existingChanges.resultUnit = convertedValue;
+					} else if (column === 'protocolCode') {
+						existingChanges.protocolCode = editValue; // No HTML conversion for protocolCode
 					}
 
 					// Update pending changes
@@ -1922,7 +1958,9 @@ const FilterableSample = forwardRef(
 						prevData.map((group) => ({
 							...group,
 							analyses: group.analyses.map((analysis) =>
-								analysis.id === analysisId ? { ...analysis, [column]: convertedValue } : analysis,
+								analysis.id === analysisId
+									? { ...analysis, [column]: column === 'protocolCode' ? editValue : convertedValue }
+									: analysis,
 							),
 						})),
 					);
@@ -2474,10 +2512,29 @@ const FilterableSample = forwardRef(
 															</td>
 
 															{/* Phương pháp */}
-															<td className="border border-gray-300 px-3 py-2 text-left">
-																<span className="text-sm">{item.protocolCode || '--'}</span>
+															<td
+																className="border border-gray-300 px-3 py-2 text-left cursor-pointer hover:bg-blue-50"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	handleCellClick(item.id, 'protocolCode', item.protocolCode);
+																}}
+															>
+																{editingCell?.analysisId === item.id && editingCell?.column === 'protocolCode' ? (
+																	<input
+																		type="text"
+																		value={editValue}
+																		onChange={(e) => setEditValue(e.target.value)}
+																		onBlur={handleCellBlur}
+																		onKeyDown={handleKeyDown}
+																		onClick={(e) => e.stopPropagation()}
+																		onMouseDown={(e) => e.stopPropagation()}
+																		className="w-full px-2 py-1 text-sm border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+																		autoFocus
+																	/>
+																) : (
+																	<span className="text-sm">{item.protocolCode || '--'}</span>
+																)}
 															</td>
-
 															{/* Kết quả */}
 															<td
 																className="border border-gray-300 px-3 py-2 text-left cursor-pointer hover:bg-blue-50"
@@ -3101,6 +3158,7 @@ const FilterableSample = forwardRef(
 					}}
 					onCancel={handleCancelAllChanges}
 					analyses={Array.from(pendingChanges.values())}
+					originalAnalyses={Array.from(originalAnalyses.values())}
 					isLoading={isSessionUpdating}
 				/>{' '}
 				{/* Cancel Confirmation Dialog */}

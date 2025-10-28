@@ -3945,7 +3945,7 @@ const ReceiptInfor = ({ receipt }) => {
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã đơn hàng</label>
-									{renderField('_deprecated_recordCode', currentReceipt?._deprecated_recordCode)}
+									{renderField('orderId', currentReceipt?.orderId)}
 								</div>
 								<div className="flex justify-start items-start mb-1">
 									<label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Giá trị</label>

@@ -4,7 +4,15 @@ import { Editor as TinyMCEEditor } from '@tinymce/tinymce-react';
 import { previewDocument } from '../../contexts/documentPreviewHelpers';
 import { apiPost, apiPostBlob } from '../../contexts/helperFunctionCallAPI';
 
-const ConfirmLabResult = ({ isOpen, onClose, onConfirm, onCancel, analyses = [], isLoading = false }) => {
+const ConfirmLabResult = ({
+	isOpen,
+	onClose,
+	onConfirm,
+	onCancel,
+	analyses = [],
+	isLoading = false,
+	originalAnalyses = [],
+}) => {
 	const [experimentLogCode, setExperimentLogCode] = useState('');
 	const [hasNoExperimentLog, setHasNoExperimentLog] = useState(true);
 	const [experimentStartDate, setExperimentStartDate] = useState('');
@@ -16,6 +24,7 @@ const ConfirmLabResult = ({ isOpen, onClose, onConfirm, onCancel, analyses = [],
 	const [isSigningIn, setIsSigningIn] = useState(false);
 	const [showExtractDialog, setShowExtractDialog] = useState(false);
 	const [isConfirming, setIsConfirming] = useState(false);
+	const [hasResultValueChanges, setHasResultValueChanges] = useState(false);
 	const editorRef = useRef(null);
 	const cardInputRef = useRef(null);
 
@@ -25,7 +34,14 @@ const ConfirmLabResult = ({ isOpen, onClose, onConfirm, onCancel, analyses = [],
 			setExperimentLogCode('');
 			setHasNoExperimentLog(true);
 			setExperimentStartDate('');
-			setExperimentEndDate('');
+			setExperimentEndDate(() => {
+				const now = new Date();
+				const gmt7 = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+				const day = String(gmt7.getDate()).padStart(2, '0');
+				const month = String(gmt7.getMonth() + 1).padStart(2, '0');
+				const year = gmt7.getFullYear();
+				return `${day}/${month}/${year}`;
+			});
 			setEditorContent('');
 			setIsExtracting(false);
 			setShowCardScanDialog(false);
@@ -36,8 +52,23 @@ const ConfirmLabResult = ({ isOpen, onClose, onConfirm, onCancel, analyses = [],
 			if (editorRef.current) {
 				editorRef.current.setContent('');
 			}
+
+			// Check if there are any resultValue changes
+			const hasChanges = analyses.some((analysis) => {
+				const original = originalAnalyses?.find((orig) => orig.id === analysis.id);
+				if (!original) return true; // New analysis, consider as change
+
+				// Strip HTML tags for comparison
+				const stripHTML = (str) => (str || '').replace(/<[^>]*>/g, '');
+				const currentValue = stripHTML(analysis.resultValue);
+				const originalValue = stripHTML(original.resultValue);
+
+				return currentValue !== originalValue;
+			});
+
+			setHasResultValueChanges(hasChanges);
 		}
-	}, [isOpen]);
+	}, [isOpen, analyses, originalAnalyses]);
 
 	const resetFields = () => {
 		setExperimentLogCode('');
@@ -1532,10 +1563,29 @@ const ConfirmLabResult = ({ isOpen, onClose, onConfirm, onCancel, analyses = [],
 						</h2>
 
 						<div className="mb-6">
-							<p className="text-gray-700 text-center mb-4">Bạn có muốn trích xuất báo cáo PDF và tải xuống không?</p>
-							<p className="text-sm text-gray-500 text-center">
-								Nếu chọn "Có", hệ thống sẽ tạo file PDF đã phân trang và tự động tải xuống
-							</p>
+							{hasResultValueChanges ? (
+								<>
+									<div className="mb-4 p-3 bg-orange-50 border border-orange-300 rounded-lg">
+										<p className="text-orange-800 font-semibold text-center mb-2">⚠️ Có thay đổi kết quả thử nghiệm</p>
+										<p className="text-sm text-orange-700 text-center">
+											Vì có thay đổi giá trị kết quả (resultValue), bạn bắt buộc phải trích xuất và tải xuống báo cáo
+											PDF.
+										</p>
+									</div>
+									<p className="text-sm text-gray-500 text-center">
+										Hệ thống sẽ tạo file PDF đã phân trang và tự động tải xuống
+									</p>
+								</>
+							) : (
+								<>
+									<p className="text-gray-700 text-center mb-4">
+										Bạn có muốn trích xuất báo cáo PDF và tải xuống không?
+									</p>
+									<p className="text-sm text-gray-500 text-center">
+										Nếu chọn "Có", hệ thống sẽ tạo file PDF đã phân trang và tự động tải xuống
+									</p>
+								</>
+							)}
 						</div>
 
 						<div className="flex justify-center gap-3">
@@ -1546,39 +1596,41 @@ const ConfirmLabResult = ({ isOpen, onClose, onConfirm, onCancel, analyses = [],
 							>
 								<span>← Quay lại</span>
 							</button>
-							<button
-								onClick={handleConfirmUpdate}
-								disabled={isConfirming}
-								className="px-6 py-2.5 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-							>
-								{isConfirming ? (
-									<>
-										<svg
-											className="animate-spin h-4 w-4"
-											xmlns="http://www.w3.org/2000/svg"
-											fill="none"
-											viewBox="0 0 24 24"
-										>
-											<circle
-												className="opacity-25"
-												cx="12"
-												cy="12"
-												r="10"
-												stroke="currentColor"
-												strokeWidth="4"
-											></circle>
-											<path
-												className="opacity-75"
-												fill="currentColor"
-												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-											></path>
-										</svg>
-										<span>Đang xử lý...</span>
-									</>
-								) : (
-									<span>Không, chỉ cập nhật</span>
-								)}
-							</button>
+							{!hasResultValueChanges && (
+								<button
+									onClick={handleConfirmUpdate}
+									disabled={isConfirming}
+									className="px-6 py-2.5 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+								>
+									{isConfirming ? (
+										<>
+											<svg
+												className="animate-spin h-4 w-4"
+												xmlns="http://www.w3.org/2000/svg"
+												fill="none"
+												viewBox="0 0 24 24"
+											>
+												<circle
+													className="opacity-25"
+													cx="12"
+													cy="12"
+													r="10"
+													stroke="currentColor"
+													strokeWidth="4"
+												></circle>
+												<path
+													className="opacity-75"
+													fill="currentColor"
+													d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+												></path>
+											</svg>
+											<span>Đang xử lý...</span>
+										</>
+									) : (
+										<span>Không, chỉ cập nhật</span>
+									)}
+								</button>
+							)}
 							<button
 								onClick={handleExtractAndPrint}
 								disabled={isConfirming}
