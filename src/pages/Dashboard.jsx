@@ -99,22 +99,15 @@ const Dashboard = () => {
 	// Add state for tracking which field is being edited
 	const [editingField, setEditingField] = useState({ receiptId: null, sampleId: null, field: null });
 
-	// Add state to track which sample's analysis grid is expanded
-	const [expandedAnalysisSampleId, setExpandedAnalysisSampleId] = useState(null);
-
-	// Add state to track analysis history tooltip
-	const [analysisHistoryTooltip, setAnalysisHistoryTooltip] = useState({
-		visible: false,
-		histories: [],
-		position: { top: 0, left: 0 },
-	});
-
-	// Add state to track analysis summary tooltip (X/Y/Z format)
+	// Add state to track analysis summary tooltip (X/Y/Z format) with interactive support
 	const [analysisSummaryTooltip, setAnalysisSummaryTooltip] = useState({
 		visible: false,
 		analyses: [],
 		position: { top: 0, left: 0 },
+		isHovering: false, // Track if mouse is over tooltip
 	});
+	const tooltipRef = useRef(null);
+	const tooltipTimeoutRef = useRef(null);
 
 	// Note modal states
 	const [showNoteModal, setShowNoteModal] = useState(false);
@@ -137,6 +130,9 @@ const Dashboard = () => {
 		transactionIndex: null,
 		field: null,
 	});
+
+	// Add state to control postal columns visibility
+	const [showPostalColumns, setShowPostalColumns] = useState(false);
 
 	// Add new state for tracking dropdown visibility
 	const [showRecordCodeDropdown, setShowRecordCodeDropdown] = useState(false);
@@ -1595,66 +1591,61 @@ const Dashboard = () => {
 		return true;
 	};
 
-	// Add function to toggle analysis grid expansion
-	const handleToggleAnalysisGrid = (sampleId) => {
-		if (expandedAnalysisSampleId === sampleId) {
-			// If clicking the same sample, collapse it
-			setExpandedAnalysisSampleId(null);
-		} else {
-			// Expand the clicked sample
-			setExpandedAnalysisSampleId(sampleId);
-		}
-	};
-
-	// Add function to handle analysis history tooltip
-	const handleAnalysisHistoryEnter = (e, analysis) => {
-		if (analysis?.histories && analysis.histories.length > 0) {
-			const element = e.currentTarget;
-			const rect = element.getBoundingClientRect();
-
-			setAnalysisHistoryTooltip({
-				visible: true,
-				histories: analysis.histories,
-				position: {
-					top: rect.bottom + window.scrollY + 5,
-					left: rect.left + window.scrollX,
-				},
-			});
-		}
-	};
-
-	const handleAnalysisHistoryLeave = () => {
-		setAnalysisHistoryTooltip({
-			visible: false,
-			histories: [],
-			position: { top: 0, left: 0 },
-		});
-	};
-
-	// Add function to handle analysis summary tooltip (X/Y/Z format)
+	// Updated function to handle analysis summary tooltip with interactive support
 	const handleAnalysisSummaryEnter = (e, sample) => {
 		if (sample?.analyses && sample.analyses.length > 0) {
+			// Clear any pending timeout
+			if (tooltipTimeoutRef.current) {
+				clearTimeout(tooltipTimeoutRef.current);
+			}
+
 			const element = e.currentTarget;
 			const rect = element.getBoundingClientRect();
 
-			// Position tooltip to the left of the cell
-			// Using fixed positioning, so we don't need to add window.scrollY/scrollX
+			// Position tooltip to the left of the cell with some gap
 			setAnalysisSummaryTooltip({
 				visible: true,
 				analyses: sample.analyses,
 				position: {
-					top: rect.top, // Use rect.top directly for fixed positioning
-					left: rect.left - 410, // 400px width + 10px gap
+					top: rect.top,
+					left: rect.left - 620, // Increased width + gap
 				},
+				isHovering: false,
 			});
 		}
 	};
 
 	const handleAnalysisSummaryLeave = () => {
+		// Delay hiding to allow mouse to move to tooltip
+		tooltipTimeoutRef.current = setTimeout(() => {
+			if (!analysisSummaryTooltip.isHovering) {
+				setAnalysisSummaryTooltip({
+					visible: false,
+					analyses: [],
+					position: { top: 0, left: 0 },
+					isHovering: false,
+				});
+			}
+		}, 200);
+	};
+
+	const handleTooltipEnterMouse = () => {
+		// Clear the timeout when mouse enters tooltip
+		if (tooltipTimeoutRef.current) {
+			clearTimeout(tooltipTimeoutRef.current);
+		}
+		setAnalysisSummaryTooltip((prev) => ({
+			...prev,
+			isHovering: true,
+		}));
+	};
+
+	const handleTooltipLeaveMouse = () => {
 		setAnalysisSummaryTooltip({
 			visible: false,
 			analyses: [],
 			position: { top: 0, left: 0 },
+			isHovering: false,
 		});
 	};
 
@@ -2293,66 +2284,36 @@ const Dashboard = () => {
 					<p>{tooltipState.content}</p>
 				</div>
 			)}
-			{/* Add analysis history tooltip */}
-			{analysisHistoryTooltip.visible && analysisHistoryTooltip.histories.length > 0 && (
-				<div
-					className="fixed bg-white border-2 border-blue-500 rounded-lg shadow-lg z-[9999] p-3 text-xs"
-					style={{
-						top: `${analysisHistoryTooltip.position.top}px`,
-						left: `${analysisHistoryTooltip.position.left}px`,
-						maxWidth: '800px',
-					}}
-				>
-					<p className="font-semibold mb-2 text-sm">Lịch sử phân tích:</p>
-					<div className="grid grid-cols-5 gap-2 font-semibold mb-2 pb-2 border-b">
-						<div>Tên chỉ tiêu</div>
-						<div>Mã phương pháp</div>
-						<div>Kết quả</div>
-						<div>Đơn vị</div>
-						<div>Hạn trả</div>
-					</div>
-					<div className="grid grid-cols-5 gap-2 max-h-60 overflow-y-auto">
-						{analysisHistoryTooltip.histories.map((history, idx) => (
-							<React.Fragment key={`history-${idx}`}>
-								<div className="truncate" title={history.parameterName || '--'}>
-									{history.parameterName || '--'}
-								</div>
-								<div className="truncate" title={history.protocolCode || '--'}>
-									{history.protocolCode || '--'}
-								</div>
-								<div className="truncate" title={history.resultValue || '--'}>
-									{history.resultValue && history.resultValue !== '<p></p>'
-										? history.resultValue.replace(/<[^>]*>/g, '').substring(0, 30)
-										: '--'}
-								</div>
-								<div className="truncate" title={history.resultUnit || '--'}>
-									{history.resultUnit || '--'}
-								</div>
-								<div className="truncate" title={history.deadline ? formatDate(history.deadline) : '--'}>
-									{history.deadline ? formatDate(history.deadline) : '--'}
-								</div>
-							</React.Fragment>
-						))}
-					</div>
-				</div>
-			)}
-			{/* Add analysis summary tooltip (X/Y/Z format) */}
+			{/* Add analysis summary tooltip - Interactive and shows all columns */}
 			{analysisSummaryTooltip.visible && analysisSummaryTooltip.analyses.length > 0 && (
 				<div
+					ref={tooltipRef}
 					className="fixed bg-white border-2 border-green-500 rounded-lg shadow-lg z-[9999] p-3 text-xs"
 					style={{
 						top: `${analysisSummaryTooltip.position.top}px`,
 						left: `${analysisSummaryTooltip.position.left}px`,
-						width: '400px',
+						width: '600px',
+						pointerEvents: 'auto',
 					}}
+					onMouseEnter={handleTooltipEnterMouse}
+					onMouseLeave={handleTooltipLeaveMouse}
 				>
-					<p className="font-semibold mb-2 text-sm">Danh sách chỉ tiêu:</p>
-					<div className="grid grid-cols-3 gap-2 font-semibold mb-2 pb-2 border-b">
+					<div
+						className="grid gap-2 font-semibold mb-2 pb-2 border-b text-left"
+						style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 0.5fr' }}
+					>
 						<div>Tên chỉ tiêu</div>
+						<div>Phương pháp</div>
 						<div>Kết quả</div>
+						<div>Đơn vị</div>
 						<div>Hạn trả</div>
+						{/* <div>Kỹ thuật viên</div> */}
+						<div>Note</div>
 					</div>
-					<div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+					<div
+						className="grid gap-2 max-h-[250px] overflow-y-auto text-left"
+						style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 0.5fr' }}
+					>
 						{analysisSummaryTooltip.analyses.map((analysis, idx) => (
 							<React.Fragment key={`summary-${idx}`}>
 								<div
@@ -2363,10 +2324,39 @@ const Dashboard = () => {
 								</div>
 								<div
 									className="truncate whitespace-nowrap overflow-hidden text-ellipsis"
+									title={analysis.protocolCode || '--'}
+								>
+									{analysis.protocolCode || '--'}
+								</div>
+								<div
+									className="truncate whitespace-nowrap overflow-hidden text-ellipsis"
 									title={analysis.resultValue || '--'}
 								>
 									{analysis.resultValue && analysis.resultValue !== '<p></p>'
-										? analysis.resultValue.replace(/<[^>]*>/g, '')
+										? (() => {
+												// Create a temporary DOM element to parse HTML
+												const tempDiv = document.createElement('div');
+												tempDiv.innerHTML = analysis.resultValue;
+												const textContent = tempDiv.textContent || tempDiv.innerText || '';
+												// Clean up any remaining HTML entities and extra whitespace
+												return textContent.replace(/\s+/g, ' ').trim();
+										  })()
+										: '--'}
+								</div>
+								<div
+									className="truncate whitespace-nowrap overflow-hidden text-ellipsis"
+									title={analysis.resultUnit || '--'}
+								>
+									{/* {analysis.resultUnit || '--'} */}
+									{analysis.resultUnit && analysis.resultUnit !== '<p></p>'
+										? (() => {
+												// Create a temporary DOM element to parse HTML
+												const tempDiv = document.createElement('div');
+												tempDiv.innerHTML = analysis.resultUnit;
+												const textContent = tempDiv.textContent || tempDiv.innerText || '';
+												// Clean up any remaining HTML entities and extra whitespace
+												return textContent.replace(/\s+/g, ' ').trim();
+										  })()
 										: '--'}
 								</div>
 								<div
@@ -2374,6 +2364,34 @@ const Dashboard = () => {
 									title={analysis.deadline ? formatDate(analysis.deadline) : '--'}
 								>
 									{analysis.deadline ? formatDate(analysis.deadline) : '--'}
+								</div>
+								{/* <div
+									className="truncate whitespace-nowrap overflow-hidden text-ellipsis"
+									title={analysis.technician?.identityName || '--'}
+								>
+									{analysis.technician?.identityName || '--'}
+								</div> */}
+								<div className="flex items-center justify-center">
+									<div
+										className="cursor-pointer hover:scale-110 transition-transform"
+										onClick={(e) => {
+											e.stopPropagation();
+											handleAnalysisNoteClick(analysis, e);
+										}}
+										onMouseEnter={(e) => {
+											if (analysis.note) {
+												showNoteTooltip(e, analysis.note, 'left');
+											}
+										}}
+										onMouseLeave={hideNoteTooltip}
+										title={analysis.note ? 'Click để xem/thêm ghi chú' : 'Click để thêm ghi chú'}
+									>
+										{analysis.note ? (
+											<span className="text-xl">📝</span>
+										) : (
+											<span className="text-xl text-gray-400">📋</span>
+										)}
+									</div>
 								</div>
 							</React.Fragment>
 						))}
@@ -2401,14 +2419,17 @@ const Dashboard = () => {
 				{/* Updated layout - buttons row with horizontal scrolling */}
 				<div className="w-full overflow-x-auto px-4 py-2">
 					<div className="flex justify-between items-center min-w-fit">
-						{/* Left side - Navigation button */}
+						{/* Left side - Postal button */}
 						<div className="flex items-center space-x-2 flex-shrink-0">
+							{/* Postal button */}
 							<button
-								className="p-2 rounded-lg border border-gray-300 flex items-center justify-center focus:outline-none gap-2 py-1 text-black hover:bg-gray-100"
-								onClick={() => navigate(`/progress${location.search}`)}
-								title="Chuyển sang trang Tiến độ"
+								className={`p-2 rounded-lg border-gray-400 flex items-center justify-center focus:outline-none gap-2 py-1 ${
+									showPostalColumns ? 'text-white bg-green-600' : 'text-black'
+								}`}
+								onClick={() => setShowPostalColumns(!showPostalColumns)}
+								title={showPostalColumns ? 'Ẩn cột vận đơn' : 'Hiện cột vận đơn'}
 							>
-								<span className="font-normal">Tiến độ →</span>
+								<span className="font-normal">📦 Postal</span>
 							</button>
 						</div>
 
@@ -2664,6 +2685,15 @@ const Dashboard = () => {
 									Hạn trả KQ
 								</th>
 
+								{/* New columns after Hạn trả KQ - conditionally shown */}
+								{showPostalColumns && (
+									<>
+										<th className="p-1 border-b text-start min-w-[120px]">Người tạo VĐ</th>
+										<th className="p-1 border-b text-start min-w-[100px]">Ngày tạo VĐ</th>
+										<th className="p-1 border-b text-start min-w-[120px]">Vận đơn</th>
+									</>
+								)}
+
 								{/* Show Thông tin mẫu thử for normal view */}
 								<th className="p-1 border-b text-start min-w-[100px] w-[10%]">Mã mẫu</th>
 								<th className="p-1 border-b text-start w-full min-w-72">Thông tin mẫu thử</th>
@@ -2722,13 +2752,7 @@ const Dashboard = () => {
 										</div>
 									)}
 								</th>
-								<th
-									className={`p-1 border-b text-start transition-all duration-300 ${
-										expandedAnalysisSampleId ? 'min-w-[600px]' : 'w-[6%] min-w-24'
-									}`}
-								>
-									Chỉ tiêu
-								</th>
+								<th className="p-1 border-b text-start w-[6%] min-w-24">Chỉ tiêu</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -2795,6 +2819,24 @@ const Dashboard = () => {
 												</td>
 												{/* Add deadline column for empty receipts */}
 												<td className="p-1 text-start text-gray-500">{canViewDeadline() ? '--' : '--'}</td>
+												{/* New columns for empty receipts - conditionally shown */}
+												{showPostalColumns && (
+													<>
+														<td className="p-1 text-start text-gray-500">--</td>
+														<td className="p-1 text-start text-gray-500">--</td>
+														<td className="p-1 text-start text-gray-500">
+															<div
+																className="cursor-pointer text-gray-500 hover:text-blue-600 border border-gray-300 rounded px-2 py-1 hover:bg-gray-50"
+																onClick={() => {
+																	setSelectedReceipt({ ...receipt, mode: 'new' });
+																	setShowShipmentForm(true);
+																}}
+															>
+																Tạo vận đơn
+															</div>
+														</td>
+													</>
+												)}
 												{/* Sample information columns - empty state */}
 											</tr>
 										) : (
@@ -2934,6 +2976,104 @@ const Dashboard = () => {
 																		</div>
 																	)}
 																</td>
+																{/* New columns after deadline - conditionally shown */}
+																{showPostalColumns && (
+																	<>
+																		<td
+																			className={`p-1 text-start align-top ${
+																				hoveredReceiptId === receipt.receiptId ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																		>
+																			<div className="text-sm">
+																				{receipt._deprecated_postalOrderCreatedBy?.identityName || '--'}
+																			</div>
+																		</td>
+
+																		<td
+																			className={`p-1 text-start align-top ${
+																				hoveredReceiptId === receipt.receiptId ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																		>
+																			<div className="text-sm">
+																				{receipt._deprecated_postalOrderCreatedAt
+																					? formatDate(receipt._deprecated_postalOrderCreatedAt)
+																					: '--'}
+																			</div>
+																		</td>
+
+																		<td
+																			className={`p-1 text-start align-top ${
+																				hoveredReceiptId === receipt.receiptId ? 'bg-gray-50' : ''
+																			}`}
+																			rowSpan={samplesToShow.length}
+																		>
+																			{receipt._deprecated_trackingNumber ? (
+																				<div className="flex flex-col items-start space-y-1">
+																					{receipt._deprecated_trackingNumber.split(',').map((trackingNum, index) => {
+																						const trimmedNum = trackingNum.trim();
+																						if (!trimmedNum) return null;
+
+																						const isDirectPickup = trimmedNum.startsWith('TT');
+
+																						return (
+																							<div key={index} className="flex items-center space-x-2">
+																								<span
+																									className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+																									onClick={() => {
+																										setSelectedReceipt({
+																											...receipt,
+																											_deprecated_trackingNumber: trimmedNum,
+																											_deprecated_originalTrackingNumber:
+																												receipt._deprecated_trackingNumber,
+																											mode: 'auto',
+																										});
+																										setShowShipmentForm(true);
+																									}}
+																								>
+																									{trimmedNum}
+																								</span>
+																								{!isDirectPickup && (
+																									<a
+																										href={`https://viettelpost.vn/thong-tin-don-hang?peopleTracking=sender&orderNumber=${trimmedNum}&orderType=1`}
+																										target="_blank"
+																										rel="noopener noreferrer"
+																										className="text-green-600 hover:text-green-800 flex items-center text-xs"
+																										onClick={(e) => e.stopPropagation()}
+																										title="Theo dõi đơn hàng trên Viettel Post"
+																									>
+																										<FaExternalLinkAlt size={10} className="mr-1" /> Track
+																									</a>
+																								)}
+																							</div>
+																						);
+																					})}
+																					{/* Always show "Add shipment" button at the bottom */}
+																					<div
+																						className="cursor-pointer text-blue-600 hover:text-blue-800 text-xs border border-blue-300 rounded px-2 py-1 hover:bg-blue-50"
+																						onClick={() => {
+																							setSelectedReceipt({ ...receipt, mode: 'new' });
+																							setShowShipmentForm(true);
+																						}}
+																					>
+																						+ Thêm vận đơn
+																					</div>
+																				</div>
+																			) : (
+																				<div
+																					className="cursor-pointer text-gray-500 hover:text-blue-600 border border-gray-300 rounded px-2 py-1 hover:bg-gray-50"
+																					onClick={() => {
+																						setSelectedReceipt({ ...receipt, mode: 'new' });
+																						setShowShipmentForm(true);
+																					}}
+																				>
+																					Tạo vận đơn
+																				</div>
+																			)}
+																		</td>
+																	</>
+																)}
 															</>
 														)}
 
@@ -3087,99 +3227,29 @@ const Dashboard = () => {
 														</td>
 
 														{/* Chỉ tiêu column */}
-														<td
-															className={`p-1 text-start align-top cursor-pointer hover:bg-gray-100 transition-all duration-300 ${
-																expandedAnalysisSampleId === sample.id ? 'min-w-[600px]' : ''
-															}`}
-														>
-															{expandedAnalysisSampleId === sample.id ? (
-																/* Show detailed grid */
-																<div className="relative">
-																	<button
-																		onClick={() => handleToggleAnalysisGrid(sample.id)}
-																		className="absolute top-0 right-0 text-red-600 hover:text-red-800 font-bold text-lg px-2 py-1 rounded hover:bg-red-50"
-																		title="Đóng"
+														<td className="p-1 text-start align-top hover:bg-gray-100">
+															{/* Show summary with tooltip */}
+															<div
+																className="text-sm"
+																onMouseEnter={(e) => handleAnalysisSummaryEnter(e, sample)}
+																onMouseLeave={handleAnalysisSummaryLeave}
+															>
+																{totalTests > 0 ? (
+																	<span
+																		className={`font-medium ${
+																			assignedTests === totalTests
+																				? 'text-green-800'
+																				: assignedTests < totalTests
+																				? 'text-yellow-600'
+																				: 'text-gray-600'
+																		}`}
 																	>
-																		×
-																	</button>
-																	<div className="grid grid-cols-6 gap-2 text-xs pr-8">
-																		{sample?.analyses?.map((analysis, idx) => (
-																			<React.Fragment key={`analysis-${analysis.id || idx}`}>
-																				<div
-																					className="truncate cursor-help hover:bg-blue-50 p-1 rounded"
-																					title={analysis.parameterName || '--'}
-																					onMouseEnter={(e) => handleAnalysisHistoryEnter(e, analysis)}
-																					onMouseLeave={handleAnalysisHistoryLeave}
-																				>
-																					{analysis.parameterName || '--'}
-																				</div>
-																				<div className="truncate" title={analysis.resultValue || '--'}>
-																					{analysis.resultValue && analysis.resultValue !== '<p></p>'
-																						? analysis.resultValue.replace(/<[^>]*>/g, '').substring(0, 30)
-																						: '--'}
-																				</div>
-																				<div className="truncate" title={analysis.resultUnit || '--'}>
-																					{analysis.resultUnit || '--'}
-																				</div>
-																				<div
-																					className="truncate"
-																					title={analysis.deadline ? formatDate(analysis.deadline) : '--'}
-																				>
-																					{analysis.deadline ? formatDate(analysis.deadline) : '--'}
-																				</div>
-																				<div className="truncate" title={analysis.technician?.identityName || '--'}>
-																					{analysis.technician?.identityName || '--'}
-																				</div>
-																				<div className="flex items-center justify-center">
-																					<div
-																						className="cursor-pointer hover:scale-110 transition-transform"
-																						onClick={(e) => handleAnalysisNoteClick(analysis, e)}
-																						onMouseEnter={(e) => {
-																							if (analysis.note) {
-																								showNoteTooltip(e, analysis.note, 'left');
-																							}
-																						}}
-																						onMouseLeave={hideNoteTooltip}
-																						title={
-																							analysis.note ? 'Click để xem/thêm ghi chú' : 'Click để thêm ghi chú'
-																						}
-																					>
-																						{analysis.note ? (
-																							<span className="text-xl">📝</span>
-																						) : (
-																							<span className="text-xl text-gray-400">📋</span>
-																						)}
-																					</div>
-																				</div>
-																			</React.Fragment>
-																		))}
-																	</div>
-																</div>
-															) : (
-																/* Show summary */
-																<div
-																	className="text-sm"
-																	onClick={() => handleToggleAnalysisGrid(sample.id)}
-																	onMouseEnter={(e) => handleAnalysisSummaryEnter(e, sample)}
-																	onMouseLeave={handleAnalysisSummaryLeave}
-																>
-																	{totalTests > 0 ? (
-																		<span
-																			className={`font-medium ${
-																				assignedTests === totalTests
-																					? 'text-green-800'
-																					: assignedTests < totalTests
-																					? 'text-yellow-600'
-																					: 'text-gray-600'
-																			}`}
-																		>
-																			{completedTests}/{assignedTests}/{totalTests}
-																		</span>
-																	) : (
-																		<span className="text-gray-500">0/0/0</span>
-																	)}
-																</div>
-															)}
+																		{completedTests}/{assignedTests}/{totalTests}
+																	</span>
+																) : (
+																	<span className="text-gray-500">0/0/0</span>
+																)}
+															</div>
 														</td>
 													</tr>
 												);
@@ -3211,7 +3281,7 @@ const Dashboard = () => {
 						<div className="text-sm text-gray-600">Tổng: {totalItems} tiếp nhận</div>
 					</div>
 					{totalPages > 1 && (
-						<div className="pagination flex items-center gap-2">
+						<div key={`pagination-${totalPages}-${currentPage}`} className="pagination flex items-center gap-2">
 							<button
 								onClick={() => handlePageChange(currentPage - 1)}
 								disabled={currentPage <= 1}
@@ -3278,14 +3348,14 @@ const Dashboard = () => {
 									return pages.map((page, index) => {
 										if (page === '...') {
 											return (
-												<span key={index} className="px-2 text-gray-400">
+												<span key={`ellipsis-${index}`} className="px-2 text-gray-400">
 													...
 												</span>
 											);
 										}
 										return (
 											<button
-												key={page}
+												key={`page-${page}`}
 												onClick={() => handlePageChange(page)}
 												className={`px-3 py-2 border rounded hover:bg-gray-100 ${
 													page === current ? 'bg-blue-500 text-white' : ''

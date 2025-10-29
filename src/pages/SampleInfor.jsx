@@ -108,6 +108,9 @@ const SampleInfor = () => {
 	console.log('Full search params:', searchParams.toString());
 
 	const { setCurrentTitlePage, formatDate, status, purposes, currentUser, getIdenByUid } = useContext(GlobalContext);
+
+	// Get effective receiptId - priority: URL param, fallback: sample.receiptId
+	const getEffectiveReceiptId = () => receiptId || sample?.receiptId || null;
 	const [technicians, setTechnicians] = useState([]);
 	const [currentSample, setCurrentSample] = useState(null);
 	const [sample, setSample] = useState(null);
@@ -560,9 +563,9 @@ const SampleInfor = () => {
 
 	const fetchSampleIdsByReceiptId = async () => {
 		// Priority: use receiptId from URL query, fallback to sample.receiptId
-		const receiptId = receiptId || sample?.receiptId;
+		const receiptId2 = receiptId || sample?.receiptId;
 
-		if (!receiptId) {
+		if (!receiptId2) {
 			console.log('No receiptId available (neither from URL nor sample), skipping fetch');
 			return;
 		}
@@ -570,7 +573,7 @@ const SampleInfor = () => {
 		try {
 			const response = await apiPost('https://red.irdop.org/v1/option/get/list', {
 				listType: 'sampleIdsByReceiptId',
-				param: { receiptId: receiptId },
+				param: { receiptId: receiptId2 },
 			});
 
 			if (response.data && Array.isArray(response.data)) {
@@ -1777,7 +1780,8 @@ const SampleInfor = () => {
 	}, [receiptId, sample?.receiptId]);
 
 	const handleSampleSelect = (sampleUid) => {
-		navigate(`/dashboard/sample?receiptId=${receiptId}&sampleId=${sampleUid}`);
+		const effectiveReceiptId = getEffectiveReceiptId();
+		navigate(`/dashboard/sample?receiptId=${effectiveReceiptId}&sampleId=${sampleUid}`);
 	};
 	const handleResultValueClick = (order) => {
 		if (!order) return;
@@ -4363,12 +4367,12 @@ const SampleInfor = () => {
 				paths={[
 					{ name: 'Danh sách', link: '/' },
 					{
-						name: `${receiptId}`,
-						link: `/dashboard/receipt?receiptId=${receiptId}`,
+						name: `${getEffectiveReceiptId()}`,
+						link: `/dashboard/receipt?receiptId=${getEffectiveReceiptId()}`,
 					},
 					{
 						name: `${sample.sampleId}`,
-						link: `/dashboard/sample?receiptId=${receiptId}&sampleId=${sample.sampleId}`,
+						link: `/dashboard/sample?receiptId=${getEffectiveReceiptId()}&sampleId=${sample.sampleId}`,
 					},
 				]}
 				sampleIds={listSampleByReceipt} // Now it's directly an array of sampleId strings

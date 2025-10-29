@@ -10,7 +10,7 @@ const Breadcrumb = ({
 	source,
 	setCurrentList,
 	setIsFilter,
-	sample_uids,
+	sampleIds,
 	searchTerm,
 	setSearchTerm,
 	showSearch = false,
@@ -20,8 +20,7 @@ const Breadcrumb = ({
 	const location = useLocation();
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
-	const currentSampleUid =
-		searchParams.get('sample_uid') || (sample_uids && sample_uids.length > 0 ? sample_uids[0] : '');
+	const currentSampleUid = searchParams.get('sampleId') || (sampleIds && sampleIds.length > 0 ? sampleIds[0] : '');
 	const [showDropdown, setShowDropdown] = useState(false);
 	const isDashboard = location.pathname.includes('dashboard') || location.pathname === '/';
 	const isMainDashboard =
@@ -87,7 +86,7 @@ const Breadcrumb = ({
 						{paths.map((path, index) => (
 							<div key={index} className="mr-1 flex items-center">
 								{index === paths.length - 1 ? (
-									sample_uids && sample_uids.length > 0 ? (
+									sampleIds && sampleIds.length > 0 ? (
 										<div className="relative flex items-center">
 											<span
 												className="text-blue-500 hover:underline cursor-pointer"
@@ -102,12 +101,12 @@ const Breadcrumb = ({
 													onMouseEnter={() => setShowDropdown(true)}
 													onMouseLeave={() => setShowDropdown(false)}
 												>
-													{sample_uids.map((uid, uidIndex) => (
+													{sampleIds.map((uid, uidIndex) => (
 														<div
 															key={uidIndex}
 															className="p-2 hover:bg-gray-100 cursor-pointer"
 															onClick={() => {
-																navigate(`/dashboard/sample?receipt_uid=${paths[index - 1].name}&sample_uid=${uid}`);
+																navigate(`/dashboard/sample?receiptId=${paths[index - 1].name}&sampleId=${uid}`);
 																setShowDropdown(false);
 															}}
 														>
@@ -119,10 +118,10 @@ const Breadcrumb = ({
 											<button
 												className="ml-1 p-1 bg-gray-100	"
 												onClick={() => {
-													const currentIndex = sample_uids.indexOf(currentSampleUid);
-													const nextIndex = (currentIndex + 1) % sample_uids.length;
-													const nextUid = sample_uids[nextIndex];
-													navigate(`/dashboard/sample?receipt_uid=${paths[index - 1].name}&sample_uid=${nextUid}`);
+													const currentIndex = sampleIds.indexOf(currentSampleUid);
+													const nextIndex = (currentIndex + 1) % sampleIds.length;
+													const nextUid = sampleIds[nextIndex];
+													navigate(`/dashboard/sample?receiptId=${paths[index - 1].name}&sampleId=${nextUid}`);
 												}}
 												title="Next sample"
 											>

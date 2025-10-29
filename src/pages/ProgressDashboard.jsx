@@ -62,7 +62,12 @@ const ProgressDashboard = () => {
 	}, [setCurrentTitlePage]);
 
 	// Fetch receipts function
-	const fetchReceipt = async (page = 1, limit = receiptsPerPage) => {
+	const fetchReceipt = async (
+		page = 1,
+		limit = receiptsPerPage,
+		searchTermParam = null,
+		trackingFilterParam = null,
+	) => {
 		try {
 			const payload = {
 				page: page,
@@ -88,13 +93,17 @@ const ProgressDashboard = () => {
 				],
 			};
 
+			// Use parameter if provided, otherwise use state
+			const effectiveSearchTerm = searchTermParam !== null ? searchTermParam : searchTerm;
+			const effectiveTrackingFilter = trackingFilterParam !== null ? trackingFilterParam : showTrackingNumberFilter;
+
 			// Add searchTerm to payload if it exists
-			if (searchTerm && searchTerm.trim()) {
-				payload.searchTerm = searchTerm.trim();
+			if (effectiveSearchTerm && effectiveSearchTerm.trim()) {
+				payload.searchTerm = effectiveSearchTerm.trim();
 			}
 
 			// Add tracking number filter if active
-			if (showTrackingNumberFilter) {
+			if (effectiveTrackingFilter) {
 				payload._deprecated_trackingNumber = [''];
 			}
 
@@ -142,6 +151,7 @@ const ProgressDashboard = () => {
 		// Extract values from URL params
 		const pageNumber = pageParam ? parseInt(pageParam, 10) : 1;
 		const itemsPerPage = itemsPerPageParam ? parseInt(itemsPerPageParam, 10) : receiptsPerPage;
+		const trackingFilterValue = trackingNumberFilterParam === 'true';
 
 		// Update all states first before making API calls
 		setCurrentPage(pageNumber);
@@ -156,25 +166,32 @@ const ProgressDashboard = () => {
 			setSearchTerm('');
 		}
 
-		setShowTrackingNumberFilter(trackingNumberFilterParam === 'true');
+		setShowTrackingNumberFilter(trackingFilterValue);
 
-		// Now make API calls based on the filter type
+		// Now make API calls based on the filter type, passing URL params directly
 		if (deadlineStartParam && deadlineEndParam) {
 			const startDate = new Date(deadlineStartParam);
 			const endDate = new Date(deadlineEndParam);
 			setDateRange([startDate, endDate]);
 			setShowTodayDeadlines(true);
 			setShowOverdueFilter(false);
-			fetchReceiptsByDeadlineWithPage(startDate, endDate, pageNumber, itemsPerPage);
+			fetchReceiptsByDeadlineWithPage(
+				startDate,
+				endDate,
+				pageNumber,
+				itemsPerPage,
+				searchTermParam || '',
+				trackingFilterValue,
+			);
 		} else if (overdueParam === 'true') {
 			setShowOverdueFilter(true);
 			setShowTodayDeadlines(false);
-			fetchOverdueReceiptsWithPage(pageNumber, itemsPerPage);
+			fetchOverdueReceiptsWithPage(pageNumber, itemsPerPage, searchTermParam || '', trackingFilterValue);
 		} else {
 			// Normal mode or search mode
 			setShowOverdueFilter(false);
 			setShowTodayDeadlines(false);
-			fetchReceipt(pageNumber, itemsPerPage);
+			fetchReceipt(pageNumber, itemsPerPage, searchTermParam || '', trackingFilterValue);
 		}
 	}, [location.search]);
 
@@ -224,7 +241,14 @@ const ProgressDashboard = () => {
 	};
 
 	// Deadline filter functions
-	const fetchReceiptsByDeadlineWithPage = async (start, end, page, limit = receiptsPerPage) => {
+	const fetchReceiptsByDeadlineWithPage = async (
+		start,
+		end,
+		page,
+		limit = receiptsPerPage,
+		searchTermParam = null,
+		trackingFilterParam = null,
+	) => {
 		try {
 			const payload = {
 				page: page,
@@ -249,6 +273,20 @@ const ProgressDashboard = () => {
 					'technicianId',
 				],
 			};
+
+			// Use parameter if provided, otherwise use state
+			const effectiveSearchTerm = searchTermParam !== null ? searchTermParam : searchTerm;
+			const effectiveTrackingFilter = trackingFilterParam !== null ? trackingFilterParam : showTrackingNumberFilter;
+
+			// Add searchTerm to payload if it exists
+			if (effectiveSearchTerm && effectiveSearchTerm.trim()) {
+				payload.searchTerm = effectiveSearchTerm.trim();
+			}
+
+			// Add tracking number filter if active
+			if (effectiveTrackingFilter) {
+				payload._deprecated_trackingNumber = [''];
+			}
 
 			const response = await apiPost('https://red.irdop.org/v1/receipt/get/recent', payload);
 
@@ -279,7 +317,12 @@ const ProgressDashboard = () => {
 		}
 	};
 
-	const fetchOverdueReceiptsWithPage = async (page, limit = receiptsPerPage) => {
+	const fetchOverdueReceiptsWithPage = async (
+		page,
+		limit = receiptsPerPage,
+		searchTermParam = null,
+		trackingFilterParam = null,
+	) => {
 		try {
 			const today = new Date();
 			const payload = {
@@ -304,6 +347,20 @@ const ProgressDashboard = () => {
 					'technicianId',
 				],
 			};
+
+			// Use parameter if provided, otherwise use state
+			const effectiveSearchTerm = searchTermParam !== null ? searchTermParam : searchTerm;
+			const effectiveTrackingFilter = trackingFilterParam !== null ? trackingFilterParam : showTrackingNumberFilter;
+
+			// Add searchTerm to payload if it exists
+			if (effectiveSearchTerm && effectiveSearchTerm.trim()) {
+				payload.searchTerm = effectiveSearchTerm.trim();
+			}
+
+			// Add tracking number filter if active
+			if (effectiveTrackingFilter) {
+				payload._deprecated_trackingNumber = [''];
+			}
 
 			const response = await apiPost('https://red.irdop.org/v1/receipt/get/recent', payload);
 

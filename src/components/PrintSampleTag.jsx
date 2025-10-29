@@ -29,11 +29,44 @@ const PrintSampleTag = () => {
 					// Extract only the data we need with new camelCase structure
 					const { receiptId, _deprecated_recordCode, receiptDate, samples } = response.data;
 
-					// Filter samples if sampleId is provided
-					let simplifiedSamples = samples.map((sample) => ({
-						sampleId: sample.sampleId || sample.sample_id,
-						status: sample.status,
-					}));
+					// Filter samples if sampleId is provided and process analyses
+					let simplifiedSamples = samples.map((sample) => {
+						const analyses = sample.analyses || [];
+
+						// Get unique technicians (null/"" count as one group)
+						const technicianGroups = [];
+						const seenTechnicians = new Set();
+						let hasEmptyTechnician = false;
+
+						analyses.forEach((analysis) => {
+							const techId = analysis.technician?.identityId;
+							const techName = analysis.technician?.identityName;
+
+							if (!techId || techId === '') {
+								hasEmptyTechnician = true;
+							} else if (!seenTechnicians.has(techId)) {
+								seenTechnicians.add(techId);
+								technicianGroups.push({
+									identityId: techId,
+									identityName: techName || '',
+								});
+							}
+						});
+
+						// Add empty technician group if exists
+						if (hasEmptyTechnician) {
+							technicianGroups.push({
+								identityId: null,
+								identityName: '',
+							});
+						}
+
+						return {
+							sampleId: sample.sampleId || sample.sample_id,
+							status: sample.status,
+							technicianGroups: technicianGroups,
+						};
+					});
 
 					// If sampleId is provided, filter to show only that specific sample
 					if (sampleId) {
@@ -171,37 +204,52 @@ const PrintSampleTag = () => {
 	};
 
 	// Single tag component for each sample
-	const SampleTag = ({ sample, isPrintView = false }) => (
-		<div
-			className={`p-2 py-1 w-[50mm] h-[30mm] flex overflow-hidden text-sm ${
-				!isPrintView ? 'border-gray-300 border rounded-sm' : ''
-			}`}
-		>
-			<div className="flex-1 flex flex-col justify-start font-semibold ">
-				<div className="flex w-full justify-between items-end">
-					<div>
-						<div className="flex justify-between mb-0  text-3xl">
-							<span>{receiptData.recordCode || '--'}</span>
+	const SampleTag = ({ sample, isPrintView = false, technicianName = null }) => {
+		const isTechnicianTag = technicianName !== null;
+		const barcodeHeight = isTechnicianTag ? 39 : 40;
+		const sampleIdFontSize = isTechnicianTag ? 'text-lg' : 'text-xl';
+		const techNameFontSize = 'text-lg';
+
+		return (
+			<div
+				className={`p-2 py-1 w-[50mm] h-[30mm] flex overflow-hidden text-sm ${
+					!isPrintView ? 'border-gray-300 border rounded-sm' : ''
+				}`}
+			>
+				<div className="flex-1 flex flex-col justify-start font-semibold">
+					<div className="flex w-full justify-between items-end">
+						<div className="text-left">
+							<div className={`flex justify-start mb-0 ${isTechnicianTag ? techNameFontSize : 'text-3xl'}`}>
+								{technicianName ? (
+									<span className="leading-tight" style={{ maxWidth: '45mm', wordBreak: 'break-word' }}>
+										{technicianName}
+									</span>
+								) : (
+									<span>{receiptData.recordCode || '--'}</span>
+								)}
+							</div>
 						</div>
+						{sample.status === 1 && (
+							<div className="flex justify-between text-xl">
+								<span>K</span>
+							</div>
+						)}
+						{!technicianName && (
+							<div className="flex justify-between mb-1 text-base">
+								<span>{formatDate(receiptData.createdAt || receiptData.receiptDate)}</span>
+							</div>
+						)}
 					</div>
-					{sample.status === 1 && (
-						<div className="flex justify-between text-xl">
-							<span>K</span>
-						</div>
-					)}
-					<div className="flex justify-between mb-1 text-base">
-						<span>{formatDate(receiptData.createdAt || receiptData.receiptDate)}</span>
+					<div className="flex items-center justify-center">
+						<BarcodeGenerator value={sample.sampleId} width={1} height={barcodeHeight} />
 					</div>
-				</div>
-				<div className="flex items-center justify-center ">
-					<BarcodeGenerator value={sample.sampleId} width={1} height={40} />
-				</div>
-				<div className="flex justify-center mb-0.5 text-xl">
-					<p style={{ letterSpacing: '0.1em', lineHeight: '20px' }}>{sample.sampleId}</p>
+					<div className={`flex justify-center mb-0.5 ${sampleIdFontSize}`}>
+						<p style={{ letterSpacing: '0.1em', lineHeight: '20px' }}>{sample.sampleId}</p>
+					</div>
 				</div>
 			</div>
-		</div>
-	);
+		);
+	};
 
 	return (
 		<div className="print-container">
@@ -289,13 +337,45 @@ const PrintSampleTag = () => {
 			{/* The actual content to be printed */}
 			<div className="print-content h-fit">
 				{receiptData.samples &&
-					receiptData.samples.map((sample, index) => (
-						<div key={`${index}-container`} className="tag-pair">
-							{/* Two identical tags side by side */}
-							<SampleTag sample={sample} />
-							<SampleTag sample={sample} />
-						</div>
-					))}
+					(() => {
+						// Collect all tags from all samples into one flat array
+						const allTags = [];
+
+						receiptData.samples.forEach((sample, sampleIndex) => {
+							// First tag: default with recordCode and date
+							allTags.push({
+								key: `${sampleIndex}-default`,
+								technicianName: null,
+								sample: sample,
+							});
+
+							// Additional tags for each technician group
+							sample.technicianGroups?.forEach((tech, techIndex) => {
+								allTags.push({
+									key: `${sampleIndex}-tech-${techIndex}`,
+									technicianName: tech.identityName || '',
+									sample: sample,
+								});
+							});
+						});
+
+						// Group all tags into pairs (2 per row) across all samples
+						const pairedTags = [];
+						for (let i = 0; i < allTags.length; i += 2) {
+							pairedTags.push({
+								key: `pair-${i}`,
+								tags: allTags.slice(i, i + 2),
+							});
+						}
+
+						return pairedTags.map((pair) => (
+							<div key={pair.key} className="tag-pair">
+								{pair.tags.map((tag) => (
+									<SampleTag key={tag.key} sample={tag.sample} technicianName={tag.technicianName} />
+								))}
+							</div>
+						));
+					})()}
 			</div>
 		</div>
 	);

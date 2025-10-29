@@ -131,6 +131,14 @@ const Header = () => {
 						</Link>
 					) : (
 						<>
+							<a
+								href="https://chat.irdop.org/"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="cursor-pointer md:text-md ml-4 text-md font-medium text-teritary hover:text-primary"
+							>
+								Chat AI
+							</a>
 							<Link
 								to={getLinkWithFilter('/processing')}
 								className={`cursor-pointer md:text-md ml-4 text-md font-medium ${
@@ -253,6 +261,12 @@ const Header = () => {
 										></button>
 									</div>
 									<div className="flex flex-col w-full">
+										<button
+											onClick={() => window.open('https://chat.irdop.org/', '_blank')}
+											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
+										>
+											Chat AI
+										</button>
 										<button
 											onClick={() => handleNavigate('/processing')}
 											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"

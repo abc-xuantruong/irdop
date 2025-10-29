@@ -17,6 +17,8 @@ const ConfirmLabResult = ({
 	const [hasNoExperimentLog, setHasNoExperimentLog] = useState(true);
 	const [experimentStartDate, setExperimentStartDate] = useState('');
 	const [experimentEndDate, setExperimentEndDate] = useState('');
+	const [experimentStartDateError, setExperimentStartDateError] = useState('');
+	const [experimentEndDateError, setExperimentEndDateError] = useState('');
 	const [editorContent, setEditorContent] = useState('');
 	const [isExtracting, setIsExtracting] = useState(false);
 	const [showCardScanDialog, setShowCardScanDialog] = useState(false);
@@ -42,6 +44,8 @@ const ConfirmLabResult = ({
 				const year = gmt7.getFullYear();
 				return `${day}/${month}/${year}`;
 			});
+			setExperimentStartDateError('');
+			setExperimentEndDateError('');
 			setEditorContent('');
 			setIsExtracting(false);
 			setShowCardScanDialog(false);
@@ -70,11 +74,20 @@ const ConfirmLabResult = ({
 		}
 	}, [isOpen, analyses, originalAnalyses]);
 
+	// Auto-extract HTML content when dialog opens
+	useEffect(() => {
+		if (isOpen && analyses.length > 0 && !editorContent) {
+			handleExtractContent();
+		}
+	}, [isOpen]);
+
 	const resetFields = () => {
 		setExperimentLogCode('');
 		setHasNoExperimentLog(true);
 		setExperimentStartDate('');
 		setExperimentEndDate('');
+		setExperimentStartDateError('');
+		setExperimentEndDateError('');
 		setEditorContent('');
 		if (editorRef.current) editorRef.current.setContent('');
 	};
@@ -116,6 +129,28 @@ const ConfirmLabResult = ({
 			toast.error('Lỗi khi trích xuất nội dung: ' + error.message);
 		} finally {
 			setIsExtracting(false);
+		}
+	};
+
+	const handleDateBlur = () => {
+		let hasError = false;
+		if (!experimentStartDate.trim()) {
+			setExperimentStartDateError('Ngày bắt đầu là bắt buộc');
+			hasError = true;
+		} else {
+			setExperimentStartDateError('');
+		}
+
+		if (!experimentEndDate.trim()) {
+			setExperimentEndDateError('Ngày kết thúc là bắt buộc');
+			hasError = true;
+		} else {
+			setExperimentEndDateError('');
+		}
+
+		// If both dates are filled and no errors, extract content
+		if (!hasError && experimentStartDate.trim() && experimentEndDate.trim()) {
+			handleExtractContent();
 		}
 	};
 
@@ -1064,10 +1099,33 @@ const ConfirmLabResult = ({
 	};
 
 	const handleConfirm = () => {
+		let hasError = false;
+
 		if (!hasNoExperimentLog && !experimentLogCode.trim()) {
 			toast.error('Vui lòng nhập mã nhật ký thử nghiệm hoặc chọn "Chưa có mã nhật ký"');
 			return;
 		}
+
+		// Validate experiment dates
+		if (!experimentStartDate.trim()) {
+			setExperimentStartDateError('Ngày bắt đầu là bắt buộc');
+			hasError = true;
+		} else {
+			setExperimentStartDateError('');
+		}
+
+		if (!experimentEndDate.trim()) {
+			setExperimentEndDateError('Ngày kết thúc là bắt buộc');
+			hasError = true;
+		} else {
+			setExperimentEndDateError('');
+		}
+
+		if (hasError) {
+			toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+			return;
+		}
+
 		// Show extraction dialog instead of immediately confirming
 		setShowExtractDialog(true);
 	};
@@ -1235,23 +1293,39 @@ const ConfirmLabResult = ({
 									</div>
 									<div className="space-y-2">
 										<label className="block text-sm font-semibold text-gray-700 h-[20px] leading-[20px]">
-											Thời gian thử nghiệm
+											Thời gian thử nghiệm <span className="text-red-500">*</span>
 										</label>
 										<div className="grid grid-cols-2 gap-2">
-											<input
-												type="text"
-												value={experimentStartDate}
-												onChange={(e) => setExperimentStartDate(e.target.value)}
-												placeholder="Ngày bắt đầu (dd/mm/yyyy)"
-												className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-											/>
-											<input
-												type="text"
-												value={experimentEndDate}
-												onChange={(e) => setExperimentEndDate(e.target.value)}
-												placeholder="Ngày kết thúc (dd/mm/yyyy)"
-												className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-											/>
+											<div>
+												<input
+													type="text"
+													value={experimentStartDate}
+													onChange={(e) => setExperimentStartDate(e.target.value)}
+													onBlur={handleDateBlur}
+													placeholder="Ngày bắt đầu (dd/mm/yyyy)"
+													className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 ${
+														experimentStartDateError ? 'border-red-500' : 'border-gray-300'
+													}`}
+												/>
+												{experimentStartDateError && (
+													<p className="text-red-500 text-xs mt-1">{experimentStartDateError}</p>
+												)}
+											</div>
+											<div>
+												<input
+													type="text"
+													value={experimentEndDate}
+													onChange={(e) => setExperimentEndDate(e.target.value)}
+													onBlur={handleDateBlur}
+													placeholder="Ngày kết thúc (dd/mm/yyyy)"
+													className={`w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 ${
+														experimentEndDateError ? 'border-red-500' : 'border-gray-300'
+													}`}
+												/>
+												{experimentEndDateError && (
+													<p className="text-red-500 text-xs mt-1">{experimentEndDateError}</p>
+												)}
+											</div>
 										</div>
 									</div>
 								</div>

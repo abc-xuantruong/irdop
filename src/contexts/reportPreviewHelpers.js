@@ -495,7 +495,14 @@ const createTableHTML = (headerHTML, rowsHTML) => {
 /**
  * Generate preview HTML
  */
-export const generatePreviewHTML = (pages, measurements, headerHTML, footerHTML, refNumber = null) => {
+export const generatePreviewHTML = (
+	pages,
+	measurements,
+	headerHTML,
+	footerHTML,
+	refNumber = null,
+	sampleIds = null,
+) => {
 	const { A4, headerHeight, footerHeight } = measurements;
 
 	// Check if watermark should be shown
@@ -679,11 +686,39 @@ export const generatePreviewHTML = (pages, measurements, headerHTML, footerHTML,
 </div>`;
 	});
 
+	// Format title for PDF filename
+	let documentTitle = 'Preview - Certificate of Analysis';
+	if (sampleIds) {
+		// Format current datetime as DDMMYY HHMM in GMT+7
+		const now = new Date();
+		const gmt7Offset = 7 * 60; // GMT+7 in minutes
+		const localOffset = now.getTimezoneOffset(); // Local timezone offset in minutes
+		const gmt7Date = new Date(now.getTime() + (gmt7Offset + localOffset) * 60 * 1000);
+
+		const day = String(gmt7Date.getDate()).padStart(2, '0');
+		const month = String(gmt7Date.getMonth() + 1).padStart(2, '0');
+		const year = String(gmt7Date.getFullYear()).slice(-2);
+		const hours = String(gmt7Date.getHours()).padStart(2, '0');
+		const minutes = String(gmt7Date.getMinutes()).padStart(2, '0');
+		const dateTimeStr = `${day}${month}${year} ${hours}${minutes}`;
+
+		// Format sample IDs
+		let sampleIdStr = '';
+		if (Array.isArray(sampleIds)) {
+			sampleIdStr = sampleIds.join(' ');
+		} else {
+			sampleIdStr = sampleIds;
+		}
+
+		// Set title as filename
+		documentTitle = `Certificate of analysis - ${sampleIdStr} - ${dateTimeStr}`;
+	}
+
 	return `
 <!DOCTYPE html>
 <html>
 <head>
-	<title>Preview - Certificate of Analysis</title>
+	<title>${documentTitle}</title>
 	<meta charset="utf-8">
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -701,11 +736,39 @@ export const generatePreviewHTML = (pages, measurements, headerHTML, footerHTML,
 /**
  * Open preview in new window
  */
-export const openPreviewWindow = (htmlContent) => {
+export const openPreviewWindow = (htmlContent, sampleIds = null) => {
 	const previewWindow = window.open('', '_blank', 'width=900,height=1200');
 	if (previewWindow) {
 		previewWindow.document.write(htmlContent);
 		previewWindow.document.close();
+
+		// Set document title for PDF filename
+		if (sampleIds) {
+			// Format current datetime as DDMMYY HHMM in GMT+7
+			const now = new Date();
+			const gmt7Offset = 7 * 60; // GMT+7 in minutes
+			const localOffset = now.getTimezoneOffset(); // Local timezone offset in minutes
+			const gmt7Date = new Date(now.getTime() + (gmt7Offset + localOffset) * 60 * 1000);
+
+			const day = String(gmt7Date.getDate()).padStart(2, '0');
+			const month = String(gmt7Date.getMonth() + 1).padStart(2, '0');
+			const year = String(gmt7Date.getFullYear()).slice(-2);
+			const hours = String(gmt7Date.getHours()).padStart(2, '0');
+			const minutes = String(gmt7Date.getMinutes()).padStart(2, '0');
+			const dateTimeStr = `${day}${month}${year} ${hours}${minutes}`;
+
+			// Format sample IDs
+			let sampleIdStr = '';
+			if (Array.isArray(sampleIds)) {
+				sampleIdStr = sampleIds.join(' ');
+			} else {
+				sampleIdStr = sampleIds;
+			}
+
+			// Set title as filename
+			const filename = `Certificate of analysis - ${sampleIdStr} - ${dateTimeStr}`;
+			previewWindow.document.title = filename;
+		}
 	} else {
 		alert('Vui lòng cho phép popup để xem preview');
 	}

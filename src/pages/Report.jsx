@@ -118,6 +118,7 @@ const ReportEditor = () => {
 				transformedSample.showEnglish = false;
 				transformedSample.showKN = false;
 				transformedSample.showSign = true;
+				transformedSample.isHidden = false; // Add isHidden property
 
 				// Generate initial header content with correct VLAS display
 				transformedSample.headerContent = generateHeaderForSample(hasVlasProtocol);
@@ -234,39 +235,69 @@ const ReportEditor = () => {
 	};
 
 	useEffect(() => {
-		// Check if full report mode
-		if (modeFromUrl === 'fullReport' && receiptIdFromUrl) {
-			setViewMode('all');
-			fetchReceiptData(receiptIdFromUrl);
-			return;
-		}
+		const loadData = async () => {
+			// Check if full report mode
+			if (modeFromUrl === 'fullReport' && receiptIdFromUrl) {
+				setViewMode('all');
+				await fetchReceiptData(receiptIdFromUrl);
+				return;
+			}
 
-		if (sampleId) {
-			setSelectedSampleId(sampleId);
-			fetchSampleData(sampleId);
+			if (sampleId) {
+				setSelectedSampleId(sampleId);
+				await fetchSampleData(sampleId);
 
-			// Fetch available samples for this receipt
-			const receiptId = sampleId.split('-')[0].replace('SP', 'TNM');
-			fetchAvailableSamples(receiptId);
-		}
+				// Fetch available samples for this receipt
+				const receiptId = sampleId.split('-')[0].replace('SP', 'TNM');
+				await fetchAvailableSamples(receiptId);
 
-		// If reportId is provided in URL, load that report directly
-		if (reportId) {
-			fetchReportData(reportId);
-			setCurrentRefNumber(reportId);
-		}
+				// After sample data is loaded, check if we need to load a specific report
+				if (refNumberFromUrl) {
+					console.log('🔍 Loading report from URL:', refNumberFromUrl);
+					await fetchReportData(refNumberFromUrl);
+					setCurrentRefNumber(refNumberFromUrl);
+				} else if (reportId) {
+					console.log('🔍 Loading report from reportId:', reportId);
+					await fetchReportData(reportId);
+					setCurrentRefNumber(reportId);
+				}
+			}
+		};
 
-		// If refNumber is provided in URL, set it to state
-		if (refNumberFromUrl && !reportId) {
-			setCurrentRefNumber(refNumberFromUrl);
-		}
+		loadData();
 	}, [sampleId, reportId, refNumberFromUrl, receiptIdFromUrl, modeFromUrl]);
+
+	// useEffect to load report when sampleData is ready and we have a refNumber/reportId from URL
+	useEffect(() => {
+		if (sampleData && sampleData.reports && (refNumberFromUrl || reportId) && !selectedReport) {
+			const targetRefNumber = refNumberFromUrl || reportId;
+
+			// Check if this report exists in sampleData.reports
+			const matchingReport = sampleData.reports.find((r) => r.refNumber === targetRefNumber);
+			if (matchingReport) {
+				console.log('🔄 Auto-loading report after sampleData is ready:', targetRefNumber);
+				fetchReportData(targetRefNumber);
+				setCurrentRefNumber(targetRefNumber);
+			}
+		}
+	}, [sampleData, refNumberFromUrl, reportId, selectedReport]);
 
 	// Handle sample selection change
 	const handleSampleChange = (e) => {
 		const newSampleId = e.target.value;
 		setSelectedSampleId(newSampleId);
 		setSelectedReport(null); // Reset report selection
+
+		// Update URL with new sampleId
+		const newUrl = new URL(window.location.href);
+		newUrl.searchParams.set('sampleId', newSampleId);
+		newUrl.searchParams.delete('refNumber'); // Clear refNumber when changing sample
+		newUrl.searchParams.delete('reportId'); // Clear reportId when changing sample
+		window.history.pushState({}, '', newUrl);
+
+		// Clear current refNumber
+		setCurrentRefNumber('');
+
 		fetchSampleData(newSampleId);
 	};
 
@@ -392,6 +423,14 @@ const ReportEditor = () => {
 						contentEditorRef.current.setContent(fullContent);
 					}
 				}, 100);
+
+				// Auto-select this report in dropdown if it exists in sampleData.reports
+				if (sampleData && sampleData.reports) {
+					const matchingReport = sampleData.reports.find((r) => r.refNumber === refNumber);
+					if (matchingReport) {
+						setSelectedReport(matchingReport);
+					}
+				}
 
 				console.log('✅ Report data loaded successfully:', refNumber);
 			}
@@ -975,8 +1014,19 @@ ${tableHTML}
 
 			const measurementData = await measureSectionsInDOM(headerHTML, contentHTML, footerHTML);
 			const paginatedPages = applyClientSidePagination(headerHTML, contentHTML, footerHTML, measurementData);
-			const finalHTML = generatePreviewHTML(paginatedPages, measurementData, headerHTML, footerHTML, currentRefNumber);
-			openPreviewWindow(finalHTML);
+
+			// Get sample ID for filename
+			const currentSampleId = sampleData?.sampleId || selectedSampleId || sampleId;
+
+			const finalHTML = generatePreviewHTML(
+				paginatedPages,
+				measurementData,
+				headerHTML,
+				footerHTML,
+				currentRefNumber,
+				currentSampleId,
+			);
+			openPreviewWindow(finalHTML, currentSampleId);
 		} catch (error) {
 			console.error('Error generating preview:', error);
 			alert('Có lỗi khi tạo preview: ' + error.message);
@@ -994,9 +1044,16 @@ ${tableHTML}
 
 			const allSamplesHTML = [];
 
-			// Process each sample individually
+			// Process each sample individually, skip hidden samples
 			for (let i = 0; i < allSamplesData.length; i++) {
 				const sample = allSamplesData[i];
+
+				// Skip hidden samples
+				if (sample.isHidden) {
+					console.log(`⏭️ Skipping hidden sample: ${sample.sampleId}`);
+					continue;
+				}
+
 				console.log(`\n📝 Processing sample ${i + 1}/${allSamplesData.length}:`, sample.sampleId);
 
 				const headerRef = sample.headerEditorRef;
@@ -1127,6 +1184,24 @@ ${tableHTML}
 				return;
 			}
 
+			// Collect all sample IDs for filename (only visible samples)
+			const allSampleIds = allSamplesData.filter((sample) => !sample.isHidden).map((sample) => sample.sampleId);
+
+			// Format current datetime as DDMMYY HHMM in GMT+7
+			const now = new Date();
+			const gmt7Offset = 7 * 60; // GMT+7 in minutes
+			const localOffset = now.getTimezoneOffset(); // Local timezone offset in minutes
+			const gmt7Date = new Date(now.getTime() + (gmt7Offset + localOffset) * 60 * 1000);
+
+			const day = String(gmt7Date.getDate()).padStart(2, '0');
+			const month = String(gmt7Date.getMonth() + 1).padStart(2, '0');
+			const year = String(gmt7Date.getFullYear()).slice(-2);
+			const hours = String(gmt7Date.getHours()).padStart(2, '0');
+			const minutes = String(gmt7Date.getMinutes()).padStart(2, '0');
+			const dateTimeStr = `${day}${month}${year} ${hours}${minutes}`;
+
+			const documentTitle = `Certificate of analysis - ${allSampleIds.join(' ')} - ${dateTimeStr}`;
+
 			// Combine all pages into a single HTML document
 			const finalHTML = `
 <!DOCTYPE html>
@@ -1134,7 +1209,7 @@ ${tableHTML}
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Toàn bộ phiếu kết quả</title>
+	<title>${documentTitle}</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -1162,6 +1237,20 @@ ${tableHTML}
 			page-break-after: always;
 			break-after: page;
 		}
+		.watermark {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%) rotate(-45deg);
+			font-size: 80px;
+			font-weight: bold;
+			color: rgba(255, 0, 0, 0.15);
+			white-space: nowrap;
+			pointer-events: none;
+			z-index: 999;
+			user-select: none;
+			text-align: center;
+		}
 		@media print {
 			body {
 				background: white;
@@ -1173,6 +1262,9 @@ ${tableHTML}
 				margin: 0;
 				page-break-after: always;
 				break-after: page;
+			}
+			.watermark {
+				color: rgba(255, 0, 0, 0.15) !important;
 			}
 		}
 		@page {
@@ -1187,7 +1279,7 @@ ${tableHTML}
 </html>`;
 
 			console.log('✅ Final HTML generated, opening preview window...');
-			openPreviewWindow(finalHTML);
+			openPreviewWindow(finalHTML, allSampleIds);
 		} catch (error) {
 			console.error('❌ Error generating all samples preview:', error);
 			alert('Có lỗi khi tạo preview toàn bộ phiếu: ' + error.message);
@@ -1258,70 +1350,7 @@ ${tableHTML}
 						setCurrentRefNumber(savedReport.refNumber);
 					}
 
-					// Update toggle states from saved report
-					if (savedReport.isVlas !== undefined) setShowVlas(savedReport.isVlas);
-					if (savedReport.isComment !== undefined) setShowComment(savedReport.isComment);
-					if (savedReport.isReference !== undefined) setShowReference(savedReport.isReference);
-
-					// Helper function to ensure section has proper ID
-					const ensureSectionId = (html, sectionId) => {
-						if (!html) return '';
-						if (html.includes(`id="${sectionId}"`)) return html;
-						const firstTagMatch = html.match(/^(\s*<[^>]+)(>)/);
-						if (firstTagMatch) {
-							return html.replace(firstTagMatch[0], `${firstTagMatch[1]} id="${sectionId}"${firstTagMatch[2]}`);
-						}
-						return html;
-					};
-
-					// Apply saved data to editors with proper section IDs
-					if (savedReport.headerSection) {
-						const headerWithId = ensureSectionId(savedReport.headerSection, 'header-section');
-						setHeader(headerWithId);
-						setTimeout(() => {
-							if (headerEditorRef.current) {
-								headerEditorRef.current.setContent(headerWithId);
-							}
-						}, 100);
-					}
-
-					if (savedReport.footerSection) {
-						const footerWithId = ensureSectionId(savedReport.footerSection, 'footer-section');
-						setFooter(footerWithId);
-						setTimeout(() => {
-							if (footerEditorRef.current) {
-								footerEditorRef.current.setContent(footerWithId);
-							}
-						}, 100);
-					}
-
-					// Reconstruct content from saved sections with spacing and proper IDs
-					const spacing = '<div style="height: 4mm; margin:0; padding:0;"></div>';
-					const contentParts = [];
-					if (savedReport.customerSection)
-						contentParts.push(ensureSectionId(savedReport.customerSection, 'customer-section'), spacing);
-					if (savedReport.sampleSection)
-						contentParts.push(ensureSectionId(savedReport.sampleSection, 'sample-section'), spacing);
-					if (savedReport.analysisSection)
-						contentParts.push(ensureSectionId(savedReport.analysisSection, 'analysis-section'), spacing);
-					if (savedReport.commentSection && savedReport.isComment)
-						contentParts.push(ensureSectionId(savedReport.commentSection, 'comment-section'), spacing);
-					if (savedReport.noteSection)
-						contentParts.push(ensureSectionId(savedReport.noteSection, 'notes-section'), spacing);
-					if (savedReport.signatureSection)
-						contentParts.push(ensureSectionId(savedReport.signatureSection, 'signature-section'));
-
-					const updatedContent = contentParts.join('');
-					if (updatedContent) {
-						setContent(updatedContent);
-						setTimeout(() => {
-							if (contentEditorRef.current) {
-								contentEditorRef.current.setContent(updatedContent);
-							}
-						}, 100);
-					}
-
-					// Update sampleData with the new report in the reports array
+					// Update sampleData with the new report in the reports array FIRST
 					if (sampleData && savedReport.refNumber) {
 						const updatedSampleData = { ...sampleData };
 						const existingReportIndex = updatedSampleData.reports.findIndex(
@@ -1346,6 +1375,12 @@ ${tableHTML}
 						setSelectedReport(newReport);
 					}
 
+					// Reload report data from API to ensure consistency
+					if (savedReport.refNumber) {
+						console.log('🔄 Reloading report data after save:', savedReport.refNumber);
+						await fetchReportData(savedReport.refNumber);
+					}
+
 					alert('Lưu báo cáo thành công!');
 				}
 			} else {
@@ -1354,6 +1389,12 @@ ${tableHTML}
 
 				for (let i = 0; i < allSamplesData.length; i++) {
 					const sample = allSamplesData[i];
+
+					// Skip hidden samples
+					if (sample.isHidden) {
+						console.log(`⏭️ Skipping hidden sample in save: ${sample.sampleId}`);
+						continue;
+					}
 
 					const headerContent = sample.headerEditorRef?.getContent() || '';
 					const contentEditorContent = sample.contentEditorRef?.getContent() || '';
@@ -1533,70 +1574,7 @@ ${tableHTML}
 						setCurrentRefNumber(savedReport.refNumber);
 					}
 
-					// Update toggle states from saved report
-					if (savedReport.isVlas !== undefined) setShowVlas(savedReport.isVlas);
-					if (savedReport.isComment !== undefined) setShowComment(savedReport.isComment);
-					if (savedReport.isReference !== undefined) setShowReference(savedReport.isReference);
-
-					// Helper function to ensure section has proper ID
-					const ensureSectionId = (html, sectionId) => {
-						if (!html) return '';
-						if (html.includes(`id="${sectionId}"`)) return html;
-						const firstTagMatch = html.match(/^(\s*<[^>]+)(>)/);
-						if (firstTagMatch) {
-							return html.replace(firstTagMatch[0], `${firstTagMatch[1]} id="${sectionId}"${firstTagMatch[2]}`);
-						}
-						return html;
-					};
-
-					// Apply saved data to editors with proper section IDs
-					if (savedReport.headerSection) {
-						const headerWithId = ensureSectionId(savedReport.headerSection, 'header-section');
-						setHeader(headerWithId);
-						setTimeout(() => {
-							if (headerEditorRef.current) {
-								headerEditorRef.current.setContent(headerWithId);
-							}
-						}, 100);
-					}
-
-					if (savedReport.footerSection) {
-						const footerWithId = ensureSectionId(savedReport.footerSection, 'footer-section');
-						setFooter(footerWithId);
-						setTimeout(() => {
-							if (footerEditorRef.current) {
-								footerEditorRef.current.setContent(footerWithId);
-							}
-						}, 100);
-					}
-
-					// Reconstruct content from saved sections with spacing and proper IDs
-					const spacing = '<div style="height: 4mm; margin:0; padding:0;"></div>';
-					const contentParts = [];
-					if (savedReport.customerSection)
-						contentParts.push(ensureSectionId(savedReport.customerSection, 'customer-section'), spacing);
-					if (savedReport.sampleSection)
-						contentParts.push(ensureSectionId(savedReport.sampleSection, 'sample-section'), spacing);
-					if (savedReport.analysisSection)
-						contentParts.push(ensureSectionId(savedReport.analysisSection, 'analysis-section'), spacing);
-					if (savedReport.commentSection && savedReport.isComment)
-						contentParts.push(ensureSectionId(savedReport.commentSection, 'comment-section'), spacing);
-					if (savedReport.noteSection)
-						contentParts.push(ensureSectionId(savedReport.noteSection, 'notes-section'), spacing);
-					if (savedReport.signatureSection)
-						contentParts.push(ensureSectionId(savedReport.signatureSection, 'signature-section'));
-
-					const updatedContent = contentParts.join('');
-					if (updatedContent) {
-						setContent(updatedContent);
-						setTimeout(() => {
-							if (contentEditorRef.current) {
-								contentEditorRef.current.setContent(updatedContent);
-							}
-						}, 100);
-					}
-
-					// Update sampleData with the new report in the reports array
+					// Update sampleData with the new report in the reports array FIRST
 					if (sampleData && savedReport.refNumber) {
 						const updatedSampleData = { ...sampleData };
 						const existingReportIndex = updatedSampleData.reports.findIndex(
@@ -1621,6 +1599,12 @@ ${tableHTML}
 						setSelectedReport(newReport);
 					}
 
+					// Reload report data from API to ensure consistency
+					if (savedReport.refNumber) {
+						console.log('🔄 Reloading report data after publish:', savedReport.refNumber);
+						await fetchReportData(savedReport.refNumber);
+					}
+
 					alert('Xuất bản báo cáo thành công!');
 				}
 			} else {
@@ -1629,6 +1613,12 @@ ${tableHTML}
 
 				for (let i = 0; i < allSamplesData.length; i++) {
 					const sample = allSamplesData[i];
+
+					// Skip hidden samples
+					if (sample.isHidden) {
+						console.log(`⏭️ Skipping hidden sample in publish: ${sample.sampleId}`);
+						continue;
+					}
 
 					const headerContent = sample.headerEditorRef?.getContent() || '';
 					const contentEditorContent = sample.contentEditorRef?.getContent() || '';
@@ -1819,6 +1809,12 @@ ${tableHTML}
 
 				for (let i = 0; i < allSamplesData.length; i++) {
 					const sample = allSamplesData[i];
+
+					// Skip hidden samples
+					if (sample.isHidden) {
+						console.log(`⏭️ Skipping hidden sample in select latest: ${sample.sampleId}`);
+						continue;
+					}
 
 					if (sample.reports && sample.reports.length > 0) {
 						const latestReport = sample.reports[0];
@@ -2670,68 +2666,71 @@ ${tableHTML}
 				) : (
 					// All Samples Editors
 					<div className="space-y-6">
-						{allSamplesData.map((sample, index) => (
-							<div
-								key={sample.sampleId}
-								className="bg-white shadow-lg"
-								style={{ padding: '37.8px', boxSizing: 'border-box' }}
-							>
-								<h3 className="text-lg font-bold mb-4 text-center" style={{ color: '#0058A3' }}>
-									{sample.sampleId}
-								</h3>
+						{allSamplesData.map((sample, index) => {
+							if (sample.isHidden) return null;
 
-								{/* Header Editor */}
-								<div style={{ maxWidth: '720px', margin: '0 auto', marginBottom: '20px' }}>
-									<TinyMCEEditor
-										value={
-											sample.headerContent ||
-											generateHeaderForSample(sample.showVlas, sample.currentRefNumber, sample.showKN)
-										}
-										onEditorChange={(content) => {
-											const updated = [...allSamplesData];
-											updated[index].headerContent = content;
-											setAllSamplesData(updated);
-										}}
-										onInit={(evt, editor) => {
-											console.log(`✅ Header editor initialized for ${sample.sampleId}`);
-											allSamplesData[index].headerEditorRef = editor;
-										}}
-										init={{
-											height: 'auto',
-											min_height: 200,
-											width: '100%',
-											statusbar: false,
-											promotion: false,
-											menubar: false,
-											quickbars_selection_toolbar: false,
-											quickbars_insert_toolbar: false,
-											contextmenu: false,
-											inline_boundaries: false,
-											toolbar_mode: 'wrap',
-											resize: 'both',
-											table_use_colgroups: false,
-											table_selection_toolbar: false,
-											plugins: [
-												'advlist',
-												'autolink',
-												'lists',
-												'link',
-												'image',
-												'charmap',
-												'anchor',
-												'searchreplace',
-												'visualblocks',
-												'code',
-												'table',
-												'help',
-												'wordcount',
-												'autoresize',
-											],
-											toolbar:
-												'blocks fontfamily fontsize bold italic underline strikethrough subscript superscript forecolor align lineheight table tabledelete tableprops tablerowprops tablecellprops',
-											autoresize_bottom_margin: 10,
-											autoresize_overflow_padding: 0,
-											content_style: `
+							return (
+								<div
+									key={sample.sampleId}
+									className="bg-white shadow-lg"
+									style={{ padding: '37.8px', boxSizing: 'border-box' }}
+								>
+									<h3 className="text-lg font-bold mb-4 text-center" style={{ color: '#0058A3' }}>
+										{sample.sampleId}
+									</h3>
+
+									{/* Header Editor */}
+									<div style={{ maxWidth: '720px', margin: '0 auto', marginBottom: '20px' }}>
+										<TinyMCEEditor
+											value={
+												sample.headerContent ||
+												generateHeaderForSample(sample.showVlas, sample.currentRefNumber, sample.showKN)
+											}
+											onEditorChange={(content) => {
+												const updated = [...allSamplesData];
+												updated[index].headerContent = content;
+												setAllSamplesData(updated);
+											}}
+											onInit={(evt, editor) => {
+												console.log(`✅ Header editor initialized for ${sample.sampleId}`);
+												allSamplesData[index].headerEditorRef = editor;
+											}}
+											init={{
+												height: 'auto',
+												min_height: 200,
+												width: '100%',
+												statusbar: false,
+												promotion: false,
+												menubar: false,
+												quickbars_selection_toolbar: false,
+												quickbars_insert_toolbar: false,
+												contextmenu: false,
+												inline_boundaries: false,
+												toolbar_mode: 'wrap',
+												resize: 'both',
+												table_use_colgroups: false,
+												table_selection_toolbar: false,
+												plugins: [
+													'advlist',
+													'autolink',
+													'lists',
+													'link',
+													'image',
+													'charmap',
+													'anchor',
+													'searchreplace',
+													'visualblocks',
+													'code',
+													'table',
+													'help',
+													'wordcount',
+													'autoresize',
+												],
+												toolbar:
+													'blocks fontfamily fontsize bold italic underline strikethrough subscript superscript forecolor align lineheight table tabledelete tableprops tablerowprops tablecellprops',
+												autoresize_bottom_margin: 10,
+												autoresize_overflow_padding: 0,
+												content_style: `
 												@import url('https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@400;500;600;700;800;900&display=swap');
 												* { box-sizing: border-box !important; }
 												body { font-family: 'Wix Madefor Display', sans-serif !important; font-size: 12px; line-height: 1.5; margin: 0; background: white; padding: 10px; width: 100%; overflow: hidden !important; }
@@ -2742,79 +2741,79 @@ ${tableHTML}
 												::-webkit-scrollbar { display: none; }
 												body { -ms-overflow-style: none; scrollbar-width: none; }
 											`,
-										}}
-									/>
-								</div>
+											}}
+										/>
+									</div>
 
-								{/* Content Editor */}
-								<div style={{ maxWidth: '720px', margin: '0 auto', marginBottom: '20px' }}>
-									<TinyMCEEditor
-										value={
-											sample.contentContent ||
-											generateCustomerSection(sample.client) +
-												spacing +
-												generateSampleInfoSection(sample) +
-												spacing +
-												generateAnalysisSection(sample) +
-												spacing +
-												(sample.showComment ? generateCommentSection() + spacing : '') +
-												generateNotesSection() +
-												spacing +
-												generateSignatureSection()
-										}
-										onEditorChange={(content) => {
-											const updated = [...allSamplesData];
-											updated[index].contentContent = content;
-											setAllSamplesData(updated);
-										}}
-										onInit={(evt, editor) => {
-											console.log(`✅ Content editor initialized for ${sample.sampleId}`);
-											allSamplesData[index].contentEditorRef = editor;
-										}}
-										init={{
-											height: 'auto',
-											min_height: 500,
-											width: '100%',
-											statusbar: false,
-											promotion: false,
-											menubar: false,
-											quickbars_selection_toolbar: false,
-											quickbars_insert_toolbar: false,
-											contextmenu: false,
-											inline_boundaries: false,
-											toolbar_mode: 'wrap',
-											resize: 'both',
-											table_use_colgroups: false,
-											table_selection_toolbar: false,
-											plugins: [
-												'advlist',
-												'autolink',
-												'lists',
-												'link',
-												'image',
-												'charmap',
-												'preview',
-												'anchor',
-												'searchreplace',
-												'visualblocks',
-												'code',
-												'fullscreen',
-												'insertdatetime',
-												'media',
-												'table',
-												'help',
-												'wordcount',
-												'emoticons',
-												'codesample',
-												'pagebreak',
-												'nonbreaking',
-												'autoresize',
-											],
-											toolbar:
-												'blocks fontfamily fontsize bold italic underline strikethrough subscript superscript forecolor align lineheight checklist numlist bullist indent outdent anchor table tabledelete tableprops tablerowprops tablecellprops tableinsertrowbefore tableinsertrowafter tabledeleterow tableinsertcolbefore tableinsertcolafter tabledeletecol',
-											autoresize_bottom_margin: 20,
-											autoresize_overflow_padding: 0,
-											content_style: `
+									{/* Content Editor */}
+									<div style={{ maxWidth: '720px', margin: '0 auto', marginBottom: '20px' }}>
+										<TinyMCEEditor
+											value={
+												sample.contentContent ||
+												generateCustomerSection(sample.client) +
+													spacing +
+													generateSampleInfoSection(sample) +
+													spacing +
+													generateAnalysisSection(sample) +
+													spacing +
+													(sample.showComment ? generateCommentSection() + spacing : '') +
+													generateNotesSection() +
+													spacing +
+													generateSignatureSection()
+											}
+											onEditorChange={(content) => {
+												const updated = [...allSamplesData];
+												updated[index].contentContent = content;
+												setAllSamplesData(updated);
+											}}
+											onInit={(evt, editor) => {
+												console.log(`✅ Content editor initialized for ${sample.sampleId}`);
+												allSamplesData[index].contentEditorRef = editor;
+											}}
+											init={{
+												height: 'auto',
+												min_height: 500,
+												width: '100%',
+												statusbar: false,
+												promotion: false,
+												menubar: false,
+												quickbars_selection_toolbar: false,
+												quickbars_insert_toolbar: false,
+												contextmenu: false,
+												inline_boundaries: false,
+												toolbar_mode: 'wrap',
+												resize: 'both',
+												table_use_colgroups: false,
+												table_selection_toolbar: false,
+												plugins: [
+													'advlist',
+													'autolink',
+													'lists',
+													'link',
+													'image',
+													'charmap',
+													'preview',
+													'anchor',
+													'searchreplace',
+													'visualblocks',
+													'code',
+													'fullscreen',
+													'insertdatetime',
+													'media',
+													'table',
+													'help',
+													'wordcount',
+													'emoticons',
+													'codesample',
+													'pagebreak',
+													'nonbreaking',
+													'autoresize',
+												],
+												toolbar:
+													'blocks fontfamily fontsize bold italic underline strikethrough subscript superscript forecolor align lineheight checklist numlist bullist indent outdent anchor table tabledelete tableprops tablerowprops tablecellprops tableinsertrowbefore tableinsertrowafter tabledeleterow tableinsertcolbefore tableinsertcolafter tabledeletecol',
+												autoresize_bottom_margin: 20,
+												autoresize_overflow_padding: 0,
+												content_style: `
 												@import url('https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@400;500;600;700;800&display=swap');
 												* { box-sizing: border-box !important; }
 												body { font-family: 'Wix Madefor Display', sans-serif !important; font-size: 12px; line-height: 1.5; margin: 0; background: white; padding: 10px; width: 100%; min-height: 200px; overflow: hidden !important; }
@@ -2826,59 +2825,59 @@ ${tableHTML}
 												::-webkit-scrollbar { display: none; }
 												body { -ms-overflow-style: none; scrollbar-width: none; }
 											`,
-										}}
-									/>
-								</div>
+											}}
+										/>
+									</div>
 
-								{/* Footer Editor */}
-								<div style={{ maxWidth: '720px', margin: '0 auto' }}>
-									<TinyMCEEditor
-										value={sample.footerContent || footer}
-										onEditorChange={(content) => {
-											const updated = [...allSamplesData];
-											updated[index].footerContent = content;
-											setAllSamplesData(updated);
-										}}
-										onInit={(evt, editor) => {
-											console.log(`✅ Footer editor initialized for ${sample.sampleId}`);
-											allSamplesData[index].footerEditorRef = editor;
-										}}
-										init={{
-											height: 'auto',
-											min_height: 150,
-											width: '100%',
-											statusbar: false,
-											promotion: false,
-											menubar: false,
-											quickbars_selection_toolbar: false,
-											quickbars_insert_toolbar: false,
-											contextmenu: false,
-											inline_boundaries: false,
-											toolbar_mode: 'wrap',
-											resize: 'both',
-											table_use_colgroups: false,
-											table_selection_toolbar: false,
-											plugins: [
-												'advlist',
-												'autolink',
-												'lists',
-												'link',
-												'image',
-												'charmap',
-												'anchor',
-												'searchreplace',
-												'visualblocks',
-												'code',
-												'table',
-												'help',
-												'wordcount',
-												'autoresize',
-											],
-											toolbar:
-												'blocks fontfamily fontsize bold italic underline strikethrough subscript superscript forecolor align lineheight table tabledelete tableprops tablerowprops tablecellprops',
-											autoresize_bottom_margin: 10,
-											autoresize_overflow_padding: 0,
-											content_style: `
+									{/* Footer Editor */}
+									<div style={{ maxWidth: '720px', margin: '0 auto' }}>
+										<TinyMCEEditor
+											value={sample.footerContent || footer}
+											onEditorChange={(content) => {
+												const updated = [...allSamplesData];
+												updated[index].footerContent = content;
+												setAllSamplesData(updated);
+											}}
+											onInit={(evt, editor) => {
+												console.log(`✅ Footer editor initialized for ${sample.sampleId}`);
+												allSamplesData[index].footerEditorRef = editor;
+											}}
+											init={{
+												height: 'auto',
+												min_height: 150,
+												width: '100%',
+												statusbar: false,
+												promotion: false,
+												menubar: false,
+												quickbars_selection_toolbar: false,
+												quickbars_insert_toolbar: false,
+												contextmenu: false,
+												inline_boundaries: false,
+												toolbar_mode: 'wrap',
+												resize: 'both',
+												table_use_colgroups: false,
+												table_selection_toolbar: false,
+												plugins: [
+													'advlist',
+													'autolink',
+													'lists',
+													'link',
+													'image',
+													'charmap',
+													'anchor',
+													'searchreplace',
+													'visualblocks',
+													'code',
+													'table',
+													'help',
+													'wordcount',
+													'autoresize',
+												],
+												toolbar:
+													'blocks fontfamily fontsize bold italic underline strikethrough subscript superscript forecolor align lineheight table tabledelete tableprops tablerowprops tablecellprops',
+												autoresize_bottom_margin: 10,
+												autoresize_overflow_padding: 0,
+												content_style: `
 												@import url('https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@400;500;600;700;800&display=swap');
 												* { box-sizing: border-box !important; }
 												body { font-family: 'Wix Madefor Display', sans-serif !important; font-size: 12px; line-height: 1.5; margin: 0; background: white; padding: 10px; width: 100%; overflow: hidden !important; }
@@ -2889,11 +2888,12 @@ ${tableHTML}
 												::-webkit-scrollbar { display: none; }
 												body { -ms-overflow-style: none; scrollbar-width: none; }
 											`,
-										}}
-									/>
+											}}
+										/>
+									</div>
 								</div>
-							</div>
-						))}
+							);
+						})}
 					</div>
 				)}
 			</div>
@@ -3028,13 +3028,25 @@ ${tableHTML}
 					<div className="mb-6 space-y-3">
 						<h3 className="text-lg font-semibold">Danh sách mẫu:</h3>
 						{allSamplesData.map((sample, index) => (
-							<div key={sample.sampleId} className="p-3 bg-gray-50 rounded-lg space-y-2">
+							<div
+								key={sample.sampleId}
+								className={`p-3 rounded-lg space-y-2 transition-colors ${
+									sample.isHidden ? 'bg-gray-300' : 'bg-gray-50'
+								}`}
+							>
 								<div className="flex items-center gap-4">
-									<label className="text-sm font-semibold whitespace-nowrap min-w-[120px]">{sample.sampleId}:</label>
+									<label
+										className={`text-sm font-semibold whitespace-nowrap min-w-[120px] ${
+											sample.isHidden ? 'text-gray-500' : ''
+										}`}
+									>
+										{sample.sampleId}:
+									</label>
 									<select
 										value={sample.selectedReportIndex !== null ? sample.selectedReportIndex : ''}
 										onChange={(e) => handleSampleReportChange(index, e.target.value)}
 										className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
+										disabled={sample.isHidden}
 									>
 										<option value="">-- Chọn báo cáo --</option>
 										{sample.reports.map((report, reportIndex) => (
@@ -3046,54 +3058,80 @@ ${tableHTML}
 								</div>
 
 								{/* Sample-specific toggles - single row */}
-								<div className="flex gap-2 pl-[136px]">
+								<div className="flex gap-2 pl-[136px] flex-wrap">
 									<button
 										onClick={() => handleSampleToggleChange(index, 'showVlas', !sample.showVlas)}
+										disabled={sample.isHidden}
 										className={`${
 											sample.showVlas ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition`}
+										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
+											sample.isHidden ? 'opacity-50 cursor-not-allowed' : ''
+										}`}
 									>
 										VLAS
 									</button>
 									<button
 										onClick={() => handleSampleToggleChange(index, 'showComment', !sample.showComment)}
+										disabled={sample.isHidden}
 										className={`${
 											sample.showComment ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition`}
+										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
+											sample.isHidden ? 'opacity-50 cursor-not-allowed' : ''
+										}`}
 									>
 										Comment
 									</button>
 									<button
 										onClick={() => handleSampleToggleChange(index, 'showSign', !sample.showSign)}
+										disabled={sample.isHidden}
 										className={`${
 											sample.showSign ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition`}
+										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
+											sample.isHidden ? 'opacity-50 cursor-not-allowed' : ''
+										}`}
 									>
 										Sign
 									</button>
 									<button
 										onClick={() => handleSampleToggleChange(index, 'showReference', !sample.showReference)}
+										disabled={sample.isHidden}
 										className={`${
 											sample.showReference ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition`}
+										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
+											sample.isHidden ? 'opacity-50 cursor-not-allowed' : ''
+										}`}
 									>
 										Reference
 									</button>
 									<button
 										onClick={() => handleSampleToggleChange(index, 'showEnglish', !sample.showEnglish)}
+										disabled={sample.isHidden}
 										className={`${
 											sample.showEnglish ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition`}
+										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
+											sample.isHidden ? 'opacity-50 cursor-not-allowed' : ''
+										}`}
 									>
 										English
 									</button>
 									<button
 										onClick={() => handleSampleToggleChange(index, 'showKN', !sample.showKN)}
+										disabled={sample.isHidden}
 										className={`${
 											sample.showKN ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700'
-										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition`}
+										} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
+											sample.isHidden ? 'opacity-50 cursor-not-allowed' : ''
+										}`}
 									>
 										KN
+									</button>
+									<button
+										onClick={() => handleSampleToggleChange(index, 'isHidden', !sample.isHidden)}
+										className={`${
+											sample.isHidden ? 'bg-red-500 text-white' : 'bg-gray-400 text-white'
+										} px-3 py-1 rounded text-xs hover:bg-red-600 transition ml-auto`}
+									>
+										{sample.isHidden ? 'Hiện' : 'Ẩn'}
 									</button>
 								</div>
 							</div>

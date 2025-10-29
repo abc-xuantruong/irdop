@@ -31,7 +31,7 @@ import {
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import CreateReceipt from '../components/CreateReceipt';
-import { apiGet, apiPost, apiGetBlob } from '../contexts/helperFunctionCallAPI';
+import { apiGet, apiPost, apiGetBlob, apiPostBlob } from '../contexts/helperFunctionCallAPI';
 import Swal from 'sweetalert2';
 import axios from 'axios'; // Add axios import
 import FileForm from '../components/FileForm';
@@ -2697,6 +2697,40 @@ const ReceiptInfor = ({ receipt }) => {
 		return value;
 	};
 
+	// Add function to handle quick draft generation
+	const handleQuickDraft = async () => {
+		try {
+			// Show loading toast
+			showToast('Đang tạo bản thảo...', 'info');
+
+			// Prepare request body with samples from current receipt
+			const requestBody = {
+				samples: currentReceipt?.samples || [],
+			};
+
+			// Call API to generate draft HTML - returns HTML string directly
+			const response = await apiPost('https://red.irdop.org/v1/report/gen/draft', requestBody);
+
+			if (response.status === 200 && response.data) {
+				// Response.data is HTML string, open in new tab
+				const htmlContent = response.data;
+				const newWindow = window.open('', '_blank');
+				if (newWindow) {
+					newWindow.document.write(htmlContent);
+					newWindow.document.close();
+					showToast('Đã mở bản thảo trong tab mới!', 'success');
+				} else {
+					showToast('Không thể mở tab mới. Vui lòng kiểm tra popup blocker.', 'error');
+				}
+			} else {
+				showToast('Không thể tạo bản thảo', 'error');
+			}
+		} catch (error) {
+			console.error('Error generating quick draft:', error);
+			showToast('Lỗi khi tạo bản thảo: ' + (error.message || 'Unknown error'), 'error');
+		}
+	};
+
 	const handlePayStatusToggle = () => {
 		setIsPaymentConfirmVisible(true);
 	};
@@ -3613,6 +3647,17 @@ const ReceiptInfor = ({ receipt }) => {
 								>
 									<div className="flex items-center justify-center gap-1">
 										Excel <PiDownloadSimpleBold size={16} />
+									</div>
+								</button>
+								<button
+									className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-1 px-2 rounded-lg text-sm whitespace-nowrap"
+									onClick={handleQuickDraft}
+									disabled={!currentReceipt?.samples || currentReceipt.samples.length === 0}
+									title="Tạo bản thảo PDF nhanh"
+								>
+									<div className="flex items-center justify-center gap-1">
+										<FaFilePdf size={14} />
+										<span>DRAFT</span>
 									</div>
 								</button>
 								<button
@@ -4552,7 +4597,7 @@ const ReceiptInfor = ({ receipt }) => {
 			/>
 			{/* FileForm */}
 			<FileForm
-				foreignKeyUIDs={[currentReceipt?._deprecated_recordCode]}
+				foreignKeyUIDs={[currentReceipt?._deprecated_recordCode, currentReceipt?.orderId]}
 				// localPath="activities/LAB"
 				objectPath="activities/LAB"
 				isVisible={isFileFormVisible}
