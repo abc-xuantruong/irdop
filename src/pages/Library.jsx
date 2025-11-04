@@ -3,7 +3,7 @@ const { useContext, useEffect, useState } = React;
 import { useNavigate, useLocation } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
-import ProtocolInfor from '../components/ProtocolInfor';
+import ProtocolInfor from '../components/protocol/ProtocolInfor';
 import ClientInfor from '../components/ClientInfor';
 import AccountInfor from '../components/AccountInfor';
 import TechnicianInfo from '../components/TechnicianInfo';

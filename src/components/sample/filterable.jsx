@@ -172,14 +172,43 @@ const FilterableSample = forwardRef(
 				setPendingChanges((prev) => {
 					const newChanges = new Map(prev);
 					bulkChanges.forEach((change) => {
-						newChanges.set(change.id, change);
+						// Lấy dữ liệu hiện tại của analysis từ processingSample
+						const currentAnalysis = processingSample
+							.flatMap((group) => group.analyses)
+							.find((analysis) => analysis.id === change.id);
+
+						// Merge change vào dữ liệu hiện tại để có full object
+						const fullChange = {
+							...(currentAnalysis || {}),
+							...change,
+						};
+						newChanges.set(change.id, fullChange);
 					});
 					return newChanges;
 				});
-			},
-		}));
 
-		// Notify parent when session state changes
+				// Cập nhật hiển thị trực tiếp trong bảng
+				setProcessingSample((prevData) => {
+					return prevData.map((group) => ({
+						...group,
+						analyses: group.analyses.map((analysis) => {
+							// Tìm change cho analysis này
+							const change = bulkChanges.find((c) => c.id === analysis.id);
+							if (change) {
+								// Merge change vào analysis hiện tại
+								return {
+									...analysis,
+									...change,
+								};
+							}
+							return analysis;
+						}),
+					}));
+				});
+
+				toast.success(`Đã áp dụng thay đổi hàng loạt cho ${bulkChanges.length} chỉ tiêu`);
+			},
+		})); // Notify parent when session state changes
 		useEffect(() => {
 			if (onSessionStateChange) {
 				onSessionStateChange({
@@ -920,7 +949,10 @@ const FilterableSample = forwardRef(
 
 		// Helper function to get technician name
 		const getTechnicianName = (analysis) => {
-			// Use analysis.technician.identityName if available
+			// Use analysis.technician name if available (support both camelCase and snake_case)
+			if (analysis?.technician?.identity_name) {
+				return analysis.technician.identity_name;
+			}
 			if (analysis?.technician?.identityName) {
 				return analysis.technician.identityName;
 			}
@@ -929,9 +961,7 @@ const FilterableSample = forwardRef(
 				return analysis.technicianId;
 			}
 			return '--';
-		};
-
-		// Tooltip functions
+		}; // Tooltip functions
 		const showTooltip = (event, content, customPosition = null) => {
 			const rect = event.target.getBoundingClientRect();
 			const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -1237,12 +1267,21 @@ const FilterableSample = forwardRef(
 		};
 
 		const confirmCancelChanges = () => {
+			// Clear pending changes
 			setPendingChanges(new Map());
-			setShowCancelConfirm(false);
-			toast.info('Đã hủy tất cả thay đổi chưa lưu');
-		};
 
-		// Handle column sorting with ASC → DESC → no sort cycle
+			// Đóng session
+			setIsResultEntrySession(false);
+
+			// Đóng tất cả các dialog
+			setShowCancelConfirm(false);
+			setShowEndSessionDialog(false);
+
+			// Clear session storage
+			sessionStorage.removeItem(SESSION_STORAGE_KEY);
+
+			toast.info('Đã hủy phiên nhập kết quả và xóa tất cả thay đổi');
+		}; // Handle column sorting with ASC → DESC → no sort cycle
 		const handleColumnSort = (columnName) => {
 			const currentColumn = filters.columnSort;
 			const currentSort = filters.sortBy;
@@ -1844,15 +1883,19 @@ const FilterableSample = forwardRef(
 
 		// Handle user confirmation (continue as current user)
 		const handleConfirmUser = () => {
+			// Check if this is for starting session or inline edit
 			if (pendingEditCell) {
+				// This is for inline edit
 				const { analysisId, column, currentValue } = pendingEditCell;
 				proceedWithEdit(analysisId, column, currentValue);
 				setPendingEditCell(null);
+				setShowSessionConfirm(false);
+			} else {
+				// This is for starting result entry session
+				setShowSessionConfirm(false);
+				startResultEntrySession();
 			}
-			setShowSessionConfirm(false);
-		};
-
-		// Handle re-login option
+		}; // Handle re-login option
 		const handleRelogin = () => {
 			setShowSessionConfirm(false);
 			setShowLoginPopup(true);
@@ -1893,8 +1936,13 @@ const FilterableSample = forwardRef(
 			// Close unit dropdown when switching cells
 			setShowUnitDropdown(false);
 
-			// Only apply session logic for result, unit, and protocol columns
-			if (column === 'resultValue' || column === 'resultUnit' || column === 'protocolCode') {
+			// Only apply session logic for result, unit, protocol columns, and protocolSource
+			if (
+				column === 'resultValue' ||
+				column === 'resultUnit' ||
+				column === 'protocolCode' ||
+				column === 'protocolSource'
+			) {
 				// If not in session, start session first
 				if (!isResultEntrySession) {
 					await startResultEntrySession();
@@ -1932,7 +1980,10 @@ const FilterableSample = forwardRef(
 				// If in result entry session and editing result/unit/protocol columns, save to pending changes
 				if (
 					isResultEntrySession &&
-					(column === 'resultValue' || column === 'resultUnit' || column === 'protocolCode')
+					(column === 'resultValue' ||
+						column === 'resultUnit' ||
+						column === 'protocolCode' ||
+						column === 'protocolSource')
 				) {
 					// Get existing pending changes for this analysis or create new with full record data
 					const existingChanges = pendingChanges.get(analysisId) || {
@@ -1948,6 +1999,8 @@ const FilterableSample = forwardRef(
 						existingChanges.resultUnit = convertedValue;
 					} else if (column === 'protocolCode') {
 						existingChanges.protocolCode = editValue; // No HTML conversion for protocolCode
+					} else if (column === 'protocolSource') {
+						existingChanges.protocolSource = editValue; // No HTML conversion for protocolSource
 					}
 
 					// Update pending changes
@@ -1983,6 +2036,10 @@ const FilterableSample = forwardRef(
 							updateData.analysis.resultValue = convertedValue;
 						} else if (column === 'resultUnit') {
 							updateData.analysis.resultUnit = convertedValue;
+						} else if (column === 'protocolCode') {
+							updateData.analysis.protocolCode = editValue; // No HTML conversion for protocolCode
+						} else if (column === 'protocolSource') {
+							updateData.analysis.protocolSource = editValue; // No HTML conversion for protocolSource
 						}
 
 						const response = await apiPost('https://red.irdop.org/v1/analysis/update', updateData);
@@ -2507,8 +2564,32 @@ const FilterableSample = forwardRef(
 															</td>
 
 															{/* Nguồn */}
-															<td className="border border-gray-300 px-3 py-2 text-left">
-																<span className="text-sm font-medium">{item.protocolSource || '--'}</span>
+															<td
+																className="border border-gray-300 px-3 py-2 text-left cursor-pointer hover:bg-blue-50"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	handleCellClick(item.id, 'protocolSource', item.protocolSource);
+																}}
+															>
+																{editingCell?.analysisId === item.id && editingCell?.column === 'protocolSource' ? (
+																	<select
+																		value={editValue}
+																		onChange={(e) => setEditValue(e.target.value)}
+																		onBlur={handleCellBlur}
+																		onKeyDown={handleKeyDown}
+																		onClick={(e) => e.stopPropagation()}
+																		onMouseDown={(e) => e.stopPropagation()}
+																		className="w-full px-2 py-1 text-sm border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+																		autoFocus
+																	>
+																		<option value="">-- Chọn nguồn --</option>
+																		<option value="IRDOP">IRDOP</option>
+																		<option value="IRDOP VS">IRDOP VS</option>
+																		<option value="EX">EX</option>
+																	</select>
+																) : (
+																	<span className="text-sm">{item.protocolSource || '--'}</span>
+																)}
 															</td>
 
 															{/* Phương pháp */}
@@ -3121,10 +3202,9 @@ const FilterableSample = forwardRef(
 						<div className="bg-white rounded-lg p-6 w-[450px] relative shadow-xl">
 							<h2 className="text-xl font-semibold mb-4 text-gray-800">Xác nhận người cập nhật</h2>
 							<p className="text-gray-700 mb-4">
-								Người cập nhật: <span className="font-semibold">{currentUser?.identityName || 'N/A'}</span>
+								Người cập nhật: <span className="font-semibold">{currentUser?.identity_name || 'Không xác định'}</span>
 							</p>
-							<p className="text-gray-600 text-sm mb-6">Vui lòng xác nhận để bắt đầu phiên nhập kết quả.</p>
-
+							<p className="text-gray-600 text-sm mb-6">Vui lòng xác nhận để bắt đầu phiên nhập kết quả.</p>{' '}
 							<div className="flex justify-end space-x-3">
 								<button
 									onClick={() => setShowSessionConfirm(false)}

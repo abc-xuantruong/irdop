@@ -220,10 +220,10 @@ const LabDashboardTemporary = () => {
 					<button
 						onClick={() => window.open('https://chat.irdop.org/', '_blank')}
 						className="w-12 h-12 flex items-center justify-center rounded-lg text-sm font-medium transition-colors relative bg-gray-100 text-gray-600 hover:bg-gray-300 hover:text-blue-600 mb-2"
-						onMouseEnter={(e) => showTooltip('AI', e)}
+						onMouseEnter={(e) => showTooltip('CHAT', e)}
 						onMouseLeave={hideTooltip}
 					>
-						<span className="text-lg font-bold">AI</span>
+						<span className="text-md font-bold">CHAT</span>
 					</button>
 					<nav className="space-y-2">
 						{bottomNavigationItems.map((item, index) => {

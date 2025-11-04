@@ -34,9 +34,13 @@
 		"react-datepicker": "^7.6.0",
 		"react-dom": "^18.2.0",
 		"react-icons": "^5.4.0",
+		"react-markdown": "^10.1.0",
 		"react-router-dom": "^7.1.1",
 		"react-table": "^7.8.0",
 		"react-toastify": "^11.0.3",
+		"rehype-katex": "^7.0.1",
+		"remark-gfm": "^4.0.1",
+		"remark-math": "^6.0.0",
 		"sweetalert2": "^11.17.2",
 		"tinymce": "^7.6.0"
 	},

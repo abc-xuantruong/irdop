@@ -1,17 +1,18 @@
 import * as React from 'react';
 const { useContext, useState, useEffect, useRef } = React;
-import { GlobalContext } from '../contexts/GlobalContext';
-import { useTaskQueue } from '../contexts/TaskQueueContext';
-import { apiPost, apiPostFormData } from '../contexts/helperFunctionCallAPI';
+import { GlobalContext } from '../../contexts/GlobalContext';
+import { useTaskQueue } from '../../contexts/TaskQueueContext';
+import { apiPost, apiPostFormData } from '../../contexts/helperFunctionCallAPI';
 import { toast } from 'react-toastify';
 import { FaFilter } from 'react-icons/fa';
+import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
+import ProtocolDetail from './ProtocolDetail';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { useLocation } from 'react-router-dom';
-import ProtocolDetail from './protocol/ProtocolDetail';
 
 const ProtocolInfor = () => {
 	const { setCurrentTitlePage, currentUser } = useContext(GlobalContext);
@@ -31,6 +32,7 @@ const ProtocolInfor = () => {
 		totalPages: 0,
 	});
 	const [searchTerm, setSearchTerm] = useState('');
+	const [searchInput, setSearchInput] = useState(''); // For input field
 	const [columnSort, setColumnSort] = useState('protocolCode');
 	const [sortBy, setSortBy] = useState('ASC');
 	const [filters, setFilters] = useState({});
@@ -44,13 +46,23 @@ const ProtocolInfor = () => {
 
 	const initialLoadRef = useRef(false);
 	const fileInputRef = useRef(null);
+	const searchDebounceRef = useRef(null);
+
+	// Helper function to ensure content is a string for ReactMarkdown
+	const renderMarkdown = (content) => {
+		if (typeof content === 'string') {
+			return content;
+		}
+		if (content === null || content === undefined) {
+			return '';
+		}
+		return JSON.stringify(content, null, 2);
+	};
 
 	// Handle navigation state from queue clicks
 	useEffect(() => {
 		if (location.state?.openProtocol && location.state?.protocolData) {
 			setSelectedProtocol(location.state.protocolData);
-			setEditedProtocol(location.state.protocolData);
-			setIsEditMode(location.state.openInEditMode || false);
 			setDetailModalVisible(true);
 			// Clear the navigation state
 			window.history.replaceState({}, document.title);
@@ -70,6 +82,15 @@ const ProtocolInfor = () => {
 			.scrollbar-hide::-webkit-scrollbar {
 				display: none;
 			}
+			
+			/* Hide all scrollbars globally */
+			* {
+				-ms-overflow-style: none;
+				scrollbar-width: none;
+			}
+			*::-webkit-scrollbar {
+				display: none;
+			}
 		`;
 		document.head.appendChild(style);
 
@@ -84,6 +105,26 @@ const ProtocolInfor = () => {
 			fetchProtocols(pagination.currentPage, pagination.itemsPerPage);
 		}
 	}, [filters, sortBy, columnSort]);
+
+	// Debounce search input
+	useEffect(() => {
+		// Clear previous timeout
+		if (searchDebounceRef.current) {
+			clearTimeout(searchDebounceRef.current);
+		}
+
+		// Set new timeout
+		searchDebounceRef.current = setTimeout(() => {
+			setSearchTerm(searchInput.trim());
+		}, 500);
+
+		// Cleanup
+		return () => {
+			if (searchDebounceRef.current) {
+				clearTimeout(searchDebounceRef.current);
+			}
+		};
+	}, [searchInput]);
 
 	// Initial load and when search term changes
 	useEffect(() => {
@@ -306,11 +347,12 @@ const ProtocolInfor = () => {
 
 	// Handle search
 	const handleSearch = () => {
-		setSearchTerm(searchTerm.trim());
+		setSearchTerm(searchInput.trim());
 	};
 
 	// Handle clear search
 	const handleClearSearch = () => {
+		setSearchInput('');
 		setSearchTerm('');
 	};
 
@@ -335,26 +377,26 @@ const ProtocolInfor = () => {
 		setSelectedProtocol(null);
 	};
 
-	// Handle protocol update from ProtocolDetail component
-	const handleProtocolUpdate = async (updatedProtocol) => {
-		setSelectedProtocol(updatedProtocol);
-		// Refresh the list to show updated data
+	// Handle protocol update callback from ProtocolDetail
+	const handleProtocolUpdate = async () => {
 		await fetchProtocols(pagination.currentPage, pagination.itemsPerPage);
 	};
 
 	return (
 		<>
 			<div className="p-4">
-				<h2 className="text-2xl font-bold mb-4">Hồ sơ Phương pháp</h2>
+				<div className="flex items-center justify-between mb-4">
+					<h2 className="text-2xl font-bold mb-4">Hồ sơ Phương pháp</h2>
 
-				{/* Upload button */}
-				<div className="mb-4">
-					<button
-						onClick={() => setShowUploadModal(true)}
-						className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-					>
-						Upload File PP
-					</button>
+					{/* Upload button */}
+					<div className="mb-4">
+						<button
+							onClick={() => setShowUploadModal(true)}
+							className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+						>
+							Upload File PP
+						</button>
+					</div>
 				</div>
 
 				{/* Search */}
@@ -363,8 +405,8 @@ const ProtocolInfor = () => {
 						type="text"
 						className="px-3 py-2 border rounded flex-1 bg-white"
 						placeholder="Tìm kiếm phương pháp..."
-						value={searchTerm}
-						onChange={(e) => setSearchTerm(e.target.value)}
+						value={searchInput}
+						onChange={(e) => setSearchInput(e.target.value)}
 						onKeyDown={(e) => {
 							if (e.key === 'Enter') {
 								handleSearch();
@@ -372,10 +414,10 @@ const ProtocolInfor = () => {
 						}}
 					/>
 					<button
-						onClick={searchTerm ? handleClearSearch : handleSearch}
+						onClick={searchInput ? handleClearSearch : handleSearch}
 						className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
 					>
-						{searchTerm ? '✕' : 'Search'}
+						{searchInput ? '✕' : 'Search'}
 					</button>
 				</div>
 
@@ -408,14 +450,9 @@ const ProtocolInfor = () => {
 						<table className="min-w-full bg-white border border-gray-300">
 							<thead className="bg-gray-50">
 								<tr>
-									<th className="px-4 py-2 border-b text-left w-20">
-										<div className="flex items-center justify-center">
-											<span className="text-sm font-medium text-gray-700">Hành động</span>
-										</div>
-									</th>
 									<th className="px-4 py-2 border-b text-left">
 										<div className="flex items-center justify-between">
-											<span>protocolName</span>
+											<span>Phương pháp</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
 													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
@@ -429,7 +466,7 @@ const ProtocolInfor = () => {
 									</th>
 									<th className="px-4 py-2 border-b text-left">
 										<div className="flex items-center justify-between">
-											<span>protocolMatrices</span>
+											<span>Nền mẫu</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
 													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
@@ -443,7 +480,7 @@ const ProtocolInfor = () => {
 									</th>
 									<th className="px-4 py-2 border-b text-left">
 										<div className="flex items-center justify-between">
-											<span>purpose</span>
+											<span>Mục đích</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
 													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
@@ -457,7 +494,7 @@ const ProtocolInfor = () => {
 									</th>
 									<th className="px-4 py-2 border-b text-left min-w-[400px]">
 										<div className="flex items-center justify-between">
-											<span>equipment</span>
+											<span>Thiết bị</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
 													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
@@ -471,7 +508,7 @@ const ProtocolInfor = () => {
 									</th>
 									<th className="px-4 py-2 border-b text-left min-w-[400px]">
 										<div className="flex items-center justify-between">
-											<span>chemicals</span>
+											<span>Hóa chất</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
 													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
@@ -485,7 +522,7 @@ const ProtocolInfor = () => {
 									</th>
 									<th className="px-4 py-2 border-b text-left">
 										<div className="flex items-center justify-between">
-											<span>docProtocolCode</span>
+											<span>Mã PP</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
 													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
@@ -499,7 +536,7 @@ const ProtocolInfor = () => {
 									</th>
 									<th className="px-4 py-2 border-b text-left">
 										<div className="flex items-center justify-between">
-											<span>refDocument</span>
+											<span>Viện dẫn</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
 													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
@@ -513,7 +550,7 @@ const ProtocolInfor = () => {
 									</th>
 									<th className="px-4 py-2 border-b text-left">
 										<div className="flex items-center justify-between">
-											<span>parameters</span>
+											<span>Chỉ tiêu</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
 													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
@@ -527,7 +564,7 @@ const ProtocolInfor = () => {
 									</th>
 									<th className="px-4 py-2 border-b text-left">
 										<div className="flex items-center justify-between">
-											<span>status</span>
+											<span>TT</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
 													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
@@ -548,17 +585,6 @@ const ProtocolInfor = () => {
 										className="hover:bg-gray-50 cursor-pointer"
 										onClick={() => handleRowClick(protocol)}
 									>
-										<td className="px-4 py-2 border-b align-top text-center">
-											<button
-												onClick={(e) => {
-													e.stopPropagation();
-													handleRowClick(protocol);
-												}}
-												className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
-											>
-												XEM
-											</button>
-										</td>
 										<td className="px-4 py-2 border-b align-top text-left">
 											{protocol.protocolName ? (
 												<div className="prose prose-sm max-w-none">
@@ -830,6 +856,7 @@ const ProtocolInfor = () => {
 					</div>,
 					document.body,
 				)}
+
 			{/* Protocol Detail Modal */}
 			<ProtocolDetail
 				protocol={selectedProtocol}

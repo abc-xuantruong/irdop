@@ -178,6 +178,40 @@ export const apiPost = async (url, body, customHeaders = {}) => {
 	}
 };
 
+export const apiPostFormData = async (url, formData, customHeaders = {}) => {
+	try {
+		const authHeaders = getAuthHeader();
+
+		// Nếu không có auth headers thì chuyển về login
+		if (!authHeaders) {
+			redirectToLogin('Vui lòng đăng nhập để tiếp tục...');
+			return { status: 401, data: { message: 'No auth token' } };
+		}
+
+		const headers = {
+			// Không set Content-Type, để browser tự động set với boundary
+			...authHeaders,
+			...customHeaders,
+		};
+		const response = await axios.post(url, formData, { headers });
+		return response;
+	} catch (error) {
+		if (error.response) {
+			if (error.response?.status === 403) {
+				forbidden('Bạn không có quyền truy cập vào chức năng này!');
+				return { status: 403, data: { message: error.response?.data?.message || 'Forbidden' } };
+			} else if (error.response?.status === 401) {
+				return { status: 401, data: { message: error.response?.data?.message || 'Unauthorized' } };
+			}
+			return {
+				status: error.response?.status,
+				data: { message: error.response?.data?.message || 'Lỗi không xác định' },
+			};
+		}
+		return { status: 500, data: { message: error.message || 'Lỗi kết nối đến máy chủ' } };
+	}
+};
+
 export const apiPut = async (url, body, customHeaders = {}) => {
 	try {
 		const authHeaders = getAuthHeader();

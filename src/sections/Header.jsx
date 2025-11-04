@@ -265,7 +265,7 @@ const Header = () => {
 											onClick={() => window.open('https://chat.irdop.org/', '_blank')}
 											className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
 										>
-											Chat AI
+											Chat
 										</button>
 										<button
 											onClick={() => handleNavigate('/processing')}

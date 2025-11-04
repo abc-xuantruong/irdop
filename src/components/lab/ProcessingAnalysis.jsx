@@ -1990,12 +1990,13 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		setIsSessionUpdating(true);
 
 		try {
-			// Prepare analyses array with id, resultValue, resultUnit, and protocolCode
+			// Prepare analyses array with id, resultValue, resultUnit, protocolCode, and protocolSource
 			const analyses = Array.from(pendingChanges.values()).map((change) => ({
 				id: change.id,
 				resultValue: change.resultValue,
 				resultUnit: change.resultUnit,
 				protocolCode: change.protocolCode,
+				protocolSource: change.protocolSource,
 			}));
 
 			// Send batch update API
@@ -2286,8 +2287,13 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 		// Close unit dropdown when switching cells
 		setShowUnitDropdown(false);
 
-		// Only apply session logic for result, unit, and protocolCode columns
-		if (column === 'resultValue' || column === 'resultUnit' || column === 'protocolCode') {
+		// Only apply session logic for result, unit, protocolCode, and protocolSource columns
+		if (
+			column === 'resultValue' ||
+			column === 'resultUnit' ||
+			column === 'protocolCode' ||
+			column === 'protocolSource'
+		) {
 			// If not in session, start session first
 			if (!isResultEntrySession) {
 				await startResultEntrySession();
@@ -2323,8 +2329,14 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 
 		// Only update if value changed
 		if (editValue !== strippedOriginal) {
-			// If in result entry session and editing result/unit/protocolCode columns, save to pending changes
-			if (isResultEntrySession && (column === 'resultValue' || column === 'resultUnit' || column === 'protocolCode')) {
+			// If in result entry session and editing result/unit/protocolCode/protocolSource columns, save to pending changes
+			if (
+				isResultEntrySession &&
+				(column === 'resultValue' ||
+					column === 'resultUnit' ||
+					column === 'protocolCode' ||
+					column === 'protocolSource')
+			) {
 				// Get existing pending changes for this analysis or create new with full record data
 				const existingChanges = pendingChanges.get(analysisId) || {
 					...originalAnalysis, // Include full record data
@@ -2335,6 +2347,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				if (column === 'protocolCode') {
 					// For protocolCode, save directly without HTML conversion
 					existingChanges.protocolCode = editValue;
+				} else if (column === 'protocolSource') {
+					// For protocolSource, save directly without HTML conversion
+					existingChanges.protocolSource = editValue;
 				} else {
 					// For resultValue and resultUnit, convert to HTML
 					const convertedValue = convertValueToHTML(editValue);
@@ -2352,8 +2367,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 				setData((prevData) =>
 					prevData.map((item) => {
 						if (item.id === analysisId) {
-							// For protocolCode, use editValue directly; for others, use convertedValue
-							const newValue = column === 'protocolCode' ? editValue : convertValueToHTML(editValue);
+							// For protocolCode and protocolSource, use editValue directly; for others, use convertedValue
+							const newValue =
+								column === 'protocolCode' || column === 'protocolSource' ? editValue : convertValueToHTML(editValue);
 							return { ...item, [column]: newValue };
 						}
 						return item;
@@ -2374,6 +2390,9 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 					if (column === 'protocolCode') {
 						// For protocolCode, send directly without HTML conversion
 						updateData.analysis.protocolCode = editValue;
+					} else if (column === 'protocolSource') {
+						// For protocolSource, send directly without HTML conversion
+						updateData.analysis.protocolSource = editValue;
 					} else {
 						// For resultValue and resultUnit, convert to HTML format before sending
 						const convertedValue = convertValueToHTML(editValue);
@@ -3747,9 +3766,33 @@ const ProcessingAnalysis = ({ onNavigateToLab }) => {
 																		<span className="text-left">{row.matrix || ''}</span>
 																	</div>
 																) : column === 'protocolSource' ? (
-																	<div className="relative text-left w-full p-1 rounded">
-																		<span className="text-left">{row.protocolSource || '--'}</span>
-																	</div>
+																	editingCell &&
+																	editingCell.analysisId === row.id &&
+																	editingCell.column === 'protocolSource' ? (
+																		<select
+																			value={editValue}
+																			onChange={(e) => setEditValue(e.target.value)}
+																			onBlur={() => handleCellBlur(row)}
+																			onKeyDown={handleKeyDown}
+																			autoFocus
+																			className="w-full px-2 py-1 border rounded bg-white"
+																			onClick={(e) => e.stopPropagation()}
+																		>
+																			<option value="">-- Chọn nguồn --</option>
+																			<option value="IRDOP">IRDOP</option>
+																			<option value="IRDOP VS">IRDOP VS</option>
+																			<option value="EX">EX</option>
+																		</select>
+																	) : (
+																		<div
+																			className="relative text-left w-full p-1 rounded cursor-pointer hover:bg-blue-50"
+																			onClick={() =>
+																				handleCellClick(row.id, 'protocolSource', row.protocolSource || '')
+																			}
+																		>
+																			<span className="text-left">{row.protocolSource || '--'}</span>
+																		</div>
+																	)
 																) : column === 'protocolCode' ? (
 																	editingCell &&
 																	editingCell.analysisId === row.id &&

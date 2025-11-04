@@ -74,7 +74,6 @@ const LabBulkUpdate = ({
 	technicians,
 	onApplyBulkChanges, // Callback to apply bulk changes to parent's pendingChanges
 	onStartSession, // Callback to start result entry session
-	onUpdateTableData, // Callback to update table display data
 }) => {
 	const [bulkEditValues, setBulkEditValues] = useState({});
 	const [editingField, setEditingField] = useState(null); // Track which field is being edited
@@ -286,19 +285,20 @@ const LabBulkUpdate = ({
 
 			const changeData = {
 				id: analysisId,
-				...currentAnalysis, // Include full record
+				// Chỉ chứa các field có thay đổi thực sự
 			};
 			let hasChanges = false;
 
 			// Apply each bulk edit value to this analysis
 			Object.keys(bulkEditValues).forEach((field) => {
 				const newValue = bulkEditValues[field];
-				const currentValue = currentAnalysis[field];
 
-				// Skip if no new value provided
+				// Skip if no new value provided or empty string (empty string means no change)
 				if (newValue === '' || newValue === null || newValue === undefined) {
 					return;
 				}
+
+				const currentValue = currentAnalysis[field];
 
 				// Special handling for HTML content fields
 				let normalizedCurrentValue = currentValue || '';
@@ -312,7 +312,7 @@ const LabBulkUpdate = ({
 					normalizedNewValue = cleanNew;
 				}
 
-				// Compare normalized values
+				// Only apply change if the normalized values are different
 				if (normalizedNewValue !== normalizedCurrentValue) {
 					changeData[field] = newValue;
 					hasChanges = true;
@@ -329,19 +329,15 @@ const LabBulkUpdate = ({
 			return;
 		}
 
+		// Start session if not already active
+		if (onStartSession) {
+			onStartSession();
+		}
+
 		// Apply bulk changes to parent component's pending changes (for session)
 		if (onApplyBulkChanges) {
 			onApplyBulkChanges(bulkChanges);
 		}
-
-		// Update table display data immediately
-		if (onUpdateTableData) {
-			onUpdateTableData(bulkChanges);
-		}
-
-		toast.success(
-			`Đã áp dụng thay đổi hàng loạt cho ${bulkChanges.length} chỉ tiêu. Thay đổi sẽ được lưu khi kết thúc phiên nhập liệu.`,
-		);
 
 		// Clear session storage after applying changes
 		sessionStorage.removeItem(BULK_UPDATE_SESSION_KEY);

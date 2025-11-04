@@ -9,6 +9,9 @@ import LabBulkUpdate from './LabBulkUpdate';
  */
 
 const ProcessingSampleV2 = ({ onNavigateToLab, filter = {} }) => {
+	// Get technicians from GlobalContext
+	const { technicians } = useContext(GlobalContext);
+
 	// Ref to track initial filter
 	const initialFilterRef = useRef(filter);
 	const filterableRef = useRef(null);
@@ -186,7 +189,7 @@ const ProcessingSampleV2 = ({ onNavigateToLab, filter = {} }) => {
 				}}
 				selectedRows={selectedAnalyses.map((item) => item.id)}
 				selectedData={selectedAnalyses}
-				technicians={[]}
+				technicians={technicians || []}
 				onApplyBulkChanges={(bulkChanges) => {
 					// Apply bulk changes via FilterableSample ref
 					if (filterableRef.current && filterableRef.current.applyBulkChanges) {
@@ -196,6 +199,12 @@ const ProcessingSampleV2 = ({ onNavigateToLab, filter = {} }) => {
 					// Close bulk edit modal and clear selections
 					setShowBulkEdit(false);
 					setSelectedAnalyses([]);
+				}}
+				onStartSession={() => {
+					// Start session if not already active
+					if (!isResultEntrySession) {
+						handleStartSession();
+					}
 				}}
 			/>
 		</div>

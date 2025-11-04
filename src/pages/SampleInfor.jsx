@@ -1731,8 +1731,26 @@ const SampleInfor = () => {
 				if (mappedSample.sampleInformation && mappedSample.sampleInformation.length > 0) {
 					const sampleInfo = mappedSample.sampleInformation || [];
 
+					// Process sampleInfo to handle custom fields
+					const processedSampleInfo = sampleInfo.map((field) => {
+						// Check if fname is not in default customer fields
+						const isCustomerDefault = defaultCustomerFields.some((defaultField) => defaultField.fname === field.fname);
+						// Check if fname is not in default receipt fields
+						const isReceiptDefault = defaultReceiptFields.some((defaultField) => defaultField.fname === field.fname);
+
+						// If fname is not in either default list, treat it as a custom field
+						if (!isCustomerDefault && !isReceiptDefault) {
+							return {
+								...field,
+								fname: 'Khác',
+								other: field.fname, // Store the custom name in 'other' field
+							};
+						}
+						return field;
+					});
+
 					// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
-					const receiptStartIndex = sampleInfo.findIndex(
+					const receiptStartIndex = processedSampleInfo.findIndex(
 						(item) => item.fname.includes('Ngày tiếp nhận') || item.fname.includes('receipt date'),
 					);
 
@@ -1741,11 +1759,11 @@ const SampleInfor = () => {
 
 					if (receiptStartIndex !== -1) {
 						// Split the array at the found index
-						customerInfoItems = sampleInfo.slice(0, receiptStartIndex);
-						receiptInfoItems = sampleInfo.slice(receiptStartIndex);
+						customerInfoItems = processedSampleInfo.slice(0, receiptStartIndex);
+						receiptInfoItems = processedSampleInfo.slice(receiptStartIndex);
 					} else {
 						// If no receipt marker found, all items go to customer info
-						customerInfoItems = sampleInfo;
+						customerInfoItems = processedSampleInfo;
 						receiptInfoItems = [];
 					}
 
@@ -2160,16 +2178,34 @@ const SampleInfor = () => {
 					(item) => item.fname && (item.fname.includes('Ngày tiếp nhận') || item.fname.includes('receipt date')),
 				);
 
+				// Process sampleInfo to handle custom fields
+				const processedSampleInfo = sampleInfo.map((field) => {
+					// Check if fname is not in default customer fields
+					const isCustomerDefault = defaultCustomerFields.some((defaultField) => defaultField.fname === field.fname);
+					// Check if fname is not in default receipt fields
+					const isReceiptDefault = defaultReceiptFields.some((defaultField) => defaultField.fname === field.fname);
+
+					// If fname is not in either default list, treat it as a custom field
+					if (!isCustomerDefault && !isReceiptDefault) {
+						return {
+							...field,
+							fname: 'Khác',
+							other: field.fname, // Store the custom name in 'other' field
+						};
+					}
+					return field;
+				});
+
 				let customerInfoItems = [];
 				let receiptInfoItems = [];
 
 				if (receiptStartIndex !== -1) {
 					// Split the array at the found index
-					customerInfoItems = sampleInfo.slice(0, receiptStartIndex);
-					receiptInfoItems = sampleInfo.slice(receiptStartIndex);
+					customerInfoItems = processedSampleInfo.slice(0, receiptStartIndex);
+					receiptInfoItems = processedSampleInfo.slice(receiptStartIndex);
 				} else {
 					// If no receipt marker found, all items go to customer info
-					customerInfoItems = sampleInfo;
+					customerInfoItems = processedSampleInfo;
 					receiptInfoItems = [];
 				}
 
@@ -2467,8 +2503,30 @@ const SampleInfor = () => {
 								if (currentSample && currentSample.sampleInformation) {
 									const sampleInfo = currentSample.sampleInformation || [];
 
+									// Process sampleInfo to handle custom fields
+									const processedSampleInfo = sampleInfo.map((field) => {
+										// Check if fname is not in default customer fields
+										const isCustomerDefault = defaultCustomerFields.some(
+											(defaultField) => defaultField.fname === field.fname,
+										);
+										// Check if fname is not in default receipt fields
+										const isReceiptDefault = defaultReceiptFields.some(
+											(defaultField) => defaultField.fname === field.fname,
+										);
+
+										// If fname is not in either default list, treat it as a custom field
+										if (!isCustomerDefault && !isReceiptDefault) {
+											return {
+												...field,
+												fname: 'Khác',
+												other: field.fname, // Store the custom name in 'other' field
+											};
+										}
+										return field;
+									});
+
 									// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
-									const receiptStartIndex = sampleInfo.findIndex(
+									const receiptStartIndex = processedSampleInfo.findIndex(
 										(item) => item.fname.includes('Ngày tiếp nhận') || item.fname.includes('receipt date'),
 									);
 
@@ -2477,11 +2535,11 @@ const SampleInfor = () => {
 
 									if (receiptStartIndex !== -1) {
 										// Split the array at the found index
-										customerInfoItems = sampleInfo.slice(0, receiptStartIndex);
-										receiptInfoItems = sampleInfo.slice(receiptStartIndex);
+										customerInfoItems = processedSampleInfo.slice(0, receiptStartIndex);
+										receiptInfoItems = processedSampleInfo.slice(receiptStartIndex);
 									} else {
 										// If no receipt marker found, all items go to customer info
-										customerInfoItems = sampleInfo;
+										customerInfoItems = processedSampleInfo;
 										receiptInfoItems = [];
 									}
 
