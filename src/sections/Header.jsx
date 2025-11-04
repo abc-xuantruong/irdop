@@ -137,7 +137,7 @@ const Header = () => {
 								rel="noopener noreferrer"
 								className="cursor-pointer md:text-md ml-4 text-md font-medium text-teritary hover:text-primary"
 							>
-								Chat AI
+								Chat
 							</a>
 							<Link
 								to={getLinkWithFilter('/processing')}
