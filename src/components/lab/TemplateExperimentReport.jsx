@@ -1746,7 +1746,9 @@ const TemplateExperimentReport = ({
 														>
 															<option value="">Trống</option>
 															<option value="sampleId">Mã mẫu</option>
-															<option value="id">Mã chỉ tiêu</option>
+															<option value="id" disabled>
+																Mã chỉ tiêu (không thể chọn)
+															</option>
 															<option value="parameterName">Tên chỉ tiêu</option>
 															<option value="protocolCode">Phương pháp thử</option>
 															<option value="resultValue">Kết quả</option>

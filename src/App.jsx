@@ -22,6 +22,7 @@ import FileInfor from './pages/FileInfor';
 import Editor from './components/lab/Editor';
 import AuthGuard from './components/AuthGuard';
 import ProcessingQueue from './components/noti box/ProcessingQueue';
+import ExtractedDataModal from './components/noti box/ExtractedDataModal';
 import AccountantDashboard from './pages/AccountantDashboard';
 import ProcessingSampleV2 from './components/lab/ProcessingSampleV2';
 import HandoverSampleDash from './pages/HandoverSampleDash';
@@ -34,6 +35,7 @@ const App = () => {
 			<Router>
 				<AuthGuard>
 					<ProcessingQueue />
+					<ExtractedDataModal />
 					<Routes>
 						{/* Fullscreen route without header/footer */}
 						{/* <Route path="/lab" element={<LabDashboard />} /> */}

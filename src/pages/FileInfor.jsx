@@ -1,6 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import Breadcrumb from '../components/Breadcrumb';
 import { GlobalContext } from '../contexts/GlobalContext';
+import { useTaskQueue } from '../contexts/TaskQueueContext';
 import { apiPost, apiGet } from '../contexts/helperFunctionCallAPI';
 import { toast, ToastContainer } from 'react-toastify';
 import {
@@ -18,9 +19,12 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import EmailForm from '../components/EmailForm';
+import FileDetail from '../components/file/FileDetail';
+import CopyDetail from '../components/file/CopyDetail';
 
 const FileInfor = () => {
 	const { setCurrentTitlePage, getIdenByUid, currentUser } = useContext(GlobalContext);
+	const { addTask, updateTask } = useTaskQueue();
 	const navigate = useNavigate();
 	const location = useLocation();
 	const [fileList, setFileList] = useState([]);
@@ -81,6 +85,12 @@ const FileInfor = () => {
 		body: '',
 		attachments: [],
 	});
+
+	// Extracted data related states
+	const [showExtractedDataModal, setShowExtractedDataModal] = useState(false);
+	const [extractedDataList, setExtractedDataList] = useState([]);
+	const [currentExtractedIndex, setCurrentExtractedIndex] = useState(0);
+	const [activeTab, setActiveTab] = useState('file'); // 'file' or 'docCopy'
 
 	// Add refs to prevent multiple API calls
 	const isLoadingRef = useRef(false);
@@ -174,6 +184,53 @@ const FileInfor = () => {
 			saveToLocalStorage(STORAGE_KEYS.SELECTED_USER_TAGS, selectedUserTags);
 		}
 	}, [selectedUserTags, initialized]);
+
+	// Listen for extracted data from ProcessingQueue
+	useEffect(() => {
+		const handleFileDataExtracted = () => {
+			console.log('🎯 FileInfor: fileDataExtracted event received');
+			const storedData = localStorage.getItem('extractedFileData');
+			console.log('📦 FileInfor: storedData from localStorage:', storedData);
+
+			if (storedData) {
+				try {
+					const { data, timestamp } = JSON.parse(storedData);
+					console.log('✅ FileInfor: Parsed data:', { data, timestamp });
+					console.log('⏰ FileInfor: Time difference:', Date.now() - timestamp, 'ms');
+
+					// Check if data is fresh (less than 5 seconds old)
+					if (Date.now() - timestamp < 5000) {
+						console.log('🚀 FileInfor: Opening modal with data');
+						setExtractedDataList(data);
+						setCurrentExtractedIndex(0);
+						setActiveTab('file');
+						setShowExtractedDataModal(true);
+						// Clear localStorage after reading
+						localStorage.removeItem('extractedFileData');
+					} else {
+						console.warn('⚠️ FileInfor: Data is too old, ignoring');
+					}
+				} catch (error) {
+					console.error('❌ FileInfor: Error parsing extracted file data:', error);
+				}
+			} else {
+				console.log('📭 FileInfor: No data in localStorage');
+			}
+		};
+
+		console.log('🔧 FileInfor: Setting up fileDataExtracted event listener');
+		// Add event listener
+		window.addEventListener('fileDataExtracted', handleFileDataExtracted);
+
+		// Check on mount in case there's already data
+		handleFileDataExtracted();
+
+		// Cleanup
+		return () => {
+			console.log('🧹 FileInfor: Cleaning up fileDataExtracted event listener');
+			window.removeEventListener('fileDataExtracted', handleFileDataExtracted);
+		};
+	}, []);
 
 	// Main effect to handle data fetching - ONLY ONE useEffect for data fetching
 	useEffect(() => {
@@ -1171,6 +1228,82 @@ const FileInfor = () => {
 		refreshCurrentData();
 	};
 
+	// Function to extract data for selected files
+	const handleExtractData = async () => {
+		if (selectedFiles.size === 0) {
+			toast.error('Vui lòng chọn file để trích xuất dữ liệu');
+			return;
+		}
+
+		const fileIds = Array.from(selectedFiles);
+		toast.info(`Đang trích xuất dữ liệu từ ${fileIds.length} file...`);
+
+		// Store all extracted data
+		const allExtractedData = [];
+
+		// Process each file
+		for (const fileId of fileIds) {
+			// Find file name for better task display
+			let fileName = 'Unknown';
+			const currentFiles = isTrashMode ? trashFiles : isSearchMode ? searchResults : fileList;
+			const fileRecord = currentFiles.find((f) => f.id === fileId);
+			if (fileRecord) {
+				fileName = fileRecord.originInfo?.fileName || `File ${fileId}`;
+			}
+
+			const taskId = addTask('extract', fileId, fileName, '', 'file');
+
+			try {
+				const response = await apiPost('https://red.irdop.org/v1/file/extract/data', {
+					fileIds: [fileId],
+				});
+				if (response.status === 200 || response.status === 201) {
+					updateTask(taskId, {
+						status: 'completed',
+						data: response.data,
+					});
+
+					// Store extracted data with metadata
+					if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+						allExtractedData.push({
+							fileId,
+							fileName,
+							data: response.data,
+							extractedAt: new Date().toISOString(),
+						});
+					}
+
+					toast.success(`Trích xuất thành công: ${fileName}`);
+				} else {
+					updateTask(taskId, {
+						status: 'failed',
+						error: 'Trích xuất thất bại',
+					});
+					toast.error(`Trích xuất thất bại: ${fileName}`);
+				}
+			} catch (err) {
+				console.error('Error extracting data:', fileName, err);
+				updateTask(taskId, {
+					status: 'failed',
+					error: err.message || 'Lỗi khi trích xuất dữ liệu',
+				});
+				toast.error(`Lỗi: ${fileName}`);
+			}
+		}
+
+		// Show extracted data modal if we have data
+		if (allExtractedData.length > 0) {
+			setExtractedDataList(allExtractedData);
+			setCurrentExtractedIndex(0);
+			setShowExtractedDataModal(true);
+		}
+
+		// Clear selection after processing
+		setSelectedFiles(new Set());
+		// Refresh data if needed
+		refreshCurrentData();
+	};
+
 	return (
 		<div className="w-full h-full relative">
 			<ToastContainer />
@@ -1343,6 +1476,21 @@ const FileInfor = () => {
 										{processing && <FaSync className="animate-spin" size={12} />}
 										{!processing && <FaSync size={12} />}
 										Gửi email ({selectedFiles.size})
+									</button>
+								)}
+								{showSelectColumn && (
+									<button
+										onClick={handleExtractData}
+										disabled={selectedFiles.size === 0 || processing}
+										className={`px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${
+											selectedFiles.size > 0 && !processing
+												? 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-500'
+												: 'bg-gray-300 text-gray-500 cursor-not-allowed'
+										}`}
+									>
+										{processing && <FaSync className="animate-spin" size={12} />}
+										{!processing && <FaSync size={12} />}
+										Soi file ({selectedFiles.size})
 									</button>
 								)}
 								<div className="flex items-center gap-1 whitespace-nowrap">
@@ -2142,6 +2290,106 @@ const FileInfor = () => {
 				totalEmails={emailList.length}
 				title="Phiếu Kết Quả Thử Nghiệm"
 			/>
+
+			{/* Extracted Data Modal */}
+			{showExtractedDataModal && extractedDataList.length > 0 && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg p-6 w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+						{/* Header */}
+						<div className="flex justify-between items-center mb-4 pb-4 border-b">
+							<div>
+								<h2 className="text-xl font-bold">Dữ liệu trích xuất</h2>
+								<p className="text-sm text-gray-600 mt-1">
+									File {currentExtractedIndex + 1}/{extractedDataList.length}:{' '}
+									{extractedDataList[currentExtractedIndex].fileName}
+								</p>
+							</div>
+							<button
+								onClick={() => {
+									setShowExtractedDataModal(false);
+									setExtractedDataList([]);
+									setCurrentExtractedIndex(0);
+									setActiveTab('file');
+								}}
+								className="text-gray-500 hover:text-gray-700"
+							>
+								<FaTimes size={24} />
+							</button>
+						</div>
+
+						{/* Tabs */}
+						<div className="flex gap-2 mb-4 border-b">
+							<button
+								onClick={() => setActiveTab('file')}
+								className={`px-4 py-2 font-semibold transition-colors ${
+									activeTab === 'file'
+										? 'text-blue-600 border-b-2 border-blue-600'
+										: 'text-gray-500 hover:text-gray-700'
+								}`}
+							>
+								File Record
+							</button>
+							<button
+								onClick={() => setActiveTab('docCopy')}
+								className={`px-4 py-2 font-semibold transition-colors ${
+									activeTab === 'docCopy'
+										? 'text-blue-600 border-b-2 border-blue-600'
+										: 'text-gray-500 hover:text-gray-700'
+								}`}
+							>
+								Doc Copy
+							</button>
+						</div>
+
+						{/* Content - Tab Display */}
+						<div className="flex-1 overflow-auto mb-4">
+							{(() => {
+								const currentData = extractedDataList[currentExtractedIndex].data;
+
+								// Data format: [{ fileRecord: {...}, docCopy: {...} }, ...]
+								// Get first item from array
+								const extractedItem = Array.isArray(currentData) && currentData.length > 0 ? currentData[0] : null;
+
+								if (!extractedItem) {
+									return <div className="text-center text-gray-500 py-8">Không có dữ liệu để hiển thị</div>;
+								}
+
+								if (activeTab === 'file') {
+									return <FileDetail fileData={extractedItem.fileRecord} />;
+								} else {
+									return <CopyDetail copyData={extractedItem.docCopy} />;
+								}
+							})()}
+						</div>
+
+						{/* Navigation and Actions */}
+						<div className="flex justify-between items-center pt-4 border-t">
+							<div className="flex gap-2">
+								<button
+									onClick={() => {
+										setCurrentExtractedIndex((prev) => Math.max(0, prev - 1));
+										setActiveTab('file'); // Reset to file tab when navigating
+									}}
+									disabled={currentExtractedIndex === 0}
+									className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									Trước
+								</button>
+								<button
+									onClick={() => {
+										setCurrentExtractedIndex((prev) => Math.min(extractedDataList.length - 1, prev + 1));
+										setActiveTab('file'); // Reset to file tab when navigating
+									}}
+									disabled={currentExtractedIndex === extractedDataList.length - 1}
+									className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									Sau
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };

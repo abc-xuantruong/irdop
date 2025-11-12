@@ -25,17 +25,31 @@ const FOOTER_HEIGHT = 40; // px (1 line of text + border)
  * Generate document fingerprint: DocRMYYMMDD + 4 random lowercase letters
  */
 const generateDocumentFingerprint = () => {
+	            const MONTH_MAP = {
+                1: "c",
+                2: "d",
+                3: "e",
+                4: "f",
+                5: "h",
+                6: "k",
+                7: "n",
+                8: "s",
+                9: "u",
+                10: "v",
+                11: "x",
+                12: "z",
+            };
 	const now = new Date();
 	const year = now.getFullYear().toString().slice(-2); // YY
-	const month = String(now.getMonth() + 1).padStart(2, '0'); // MM
-	const day = String(now.getDate()).padStart(2, '0'); // DD
+	const month = MONTH_MAP[now.getMonth() + 1]; // MM
 
 	// Generate 4 random lowercase letters
-	const randomChars = Array.from({ length: 4 }, () => String.fromCharCode(97 + Math.floor(Math.random() * 26))).join(
+	const randomChars = Array.from({ length: 5 }, () => String.fromCharCode(97 + Math.floor(Math.random() * 26))).join(
 		'',
 	);
 
-	return `DocRM${year}${month}${day}${randomChars}`;
+
+	return `DC${year}${month}${randomChars.toUpperCase()}`;
 };
 
 /**
@@ -622,7 +636,7 @@ export const generatePreviewHTML = (pages, config) => {
 	<div class="page-footer">
 		<div class="footer-info">
 			<div class="footer-fingerprint">
-				<strong>Mã xuất bản tài liệu / Document fingerprint:</strong> ${docFingerprint}
+				<strong>Mã xuất bản tài liệu / Copy Id:</strong> ${docFingerprint}
 				&nbsp;&nbsp;&nbsp;
 				<strong>Ngày tạo / Created at:</strong> ${createdAt}
 			</div>

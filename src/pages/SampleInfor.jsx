@@ -193,6 +193,18 @@ const SampleInfor = () => {
 	const [refreshTrigger, setRefreshTrigger] = useState(0);
 	const [isBulkDeadlineVisible, setIsBulkDeadlineVisible] = useState(false);
 	const [bulkDeadlineDate, setBulkDeadlineDate] = useState(new Date());
+	const [copySampleDropdownVisible, setCopySampleDropdownVisible] = useState(false);
+
+	// Add state for field selection dialog
+	const [isFieldSelectionVisible, setIsFieldSelectionVisible] = useState(false);
+	const [selectedFields, setSelectedFields] = useState({
+		parameterName: true, // Bắt buộc, luôn true
+		protocolCode: true,
+		protocolSource: true,
+		resultUnit: true,
+		scientificField: true,
+		technicianId: true,
+	});
 
 	// Add state for drag and drop functionality
 	const [customerInfoOrder, setCustomerInfoOrder] = useState([]);
@@ -773,9 +785,17 @@ const SampleInfor = () => {
 				const analyses = response.data.analysis.map((analysis) => {
 					// Tạo object mới không có resultValue và reviewedBy
 					const { resultValue, reviewedBy, result_value, reviewed_by, ...cleanAnalysis } = analysis;
+
+					// Kiểm tra xem parameterName đã tồn tại trong listAnalytes chưa
+					const isDuplicate = listAnalytes.some(
+						(existingAnalysis) =>
+							existingAnalysis.parameterName === (cleanAnalysis.parameterName || cleanAnalysis.parameter_name),
+					);
+
 					return {
 						...cleanAnalysis,
 						tempId: Math.random().toString(36).substr(2, 9),
+						isDuplicate: isDuplicate, // Đánh dấu nếu đã tồn tại
 						// Map snake_case to camelCase
 						createdAt: cleanAnalysis.createdAt || cleanAnalysis.created_at,
 						createdById: cleanAnalysis.createdById || cleanAnalysis.created_by_uid,
@@ -814,9 +834,21 @@ const SampleInfor = () => {
 					};
 				});
 
+				// Đếm số lượng chỉ tiêu trùng lặp
+				const duplicateCount = analyses.filter((a) => a.isDuplicate).length;
+
 				// Tự động thêm tất cả analysis vào selectedParameters
 				setSelectedParameters([...selectedParameters, ...analyses]);
-				showToast(`Đã thêm ${analyses.length} chỉ tiêu từ mẫu ${sampleUid}`);
+
+				// Hiển thị thông báo có thông tin về chỉ tiêu trùng lặp
+				if (duplicateCount > 0) {
+					showToast(
+						`Đã thêm ${analyses.length} chỉ tiêu từ mẫu ${sampleUid} (${duplicateCount} chỉ tiêu đã tồn tại)`,
+						'warning',
+					);
+				} else {
+					showToast(`Đã thêm ${analyses.length} chỉ tiêu từ mẫu ${sampleUid}`);
+				}
 				setSearchTerm(''); // Clear the search input field
 			} else {
 				showToast('Không tìm thấy mẫu với mã này', 'warning');
@@ -891,6 +923,68 @@ const SampleInfor = () => {
 		const updatedParameters = selectedParameters.filter((_, i) => i !== index);
 		setSelectedParameters(updatedParameters);
 	};
+
+	// Hàm hiển thị dialog chọn trường
+	const handleShowFieldSelection = () => {
+		if (selectedParameters.length === 0) {
+			showToast('Không có chỉ tiêu nào được chọn', 'warning');
+			return;
+		}
+		setIsFieldSelectionVisible(true);
+	};
+
+	// Hàm toggle checkbox trường
+	const handleFieldToggle = (fieldName) => {
+		if (fieldName === 'parameterName') return; // Không cho bỏ chọn tên chỉ tiêu
+		setSelectedFields((prev) => ({
+			...prev,
+			[fieldName]: !prev[fieldName],
+		}));
+	};
+
+	// Hàm để refetch dữ liệu sample
+	const refetchSampleData = async () => {
+		try {
+			console.log('Refetching sample data with sampleId:', sampleId);
+			const response = await apiPost('https://red.irdop.org/v1/sample/get/full', {
+				sampleId: sampleId,
+			});
+
+			// Process data with new camelCase structure
+			if (response.data && response.data.analyses) {
+				for (const analysis of response.data.analyses) {
+					// Adjust deadline for display (GMT+7) if exists
+					if (analysis.deadline) {
+						analysis.deadline = adjustTimezoneForDisplay(analysis.deadline);
+					}
+				}
+			}
+
+			// Map camelCase response to component state
+			const mappedSample = {
+				id: response.data.id,
+				sampleId: response.data.sampleId || response.data.sampleId,
+				sampleName: response.data.sampleName || response.data.sampleName,
+				sampleDescription: response.data.sampleDescription || response.data.sample_description,
+				matrix: response.data.matrix,
+				sampleInformation: response.data.sampleInformation || response.data.sample_information,
+				sampleVolume: response.data.sampleVolume || response.data.sample_volume,
+				additionalRequest: response.data.additionalRequest || response.data.additionalRequest,
+				status: response.data.status,
+				purpose: response.data.purpose,
+				analysis: response.data.analyses || [],
+			};
+
+			setSample(mappedSample);
+			setCurrentSample(mappedSample);
+			setListAnalytes(mappedSample.analysis);
+
+			console.log('Sample data refetched successfully');
+		} catch (error) {
+			console.error('Error refetching sample data:', error);
+		}
+	};
+
 	const handleConfirmAddParameter = async () => {
 		try {
 			if (selectedParameters.length === 0) {
@@ -898,91 +992,187 @@ const SampleInfor = () => {
 				return;
 			}
 
-			const parameters = selectedParameters.map((parameter) => {
-				const analysisData = {
-					receiptId: currentSample.receiptId,
-					sampleId: currentSample.id,
-					parameterId: parameter.parameterId || 0,
-					parameterName: parameter.parameterName,
-					_deprecated_parameterUid: parameter._deprecated_parameterUid || parameter.parameterUid || '', // Use deprecated field name
-					matrix: parameter.matrix || '', // Include matrix from sample analyses
-					scientificField: parameter.scientificField || '', // Include scientificField from sample analyses
-					displayStyle: parameter.displayStyle || [
-						{
-							label: 'default',
-							value: '',
-						},
-						{
-							label: 'eng',
-							value: '',
-						},
-					],
-					accrenditation: parameter.accrenditation,
-					protocolId: parameter.protocolId,
-					technicianId: parameter.technicianId || parameter.technicianUid,
-					deadline: parameter.deadline
-						? adjustDateForApiSubmission(new Date(parameter.deadline))
-						: adjustDateForApiSubmission(
-								new Date(Date.now() + (parameter?.tatExpected?.days * 24 * 60 * 60 * 1000 || 0)),
-						  ),
-					protocolCode: parameter.protocolCode,
-					resultUnit: parameter.defaultUnit || parameter.resultUnit,
-					protocolSource: parameter.protocolSource,
-					createdById: currentUser.identity_uid,
-					modifiedById: currentUser.identity_uid,
-				};
+			// Đóng dialog chọn trường
+			setIsFieldSelectionVisible(false);
 
-				// Only add resultValue if it exists and is not empty
-				if (parameter.resultValue && parameter.resultValue !== '') {
-					analysisData.resultValue = parameter.resultValue;
+			// Phân loại parameters thành 2 nhóm: cần update và cần create
+			const parametersToUpdate = [];
+			const parametersToCreate = [];
+
+			selectedParameters.forEach((parameter) => {
+				if (parameter.isDuplicate) {
+					// Tìm analysis đã tồn tại trong listAnalytes
+					const existingAnalysis = listAnalytes.find((analysis) => analysis.parameterName === parameter.parameterName);
+
+					if (existingAnalysis) {
+						// Chuẩn bị data để update - chỉ thêm các trường được chọn
+						const updateData = {
+							id: existingAnalysis.id,
+							sampleId: existingAnalysis.sampleId,
+							receiptId: existingAnalysis.receiptId,
+							modifiedByUid: currentUser.identity_uid,
+						};
+
+						// Thêm các trường theo selectedFields
+						if (selectedFields.scientificField) {
+							updateData.scientificField = parameter.scientificField || existingAnalysis.scientificField || '';
+						}
+						if (selectedFields.technicianId) {
+							updateData.technicianId =
+								parameter.technicianId || parameter.technicianUid || existingAnalysis.technicianId;
+						}
+						if (selectedFields.resultUnit) {
+							updateData.resultUnit = parameter.defaultUnit || parameter.resultUnit || existingAnalysis.resultUnit;
+						}
+						if (selectedFields.protocolCode) {
+							updateData.protocolCode = parameter.protocolCode || existingAnalysis.protocolCode;
+						}
+						if (selectedFields.protocolSource) {
+							updateData.protocolSource = parameter.protocolSource || existingAnalysis.protocolSource;
+						}
+
+						parametersToUpdate.push(updateData);
+					}
+				} else {
+					// Chuẩn bị data để create - luôn có parameterName, các trường khác theo selectedFields
+					const analysisData = {
+						receiptId: currentSample.receiptId,
+						sampleId: currentSample.id,
+						parameterId: parameter.parameterId || 0,
+						parameterName: parameter.parameterName, // Bắt buộc
+						_deprecated_parameterUid: parameter._deprecated_parameterUid || parameter.parameterUid || '',
+						matrix: parameter.matrix || '',
+						displayStyle: parameter.displayStyle || [
+							{
+								label: 'default',
+								value: '',
+							},
+							{
+								label: 'eng',
+								value: '',
+							},
+						],
+						accrenditation: parameter.accrenditation,
+						protocolId: parameter.protocolId,
+						deadline: parameter.deadline
+							? adjustDateForApiSubmission(new Date(parameter.deadline))
+							: adjustDateForApiSubmission(
+									new Date(Date.now() + (parameter?.tatExpected?.days * 24 * 60 * 60 * 1000 || 0)),
+							  ),
+						createdById: currentUser.identity_uid,
+						modifiedById: currentUser.identity_uid,
+					};
+
+					// Thêm các trường theo selectedFields
+					if (selectedFields.scientificField) {
+						analysisData.scientificField = parameter.scientificField || '';
+					}
+					if (selectedFields.technicianId) {
+						analysisData.technicianId = parameter.technicianId || parameter.technicianUid;
+					}
+					if (selectedFields.resultUnit) {
+						analysisData.resultUnit = parameter.defaultUnit || parameter.resultUnit;
+					}
+					if (selectedFields.protocolCode) {
+						analysisData.protocolCode = parameter.protocolCode;
+					}
+					if (selectedFields.protocolSource) {
+						analysisData.protocolSource = parameter.protocolSource;
+					}
+
+					// Only add resultValue if it exists and is not empty
+					if (parameter.resultValue && parameter.resultValue !== '') {
+						analysisData.resultValue = parameter.resultValue;
+					}
+
+					parametersToCreate.push(analysisData);
 				}
-
-				return analysisData;
 			});
 
-			// Use the new analysis/create API endpoint
-			const response = await apiPost('https://red.irdop.org/v1/analysis/create', {
-				analyses: parameters, // For multiple analyses
-			});
+			let updateCount = 0;
+			let createCount = 0;
+			let newAnalyses = [];
 
-			if (response.status === 200) {
-				showToast(`${response.data.length} chỉ tiêu được thêm thành công!`);
-				setIsAddingParameter(false);
-				setSelectedParameters([]);
-				setSampleAnalyses([]);
-				setSearchTerm('');
-				setIsLoadingSampleAnalyses(false);
-				setParameterList([]);
-				setIsLoadingParameters(false);
-				setCurrentPage(1);
-				setParameterPagination({
-					currentPage: 1,
-					itemsPerPage: 20,
-					totalItems: 0,
-					totalPages: 1,
+			// Gọi API update nếu có analyses cần update
+			if (parametersToUpdate.length > 0) {
+				const updateResponse = await apiPost('https://red.irdop.org/v1/analysis/update', {
+					analyses: parametersToUpdate,
 				});
 
-				// Update listAnalytes with the new analyses from the API response
-				setListAnalytes([...listAnalytes, ...response.data]);
-
-				// Also update currentSample to maintain consistency
-				setCurrentSample({
-					...currentSample,
-					analysis: [...currentSample.analysis, ...response.data],
-				});
-			} else {
-				Swal.fire({
-					icon: 'error',
-					title: 'Lỗi',
-					text: response.data?.message || 'Failed to add parameters.',
-				});
+				if (updateResponse.status === 200) {
+					updateCount = parametersToUpdate.length;
+					// Cập nhật listAnalytes với data mới từ response
+					const updatedAnalytes = listAnalytes.map((analysis) => {
+						const updated = updateResponse.data?.find((u) => u.id === analysis.id);
+						return updated || analysis;
+					});
+					setListAnalytes(updatedAnalytes);
+				} else {
+					throw new Error(updateResponse.data?.message || 'Lỗi khi cập nhật chỉ tiêu');
+				}
 			}
+
+			// Gọi API create nếu có analyses cần create
+			if (parametersToCreate.length > 0) {
+				const createResponse = await apiPost('https://red.irdop.org/v1/analysis/create', {
+					analyses: parametersToCreate,
+				});
+
+				if (createResponse.status === 200) {
+					createCount = createResponse.data.length;
+					newAnalyses = createResponse.data;
+					// Thêm analyses mới vào listAnalytes
+					setListAnalytes([...listAnalytes, ...newAnalyses]);
+					// Cập nhật currentSample
+					setCurrentSample({
+						...currentSample,
+						analysis: [...currentSample.analysis, ...newAnalyses],
+					});
+				} else {
+					throw new Error(createResponse.data?.message || 'Lỗi khi thêm chỉ tiêu mới');
+				}
+			}
+
+			// Hiển thị thông báo thành công
+			const messages = [];
+			if (updateCount > 0) messages.push(`${updateCount} chỉ tiêu được cập nhật`);
+			if (createCount > 0) messages.push(`${createCount} chỉ tiêu được thêm mới`);
+			showToast(messages.join(', ') + '!');
+
+			// Reset state
+			setIsAddingParameter(false);
+			setSelectedParameters([]);
+			setSampleAnalyses([]);
+			setSearchTerm('');
+			setIsLoadingSampleAnalyses(false);
+			setParameterList([]);
+			setIsLoadingParameters(false);
+			setCurrentPage(1);
+			setParameterPagination({
+				currentPage: 1,
+				itemsPerPage: 20,
+				totalItems: 0,
+				totalPages: 1,
+			});
+
+			// Gọi lại API để cập nhật dữ liệu hiển thị
+			await refetchSampleData();
+
+			// Reset selectedFields về mặc định
+			setSelectedFields({
+				parameterName: true,
+				protocolCode: true,
+				protocolSource: true,
+				resultUnit: true,
+				scientificField: true,
+				technicianId: true,
+			});
 		} catch (error) {
-			console.error('Error adding parameters:', error);
+			console.error('Error in handleConfirmAddParameter:', error);
 			Swal.fire({
 				icon: 'error',
 				title: 'Lỗi',
-				text: error.message || 'An error occurred while adding parameters.',
+				text: error.message || 'Đã xảy ra lỗi khi xử lý chỉ tiêu.',
 			});
 		}
 	};
@@ -1001,6 +1191,15 @@ const SampleInfor = () => {
 			itemsPerPage: 20,
 			totalItems: 0,
 			totalPages: 1,
+		});
+		// Reset selectedFields về mặc định
+		setSelectedFields({
+			parameterName: true,
+			protocolCode: true,
+			protocolSource: true,
+			resultUnit: true,
+			scientificField: true,
+			technicianId: true,
 		});
 	};
 
@@ -1033,6 +1232,19 @@ const SampleInfor = () => {
 	const handleCancelNewParameter = () => {
 		setIsAddingNewParameter(false);
 	};
+
+	// Add handler for copy parameter button
+	const handleCopyParameterClick = () => {
+		setCopySampleDropdownVisible(!copySampleDropdownVisible);
+	};
+
+	// Add handler for selecting a sample to copy from
+	const handleCopySampleSelect = async (selectedSampleId) => {
+		setCopySampleDropdownVisible(false);
+		// Call the existing function to fetch and add all parameters from the selected sample
+		await fetchSampleFullAndAddAll(selectedSampleId);
+	};
+
 	// These functions have been removed as they were related to updateParameterMode	// Helper function for updating analysis
 	const updateAnalysis = async (analysis) => {
 		try {
@@ -1328,7 +1540,7 @@ const SampleInfor = () => {
 				onClick={() => setIsAddingParameter(false)} // Close when clicking the overlay
 			>
 				<div
-					className="bg-white p-4 rounded-lg w-[90%] md:w-[70%] xl:w-[50%] h-3/5 max-w-[700px] min-h-[400px] max-h-[700px] relative"
+					className="bg-white p-4 rounded-lg w-[90%] md:w-[70%] xl:w-[50%] h-3/5 max-w-[800px] min-h-[400px] max-h-[700px] relative"
 					onClick={(e) => e.stopPropagation()} // Prevent clicks inside the modal from closing it
 				>
 					{/* Rest of the modal content stays the same */}
@@ -1508,7 +1720,9 @@ const SampleInfor = () => {
 							{selectedParameters.map((parameter, index) => (
 								<div
 									key={parameter.tempId || parameter.id || index}
-									className="p-1 border rounded mb-2 flex text-start items-center w-fit h-fit mr-1 max-w-68"
+									className={`p-1 border rounded mb-2 flex text-start items-center w-fit h-fit mr-1 max-w-68 ${
+										parameter.isDuplicate ? 'bg-yellow-100 border-yellow-400' : ''
+									}`}
 								>
 									<div>
 										<p className="text-xs font-medium w-full line-clamp-1">Nền mẫu: {parameter.matrix}</p>
@@ -1521,6 +1735,7 @@ const SampleInfor = () => {
 												} )`}</b>
 											)}
 											{parameter.tempId && <span className="text-blue-600 font-medium"> - Từ mẫu khác</span>}
+											{parameter.isDuplicate && <span className="text-orange-600 font-medium"> - ⚠️ Đã tồn tại</span>}
 										</p>
 									</div>
 
@@ -1531,21 +1746,147 @@ const SampleInfor = () => {
 							))}
 						</div>
 						<div className="flex justify-between items-center">
-							<div className="flex">
-								<button className="bg-white border-gray-300 p-2 rounded" onClick={handleAddNewParameter}>
+							<div className="flex gap-2 relative">
+								<button className="bg-white border border-gray-300 p-2 rounded" onClick={handleAddNewParameter}>
 									Thêm chỉ tiêu mới
 								</button>
+								<button
+									className="copy-parameter-button bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+									onClick={handleCopyParameterClick}
+								>
+									Copy chỉ tiêu
+								</button>
+
+								{/* Dropdown for sample selection */}
+								{copySampleDropdownVisible && listSampleByReceipt && listSampleByReceipt.length > 0 && (
+									<div className="copy-sample-dropdown-container absolute left-0 bottom-full mb-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto z-50 min-w-[200px]">
+										{listSampleByReceipt
+											.filter((sid) => sid !== sampleId) // Exclude current sample
+											.map((sid, index) => (
+												<div
+													key={index}
+													className="p-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+													onClick={() => handleCopySampleSelect(sid)}
+												>
+													<span className="text-sm font-medium">{sid}</span>
+												</div>
+											))}
+										{listSampleByReceipt.filter((sid) => sid !== sampleId).length === 0 && (
+											<div className="p-2 text-sm text-gray-500 text-center">
+												Không có mẫu khác trong phiếu tiếp nhận này
+											</div>
+										)}
+									</div>
+								)}
 							</div>
 
 							<div className="flex justify-end">
 								<button className="bg-gray-500 text-white p-2 rounded mr-2" onClick={handleCancelAddParameter}>
 									Hủy bỏ
 								</button>
-								<button className="bg-green-500 text-white p-2 rounded" onClick={handleConfirmAddParameter}>
+								<button className="bg-green-500 text-white p-2 rounded" onClick={handleShowFieldSelection}>
 									Xác nhận
 								</button>
 							</div>
 						</div>
+					</div>
+				</div>
+			</div>
+		);
+	};
+
+	// Render dialog chọn trường cần update/create
+	const renderFieldSelectionDialog = () => {
+		if (!isFieldSelectionVisible) return null;
+
+		return (
+			<div
+				className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50"
+				onClick={() => setIsFieldSelectionVisible(false)}
+			>
+				<div className="bg-white p-6 rounded-lg w-[500px] max-w-[90%] relative" onClick={(e) => e.stopPropagation()}>
+					<h2 className="text-xl font-semibold mb-4">Chọn trường cần cập nhật/tạo mới</h2>
+					<p className="text-sm text-gray-600 mb-4">
+						Chọn các trường bạn muốn cập nhật cho các chỉ tiêu đã tồn tại hoặc tạo mới cho các chỉ tiêu mới.
+					</p>
+
+					<div className="space-y-3 mb-6">
+						{/* Tên chỉ tiêu - bắt buộc */}
+						<label className="flex items-center cursor-not-allowed">
+							<input type="checkbox" checked={true} disabled className="mr-3 w-4 h-4" />
+							<span className="font-medium">Tên chỉ tiêu</span>
+							<span className="ml-2 text-xs text-red-600">(Bắt buộc)</span>
+						</label>
+
+						{/* Phương pháp - Protocol Code */}
+						<label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+							<input
+								type="checkbox"
+								checked={selectedFields.protocolCode}
+								onChange={() => handleFieldToggle('protocolCode')}
+								className="mr-3 w-4 h-4"
+							/>
+							<span>Mã phương pháp (Protocol Code)</span>
+						</label>
+
+						{/* Protocol Source */}
+						<label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+							<input
+								type="checkbox"
+								checked={selectedFields.protocolSource}
+								onChange={() => handleFieldToggle('protocolSource')}
+								className="mr-3 w-4 h-4"
+							/>
+							<span>Nguồn phương pháp (Protocol Source)</span>
+						</label>
+
+						{/* Đơn vị */}
+						<label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+							<input
+								type="checkbox"
+								checked={selectedFields.resultUnit}
+								onChange={() => handleFieldToggle('resultUnit')}
+								className="mr-3 w-4 h-4"
+							/>
+							<span>Đơn vị kết quả (Result Unit)</span>
+						</label>
+
+						{/* Lĩnh vực */}
+						<label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+							<input
+								type="checkbox"
+								checked={selectedFields.scientificField}
+								onChange={() => handleFieldToggle('scientificField')}
+								className="mr-3 w-4 h-4"
+							/>
+							<span>Lĩnh vực (Scientific Field)</span>
+						</label>
+
+						{/* Kiểm nghiệm viên */}
+						<label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+							<input
+								type="checkbox"
+								checked={selectedFields.technicianId}
+								onChange={() => handleFieldToggle('technicianId')}
+								className="mr-3 w-4 h-4"
+							/>
+							<span>Kiểm nghiệm viên (Technician)</span>
+						</label>
+					</div>
+
+					<div className="flex justify-end gap-2">
+						<button
+							className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+							onClick={() => setIsFieldSelectionVisible(false)}
+						>
+							Hủy
+						</button>
+						<button
+							className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+							onClick={handleConfirmAddParameter}
+						>
+							Xác nhận
+						</button>
 					</div>
 				</div>
 			</div>
@@ -2880,6 +3221,13 @@ const SampleInfor = () => {
 		}
 	};
 
+	// Add click outside handler for copy sample dropdown
+	const handleClickOutsideCopySampleDropdown = (event) => {
+		if (!event.target.closest('.copy-sample-dropdown-container') && !event.target.closest('.copy-parameter-button')) {
+			setCopySampleDropdownVisible(false);
+		}
+	};
+
 	useEffect(() => {
 		if (sampleDropdownVisible) {
 			document.addEventListener('mousedown', handleClickOutsideSampleDropdown);
@@ -2890,6 +3238,17 @@ const SampleInfor = () => {
 			document.removeEventListener('mousedown', handleClickOutsideSampleDropdown);
 		};
 	}, [sampleDropdownVisible]);
+
+	useEffect(() => {
+		if (copySampleDropdownVisible) {
+			document.addEventListener('mousedown', handleClickOutsideCopySampleDropdown);
+		} else {
+			document.removeEventListener('mousedown', handleClickOutsideCopySampleDropdown);
+		}
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutsideCopySampleDropdown);
+		};
+	}, [copySampleDropdownVisible]);
 	// Handler for selecting an item from the dropdown - no longer used for parameter name
 	const handleParameterNameSelect = (name) => {
 		if (editingParameterField !== null) {
@@ -4905,6 +5264,7 @@ const SampleInfor = () => {
 						</div>
 					</div>
 					{isAddingParameter && renderNewParameter()}
+					{renderFieldSelectionDialog()}
 				</div>
 
 				<div className="hover:overflow-auto overflow-hidden xl:pb-0 md:pb-2 hover:pb-0 pb-2 border-x xl:border-x-0">

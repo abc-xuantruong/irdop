@@ -143,14 +143,35 @@ const ReportEditor = () => {
 
 		try {
 			setLoading(true);
-			const receiptId = sampleIdToFetch.split('-')[0].replace('SP', 'TNM');
+			let receiptId = sampleIdToFetch.split('-')[0].replace('SP', 'TNM');
 
-			const receiptResponse = await apiPost('https://red.irdop.org/v1/receipt/get/full', {
+			let receiptResponse = await apiPost('https://red.irdop.org/v1/receipt/get/full', {
 				receiptId: receiptId,
 			});
 
-			if (receiptResponse.status !== 200) {
-				throw new Error(`Receipt API request failed with status ${receiptResponse.status}`);
+			// If receipt API fails, try to get receiptId from sample API
+			if (receiptResponse.status !== 200 || receiptResponse.data == null) {
+				console.warn('⚠️ Receipt API failed, trying to get receiptId from sample API');
+
+				const sampleResponse = await apiPost('https://red.irdop.org/v1/sample/get/full', {
+					sampleId: sampleIdToFetch,
+				});
+
+				if (sampleResponse.status === 200 && sampleResponse.data?.receiptId) {
+					receiptId = sampleResponse.data.receiptId;
+					console.log('✅ Got receiptId from sample API:', receiptId);
+
+					// Retry receipt API with correct receiptId
+					receiptResponse = await apiPost('https://red.irdop.org/v1/receipt/get/full', {
+						receiptId: receiptId,
+					});
+
+					if (receiptResponse.status !== 200) {
+						throw new Error(`Receipt API request failed with status ${receiptResponse.status}`);
+					}
+				} else {
+					throw new Error(`Failed to get receiptId from sample API`);
+				}
 			}
 
 			const receiptData = receiptResponse.data;
@@ -3170,37 +3191,49 @@ ${tableHTML}
 					</button>
 				</div>
 
-				{/* Analysis Table */}
+				{/* Receipt Note */}
+				{receiptData && receiptData.note && (
+					<div className="mt-6">
+						<h3 className="font-semibold mb-2 text-lg text-left">Ghi chú tiếp nhận mẫu</h3>
+						<div className="p-3 bg-gray-50 rounded-lg border border-gray-300">
+							<p className="text-sm whitespace-pre-wrap text-left">{receiptData.note}</p>
+						</div>
+					</div>
+				)}
+
+				{/* Sample Addition Request */}
+				{sampleData && sampleData.additionRequest && (
+					<div className="mt-6">
+						<h3 className="font-semibold mb-2 text-lg text-left">Ghi chú mẫu thử</h3>
+						<div className="p-3 bg-gray-50 rounded-lg border border-gray-300">
+							<p className="text-sm whitespace-pre-wrap text-left">{sampleData.additionRequest}</p>
+						</div>
+					</div>
+				)}
+
+				{/* Analysis List */}
 				{sampleData && sampleData.analysis && sampleData.analysis.length > 0 && (
 					<div className="mt-6">
-						<h3 className="font-semibold mb-3 text-lg">Danh sách phân tích</h3>
+						<h3 className="font-semibold mb-3 text-lg text-left">Danh sách chỉ tiêu</h3>
 						<div className="overflow-x-auto">
 							<table className="w-full text-sm border-collapse border border-gray-300">
 								<thead className="bg-gray-100">
 									<tr>
-										<th className="border border-gray-300 px-2 py-1 text-left">ID</th>
-										<th className="border border-gray-300 px-2 py-1 text-left">Parameter Name</th>
-										<th className="border border-gray-300 px-2 py-1 text-left">Matrix</th>
-										<th className="border border-gray-300 px-2 py-1 text-left">Protocol Source</th>
-										<th className="border border-gray-300 px-2 py-1 text-left">Protocol Code</th>
-										<th className="border border-gray-300 px-2 py-1 text-left">Result Value</th>
-										<th className="border border-gray-300 px-2 py-1 text-left">Result Unit</th>
-										<th className="border border-gray-300 px-2 py-1 text-left">Reference</th>
-										<th className="border border-gray-300 px-2 py-1 text-left">Note</th>
+										<th className="border border-gray-300 px-2 py-1 text-left">Tên chỉ tiêu</th>
+										<th className="border border-gray-300 px-2 py-1 text-left">Mã phương pháp</th>
+										<th className="border border-gray-300 px-2 py-1 text-left">Kết quả</th>
+										<th className="border border-gray-300 px-2 py-1 text-left">Đơn vị</th>
+										<th className="border border-gray-300 px-2 py-1 text-left">Ghi chú</th>
 									</tr>
 								</thead>
 								<tbody>
 									{sampleData.analysis.map((item, index) => (
 										<tr key={item.id || index} className="hover:bg-gray-50">
-											<td className="border border-gray-300 px-2 py-1">{item.id || '--'}</td>
-											<td className="border border-gray-300 px-2 py-1">{item.parameter_name || '--'}</td>
-											<td className="border border-gray-300 px-2 py-1">{item.matrix || '--'}</td>
-											<td className="border border-gray-300 px-2 py-1">{item.protocol_source || '--'}</td>
-											<td className="border border-gray-300 px-2 py-1">{item.protocol_code || '--'}</td>
-											<td className="border border-gray-300 px-2 py-1">{item.result_value || '--'}</td>
-											<td className="border border-gray-300 px-2 py-1">{item.result_unit || '--'}</td>
-											<td className="border border-gray-300 px-2 py-1">{item.reference || '--'}</td>
-											<td className="border border-gray-300 px-2 py-1">{item.note || '--'}</td>
+											<td className="border border-gray-300 px-2 py-1 text-left">{item.parameter_name || '--'}</td>
+											<td className="border border-gray-300 px-2 py-1 text-left">{item.protocol_code || '--'}</td>
+											<td className="border border-gray-300 px-2 py-1 text-left">{item.result_value || '--'}</td>
+											<td className="border border-gray-300 px-2 py-1 text-left">{item.result_unit || '--'}</td>
+											<td className="border border-gray-300 px-2 py-1 text-left">{item.note || '--'}</td>
 										</tr>
 									))}
 								</tbody>

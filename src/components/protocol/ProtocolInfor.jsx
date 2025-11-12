@@ -69,6 +69,38 @@ const ProtocolInfor = () => {
 		}
 	}, [location.state]);
 
+	// Listen for extracted data from ProcessingQueue
+	useEffect(() => {
+		const handleProtocolDataExtracted = () => {
+			const storedData = localStorage.getItem('extractedProtocolData');
+			if (storedData) {
+				try {
+					const { data, timestamp } = JSON.parse(storedData);
+					// Check if data is fresh (less than 5 seconds old)
+					if (Date.now() - timestamp < 5000) {
+						setSelectedProtocol(data);
+						setDetailModalVisible(true);
+						// Clear localStorage after reading
+						localStorage.removeItem('extractedProtocolData');
+					}
+				} catch (error) {
+					console.error('Error parsing extracted protocol data:', error);
+				}
+			}
+		};
+
+		// Add event listener
+		window.addEventListener('protocolDataExtracted', handleProtocolDataExtracted);
+
+		// Check on mount in case there's already data
+		handleProtocolDataExtracted();
+
+		// Cleanup
+		return () => {
+			window.removeEventListener('protocolDataExtracted', handleProtocolDataExtracted);
+		};
+	}, []);
+
 	useEffect(() => {
 		setCurrentTitlePage('Hồ sơ Phương pháp');
 
@@ -204,12 +236,11 @@ const ProtocolInfor = () => {
 
 		// Process each file
 		for (const file of filesToUpload) {
-			const taskId = addTask('upload', null, '', file.name);
+			const taskId = addTask('upload', null, '', file.name, 'protocol');
 
 			try {
 				const formData = new FormData();
 				formData.append('files', file);
-
 				const response = await apiPostFormData('https://red.irdop.org/v1/protocol/upload/file', formData);
 
 				if (response.status === 200 || response.status === 201) {
