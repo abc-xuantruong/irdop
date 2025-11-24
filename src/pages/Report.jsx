@@ -515,28 +515,27 @@ const ReportEditor = () => {
 
 				if (fieldName.includes('Ngày tiếp nhận')) {
 					return `
-			<div style="display: flex; margin-top: 8px;">
-				<div style="width: 27%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: top;">
-					<p style="font-weight:bold; margin-right: 4px;">${displayMainLabel}</p> ${engLabel}:
+			<div style="display: grid; grid-template-columns: 27% 23% 30% 20%; margin-top: 8px;">
+				<div style="font-size: 12px; line-height: 1.2; text-align: left;">
+					<p style="margin: 0;"><span style="font-weight:bold;">${displayMainLabel}</span>${engLabel}:</p>
 				</div>
-				<div style="width: 23%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;">
+				<div style="font-size: 12px; line-height: 1.2; text-align: left;">
 					<p style="margin: 0;">${fieldValue}</p>
 				</div>
-				<div style="width: 30%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: center;">
-					<p style="font-weight:bold; margin-right: 4px;">Thời gian lưu mẫu</p> / Storage time:
+				<div style="font-size: 12px; line-height: 1.2; text-align: left;">
+					<p style="margin: 0;"><span style="font-weight:bold;">Thời gian lưu mẫu</span> / Storage time:</p>
 				</div>
-				<div style="width: 19%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;">
+				<div style="font-size: 12px; line-height: 1.2; text-align: left;">
 					<p style="margin: 0;">Không có mẫu lưu</p>
 				</div>
 			</div>`;
 				}
-
 				return `
-			<div style="display: flex;">
-				<div style="width: 27%; font-size: 12px; line-height: 1.2; text-align: left; padding-right: 10px; display: flex; align-items: top;">
-					<p style="font-weight:bold; margin-right: 4px;">${displayMainLabel}</p> ${engLabel}:
+			<div style="display: grid; grid-template-columns: 27% 23% 30% 20%;">
+				<div style="font-size: 12px; line-height: 1.2; text-align: left;">
+					<p style="margin: 0;"><span style="font-weight:bold;">${displayMainLabel}</span>${engLabel}:</p>
 				</div>
-				<div style="width: 73%; font-size: 12px; line-height: 1.2; text-align: left; padding-left: 10px;">
+				<div style="grid-column: span 3; font-size: 12px; line-height: 1.2; text-align: left;">
 					<p style="margin: 0; ${mainLabel.toLowerCase().includes('tên mẫu') ? 'font-weight: bold;' : ''}">${fieldValue}</p>
 				</div>
 			</div>`;

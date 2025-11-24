@@ -23,6 +23,7 @@ import {
 	FaCheck,
 	FaSync,
 	FaLayerGroup,
+	FaSearch,
 } from 'react-icons/fa';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -796,6 +797,8 @@ const SampleInfor = () => {
 						...cleanAnalysis,
 						tempId: Math.random().toString(36).substr(2, 9),
 						isDuplicate: isDuplicate, // Đánh dấu nếu đã tồn tại
+						// Initialize params array
+						params: cleanAnalysis.params || [],
 						// Map snake_case to camelCase
 						createdAt: cleanAnalysis.createdAt || cleanAnalysis.created_at,
 						createdById: cleanAnalysis.createdById || cleanAnalysis.created_by_uid,
@@ -956,6 +959,10 @@ const SampleInfor = () => {
 					// Adjust deadline for display (GMT+7) if exists
 					if (analysis.deadline) {
 						analysis.deadline = adjustTimezoneForDisplay(analysis.deadline);
+					}
+					// Initialize params array if not exists
+					if (!analysis.params) {
+						analysis.params = [];
 					}
 				}
 			}
@@ -2031,6 +2038,10 @@ const SampleInfor = () => {
 						if (analysis.deadline) {
 							analysis.deadline = adjustTimezoneForDisplay(analysis.deadline);
 						}
+						// Initialize params array if not exists
+						if (!analysis.params) {
+							analysis.params = [];
+						}
 					}
 				}
 
@@ -2072,23 +2083,8 @@ const SampleInfor = () => {
 				if (mappedSample.sampleInformation && mappedSample.sampleInformation.length > 0) {
 					const sampleInfo = mappedSample.sampleInformation || [];
 
-					// Process sampleInfo to handle custom fields
-					const processedSampleInfo = sampleInfo.map((field) => {
-						// Check if fname is not in default customer fields
-						const isCustomerDefault = defaultCustomerFields.some((defaultField) => defaultField.fname === field.fname);
-						// Check if fname is not in default receipt fields
-						const isReceiptDefault = defaultReceiptFields.some((defaultField) => defaultField.fname === field.fname);
-
-						// If fname is not in either default list, treat it as a custom field
-						if (!isCustomerDefault && !isReceiptDefault) {
-							return {
-								...field,
-								fname: 'Khác',
-								other: field.fname, // Store the custom name in 'other' field
-							};
-						}
-						return field;
-					});
+					// Use sampleInfo directly without converting custom fields to 'Khác'
+					const processedSampleInfo = sampleInfo;
 
 					// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
 					const receiptStartIndex = processedSampleInfo.findIndex(
@@ -2519,23 +2515,8 @@ const SampleInfor = () => {
 					(item) => item.fname && (item.fname.includes('Ngày tiếp nhận') || item.fname.includes('receipt date')),
 				);
 
-				// Process sampleInfo to handle custom fields
-				const processedSampleInfo = sampleInfo.map((field) => {
-					// Check if fname is not in default customer fields
-					const isCustomerDefault = defaultCustomerFields.some((defaultField) => defaultField.fname === field.fname);
-					// Check if fname is not in default receipt fields
-					const isReceiptDefault = defaultReceiptFields.some((defaultField) => defaultField.fname === field.fname);
-
-					// If fname is not in either default list, treat it as a custom field
-					if (!isCustomerDefault && !isReceiptDefault) {
-						return {
-							...field,
-							fname: 'Khác',
-							other: field.fname, // Store the custom name in 'other' field
-						};
-					}
-					return field;
-				});
+				// Use sampleInfo directly without converting custom fields to 'Khác'
+				const processedSampleInfo = sampleInfo;
 
 				let customerInfoItems = [];
 				let receiptInfoItems = [];
@@ -2844,27 +2825,8 @@ const SampleInfor = () => {
 								if (currentSample && currentSample.sampleInformation) {
 									const sampleInfo = currentSample.sampleInformation || [];
 
-									// Process sampleInfo to handle custom fields
-									const processedSampleInfo = sampleInfo.map((field) => {
-										// Check if fname is not in default customer fields
-										const isCustomerDefault = defaultCustomerFields.some(
-											(defaultField) => defaultField.fname === field.fname,
-										);
-										// Check if fname is not in default receipt fields
-										const isReceiptDefault = defaultReceiptFields.some(
-											(defaultField) => defaultField.fname === field.fname,
-										);
-
-										// If fname is not in either default list, treat it as a custom field
-										if (!isCustomerDefault && !isReceiptDefault) {
-											return {
-												...field,
-												fname: 'Khác',
-												other: field.fname, // Store the custom name in 'other' field
-											};
-										}
-										return field;
-									});
+									// Use sampleInfo directly without converting custom fields to 'Khác'
+									const processedSampleInfo = sampleInfo;
 
 									// Find the index of the first object that contains 'Ngày tiếp nhận' or 'receipt date' in fname
 									const receiptStartIndex = processedSampleInfo.findIndex(
@@ -3294,7 +3256,7 @@ const SampleInfor = () => {
 		// Remove dropdown functionality
 		const updatedAnalytes = listAnalytes.map((item) => {
 			if (item.id === index) {
-				return { ...item, parameterName: newValue, parameterId: 0 };
+				return { ...item, parameterName: newValue, parameterId: 0, fromParams: false };
 			}
 			return item;
 		});
@@ -3544,6 +3506,126 @@ const SampleInfor = () => {
 			});
 		}
 	};
+
+	// Params handling functions
+	const handleParamsChange = async (analysisId, selectedParamId) => {
+		const updatedAnalytes = listAnalytes.map((item) => {
+			if (item.id === analysisId) {
+				// If "Mặc định" is selected, restore original values
+				if (selectedParamId === '__default__') {
+					return {
+						...item,
+						parameterName: item.originalName || item.parameterName,
+						parameterId: item.originalParameterId || item.parameterId,
+						fromParams: false,
+					};
+				}
+
+				// Find the selected param
+				const selectedParam = item.params?.find((p) => p.id === selectedParamId);
+				if (selectedParam) {
+					// Store original values if not already stored
+					if (!item.originalName) {
+						item.originalName = item.parameterName;
+						item.originalParameterId = item.parameterId;
+					}
+
+					return {
+						...item,
+						parameterName: selectedParam.parameterName,
+						parameterId: selectedParam.id,
+						fromParams: true,
+					};
+				}
+			}
+			return item;
+		});
+
+		setListAnalytes(updatedAnalytes);
+
+		// Save to backend if not selecting default
+		if (selectedParamId !== '__default__') {
+			try {
+				const analysis = updatedAnalytes.find((item) => item.id === analysisId);
+				const updateData = {
+					id: analysis.id,
+					parameterName: analysis.parameterName,
+					parameterId: analysis.parameterId,
+				};
+
+				const response = await apiPost('https://red.irdop.org/v1/analysis/update', {
+					analysis: updateData,
+				});
+
+				if (response.status !== 200) {
+					Swal.fire({
+						icon: 'error',
+						title: 'Lỗi',
+						text: response.data?.message || 'Có lỗi xảy ra khi cập nhật chỉ tiêu',
+					});
+				}
+			} catch (error) {
+				console.error('Error updating parameter from params:', error);
+			}
+		}
+	};
+
+	const handleParamsSearch = async (analysisId, parameterName) => {
+		if (!parameterName || parameterName.trim() === '') {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Cảnh báo',
+				text: 'Vui lòng nhập tên chỉ tiêu để tìm kiếm',
+			});
+			return;
+		}
+
+		try {
+			const response = await apiPost('https://red.irdop.org/v1/parameter/get/search_by_name', {
+				parameterName: parameterName.trim(),
+			});
+
+			if (response.status === 200 && response.data && response.data.length > 0) {
+				// Update the params array for this analysis
+				const updatedAnalytes = listAnalytes.map((item) => {
+					if (item.id === analysisId) {
+						return {
+							...item,
+							params: response.data,
+						};
+					}
+					return item;
+				});
+				setListAnalytes(updatedAnalytes);
+
+				// Auto-select the first result if available
+				if (response.data[0]) {
+					await handleParamsChange(analysisId, response.data[0].id);
+				}
+
+				Swal.fire({
+					icon: 'success',
+					title: 'Thành công',
+					text: `Tìm thấy ${response.data.length} kết quả`,
+					timer: 1500,
+				});
+			} else {
+				Swal.fire({
+					icon: 'info',
+					title: 'Không tìm thấy',
+					text: 'Không tìm thấy chỉ tiêu phù hợp',
+				});
+			}
+		} catch (error) {
+			console.error('Error searching params:', error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Lỗi',
+				text: 'Có lỗi xảy ra khi tìm kiếm chỉ tiêu',
+			});
+		}
+	};
+
 	// Add handlers for external lab info
 	const [editingExNameField, setEditingExNameField] = useState(null);
 	const [editingExDateField, setEditingExDateField] = useState(null);
@@ -5271,6 +5353,7 @@ const SampleInfor = () => {
 					<table className="text-black w-full border-2 analytes-table">
 						<thead>
 							<tr className="border-y-2">
+								<th className="p-2 border-x w-[20%] min-w-48 text-left">Gợi ý</th>
 								<th className="p-2 border-x w-[24%] min-w-60 text-left">Chỉ tiêu</th>
 								<th className="p-2 border-x w-32 min-w-32 text-left">Nền mẫu</th>
 								<th className="p-2 border-x w-[25%] min-w-44 text-left">Phương pháp</th>
@@ -5293,6 +5376,10 @@ const SampleInfor = () => {
 						<tbody>
 							{isAddingNewParameter && (
 								<tr className="border bg-blue-50">
+									<td className="p-1 border relative">
+										{/* Gợi ý - không nhập khi tạo mới */}
+										<div className="p-1 text-gray-400 italic text-center">--</div>
+									</td>
 									<td className="p-1 border relative">
 										<input
 											type="text"
@@ -5386,7 +5473,33 @@ const SampleInfor = () => {
 							)}
 							{listAnalytes?.map((order) => (
 								<tr key={order.id} className="border">
-									{' '}
+									{/* Gợi ý (Params) Column */}
+									<td className="p-1 border relative align-top">
+										<div className="flex items-center gap-0.5">
+											<select
+												className={`flex-1 p-1 border rounded text-sm focus:outline-none ${
+													order.fromParams ? 'bg-blue-50 border-blue-300' : 'bg-white'
+												}`}
+												value={order.fromParams && order.parameterId ? order.parameterId : ''}
+												onChange={(e) => handleParamsChange(order.id, e.target.value)}
+											>
+												<option value="">--</option>
+												{order.originalName && <option value="__default__">Mặc định</option>}
+												{order.params?.map((param) => (
+													<option key={param.id} value={param.id}>
+														{param.parameterName}
+													</option>
+												))}
+											</select>
+											<button
+												className="p-1 border rounded hover:bg-gray-100"
+												onClick={() => handleParamsSearch(order.id, order.parameterName)}
+												title="Tìm kiếm chỉ tiêu"
+											>
+												<FaSearch size={12} />
+											</button>
+										</div>
+									</td>{' '}
 									<td className="p-1 border relative align-top">
 										<div className="relative w-full">
 											{order.accreditation && (

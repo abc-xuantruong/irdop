@@ -48,9 +48,7 @@ const CreateReceiptFromCRM = () => {
 		field: null,
 	});
 	const [editAnalysisValue, setEditAnalysisValue] = useState('');
-	// Define options for select fields
-	const sourceOptions = ['--', 'IRDOP', 'IRDOP VS', 'EX'];
-	const fieldOptions = ['--', 'Hóa Lý', 'Vi sinh']; // Add states for sample information editing
+	// Add states for sample information editing
 	const [editingSampleInfo, setEditingSampleInfo] = useState({
 		sampleIndex: null,
 		isEditing: false,
@@ -303,6 +301,7 @@ const CreateReceiptFromCRM = () => {
 						sampleName: sample.sampleName,
 						matrix: sample.matrix || '',
 						sampleInformation: sample.sampleInformation || [],
+						params: sample.params || [], // Add params array
 						analysis: (sample.analysis || sample.analyses || []).map((analysis) => ({
 							parameterName: analysis.parameterName,
 							protocolCode: analysis.protocolCode || '',
@@ -1163,6 +1162,12 @@ const CreateReceiptFromCRM = () => {
 					...updatedSamples[sampleIndex].analysis[analysisIndex],
 					[field]: editAnalysisValue,
 				};
+
+				// If editing parameterName manually, remove fromParams flag and selectedParamId
+				if (field === 'parameterName') {
+					delete updatedSamples[sampleIndex].analysis[analysisIndex].fromParams;
+					delete updatedSamples[sampleIndex].analysis[analysisIndex].selectedParamId;
+				}
 			}
 
 			setCrmData({
@@ -1357,17 +1362,17 @@ const CreateReceiptFromCRM = () => {
 
 			// If user selects 'Khác', prepare for other input
 			if (value === 'Khác') {
-				updatedCustomerInfo[sampleIndex][fieldIndex].other = '';
+				updatedCustomerInfo[sampleIndex][fieldIndex].other = updatedCustomerInfo[sampleIndex][fieldIndex].other || '';
 			} else {
-				// Remove 'other' field if it exists
+				// Remove 'other' field if it exists when user selects a default field
 				delete updatedCustomerInfo[sampleIndex][fieldIndex].other;
 			}
 		} else if (field === 'other') {
-			// When user types in the "other" input, update both 'other' and 'fname' fields
+			// When user types in the "other" input, only update the 'other' field
+			// Keep fname as 'Khác' so the dropdown shows correctly
 			updatedCustomerInfo[sampleIndex][fieldIndex] = {
 				...updatedCustomerInfo[sampleIndex][fieldIndex],
 				other: value,
-				fname: value, // Set fname to the custom value entered by user
 			};
 		} else {
 			updatedCustomerInfo[sampleIndex][fieldIndex] = {
@@ -1500,6 +1505,7 @@ const CreateReceiptFromCRM = () => {
 						sampleName: sample.sampleName,
 						matrix: sample.matrix || '',
 						sampleInformation: sample.sampleInformation || [],
+						params: sample.params || [], // Add params array
 						analysis: (sample.analysis || sample.analyses || []).map((analysis) => ({
 							parameterName: analysis.parameterName,
 							protocolCode: analysis.protocolCode || '',
@@ -2301,98 +2307,133 @@ const CreateReceiptFromCRM = () => {
 																										: field.fvalue,
 																						  }))
 																						: [])
-																				).map((field, fieldIndex) => (
-																					<div key={fieldIndex} className="mb-1 w-full px-2">
-																						<table className="w-full">
-																							<tbody>
-																								<tr>
-																									<td className="w-1/3 text-start p-1 font-medium min-w-32 flex justify-between items-center">
-																										{' '}
-																										<select
-																											value={
-																												defaultCustomerFields.some(
-																													(item) => item.fname === field?.fname,
-																												)
-																													? field.fname
-																													: field?.other
-																													? 'Khác'
-																													: field?.fname || ''
-																											}
-																											onChange={(e) =>
-																												handleCustomerFieldChange(
-																													index,
-																													fieldIndex,
-																													'fname',
-																													e.target.value,
-																												)
-																											}
-																											className={`p-1 ${
-																												field.fname === 'Khác' ||
-																												(field?.other &&
-																													!defaultCustomerFields.some(
-																														(item) => item.fname === field?.fname,
-																													))
-																													? 'w-1/2 mr-1'
-																													: 'w-full'
-																											} border min-w-16 rounded-md bg-white text-xs`}
-																										>
-																											<option value="">Chọn thông tin</option>
-																											{defaultCustomerFields.map((selectField) => (
-																												<option key={selectField.fname} value={selectField.fname}>
-																													{selectField.fname}
-																												</option>
-																											))}
-																											<option value="Khác">Khác</option>
-																										</select>
-																										{(field.fname === 'Khác' ||
-																											(field?.other &&
-																												!defaultCustomerFields.some(
-																													(item) => item.fname === field?.fname,
-																												))) && (
+																				).map((field, fieldIndex) => {
+																					// Check if this is a default field or a custom field
+																					const isDefaultField = defaultCustomerFields.some(
+																						(item) => item.fname === field?.fname,
+																					);
+																					const isKhacWithOther = field.fname === 'Khác' && field?.other;
+
+																					return (
+																						<div key={fieldIndex} className="mb-1 w-full px-2">
+																							<table className="w-full">
+																								<tbody>
+																									<tr>
+																										<td className="w-1/3 text-start p-1 font-medium min-w-32 flex justify-between items-center">
+																											{isDefaultField || isKhacWithOther ? (
+																												<>
+																													<select
+																														value={
+																															isDefaultField
+																																? field.fname
+																																: isKhacWithOther
+																																? 'Khác'
+																																: ''
+																														}
+																														onChange={(e) =>
+																															handleCustomerFieldChange(
+																																index,
+																																fieldIndex,
+																																'fname',
+																																e.target.value,
+																															)
+																														}
+																														className={`p-1 ${
+																															isKhacWithOther ? 'w-1/2 mr-1' : 'w-full'
+																														} border min-w-16 rounded-md bg-white text-xs`}
+																													>
+																														<option value="">Chọn thông tin</option>
+																														{defaultCustomerFields.map((selectField) => (
+																															<option key={selectField.fname} value={selectField.fname}>
+																																{selectField.fname}
+																															</option>
+																														))}
+																														<option value="Khác">Khác</option>
+																													</select>
+																													{isKhacWithOther && (
+																														<input
+																															type="text"
+																															value={field?.other || ''}
+																															onChange={(e) =>
+																																handleCustomerFieldChange(
+																																	index,
+																																	fieldIndex,
+																																	'other',
+																																	e.target.value,
+																																)
+																															}
+																															className="p-1 w-full border rounded-md bg-white text-xs"
+																															placeholder="Nhập tên khác"
+																														/>
+																													)}
+																												</>
+																											) : (
+																												<div className="flex items-center w-full">
+																													<input
+																														type="text"
+																														value={field?.fname || ''}
+																														onChange={(e) =>
+																															handleCustomerFieldChange(
+																																index,
+																																fieldIndex,
+																																'fname',
+																																e.target.value,
+																															)
+																														}
+																														className="p-1 flex-1 border rounded-md bg-white text-xs mr-1"
+																														placeholder="Tên trường tùy chỉnh"
+																													/>
+																													<button
+																														onClick={() => {
+																															// Convert custom field to dropdown mode
+																															const updatedCustomerInfo = { ...customerInfo };
+																															if (!updatedCustomerInfo[index]) {
+																																updatedCustomerInfo[index] = [];
+																															}
+																															updatedCustomerInfo[index][fieldIndex] = {
+																																...updatedCustomerInfo[index][fieldIndex],
+																																fname: 'Khác',
+																																other: field?.fname || '',
+																															};
+																															setCustomerInfo(updatedCustomerInfo);
+																														}}
+																														className="p-1 border rounded-md bg-blue-50 hover:bg-blue-100 text-xs whitespace-nowrap"
+																														title="Chuyển sang dropdown"
+																													>
+																														⇄
+																													</button>
+																												</div>
+																											)}
+																										</td>
+																										<td className="w-full text-start p-1">
 																											<input
 																												type="text"
-																												value={field?.other || ''}
+																												value={field?.fvalue || ''}
 																												onChange={(e) =>
 																													handleCustomerFieldChange(
 																														index,
 																														fieldIndex,
-																														'other',
+																														'fvalue',
 																														e.target.value,
 																													)
 																												}
 																												className="p-1 w-full border rounded-md bg-white text-xs"
-																												placeholder="Nhập tên khác"
 																											/>
-																										)}
-																									</td>
-																									<td className="w-full text-start p-1">
-																										<input
-																											type="text"
-																											value={field?.fvalue || ''}
-																											onChange={(e) =>
-																												handleCustomerFieldChange(
-																													index,
-																													fieldIndex,
-																													'fvalue',
-																													e.target.value,
-																												)
-																											}
-																											className="p-1 w-full border rounded-md bg-white text-xs"
-																										/>
-																									</td>
-																									<td>
-																										<button
-																											className="text-red-200 hover:text-red-500 bg-white text-sm rounded-lg py-0 px-1 focus:outline-none"
-																											onClick={() => handleDeleteCustomerField(index, fieldIndex)}
-																										>
-																											✕
-																										</button>
-																									</td>
-																								</tr>
-																							</tbody>
-																						</table>
-																					</div>
-																				))}
+																										</td>
+																										<td>
+																											<button
+																												className="text-red-200 hover:text-red-500 bg-white text-sm rounded-lg py-0 px-1 focus:outline-none"
+																												onClick={() => handleDeleteCustomerField(index, fieldIndex)}
+																											>
+																												✕
+																											</button>
+																										</td>
+																									</tr>
+																								</tbody>
+																							</table>
+																						</div>
+																					);
+																				})}
 																			</div>
 																		</div>
 																	</div>
@@ -2403,11 +2444,10 @@ const CreateReceiptFromCRM = () => {
 															<table className="w-full">
 																<thead>
 																	<tr className="border-b-2 text-gray-500">
-																		<th className="p-1 text-start">Mã</th>
+																		<th className="p-1 text-start">Gợi ý</th>
 																		<th className="p-1 text-start">Chỉ tiêu</th>
 																		<th className="p-1 text-start">Nguồn</th>
 																		<th className="p-1 text-start">Mã Phương pháp</th>
-																		<th className="p-1 text-start">Lĩnh vực</th>
 																		<th className="p-1 text-start">Đơn vị</th>
 																		<th className="p-1 text-start w-10">Xóa</th>
 																	</tr>
@@ -2415,25 +2455,78 @@ const CreateReceiptFromCRM = () => {
 																<tbody>
 																	{sample.analysis.map((item, idx) => (
 																		<tr key={idx} className="border-b">
-																			<td className="p-1 text-start">{item.parameterId}</td>
-																			<td className="p-1 text-start">{item.parameterName}</td>{' '}
+																			<td className="p-1 text-start w-24">
+																				{sample.params && sample.params.length > 0 ? (
+																					<select
+																						value={item.selectedParamId || ''}
+																						onChange={(e) => {
+																							const selectedParam = sample.params.find(
+																								(p) => p.paramId === e.target.value,
+																							);
+																							if (selectedParam) {
+																								const updatedCrmData = { ...crmData };
+																								updatedCrmData.samples[index].analysis[idx] = {
+																									...updatedCrmData.samples[index].analysis[idx],
+																									parameterName: selectedParam.paramName,
+																									selectedParamId: selectedParam.paramId,
+																									fromParams: true,
+																								};
+																								setCrmData(updatedCrmData);
+																							}
+																						}}
+																						className="w-full border p-0.5 rounded bg-white text-xs"
+																					>
+																						<option value="">--</option>
+																						{sample.params.map((param) => (
+																							<option key={param.paramId} value={param.paramId}>
+																								{param.paramId}
+																							</option>
+																						))}
+																					</select>
+																				) : (
+																					<span className="text-gray-400 text-xs">--</span>
+																				)}
+																			</td>
+																			<td className="p-1 text-start">
+																				{editingAnalysis.sampleIndex === index &&
+																				editingAnalysis.analysisIndex === idx &&
+																				editingAnalysis.field === 'parameterName' ? (
+																					<input
+																						type="text"
+																						value={editAnalysisValue}
+																						onChange={handleAnalysisEditChange}
+																						onKeyDown={handleAnalysisKeyDown}
+																						onBlur={saveAnalysisEdit}
+																						autoFocus
+																						className="w-full border p-1 rounded bg-white"
+																					/>
+																				) : (
+																					<span
+																						className={`cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full ${
+																							item.fromParams ? 'text-blue-600 font-medium' : 'text-gray-700'
+																						}`}
+																						onClick={() =>
+																							startEditingAnalysis(index, idx, 'parameterName', item.parameterName)
+																						}
+																						title="Nhấn để chỉnh sửa"
+																					>
+																						{item.parameterName || '--'}
+																					</span>
+																				)}
+																			</td>
 																			<td className="p-1 text-start w-28">
 																				{editingAnalysis.sampleIndex === index &&
 																				editingAnalysis.analysisIndex === idx &&
 																				editingAnalysis.field === 'protocolSource' ? (
-																					<select
+																					<input
+																						type="text"
 																						value={editAnalysisValue}
 																						onChange={handleAnalysisEditChange}
+																						onKeyDown={handleAnalysisKeyDown}
 																						onBlur={saveAnalysisEdit}
 																						autoFocus
-																						className="w-24 border p-0.5 rounded bg-white"
-																					>
-																						{sourceOptions.map((option, i) => (
-																							<option key={i} value={option === '--' ? '' : option}>
-																								{option}
-																							</option>
-																						))}
-																					</select>
+																						className="w-full border p-1 rounded bg-white"
+																					/>
 																				) : (
 																					<span
 																						className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
@@ -2442,7 +2535,7 @@ const CreateReceiptFromCRM = () => {
 																						}
 																						title="Nhấn để chỉnh sửa"
 																					>
-																						{item.protocolSource || '--'}
+																						{item.protocolSource || 'IRDOP'}
 																					</span>
 																				)}
 																			</td>
@@ -2531,35 +2624,6 @@ const CreateReceiptFromCRM = () => {
 																							)}
 																						</div>
 																					</>
-																				)}
-																			</td>
-																			<td className="p-1 text-start w-24">
-																				{editingAnalysis.sampleIndex === index &&
-																				editingAnalysis.analysisIndex === idx &&
-																				editingAnalysis.field === 'scientificField' ? (
-																					<select
-																						value={editAnalysisValue}
-																						onChange={handleAnalysisEditChange}
-																						onBlur={saveAnalysisEdit}
-																						autoFocus
-																						className="max-w-20 border p-0.5 rounded bg-white"
-																					>
-																						{fieldOptions.map((option, i) => (
-																							<option key={i} value={option === '--' ? '' : option}>
-																								{option}
-																							</option>
-																						))}
-																					</select>
-																				) : (
-																					<span
-																						className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
-																						onClick={() =>
-																							startEditingAnalysis(index, idx, 'scientificField', item.scientificField)
-																						}
-																						title="Nhấn để chỉnh sửa"
-																					>
-																						{item.scientificField || '--'}
-																					</span>
 																				)}
 																			</td>
 																			<td className="p-1 text-start w-24">
