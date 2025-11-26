@@ -655,8 +655,105 @@ export const generatePreviewHTML = (
 		const pageNumber = (index + 1).toString().padStart(2, '0');
 		const totalPagesStr = totalPages.toString().padStart(2, '0');
 
-		// Update footer with correct page numbers
-		let pageFooter = footerHTML.replace(/\d{2}\s*\/\s*\d{2}/g, `${pageNumber} / ${totalPagesStr}`);
+		console.log('Processing page:', { index, pageNumber, totalPagesStr, totalPages });
+
+		// Update footer with correct page numbers - replace entire div containing page numbers
+		let pageFooter = footerHTML;
+		console.log('Original footer HTML (first 800 chars):', footerHTML.substring(0, 800));
+
+		// Replace entire div containing "Trang / Pages:" and the page numbers
+		// This handles TinyMCE's formatting where numbers are split into separate spans
+		const pageContainerPattern = /<div[^>]*>\s*<span[^>]*>Trang \/ Pages:<\/span>[\s\S]*?<\/div>\s*<\/div>/;
+		const match = footerHTML.match(pageContainerPattern);
+		console.log('Page container match found:', !!match);
+
+		if (match) {
+			// Replace with clean HTML structure - page numbers below barcode, aligned right
+			const replacement = `<div style="display: flex; align-items: center; justify-content: flex-end;">
+			<span style="margin-right: 2px;">Trang / Pages:</span>
+			<span>${pageNumber} / ${totalPagesStr}</span>
+		</div>
+	</div>`;
+			pageFooter = footerHTML.replace(pageContainerPattern, replacement);
+			console.log('✅ Page numbers replaced successfully');
+		} else {
+			console.warn('Page container pattern not found! Trying simpler pattern...');
+			// Try simpler pattern - just replace the numbers
+			const simplePattern = /<span[^>]*>0?\d+<\/span>\s*<span[^>]*>\/<\/span>\s*<span[^>]*>0?\d+<\/span>/;
+			if (footerHTML.match(simplePattern)) {
+				pageFooter = footerHTML.replace(
+					simplePattern,
+					`<span>${pageNumber}</span> <span>/</span> <span>${totalPagesStr}</span>`,
+				);
+				console.log('✅ Used simple pattern for page numbers');
+			} else {
+				console.error('Could not find any page number pattern!');
+			}
+		}
+
+		// Extract refNumber from header's ref_code element
+		const parser = new DOMParser();
+		const headerDoc = parser.parseFromString(headerHTML, 'text/html');
+		const refCodeElement = headerDoc.querySelector('.ref_code');
+		const extractedRefNumber = refCodeElement ? refCodeElement.textContent.trim() : '';
+
+		// Replace "Xuất bản / ref.: ....." with refNumber in header
+		if (extractedRefNumber && refCodeElement) {
+			const originalHTML = headerDoc.body.innerHTML;
+			const updatedHTML = originalHTML.replace(/Xuất bản\s*\/\s*ref\.?:?\s*[^\s<]*/gi, extractedRefNumber);
+			headerDoc.body.innerHTML = updatedHTML;
+			headerHTML = headerDoc.body.innerHTML;
+		}
+
+		// Add barcode canvas before the page numbers div
+		const footerDoc = parser.parseFromString(pageFooter, 'text/html');
+
+		// Find the parent container that has flex-direction: column
+		const containerDiv = footerDoc.querySelector('div[style*="flex-direction: column"]');
+
+		if (containerDiv) {
+			// Check if canvas already exists
+			let canvasDiv = containerDiv.querySelector('div.barcode-container');
+
+			if (!canvasDiv) {
+				// Create new div for barcode
+				canvasDiv = footerDoc.createElement('div');
+				canvasDiv.className = 'barcode-container';
+				canvasDiv.style.cssText = 'display: flex; align-items: center; justify-content: flex-end; margin-bottom: 2px;';
+
+				// Create canvas element
+				const canvas = footerDoc.createElement('canvas');
+				canvas.className = 'barcode-canvas';
+				canvas.style.cssText = 'max-width: 150px; height: auto;';
+
+				// Add canvas to div
+				canvasDiv.appendChild(canvas);
+
+				// Insert barcode div before the page numbers div (first child)
+				containerDiv.insertBefore(canvasDiv, containerDiv.firstChild);
+			}
+
+			// Update canvas data-value
+			const canvas = canvasDiv.querySelector('canvas');
+			if (canvas) {
+				if (
+					extractedRefNumber &&
+					extractedRefNumber !== '' &&
+					!extractedRefNumber.includes('DRAFT') &&
+					!extractedRefNumber.includes('SƠ BỘ')
+				) {
+					canvas.setAttribute('data-value', extractedRefNumber);
+				} else {
+					canvas.setAttribute('data-value', '');
+				}
+			}
+
+			// Get the updated HTML
+			pageFooter = footerDoc.body.innerHTML;
+		} else {
+			console.error('❌ Could not find container div in footer!');
+			console.log('Footer HTML for debug:', pageFooter.substring(0, 1000));
+		}
 
 		// Generate content for this page - add spacing between sections but NOT after the last one
 		const pageContent = page.sections
@@ -723,12 +820,39 @@ export const generatePreviewHTML = (
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+	<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 	<style>${css}</style>
 </head>
 <body>
 	<div class="print-container">
 		${pagesHTML}
 	</div>
+	<script>
+		// Render all barcodes after page loads
+		window.addEventListener('load', function() {
+			const barcodeCanvases = document.querySelectorAll('.barcode-canvas');
+			
+			barcodeCanvases.forEach((canvas) => {
+				const value = canvas.getAttribute('data-value');
+				
+				if (value && value.trim() !== '') {
+					try {
+						JsBarcode(canvas, value, {
+							format: 'CODE128',
+							width: 1,
+							height: 40,
+							displayValue: false,
+							margin: 1,
+							background: 'transparent',
+							lineColor: '#2a2a2a',
+						});
+					} catch (error) {
+						console.error('Error generating barcode:', error);
+					}
+				}
+			});
+		});
+	</script>
 </body>
 </html>`;
 };

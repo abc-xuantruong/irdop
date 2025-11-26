@@ -10,6 +10,32 @@ import {
 	generatePreviewHTML,
 	openPreviewWindow,
 } from '../contexts/reportPreviewHelpers';
+import JsBarcode from 'jsbarcode';
+
+// Barcode component for footer
+const BarcodeGenerator = ({ value, width = 1, height = 30, format = 'CODE128' }) => {
+	const canvasRef = useRef(null);
+
+	useEffect(() => {
+		if (canvasRef.current && value) {
+			try {
+				JsBarcode(canvasRef.current, value, {
+					format: format,
+					width: width,
+					height: height,
+					displayValue: false,
+					margin: 2,
+					background: 'transparent',
+					lineColor: '#000000',
+				});
+			} catch (error) {
+				console.error('Error generating barcode:', error);
+			}
+		}
+	}, [value, width, height, format]);
+
+	return <canvas ref={canvasRef} style={{ maxWidth: '100%', height: 'auto' }} />;
+};
 
 const ReportEditor = () => {
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -27,6 +53,7 @@ const ReportEditor = () => {
 	const [selectedSampleId, setSelectedSampleId] = useState(sampleId || '');
 	const [selectedReport, setSelectedReport] = useState(null);
 	const [currentRefNumber, setCurrentRefNumber] = useState(refNumberFromUrl || ''); // Track current refNumber
+	const [userClearedReport, setUserClearedReport] = useState(false); // Track if user manually cleared report selection
 
 	// Multi-sample mode states
 	const [viewMode, setViewMode] = useState('single'); // 'single' or 'all'
@@ -290,6 +317,11 @@ const ReportEditor = () => {
 
 	// useEffect to load report when sampleData is ready and we have a refNumber/reportId from URL
 	useEffect(() => {
+		// Don't auto-load if user manually cleared the report selection
+		if (userClearedReport) {
+			return;
+		}
+
 		if (sampleData && sampleData.reports && (refNumberFromUrl || reportId) && !selectedReport) {
 			const targetRefNumber = refNumberFromUrl || reportId;
 
@@ -301,13 +333,14 @@ const ReportEditor = () => {
 				setCurrentRefNumber(targetRefNumber);
 			}
 		}
-	}, [sampleData, refNumberFromUrl, reportId, selectedReport]);
+	}, [sampleData, refNumberFromUrl, reportId, selectedReport, userClearedReport]);
 
 	// Handle sample selection change
 	const handleSampleChange = (e) => {
 		const newSampleId = e.target.value;
 		setSelectedSampleId(newSampleId);
 		setSelectedReport(null); // Reset report selection
+		setUserClearedReport(false); // Reset flag when changing sample
 
 		// Update URL with new sampleId
 		const newUrl = new URL(window.location.href);
@@ -324,10 +357,34 @@ const ReportEditor = () => {
 
 	// Handle report selection change
 	const handleReportChange = async (e) => {
-		const reportIndex = parseInt(e.target.value);
-		if (sampleData && sampleData.reports && sampleData.reports[reportIndex]) {
-			const report = sampleData.reports[reportIndex];
+		const reportIndex = e.target.value;
+		console.log('📝 handleReportChange called with value:', reportIndex);
+
+		// Check if user selected default option (empty string or "")
+		if (reportIndex === '' || reportIndex === undefined || reportIndex === null) {
+			console.log('🔄 Clearing report selection');
+			setSelectedReport(null);
+			setUserClearedReport(true); // Mark that user manually cleared selection
+
+			// Remove refNumber from URL
+			const newUrl = new URL(window.location.href);
+			newUrl.searchParams.delete('refNumber');
+			window.history.pushState({}, '', newUrl);
+
+			// Clear current refNumber state
+			setCurrentRefNumber('');
+			console.log('✅ Report selection cleared');
+			return;
+		}
+
+		const parsedIndex = parseInt(reportIndex);
+		console.log('📊 Parsed index:', parsedIndex);
+
+		if (sampleData && sampleData.reports && sampleData.reports[parsedIndex]) {
+			const report = sampleData.reports[parsedIndex];
+			console.log('✅ Setting report:', report.refNumber);
 			setSelectedReport(report);
+			setUserClearedReport(false); // Reset flag when user selects a report
 
 			// Update URL with refNumber query parameter
 			const newUrl = new URL(window.location.href);
@@ -339,16 +396,6 @@ const ReportEditor = () => {
 
 			// Fetch full report data from API
 			await fetchReportData(report.refNumber);
-		} else {
-			setSelectedReport(null);
-
-			// Remove refNumber from URL if no report selected
-			const newUrl = new URL(window.location.href);
-			newUrl.searchParams.delete('refNumber');
-			window.history.pushState({}, '', newUrl);
-
-			// Clear current refNumber state
-			setCurrentRefNumber('');
 		}
 	};
 
@@ -843,7 +890,8 @@ ${tableHTML}
 			Form: BM06-QT010-KN / Version: 06 / Effective date: 02/06/2025
 		</p>
 	</div>
-	<div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;">
+	<div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; height: 100%; gap: 4px;">
+		<canvas class="barcode-canvas" data-value="" style="max-width: 150px; height: auto;"></canvas>
 		<div style="display: flex; align-items: center;">
 			<span style="margin-right: 2px;">Trang / Pages:</span>
 			<span>01 / 01</span>
@@ -1233,6 +1281,7 @@ ${tableHTML}
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Wix+Madefor+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+	<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 	<style>
 		* {
 			margin: 0;
@@ -1295,6 +1344,32 @@ ${tableHTML}
 </head>
 <body>
 	${allSamplesHTML.join('\n')}
+	<script>
+		// Render all barcodes after page loads
+		window.addEventListener('load', function() {
+			const barcodeCanvases = document.querySelectorAll('.barcode-canvas');
+			
+			barcodeCanvases.forEach((canvas) => {
+				const value = canvas.getAttribute('data-value');
+				
+				if (value && value.trim() !== '') {
+					try {
+						JsBarcode(canvas, value, {
+							format: 'CODE128',
+							width: 1,
+							height: 40,
+							displayValue: false,
+							margin: 1,
+							background: 'transparent',
+							lineColor: '#2a2a2a',
+						});
+					} catch (error) {
+						console.error('Error generating barcode:', error);
+					}
+				}
+			});
+		});
+	</script>
 </body>
 </html>`;
 
@@ -2969,7 +3044,14 @@ ${tableHTML}
 							<div className="mb-6 flex items-center gap-4">
 								<label className="text-sm font-semibold whitespace-nowrap">Chọn báo cáo:</label>
 								<select
-									value={selectedReport ? sampleData.reports.indexOf(selectedReport) : ''}
+									value={
+										selectedReport
+											? (() => {
+													const idx = sampleData.reports.findIndex((r) => r.refNumber === selectedReport.refNumber);
+													return idx >= 0 ? idx : '';
+											  })()
+											: ''
+									}
 									onChange={handleReportChange}
 									className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
 								>
