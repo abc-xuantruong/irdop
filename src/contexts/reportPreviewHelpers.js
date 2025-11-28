@@ -697,11 +697,9 @@ export const generatePreviewHTML = (
 		const refCodeElement = headerDoc.querySelector('.ref_code');
 		const extractedRefNumber = refCodeElement ? refCodeElement.textContent.trim() : '';
 
-		// Replace "Xuất bản / ref.: ....." with refNumber in header
+		// Replace content inside <p class="ref_code"> with actual refNumber
 		if (extractedRefNumber && refCodeElement) {
-			const originalHTML = headerDoc.body.innerHTML;
-			const updatedHTML = originalHTML.replace(/Xuất bản\s*\/\s*ref\.?:?\s*[^\s<]*/gi, extractedRefNumber);
-			headerDoc.body.innerHTML = updatedHTML;
+			refCodeElement.textContent = extractedRefNumber;
 			headerHTML = headerDoc.body.innerHTML;
 		}
 

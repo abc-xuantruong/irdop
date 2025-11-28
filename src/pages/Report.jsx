@@ -1619,9 +1619,17 @@ ${tableHTML}
 		try {
 			if (viewMode === 'single') {
 				// Mode one: Publish single report
-				const headerContent = headerEditorRef.current?.getContent() || '';
+				let headerContent = headerEditorRef.current?.getContent() || '';
 				const contentEditorContent = contentEditorRef.current?.getContent() || '';
 				const footerContent = footerEditorRef.current?.getContent() || '';
+
+				// Reset refNumber to "SƠ BỘ / DRAFT" before publishing
+				const headerDoc = new DOMParser().parseFromString(headerContent, 'text/html');
+				const refCodeElement = headerDoc.querySelector('.ref_code');
+				if (refCodeElement) {
+					refCodeElement.textContent = 'SƠ BỘ / DRAFT';
+					headerContent = headerDoc.body.innerHTML;
+				}
 
 				// Parse content sections
 				const tempDiv = document.createElement('div');
@@ -1715,9 +1723,17 @@ ${tableHTML}
 						continue;
 					}
 
-					const headerContent = sample.headerEditorRef?.getContent() || '';
+					let headerContent = sample.headerEditorRef?.getContent() || '';
 					const contentEditorContent = sample.contentEditorRef?.getContent() || '';
 					const footerContent = sample.footerEditorRef?.getContent() || '';
+
+					// Reset refNumber to "SƠ BỘ / DRAFT" before publishing
+					const headerDoc = new DOMParser().parseFromString(headerContent, 'text/html');
+					const refCodeElement = headerDoc.querySelector('.ref_code');
+					if (refCodeElement) {
+						refCodeElement.textContent = 'SƠ BỘ / DRAFT';
+						headerContent = headerDoc.body.innerHTML;
+					}
 
 					// Parse content sections
 					const tempDiv = document.createElement('div');
