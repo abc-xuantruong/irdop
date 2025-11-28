@@ -717,12 +717,12 @@ export const generatePreviewHTML = (
 				// Create new div for barcode
 				canvasDiv = footerDoc.createElement('div');
 				canvasDiv.className = 'barcode-container';
-				canvasDiv.style.cssText = 'display: flex; align-items: center; justify-content: flex-end; margin-bottom: 2px;';
+				canvasDiv.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding-top: 6px; height: 50px;';
 
 				// Create canvas element
 				const canvas = footerDoc.createElement('canvas');
 				canvas.className = 'barcode-canvas';
-				canvas.style.cssText = 'max-width: 150px; height: auto;';
+				canvas.style.cssText = 'width: 210px; height: 23px;';
 
 				// Add canvas to div
 				canvasDiv.appendChild(canvas);
@@ -741,8 +741,14 @@ export const generatePreviewHTML = (
 					!extractedRefNumber.includes('SƠ BỘ')
 				) {
 					canvas.setAttribute('data-value', extractedRefNumber);
+					canvas.style.display = 'block';
+					// Show barcode: use space-between layout
+					canvasDiv.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding-top: 6px; height: 50px;';
 				} else {
 					canvas.setAttribute('data-value', '');
+					canvas.style.display = 'none';
+					// Hide barcode: use flex-end layout to keep page numbers at bottom
+					canvasDiv.style.cssText = 'display: flex; align-items: center; justify-content: flex-end; height: auto;';
 				}
 			}
 
@@ -837,10 +843,10 @@ export const generatePreviewHTML = (
 					try {
 						JsBarcode(canvas, value, {
 							format: 'CODE128',
-							width: 1,
-							height: 40,
+							width: 2,
+							height: 23,
 							displayValue: false,
-							margin: 1,
+							margin: 0,
 							background: 'transparent',
 							lineColor: '#2a2a2a',
 						});

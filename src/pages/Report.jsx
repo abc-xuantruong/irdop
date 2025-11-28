@@ -890,8 +890,8 @@ ${tableHTML}
 			Form: BM06-QT010-KN / Version: 06 / Effective date: 02/06/2025
 		</p>
 	</div>
-	<div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; height: 100%; gap: 4px;">
-		<canvas class="barcode-canvas" data-value="" style="max-width: 150px; height: auto;"></canvas>
+	<div style="font-size: 11px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; height: 50px; gap: 4px; padding-top: 6px;">
+		<canvas class="barcode-canvas" data-value="" style="width: 210px; height: 23px;"></canvas>
 		<div style="display: flex; align-items: center;">
 			<span style="margin-right: 2px;">Trang / Pages:</span>
 			<span>01 / 01</span>
@@ -1356,10 +1356,10 @@ ${tableHTML}
 					try {
 						JsBarcode(canvas, value, {
 							format: 'CODE128',
-							width: 1,
-							height: 40,
+							width: 2,
+							height: 23,
 							displayValue: false,
-							margin: 1,
+							margin: 0,
 							background: 'transparent',
 							lineColor: '#2a2a2a',
 						});
