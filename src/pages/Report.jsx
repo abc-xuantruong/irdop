@@ -890,8 +890,8 @@ ${tableHTML}
 			Form: BM06-QT010-KN / Version: 06 / Effective date: 02/06/2025
 		</p>
 	</div>
-	<div style="font-size: 11px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; height: 50px; gap: 4px; padding-top: 6px;">
-		<canvas class="barcode-canvas" data-value="" style="width: 210px; height: 23px;"></canvas>
+	<div style="font-size: 11px; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; height: 100%; gap: 2px;">
+		<canvas class="barcode-canvas" data-value="" style="width: 210px; height: 23px; margin-bottom: 2px; margin-top: 4px;"></canvas>
 		<div style="display: flex; align-items: center;">
 			<span style="margin-right: 2px;">Trang / Pages:</span>
 			<span>01 / 01</span>

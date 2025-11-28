@@ -711,47 +711,33 @@ export const generatePreviewHTML = (
 
 		if (containerDiv) {
 			// Check if canvas already exists
-			let canvasDiv = containerDiv.querySelector('div.barcode-container');
+			let canvas = containerDiv.querySelector('canvas.barcode-canvas');
 
-			if (!canvasDiv) {
-				// Create new div for barcode
-				canvasDiv = footerDoc.createElement('div');
-				canvasDiv.className = 'barcode-container';
-				canvasDiv.style.cssText =
-					'display: flex; align-items: center; justify-content: space-between; padding-top: 6px; height: 50px;';
-
-				// Create canvas element
-				const canvas = footerDoc.createElement('canvas');
+			if (!canvas) {
+				// Create canvas element directly
+				canvas = footerDoc.createElement('canvas');
 				canvas.className = 'barcode-canvas';
-				canvas.style.cssText = 'width: 210px; height: 23px;';
+				canvas.style.cssText = 'width: 210px; height: 23px; margin-bottom: 2px; margin-top: 4px;';
 
-				// Add canvas to div
-				canvasDiv.appendChild(canvas);
-
-				// Insert barcode div before the page numbers div (first child)
-				containerDiv.insertBefore(canvasDiv, containerDiv.firstChild);
+				// Insert canvas before the page numbers div (first child)
+				containerDiv.insertBefore(canvas, containerDiv.firstChild);
+			} else {
+				// Update existing canvas style
+				canvas.style.cssText = 'width: 210px; height: 23px; margin-bottom: 2px; margin-top: 4px;';
 			}
 
-			// Update canvas data-value
-			const canvas = canvasDiv.querySelector('canvas');
-			if (canvas) {
-				if (
-					extractedRefNumber &&
-					extractedRefNumber !== '' &&
-					!extractedRefNumber.includes('DRAFT') &&
-					!extractedRefNumber.includes('SƠ BỘ')
-				) {
-					canvas.setAttribute('data-value', extractedRefNumber);
-					canvas.style.display = 'block';
-					// Show barcode: use space-between layout
-					canvasDiv.style.cssText =
-						'display: flex; align-items: center; justify-content: space-between; padding-top: 6px; height: 50px;';
-				} else {
-					canvas.setAttribute('data-value', '');
-					canvas.style.display = 'none';
-					// Hide barcode: use flex-end layout to keep page numbers at bottom
-					canvasDiv.style.cssText = 'display: flex; align-items: center; justify-content: flex-end; height: auto;';
-				}
+			// Update canvas data-value and visibility
+			if (
+				extractedRefNumber &&
+				extractedRefNumber !== '' &&
+				!extractedRefNumber.includes('DRAFT') &&
+				!extractedRefNumber.includes('SƠ BỘ')
+			) {
+				canvas.setAttribute('data-value', extractedRefNumber);
+				canvas.style.display = 'block';
+			} else {
+				canvas.setAttribute('data-value', '');
+				canvas.style.display = 'none';
 			}
 
 			// Get the updated HTML
