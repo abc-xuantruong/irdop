@@ -177,20 +177,19 @@ const ProtocolInfor = () => {
 			const requestBody = {
 				columns: [
 					'id',
-					'url',
-					'protocolName',
-					'detailedProcedure',
+					'protocolCode',
+					'docTitle',
 					'protocolMatrices',
 					'purpose',
-					'equipment',
-					'chemicals',
-					'dataProcessing',
-					'docProtocolCode',
-					'protocolCode',
+					'estimatedTime',
 					'refDocument',
+					'equipment',
+					'tools',
+					'chemicals',
+					'detailedProcedure',
+					'dataProcessing',
 					'parameters',
-					'instruction',
-					'status',
+					'files',
 				],
 				filter: filters,
 				page,
@@ -483,20 +482,6 @@ const ProtocolInfor = () => {
 								<tr>
 									<th className="px-4 py-2 border-b text-left">
 										<div className="flex items-center justify-between">
-											<span>Phương pháp</span>
-											<div className="flex items-center gap-1">
-												<FaFilter
-													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
-													onClick={() => openFilterModal('protocolName')}
-												/>
-												<div className="cursor-pointer" onClick={() => handleSort('protocolName')}>
-													{getSortIcon('protocolName')}
-												</div>
-											</div>
-										</div>
-									</th>
-									<th className="px-4 py-2 border-b text-left">
-										<div className="flex items-center justify-between">
 											<span>Nền mẫu</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
@@ -551,16 +536,16 @@ const ProtocolInfor = () => {
 											</div>
 										</div>
 									</th>
-									<th className="px-4 py-2 border-b text-left">
+									<th className="px-4 py-2 border-b text-left min-w-[400px]">
 										<div className="flex items-center justify-between">
-											<span>Mã PP</span>
+											<span>Dụng cụ</span>
 											<div className="flex items-center gap-1">
 												<FaFilter
 													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
-													onClick={() => openFilterModal('docProtocolCode')}
+													onClick={() => openFilterModal('tools')}
 												/>
-												<div className="cursor-pointer" onClick={() => handleSort('docProtocolCode')}>
-													{getSortIcon('docProtocolCode')}
+												<div className="cursor-pointer" onClick={() => handleSort('tools')}>
+													{getSortIcon('tools')}
 												</div>
 											</div>
 										</div>
@@ -593,20 +578,6 @@ const ProtocolInfor = () => {
 											</div>
 										</div>
 									</th>
-									<th className="px-4 py-2 border-b text-left">
-										<div className="flex items-center justify-between">
-											<span>TT</span>
-											<div className="flex items-center gap-1">
-												<FaFilter
-													className="w-3 h-3 cursor-pointer text-gray-500 hover:text-gray-700"
-													onClick={() => openFilterModal('status')}
-												/>
-												<div className="cursor-pointer" onClick={() => handleSort('status')}>
-													{getSortIcon('status')}
-												</div>
-											</div>
-										</div>
-									</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -617,23 +588,15 @@ const ProtocolInfor = () => {
 										onClick={() => handleRowClick(protocol)}
 									>
 										<td className="px-4 py-2 border-b align-top text-left">
-											{protocol.protocolName ? (
-												<div className="prose prose-sm max-w-none">
-													<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-														{renderMarkdown(protocol.protocolName)}
-													</ReactMarkdown>
-												</div>
-											) : (
-												'-'
-											)}
-										</td>
-										<td className="px-4 py-2 border-b align-top text-left">
-											{protocol.protocolMatrices ? (
-												<div className="prose prose-sm max-w-none">
-													<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-														{renderMarkdown(protocol.protocolMatrices)}
-													</ReactMarkdown>
-												</div>
+											{Array.isArray(protocol.protocolMatrices) && protocol.protocolMatrices.length > 0 ? (
+												<ul className="list-disc list-inside text-xs">
+													{protocol.protocolMatrices.slice(0, 3).map((matrix, index) => (
+														<li key={index}>{matrix}</li>
+													))}
+													{protocol.protocolMatrices.length > 3 && (
+														<li className="text-gray-500">... và {protocol.protocolMatrices.length - 3} nữa</li>
+													)}
+												</ul>
 											) : (
 												'-'
 											)}
@@ -652,37 +615,97 @@ const ProtocolInfor = () => {
 											)}
 										</td>
 										<td className="px-4 py-2 border-b align-top text-left text-xs">
-											{protocol.equipment ? (
-												<div className="overflow-auto max-h-40">
-													<div className="prose prose-sm max-w-none">
-														<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-															{renderMarkdown(protocol.equipment)}
-														</ReactMarkdown>
-													</div>
+											{Array.isArray(protocol.equipment) && protocol.equipment.length > 0 ? (
+												<div className="max-h-40 overflow-y-auto">
+													<table className="min-w-full text-xs border border-gray-200">
+														<thead className="bg-gray-50">
+															<tr>
+																<th className="px-2 py-1 border-b text-left font-medium">Tên thiết bị</th>
+																<th className="px-2 py-1 border-b text-left font-medium">Thông số kỹ thuật</th>
+																<th className="px-2 py-1 border-b text-left font-medium">Nhà sản xuất</th>
+															</tr>
+														</thead>
+														<tbody>
+															{protocol.equipment.slice(0, 2).map((item, index) => (
+																<tr key={index} className="border-b border-gray-100">
+																	<td className="px-2 py-1">{item.equipmentName || 'N/A'}</td>
+																	<td className="px-2 py-1">{item.technicalSpecifications || '-'}</td>
+																	<td className="px-2 py-1">{item.manufacturer || '-'}</td>
+																</tr>
+															))}
+														</tbody>
+													</table>
+													{protocol.equipment.length > 2 && (
+														<div className="text-gray-500 text-xs mt-1">
+															... và {protocol.equipment.length - 2} thiết bị nữa
+														</div>
+													)}
 												</div>
 											) : (
 												'-'
 											)}
 										</td>
 										<td className="px-4 py-2 border-b align-top text-left text-xs">
-											{protocol.chemicals ? (
-												<div className="overflow-auto max-h-40">
-													<div className="prose prose-sm max-w-none">
-														<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-															{renderMarkdown(protocol.chemicals)}
-														</ReactMarkdown>
-													</div>
+											{Array.isArray(protocol.chemicals) && protocol.chemicals.length > 0 ? (
+												<div className="max-h-40 overflow-y-auto">
+													<table className="min-w-full text-xs border border-gray-200">
+														<thead className="bg-gray-50">
+															<tr>
+																<th className="px-2 py-1 border-b text-left font-medium">Tên hóa chất</th>
+																<th className="px-2 py-1 border-b text-left font-medium">Số lượng</th>
+																<th className="px-2 py-1 border-b text-left font-medium">Độ tinh khiết</th>
+															</tr>
+														</thead>
+														<tbody>
+															{protocol.chemicals.slice(0, 2).map((item, index) => (
+																<tr key={index} className="border-b border-gray-100">
+																	<td className="px-2 py-1">{item.chemicalName || 'N/A'}</td>
+																	<td className="px-2 py-1">
+																		{item.quantity && item.unit ? `${item.quantity} ${item.unit}` : '-'}
+																	</td>
+																	<td className="px-2 py-1">{item.purity || '-'}</td>
+																</tr>
+															))}
+														</tbody>
+													</table>
+													{protocol.chemicals.length > 2 && (
+														<div className="text-gray-500 text-xs mt-1">
+															... và {protocol.chemicals.length - 2} hóa chất nữa
+														</div>
+													)}
 												</div>
 											) : (
 												'-'
 											)}
 										</td>
-										<td className="px-4 py-2 border-b align-top text-left">
-											{protocol.docProtocolCode ? (
-												<div className="prose prose-sm max-w-none">
-													<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-														{renderMarkdown(protocol.docProtocolCode)}
-													</ReactMarkdown>
+										<td className="px-4 py-2 border-b align-top text-left text-xs">
+											{Array.isArray(protocol.tools) && protocol.tools.length > 0 ? (
+												<div className="max-h-40 overflow-y-auto">
+													<table className="min-w-full text-xs border border-gray-200">
+														<thead className="bg-gray-50">
+															<tr>
+																<th className="px-2 py-1 border-b text-left font-medium">Tên dụng cụ</th>
+																<th className="px-2 py-1 border-b text-left font-medium">Số lượng</th>
+																<th className="px-2 py-1 border-b text-left font-medium">Vật liệu</th>
+															</tr>
+														</thead>
+														<tbody>
+															{protocol.tools.slice(0, 2).map((item, index) => (
+																<tr key={index} className="border-b border-gray-100">
+																	<td className="px-2 py-1">{item.toolName || 'N/A'}</td>
+																	<td className="px-2 py-1">
+																		{item.quantity && item.unit ? `${item.quantity} ${item.unit}` : '-'}
+																	</td>
+																	<td className="px-2 py-1">{item.material || '-'}</td>
+																</tr>
+															))}
+														</tbody>
+													</table>
+													{protocol.tools.length > 2 && (
+														<div className="text-gray-500 text-xs mt-1">
+															... và {protocol.tools.length - 2} dụng cụ nữa
+														</div>
+													)}
 												</div>
 											) : (
 												'-'
@@ -700,34 +723,35 @@ const ProtocolInfor = () => {
 											)}
 										</td>
 										<td className="px-4 py-2 border-b align-top text-left text-xs">
-											{protocol.parameters ? (
-												<div className="overflow-auto max-h-40">
-													<div className="prose prose-sm max-w-none">
-														<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-															{renderMarkdown(protocol.parameters)}
-														</ReactMarkdown>
-													</div>
+											{Array.isArray(protocol.parameters) && protocol.parameters.length > 0 ? (
+												<div className="max-h-40 overflow-y-auto">
+													<table className="min-w-full text-xs border border-gray-200">
+														<thead className="bg-gray-50">
+															<tr>
+																<th className="px-2 py-1 border-b text-left font-medium">Tên chỉ tiêu</th>
+																<th className="px-2 py-1 border-b text-left font-medium">Nền mẫu</th>
+																<th className="px-2 py-1 border-b text-left font-medium">ID</th>
+															</tr>
+														</thead>
+														<tbody>
+															{protocol.parameters.slice(0, 3).map((item, index) => (
+																<tr key={index} className="border-b border-gray-100">
+																	<td className="px-2 py-1">{item.parameterName || 'N/A'}</td>
+																	<td className="px-2 py-1">{item.matrix || '-'}</td>
+																	<td className="px-2 py-1">{item.parameterId || '-'}</td>
+																</tr>
+															))}
+														</tbody>
+													</table>
+													{protocol.parameters.length > 3 && (
+														<div className="text-gray-500 text-xs mt-1">
+															... và {protocol.parameters.length - 3} chỉ tiêu nữa
+														</div>
+													)}
 												</div>
 											) : (
 												'-'
 											)}
-										</td>
-										<td className="px-4 py-2 border-b align-top text-left">
-											<span
-												className={`px-2 py-1 rounded text-xs ${
-													protocol.status === 'approved'
-														? 'bg-green-100 text-green-800'
-														: protocol.status === 'edited'
-														? 'bg-blue-100 text-blue-800'
-														: protocol.status === 'extracted'
-														? 'bg-yellow-100 text-yellow-800'
-														: protocol.status === 'uploaded'
-														? 'bg-gray-100 text-gray-800'
-														: 'bg-gray-100 text-gray-600'
-												}`}
-											>
-												{protocol.status || '-'}
-											</span>
 										</td>
 									</tr>
 								))}

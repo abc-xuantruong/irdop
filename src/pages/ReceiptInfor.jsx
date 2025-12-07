@@ -4590,7 +4590,7 @@ const ReceiptInfor = ({ receipt }) => {
 				subject={emailFormData.subject}
 				body={emailFormData.body}
 				attachments={emailFormData.attachments}
-				foreignKeyUIDs={[currentReceipt?.receipt_uid]}
+				foreignKeyUIDs={[currentReceipt?._deprecated_recordCode, currentReceipt?.orderId]}
 				isVisible={isEmailFormVisible}
 				onClose={() => setIsEmailFormVisible(false)}
 				onSubmit={handleEmailSubmit}

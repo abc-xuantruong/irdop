@@ -20,6 +20,36 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 	const [reExtractInstruction, setReExtractInstruction] = useState('');
 	const reExtractFileInputRef = useRef(null);
 
+	// Allowed fields for API calls based on database schema
+	const allowedFields = [
+		'id',
+		'protocolCode',
+		'docProtocolCode',
+		'docTitle',
+		'protocolMatrices',
+		'purpose',
+		'estimatedTime',
+		'refDocument',
+		'equipment',
+		'tools',
+		'chemicals',
+		'detailedProcedure',
+		'dataProcessing',
+		'parameters',
+		'files',
+	];
+
+	// Helper function to filter object by allowed fields
+	const filterProtocolFields = (protocolObj) => {
+		const filtered = {};
+		allowedFields.forEach((field) => {
+			if (protocolObj.hasOwnProperty(field)) {
+				filtered[field] = protocolObj[field];
+			}
+		});
+		return filtered;
+	};
+
 	// Update editedProtocol when protocol prop changes
 	React.useEffect(() => {
 		if (protocol) {
@@ -114,8 +144,9 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 
 	const handleSaveProtocol = async () => {
 		try {
+			const filteredProtocol = filterProtocolFields(editedProtocol);
 			const response = await apiPost('https://red.irdop.org/v1/protocol/update?action=update', {
-				protocol: editedProtocol,
+				protocol: filteredProtocol,
 			});
 
 			console.log('Save response:', response);
@@ -215,16 +246,13 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 			}
 
 			// Call extract API with the file URL (new or existing)
+			const filteredProtocol = filterProtocolFields({
+				...protocol,
+				url: fileUrl,
+				instruction: reExtractInstruction || protocol.instruction,
+			});
 			const extractResponse = await apiPost('https://red.irdop.org/v1/protocol/update?action=extract', {
-				protocol: {
-					id: protocol.id,
-					url: fileUrl,
-					instruction: reExtractInstruction || protocol.instruction,
-					protocolCode: protocol.protocolCode,
-					docProtocolCode: protocol.docProtocolCode,
-					protocolName: protocol.protocolName,
-					protocolMatrices: protocol.protocolMatrices,
-				},
+				protocol: filteredProtocol,
 			});
 
 			if (extractResponse.data && extractResponse.data.success && extractResponse.data.data) {
@@ -280,9 +308,7 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 				<div className="bg-white rounded-lg w-[90vw] h-[95vh] overflow-hidden flex flex-col">
 					{/* Modal Header */}
 					<div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-						<h2 className="text-xl font-bold text-gray-800 text-left">
-							Chi tiết Phương pháp: {protocol.protocolName || protocol.protocolCode || 'N/A'}
-						</h2>
+						<h2 className="text-xl font-bold text-gray-800 text-left">Chi tiết Phương pháp</h2>
 						<div className="flex items-center gap-2">
 							{protocol.url && (
 								<button
@@ -325,61 +351,8 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 					{/* Modal Content */}
 					<div className="flex-1 overflow-y-auto p-6">
 						<div className="space-y-6">
-							{/* ID and Status */}
-							<div className="grid grid-cols-2 gap-4">
-								<div>
-									<label className="block text-sm font-medium text-gray-700 mb-1 text-left">ID</label>
-									<div className="text-sm text-gray-900 bg-gray-50 p-2 rounded text-left">{protocol.id || '-'}</div>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-700 mb-1 text-left">Trạng thái</label>
-									<div className="text-left">
-										<span
-											className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-												protocol.status === 'approved'
-													? 'bg-green-100 text-green-800'
-													: protocol.status === 'edited'
-													? 'bg-blue-100 text-blue-800'
-													: protocol.status === 'extracted'
-													? 'bg-yellow-100 text-yellow-800'
-													: protocol.status === 'uploaded'
-													? 'bg-gray-100 text-gray-800'
-													: 'bg-gray-100 text-gray-600'
-											}`}
-										>
-											{protocol.status || '-'}
-										</span>
-									</div>
-								</div>
-							</div>
-
 							{/* Document Protocol Code and Reference Document - Same Row */}
 							<div className="grid grid-cols-2 gap-4">
-								<div>
-									<label className="block text-sm font-medium text-gray-700 mb-2 text-left">
-										Mã Tài liệu Phương pháp
-									</label>
-									{isEditMode ? (
-										<textarea
-											value={editedProtocol?.docProtocolCode || ''}
-											onChange={(e) => handleFieldChange('docProtocolCode', e.target.value)}
-											className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-left bg-white"
-											rows={3}
-										/>
-									) : (
-										<div className="bg-gray-50 p-4 rounded-lg text-left">
-											{protocol.docProtocolCode ? (
-												<div className="prose prose-sm max-w-none">
-													<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-														{renderMarkdown(protocol.docProtocolCode)}
-													</ReactMarkdown>
-												</div>
-											) : (
-												<span className="text-gray-500">-</span>
-											)}
-										</div>
-									)}
-								</div>
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-2 text-left">Viện dẫn liên quan</label>
 									{isEditMode ? (
@@ -405,29 +378,39 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 								</div>
 							</div>
 
-							{/* Protocol Name */}
-							<div>
-								<label className="block text-sm font-medium text-gray-700 mb-2 text-left">Tên Phương pháp</label>
-								{isEditMode ? (
-									<textarea
-										value={editedProtocol?.protocolName || ''}
-										onChange={(e) => handleFieldChange('protocolName', e.target.value)}
-										className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-left bg-white"
-										rows={3}
-									/>
-								) : (
-									<div className="bg-gray-50 p-4 rounded-lg text-left">
-										{protocol.protocolName ? (
-											<div className="prose prose-sm max-w-none">
-												<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-													{renderMarkdown(protocol.protocolName)}
-												</ReactMarkdown>
-											</div>
-										) : (
-											<span className="text-gray-500">-</span>
-										)}
-									</div>
-								)}
+							{/* Document Title and Estimated Time - Same Row */}
+							<div className="grid grid-cols-2 gap-4">
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1 text-left">Tiêu đề Tài liệu</label>
+									{isEditMode ? (
+										<input
+											type="text"
+											value={editedProtocol?.docTitle || ''}
+											onChange={(e) => handleFieldChange('docTitle', e.target.value)}
+											className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-left bg-white"
+										/>
+									) : (
+										<div className="text-sm text-gray-900 bg-gray-50 p-2 rounded text-left">
+											{protocol.docTitle || '-'}
+										</div>
+									)}
+								</div>
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1 text-left">Thời gian Ước tính</label>
+									{isEditMode ? (
+										<input
+											type="text"
+											value={editedProtocol?.estimatedTime || ''}
+											onChange={(e) => handleFieldChange('estimatedTime', e.target.value)}
+											className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-left bg-white"
+											placeholder="Ví dụ: 2 giờ"
+										/>
+									) : (
+										<div className="text-sm text-gray-900 bg-gray-50 p-2 rounded text-left">
+											{protocol.estimatedTime || '-'}
+										</div>
+									)}
+								</div>
 							</div>
 
 							{/* Protocol Matrices */}
@@ -435,19 +418,31 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 								<label className="block text-sm font-medium text-gray-700 mb-2 text-left">Nền mẫu áp dụng</label>
 								{isEditMode ? (
 									<textarea
-										value={editedProtocol?.protocolMatrices || ''}
-										onChange={(e) => handleFieldChange('protocolMatrices', e.target.value)}
+										value={
+											Array.isArray(editedProtocol?.protocolMatrices)
+												? editedProtocol.protocolMatrices.join('\n')
+												: editedProtocol?.protocolMatrices || ''
+										}
+										onChange={(e) =>
+											handleFieldChange(
+												'protocolMatrices',
+												e.target.value.split('\n').filter((item) => item.trim()),
+											)
+										}
 										className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-left bg-white"
 										rows={3}
+										placeholder="Nhập mỗi nền mẫu trên một dòng"
 									/>
 								) : (
 									<div className="bg-gray-50 p-4 rounded-lg text-left">
-										{protocol.protocolMatrices ? (
-											<div className="prose prose-sm max-w-none">
-												<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-													{renderMarkdown(protocol.protocolMatrices)}
-												</ReactMarkdown>
-											</div>
+										{Array.isArray(protocol.protocolMatrices) && protocol.protocolMatrices.length > 0 ? (
+											<ul className="list-disc list-inside space-y-1">
+												{protocol.protocolMatrices.map((matrix, index) => (
+													<li key={index} className="text-gray-900">
+														{matrix}
+													</li>
+												))}
+											</ul>
 										) : (
 											<span className="text-gray-500">-</span>
 										)}
@@ -489,19 +484,49 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 									<label className="block text-sm font-medium text-gray-700 mb-2 text-left">Thiết bị, dụng cụ</label>
 									{isEditMode ? (
 										<textarea
-											value={editedProtocol?.equipment || ''}
-											onChange={(e) => handleFieldChange('equipment', e.target.value)}
+											value={
+												Array.isArray(editedProtocol?.equipment)
+													? editedProtocol.equipment
+															.map((item) => (typeof item === 'object' ? JSON.stringify(item) : item))
+															.join('\n')
+													: ''
+											}
+											onChange={(e) => {
+												const lines = e.target.value.split('\n').filter((line) => line.trim());
+												const parsed = lines.map((line) => {
+													try {
+														return JSON.parse(line);
+													} catch {
+														return line;
+													}
+												});
+												handleFieldChange('equipment', parsed);
+											}}
 											className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-left bg-white"
 											rows={8}
+											placeholder="Nhập mỗi thiết bị trên một dòng (JSON hoặc text)"
 										/>
 									) : (
 										<div className="bg-gray-50 p-4 rounded-lg max-h-60 overflow-y-auto text-left">
-											{protocol.equipment ? (
-												<div className="prose prose-sm max-w-none">
-													<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-														{renderMarkdown(protocol.equipment)}
-													</ReactMarkdown>
-												</div>
+											{Array.isArray(protocol.equipment) && protocol.equipment.length > 0 ? (
+												<table className="min-w-full text-xs border border-gray-200">
+													<thead className="bg-gray-50">
+														<tr>
+															<th className="px-2 py-1 border-b text-left font-medium">Tên thiết bị</th>
+															<th className="px-2 py-1 border-b text-left font-medium">Thông số kỹ thuật</th>
+															<th className="px-2 py-1 border-b text-left font-medium">Nhà sản xuất</th>
+														</tr>
+													</thead>
+													<tbody>
+														{protocol.equipment.map((item, index) => (
+															<tr key={index} className="border-b border-gray-100">
+																<td className="px-2 py-1">{item.equipmentName || 'N/A'}</td>
+																<td className="px-2 py-1">{item.technicalSpecifications || '-'}</td>
+																<td className="px-2 py-1">{item.manufacturer || '-'}</td>
+															</tr>
+														))}
+													</tbody>
+												</table>
 											) : (
 												<span className="text-gray-500">-</span>
 											)}
@@ -514,19 +539,51 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 									<label className="block text-sm font-medium text-gray-700 mb-2 text-left">Hóa chất, thuốc thử</label>
 									{isEditMode ? (
 										<textarea
-											value={editedProtocol?.chemicals || ''}
-											onChange={(e) => handleFieldChange('chemicals', e.target.value)}
+											value={
+												Array.isArray(editedProtocol?.chemicals)
+													? editedProtocol.chemicals
+															.map((item) => (typeof item === 'object' ? JSON.stringify(item) : item))
+															.join('\n')
+													: ''
+											}
+											onChange={(e) => {
+												const lines = e.target.value.split('\n').filter((line) => line.trim());
+												const parsed = lines.map((line) => {
+													try {
+														return JSON.parse(line);
+													} catch {
+														return line;
+													}
+												});
+												handleFieldChange('chemicals', parsed);
+											}}
 											className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-left bg-white"
 											rows={8}
+											placeholder="Nhập mỗi hóa chất trên một dòng (JSON hoặc text)"
 										/>
 									) : (
 										<div className="bg-gray-50 p-4 rounded-lg max-h-60 overflow-y-auto text-left">
-											{protocol.chemicals ? (
-												<div className="prose prose-sm max-w-none">
-													<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-														{renderMarkdown(protocol.chemicals)}
-													</ReactMarkdown>
-												</div>
+											{Array.isArray(protocol.chemicals) && protocol.chemicals.length > 0 ? (
+												<table className="min-w-full text-xs border border-gray-200">
+													<thead className="bg-gray-50">
+														<tr>
+															<th className="px-2 py-1 border-b text-left font-medium">Tên hóa chất</th>
+															<th className="px-2 py-1 border-b text-left font-medium">Số lượng</th>
+															<th className="px-2 py-1 border-b text-left font-medium">Độ tinh khiết</th>
+														</tr>
+													</thead>
+													<tbody>
+														{protocol.chemicals.map((item, index) => (
+															<tr key={index} className="border-b border-gray-100">
+																<td className="px-2 py-1">{item.chemicalName || 'N/A'}</td>
+																<td className="px-2 py-1">
+																	{item.quantity && item.unit ? `${item.quantity} ${item.unit}` : '-'}
+																</td>
+																<td className="px-2 py-1">{item.purity || '-'}</td>
+															</tr>
+														))}
+													</tbody>
+												</table>
 											) : (
 												<span className="text-gray-500">-</span>
 											)}
@@ -540,25 +597,142 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 								<label className="block text-sm font-medium text-gray-700 mb-2 text-left">Danh sách chỉ tiêu</label>
 								{isEditMode ? (
 									<textarea
-										value={editedProtocol?.parameters || ''}
-										onChange={(e) => handleFieldChange('parameters', e.target.value)}
+										value={
+											Array.isArray(editedProtocol?.parameters)
+												? editedProtocol.parameters
+														.map((item) => (typeof item === 'object' ? JSON.stringify(item) : item))
+														.join('\n')
+												: ''
+										}
+										onChange={(e) => {
+											const lines = e.target.value.split('\n').filter((line) => line.trim());
+											const parsed = lines.map((line) => {
+												try {
+													return JSON.parse(line);
+												} catch {
+													return line;
+												}
+											});
+											handleFieldChange('parameters', parsed);
+										}}
 										className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-left bg-white"
 										rows={8}
+										placeholder="Nhập mỗi chỉ tiêu trên một dòng (JSON hoặc text)"
 									/>
 								) : (
 									<div className="bg-gray-50 p-4 rounded-lg max-h-60 overflow-y-auto text-left">
-										{protocol.parameters ? (
-											<div className="prose prose-sm max-w-none">
-												<ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-													{renderMarkdown(protocol.parameters)}
-												</ReactMarkdown>
-											</div>
+										{Array.isArray(protocol.parameters) && protocol.parameters.length > 0 ? (
+											<table className="min-w-full text-xs border border-gray-200">
+												<thead className="bg-gray-50">
+													<tr>
+														<th className="px-2 py-1 border-b text-left font-medium">Tên chỉ tiêu</th>
+														<th className="px-2 py-1 border-b text-left font-medium">Nền mẫu</th>
+														<th className="px-2 py-1 border-b text-left font-medium">ID</th>
+													</tr>
+												</thead>
+												<tbody>
+													{protocol.parameters.map((item, index) => (
+														<tr key={index} className="border-b border-gray-100">
+															<td className="px-2 py-1">{item.parameterName || 'N/A'}</td>
+															<td className="px-2 py-1">{item.matrix || '-'}</td>
+															<td className="px-2 py-1">{item.parameterId || '-'}</td>
+														</tr>
+													))}
+												</tbody>
+											</table>
 										) : (
 											<span className="text-gray-500">-</span>
 										)}
 									</div>
 								)}
 							</div>
+
+							{/* Tools */}
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2 text-left">Công cụ</label>
+								{isEditMode ? (
+									<textarea
+										value={
+											Array.isArray(editedProtocol?.tools)
+												? editedProtocol.tools
+														.map((item) => (typeof item === 'object' ? JSON.stringify(item) : item))
+														.join('\n')
+												: ''
+										}
+										onChange={(e) => {
+											const lines = e.target.value.split('\n').filter((line) => line.trim());
+											const parsed = lines.map((line) => {
+												try {
+													return JSON.parse(line);
+												} catch {
+													return line;
+												}
+											});
+											handleFieldChange('tools', parsed);
+										}}
+										className="w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-left bg-white"
+										rows={4}
+										placeholder="Nhập mỗi công cụ trên một dòng (JSON hoặc text)"
+									/>
+								) : (
+									<div className="bg-gray-50 p-4 rounded-lg max-h-40 overflow-y-auto text-left">
+										{Array.isArray(protocol.tools) && protocol.tools.length > 0 ? (
+											<table className="min-w-full text-xs border border-gray-200">
+												<thead className="bg-gray-50">
+													<tr>
+														<th className="px-2 py-1 border-b text-left font-medium">Tên dụng cụ</th>
+														<th className="px-2 py-1 border-b text-left font-medium">Số lượng</th>
+														<th className="px-2 py-1 border-b text-left font-medium">Vật liệu</th>
+													</tr>
+												</thead>
+												<tbody>
+													{protocol.tools.map((item, index) => (
+														<tr key={index} className="border-b border-gray-100">
+															<td className="px-2 py-1">{item.toolName || 'N/A'}</td>
+															<td className="px-2 py-1">
+																{item.quantity && item.unit ? `${item.quantity} ${item.unit}` : '-'}
+															</td>
+															<td className="px-2 py-1">{item.material || '-'}</td>
+														</tr>
+													))}
+												</tbody>
+											</table>
+										) : (
+											<span className="text-gray-500">-</span>
+										)}
+									</div>
+								)}
+							</div>
+
+							{/* Files - Temporarily hidden */}
+							{/* <div>
+								<label className="block text-sm font-medium text-gray-700 mb-2 text-left">Files</label>
+								<div className="bg-gray-50 p-4 rounded-lg text-left">
+									{Array.isArray(protocol.files) && protocol.files.length > 0 ? (
+										<ul className="list-disc list-inside space-y-1">
+											{protocol.files.map((file, index) => (
+												<li key={index} className="text-gray-900">
+													{typeof file === 'object' ? (
+														<div>
+															<strong>{file.name || file.filename || 'N/A'}</strong>
+															{file.size && <span> - Kích thước: {formatFileSize(file.size)}</span>}
+															{file.url && (
+																<a href={file.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 ml-2">
+																	Xem
+																</a>
+															)}
+														</div>
+													) : (
+														file
+													)}
+												</li>
+											))}
+										</ul>
+									) : (
+										<span className="text-gray-500">-</span>
+									)}
+								</div>
+							</div> */}
 
 							{/* Tab Navigation */}
 							<div>
