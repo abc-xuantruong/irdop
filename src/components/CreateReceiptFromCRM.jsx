@@ -396,7 +396,7 @@ const CreateReceiptFromCRM = () => {
                             });
                         };
 
-                        const originalAnalysis = processAnalysis(sample.analysis || sample.analyses);
+                        const originalAnalysis = processAnalysis(sample.analyses || sample.analysis);
                         const proposalAnalysis = processAnalysis(sample.proposalAnalysis);
 
                         return {
@@ -1819,7 +1819,7 @@ const CreateReceiptFromCRM = () => {
                             });
                         };
 
-                        const originalAnalysis = processAnalysis(sample.analysis || sample.analyses);
+                        const originalAnalysis = processAnalysis(sample.analyses || sample.analysis);
                         const proposalAnalysis = processAnalysis(sample.proposalAnalysis);
 
                         return {
