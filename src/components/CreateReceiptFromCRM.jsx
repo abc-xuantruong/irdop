@@ -396,8 +396,8 @@ const CreateReceiptFromCRM = () => {
                             });
                         };
 
-                        const originalAnalysis = processAnalysis(sample.analyses || sample.analysis);
-                        const proposalAnalyses = processAnalysis(sample.proposalAnalyses);
+                        const originalAnalysis = processAnalysis(sample.analysis || sample.analyses);
+                        const proposalAnalysis = processAnalysis(sample.proposalAnalysis);
 
                         return {
                             sampleName: sample.sampleName,
@@ -1819,8 +1819,8 @@ const CreateReceiptFromCRM = () => {
                             });
                         };
 
-                        const originalAnalysis = processAnalysis(sample.analyses || sample.analysis);
-                        const proposalAnalyses = processAnalysis(sample.proposalAnalyses);
+                        const originalAnalysis = processAnalysis(sample.analysis || sample.analyses);
+                        const proposalAnalysis = processAnalysis(sample.proposalAnalysis);
 
                         return {
                             sampleName: sample.sampleName,
