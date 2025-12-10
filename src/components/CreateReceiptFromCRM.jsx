@@ -396,15 +396,15 @@ const CreateReceiptFromCRM = () => {
                             });
                         };
 
-                        const originalAnalysis = processAnalysis(sample.analysis || sample.analyses);
-                        const proposalAnalysis = processAnalysis(sample.proposalAnalysis);
+                        const originalAnalyses = processAnalysis(sample.analyses || sample.analysis);
+                        const proposalAnalyses  = processAnalysis(sample.proposalAnalyses );
 
                         return {
                             sampleName: sample.sampleName,
                             matrix: sample.matrix || "",
                             sampleInformation: sample.sampleInformation || [],
-                            analysis: originalAnalysis, // Default to original
-                            originalAnalysis: originalAnalysis,
+                            analysis: originalAnalyses, // Default to original
+                            originalAnalyses: originalAnalyses,
                             proposalAnalyses: proposalAnalyses,
                             activeAnalysisMode: "default", // 'default' or 'propose'
                         };
@@ -808,7 +808,7 @@ const CreateReceiptFromCRM = () => {
         const sample = updatedSamples[sampleIndex];
 
         const newMode = sample.activeAnalysisMode === "default" ? "propose" : "default";
-        const newAnalysis = newMode === "default" ? sample.originalAnalysis : sample.proposalAnalyses;
+        const newAnalysis = newMode === "default" ? sample.originalAnalyses : sample.proposalAnalyses;
 
         updatedSamples[sampleIndex] = {
             ...sample,
@@ -1819,16 +1819,16 @@ const CreateReceiptFromCRM = () => {
                             });
                         };
 
-                        const originalAnalysis = processAnalysis(sample.analysis || sample.analyses);
-                        const proposalAnalysis = processAnalysis(sample.proposalAnalysis);
+                        const originalAnalyses = processAnalysis(sample.analyses || sample.analysis);
+                        const proposalAnalyses  = processAnalysis(sample.proposalAnalyses );
 
                         return {
                             sampleName: sample.sampleName,
                             matrix: sample.matrix || "",
                             sampleInformation: sample.sampleInformation || [],
-                            analysis: originalAnalysis, // Default to original
-                            originalAnalysis: originalAnalysis,
-                            proposalAnalyses: proposalAnalyses,
+                            analysis: originalAnalyses, // Default to original
+                            originalAnalyses: originalAnalyses,
+                            proposalAnalyses : proposalAnalyses  || [],
                             activeAnalysisMode: "default", // 'default' or 'propose'
                         };
                     }),
