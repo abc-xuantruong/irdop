@@ -781,9 +781,9 @@ ${tableHTML}
 	<div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; justify-content:space-between;height:2.7cm;">
 		<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between; max-width:fit-content;">
 			${
-				!showSign
+				showSign
 					? `<strong style="font-size:12px; line-height:1.2; margin:0;">TRƯỞNG PHÒNG KIỂM NGHIỆM<br>PHÒNG ĐẢM BẢO CHẤT LƯỢNG / Quality Assurance Manager</strong>
-			<p style="font-size:12px; margin:0; line-height:1.4;">Nguyễn Công Phúc</p>`
+			<p style="font-size:12px; margin:0; line-height:1.4;">Trần Thị Lan</p>`
 					: ''
 			}
 		</div>
@@ -2352,9 +2352,9 @@ ${tableHTML}
 	<div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; justify-content:space-between;height:2.7cm;">
 		<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between; max-width:fit-content;">
 			${
-				!sample.showSign
+				sample.showSign
 					? `<strong style="font-size:12px; line-height:1.2; margin:0;">TRƯỞNG PHÒNG KIỂM NGHIỆM<br>PHÒNG ĐẢM BẢO CHẤT LƯỢNG / Quality Assurance Manager</strong>
-			<p style="font-size:12px; margin:0; line-height:1.4;">Nguyễn Công Phúc</p>`
+			<p style="font-size:12px; margin:0; line-height:1.4;">Trần Thị Lan</p>`
 					: ''
 			}
 		</div>

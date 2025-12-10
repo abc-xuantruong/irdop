@@ -1,9 +1,9 @@
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import React, { useState, useEffect, useContext, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { GlobalContext } from "../../contexts/GlobalContext";
-import { apiGet, apiPost } from "../../contexts/helperFunctionCallAPI";
-import { convertValueToHTML, convertHTMLToValue } from "../../contexts/formatHelpers";
-import { useLocation, useNavigate } from "react-router-dom";
+import { GlobalContext } from "../../../contexts/GlobalContext";
+import { apiGet, apiPost } from "../../../contexts/helperFunctionCallAPI";
+import { convertValueToHTML, convertHTMLToValue } from "../../../contexts/formatHelpers";
 import { toast, ToastContainer } from "react-toastify";
 import { IoIosArrowDown } from "react-icons/io";
 import { MdAttachFile } from "react-icons/md";
@@ -12,10 +12,12 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import LabBulkUpdate from "./LabBulkUpdate";
 import LoginPopup from "./LoginPopup";
-import ConfirmLabResult from "../noti box/confirmLabResult";
+import ConfirmLabResult from "./ConfirmLabResult";
 import Cookies from "js-cookie";
 import axios from "axios";
 import Swal from "sweetalert2";
+
+const API_ENDPOINT = "https://red.irdop.org/v1/analysis/get/processing";
 
 // Custom CSS for thin scrollbars and display experience
 const customScrollbarStyle = `
@@ -500,8 +502,8 @@ const HeaderCell = ({ columnName, displayName, isFilterable = true, isSortable =
     };
 
     return (
-        <th
-            className={`px-2 py-2 text-left text-xs font-semibold uppercase tracking-wider border-b-2 border-blue-700 hover:bg-blue-200 bg-blue-100 relative cursor-pointer ${className}`}
+        <TableHead
+            className={`h-auto px-2 py-2 text-left text-xs font-semibold uppercase tracking-wider border-b-2 border-blue-700 hover:bg-blue-200 bg-blue-100 relative cursor-pointer ${className}`}
             style={{ width }}
             onClick={handleHeaderClick}
         >
@@ -531,29 +533,24 @@ const HeaderCell = ({ columnName, displayName, isFilterable = true, isSortable =
                     )}
                 </div>
             </div>
-        </th>
+        </TableHead>
     );
 };
 
 const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
     const { technicians, currentUser } = useContext(GlobalContext);
-    const location = useLocation();
-    const navigate = useNavigate();
 
     /*
-	FILTERING AND URL MANAGEMENT LOGIC:
+	FILTERING LOGIC (STATE-BASED):
 	
 	1. Initial Load:
-	   - Check for filter-related query params on first load
-	   - If params exist: parse them into state and load data accordingly
-	   - If no params: use default values without writing defaults to URL
-	   - Load both sidebar and table data in single API call
+	   - Load data using default state or enforced filters (e.g., technicianId for user mode)
+	   - No longer reads from URL query parameters
 	
-	2. After Initial Load:
-	   - Any filter changes (sidebar selections, table filters, sorting) update URL params
-	   - URL params trigger new API calls for both sidebar and table data
-	   - Search box input does NOT update URL (uses debounced API calls only)
-	   - Default values (page=1, itemsPerPage=100, etc.) are not written to URL
+	2. Filter Updates:
+	   - All filter changes (sidebar, table header, sorting, pagination) update component state (filters, currentPage, etc.)
+	   - State changes trigger useEffect to fetch new data
+	   - URL is NOT updated
 	*/
 
     // State management
@@ -574,20 +571,49 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
     const [isDragging, setIsDragging] = useState(false);
     const [dragStartId, setDragStartId] = useState(null);
 
+    // Handle select all checkbox
+    const handleSelectAll = (e) => {
+        const isChecked = e.target.checked;
+        const newSelectedIds = new Set(selectedAnalysisIds);
+        const newSelectedRows = new Map(selectedRowsData);
+
+        if (isChecked) {
+            data.forEach((row) => {
+                newSelectedIds.add(row.id);
+                newSelectedRows.set(row.id, row);
+            });
+        } else {
+            data.forEach((row) => {
+                newSelectedIds.delete(row.id);
+                newSelectedRows.delete(row.id);
+            });
+        }
+
+        setSelectedAnalysisIds(newSelectedIds);
+        setSelectedRowsData(newSelectedRows);
+    };
+
+    // Handle individual row selection
+    const toggleSelection = (id, row) => {
+        const newSelectedIds = new Set(selectedAnalysisIds);
+        const newSelectedRows = new Map(selectedRowsData);
+
+        if (newSelectedIds.has(id)) {
+            newSelectedIds.delete(id);
+            newSelectedRows.delete(id);
+        } else {
+            newSelectedIds.add(id);
+            newSelectedRows.set(id, row);
+        }
+
+        setSelectedAnalysisIds(newSelectedIds);
+        setSelectedRowsData(newSelectedRows);
+    };
+
+    // Check if there are selected samples
+    const hasSelectedSamples = selectedAnalysisIds.size > 0;
+
     // Sidebar state
-    const [parameterSearchTerm, setParameterSearchTerm] = useState("");
-    const [parametersData, setParametersData] = useState({
-        analysis: [],
-        sample: [],
-        matrix: [],
-        technician: [],
-        pagination: {},
-    });
-    const [selectedParameter, setSelectedParameter] = useState("");
-    const [sidebarExpandedSections, setSidebarExpandedSections] = useState({
-        analysis: true, // Default expanded
-    });
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
     // Table state
     const [sortConfig, setSortConfig] = useState({ column: "sampleId", direction: "ASC" });
@@ -606,6 +632,7 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
     const [isFilterCreationMode, setIsFilterCreationMode] = useState(false);
     const [activeFilterColumn, setActiveFilterColumn] = useState(null);
     const [filterSearchTerm, setFilterSearchTerm] = useState("");
+    const [parameterSearchTerm, setParameterSearchTerm] = useState("");
     const [filterResults, setFilterResults] = useState([]);
     const [filterLoading, setFilterLoading] = useState(false);
     const [selectedFilterValues, setSelectedFilterValues] = useState([]);
@@ -697,10 +724,12 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
     const [previewUrl, setPreviewUrl] = useState("");
 
     // Ref to prevent unnecessary API calls and track request sequence
-    const lastSearchTermRef = useRef("");
+
     const isCurrentlyFetchingRef = useRef(false);
     const requestSequenceRef = useRef(0);
-    const prevLocationSearchRef = useRef("");
+    const lastFetchViewModeRef = useRef(viewMode);
+    const isDraggingRef = useRef(false);
+    const dragStartIndexRef = useRef(-1);
 
     // Handle drag selection
     // Mouse event handlers - REMOVED
@@ -721,99 +750,64 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         };
     }, [activeFilterColumn]);
 
-    // Enforce technician filter if viewMode is user
+    const prevViewModeRef = useRef(viewMode);
+
+    // Enforce technician filter logic
+    // Enforce technician filter logic
     useEffect(() => {
+        // Handle transition from User to Admin
+        if (prevViewModeRef.current === "user" && viewMode === "admin") {
+            // Clear technician filter when switching to admin mode
+            setFilters((prev) => {
+                const newFilters = { ...prev };
+                if (newFilters.headerFilters) {
+                    delete newFilters.headerFilters.technicianId;
+                }
+                return newFilters;
+            });
+        }
+
+        // Handle User mode enforcement
         if (viewMode === "user" && currentUser?.identity_uid) {
-            const queryParams = new URLSearchParams(location.search);
-            const currentTechId = queryParams.get("technicianId");
             const myId = JSON.stringify([currentUser.identity_uid]);
 
-            if (currentTechId !== myId) {
-                queryParams.set("technicianId", myId);
-                queryParams.delete("page");
-                navigate(`${location.pathname}?${queryParams.toString()}`, { replace: true });
-            }
+            // Enforce current user as technician filter
+            setFilters((prev) => {
+                const newFilters = { ...prev };
+                newFilters.headerFilters = newFilters.headerFilters || {};
+
+                // Only update if not already set to current user
+                if (newFilters.headerFilters.technicianId !== myId) {
+                    newFilters.headerFilters.technicianId = [currentUser.identity_uid]; // Store as array for consistency
+                }
+                return newFilters;
+            });
         }
-    }, [viewMode, currentUser, location.search, navigate]);
+
+        prevViewModeRef.current = viewMode;
+    }, [viewMode, currentUser]);
 
     // Initial data loading
     const loadInitialData = async () => {
         setIsInitialDataLoading(true);
-        const searchParams = new URLSearchParams(location.search);
 
-        const hasFilterParams = Array.from(searchParams.keys()).some((key) =>
-            [
-                "parameters",
-                "protocols",
-                "columnSort",
-                "sortBy",
-                "sampleId",
-                "parameterName",
-                "protocolCode",
-                "matrix",
-                "deadline",
-                "docId",
-                "resultValue",
-                "technicianId",
-                "protocolSource",
-                "deadlineStartAt",
-                "deadlineEndAt",
-                "deadlineType",
-            ].includes(key),
-        );
+        // Use current state for initial load
+        // If viewMode is user, the useEffect above will handle setting the technician filter
+        // and trigger a re-fetch if needed, but we need an initial fetch here.
 
-        let newFilters = { ...filters };
-        let newCurrentPage = currentPage;
-        let newItemsPerPage = itemsPerPage;
-        let newSortConfig = { ...sortConfig };
+        let initialFilters = { ...filters };
 
-        // Always parse query parameters (not just when hasFilterParams is true)
-        searchParams.forEach((value, key) => {
-            if (key === "itemsPerPage") {
-                newItemsPerPage = parseInt(value) || 100;
-            } else if (key === "page") {
-                newCurrentPage = parseInt(value) || 1;
-            } else if (key === "parameters") {
-                try {
-                    const parsedParameters = JSON.parse(value);
-                    newFilters.parameters = Array.isArray(parsedParameters) ? parsedParameters : [];
-                } catch (e) {
-                    newFilters.parameters = [];
-                }
-            } else if (key === "protocols") {
-                try {
-                    const parsedProtocols = JSON.parse(value);
-                    newFilters.protocols = Array.isArray(parsedProtocols) ? parsedProtocols : [];
-                } catch (e) {
-                    newFilters.protocols = [];
-                }
-            } else if (key === "columnSort") {
-                newFilters.columnSort = value;
-                newSortConfig.column = value;
-            } else if (key === "sortBy") {
-                newFilters.sortBy = value;
-                newSortConfig.direction = value;
-            } else if (key !== "mode") {
-                // Handle header filters
-                try {
-                    const parsedValue = JSON.parse(value);
-                    newFilters.headerFilters = newFilters.headerFilters || {};
-                    newFilters.headerFilters[key] = parsedValue;
-                } catch (e) {
-                    newFilters.headerFilters = newFilters.headerFilters || {};
-                    newFilters.headerFilters[key] = value;
-                }
-            }
-        });
+        // If user mode, ensure technician filter is set initially if we have the user info
+        if (viewMode === "user" && currentUser?.identity_uid) {
+            initialFilters.headerFilters = initialFilters.headerFilters || {};
+            initialFilters.headerFilters.technicianId = [currentUser.identity_uid];
 
-        // Load data FIRST before updating states to avoid triggering other useEffects
-        await Promise.all([fetchParameters("", newFilters), fetchAnalysisData(false, newFilters, newCurrentPage, newItemsPerPage)]);
+            // Update state to match
+            setFilters(initialFilters);
+        }
 
-        // Update states AFTER data is loaded
-        if (newCurrentPage !== currentPage) setCurrentPage(newCurrentPage);
-        if (newItemsPerPage !== itemsPerPage) setItemsPerPage(newItemsPerPage);
-        if (JSON.stringify(newSortConfig) !== JSON.stringify(sortConfig)) setSortConfig(newSortConfig);
-        if (JSON.stringify(newFilters) !== JSON.stringify(filters)) setFilters(newFilters);
+        // Load data
+        await fetchAnalysisData(false, initialFilters, currentPage, itemsPerPage);
 
         setIsInitialDataLoading(false);
     };
@@ -1037,90 +1031,6 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         }
     };
 
-    // Fetch parameters list
-    const fetchParameters = async (searchTerm = "", customFilters = null) => {
-        try {
-            const useFilters = customFilters || filters;
-            const queryParams = new URLSearchParams(location.search);
-
-            const requestBody = {
-                searchTerm: searchTerm,
-                technicianIds: useFilters.headerFilters.technicianId || null,
-            };
-
-            // Handle deadline filtering - priority to specific deadline params from sidebar
-            const deadlineStartAt = queryParams.get("deadlineStartAt");
-            const deadlineEndAt = queryParams.get("deadlineEndAt");
-            let deadline = queryParams.get("deadline") || useFilters.headerFilters.deadline;
-
-            // Parse deadline if it's a JSON string from query params
-            if (typeof deadline === "string" && deadline.startsWith("[")) {
-                try {
-                    deadline = JSON.parse(deadline);
-                } catch (e) {
-                    // If parsing fails, keep as string
-                    console.warn("Failed to parse deadline from query params:", e);
-                }
-            }
-
-            if (deadlineStartAt && deadlineEndAt) {
-                // Sidebar range filtering (3days, week)
-                requestBody.deadlineStartAt = deadlineStartAt;
-                requestBody.deadlineEndAt = deadlineEndAt;
-            } else if (deadlineEndAt) {
-                // Sidebar overdue filtering (today)
-                requestBody.deadlineEndAt = deadlineEndAt;
-            } else if (deadline) {
-                // Header filtering or sidebar specific date - separate date range from checkbox values
-                let hasDateRange = false;
-                let checkboxValues = [];
-
-                if (Array.isArray(deadline)) {
-                    // Process array to separate date range objects from regular values
-                    deadline.forEach((item) => {
-                        if (typeof item === "object" && item !== null && (item.start || item.end)) {
-                            // This is a date range object
-                            if (!hasDateRange) {
-                                if (item.start) requestBody.deadlineStartAt = item.start;
-                                if (item.end) requestBody.deadlineEndAt = item.end;
-                                hasDateRange = true;
-                            }
-                        } else if (item && typeof item === "string") {
-                            // This is a checkbox value
-                            checkboxValues.push(item);
-                        }
-                    });
-                } else if (typeof deadline === "object" && deadline !== null && (deadline.start || deadline.end)) {
-                    // Single date range object
-                    if (deadline.start) requestBody.deadlineStartAt = deadline.start;
-                    if (deadline.end) requestBody.deadlineEndAt = deadline.end;
-                    hasDateRange = true;
-                } else if (deadline && typeof deadline === "string") {
-                    // Single checkbox value
-                    checkboxValues.push(deadline);
-                }
-
-                // Add checkbox values to deadline array if any exist
-                if (checkboxValues.length > 0) {
-                    requestBody.deadline = checkboxValues;
-                }
-            }
-            const response = await apiPost(PARAMETER_API_ENDPOINT, requestBody);
-
-            if (response.status < 300 && response.data) {
-                setParametersData({
-                    analysis: response.data.result || [],
-                    sample: [], // Removed as per requirement
-                    matrix: [], // Removed as per requirement
-                    technician: [], // Removed as per requirement
-                    pagination: response.data.pagination || {},
-                });
-            }
-        } catch (error) {
-            setError("Lỗi khi tải danh sách chỉ tiêu: " + error.message);
-        }
-    };
-
     // Fetch filter values for column
     const fetchFilterValues = async (column, searchTerm = "") => {
         setFilterLoading(true);
@@ -1300,11 +1210,7 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         };
     }, []);
 
-    // API Constants
-    const API_ENDPOINT = "https://red.irdop.org/v1/analysis/get/processing";
-    const PARAMETER_API_ENDPOINT = "https://red.irdop.org/v1/analysis/get/parameter/current";
-
-    // Parse URL parameters and load initial data
+    // Parse URL parameters and load initial data - REMOVED URL PARSING
     useEffect(() => {
         if (isInitialLoad) {
             loadInitialData();
@@ -1312,191 +1218,39 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         }
     }, []);
 
-    // Main useEffect to handle all query params changes and call appropriate APIs
+    // Main useEffect to handle state changes and call appropriate APIs
     useEffect(() => {
         // Don't run during initial load or initial data loading
         if (isInitialLoad || isInitialDataLoading) {
             return;
         }
 
-        const searchParams = new URLSearchParams(location.search);
+        // Debounce API calls to prevent rapid successive calls
+        const timeoutId = setTimeout(() => {
+            if (!isCurrentlyFetchingRef.current) {
+                isCurrentlyFetchingRef.current = true;
 
-        // Extract all relevant query parameters
-        const pageParam = searchParams.get("page");
-        const itemsPerPageParam = searchParams.get("itemsPerPage");
-        const parametersParam = searchParams.get("parameters");
-        const protocolsParam = searchParams.get("protocols");
-        const columnSortParam = searchParams.get("columnSort");
-        const sortByParam = searchParams.get("sortBy");
-
-        // Header filter parameters
-        const sampleIdParam = searchParams.get("sampleId");
-        const parameterNameParam = searchParams.get("parameterName");
-        const protocolCodeParam = searchParams.get("protocolCode");
-        const matrixParam = searchParams.get("matrix");
-        const deadlineParam = searchParams.get("deadline");
-        const deadlineStartAtParam = searchParams.get("deadlineStartAt");
-        const deadlineEndAtParam = searchParams.get("deadlineEndAt");
-        const deadlineTypeParam = searchParams.get("deadlineType");
-        const docIdParam = searchParams.get("docId");
-        const resultValueParam = searchParams.get("resultValue");
-        const protocolSourceParam = searchParams.get("protocolSource");
-        const technicianIdParam = searchParams.get("technicianId");
-
-        // Update component states based on URL params
-        const pageNumber = pageParam ? parseInt(pageParam, 10) : 1;
-        const itemsPerPageValue = itemsPerPageParam ? parseInt(itemsPerPageParam, 10) : itemsPerPage;
-
-        // Build new filters object from URL parameters
-        let newFilters = { ...filters };
-        let needsUpdate = false;
-
-        // Update pagination if different
-        if (pageNumber !== currentPage) {
-            setCurrentPage(pageNumber);
-            needsUpdate = true;
-        }
-
-        if (itemsPerPageValue !== itemsPerPage) {
-            setItemsPerPage(itemsPerPageValue);
-            needsUpdate = true;
-        }
-
-        // Parse and update filter arrays
-        if (parametersParam) {
-            try {
-                const parsedParameters = JSON.parse(parametersParam);
-                if (JSON.stringify(parsedParameters) !== JSON.stringify(newFilters.parameters)) {
-                    newFilters.parameters = Array.isArray(parsedParameters) ? parsedParameters : [];
-                    needsUpdate = true;
-                }
-            } catch (e) {
-                newFilters.parameters = [];
-                needsUpdate = true;
+                // Fetch data with current state
+                fetchAnalysisData(false, filters, currentPage, itemsPerPage).finally(() => {
+                    isCurrentlyFetchingRef.current = false;
+                });
             }
-        } else if (newFilters.parameters.length > 0) {
-            newFilters.parameters = [];
-            needsUpdate = true;
-        }
+        }, 100);
 
-        if (protocolsParam) {
-            try {
-                const parsedProtocols = JSON.parse(protocolsParam);
-                if (JSON.stringify(parsedProtocols) !== JSON.stringify(newFilters.protocols)) {
-                    newFilters.protocols = Array.isArray(parsedProtocols) ? parsedProtocols : [];
-                    needsUpdate = true;
-                }
-            } catch (e) {
-                newFilters.protocols = [];
-                needsUpdate = true;
-            }
-        } else if (newFilters.protocols.length > 0) {
-            newFilters.protocols = [];
-            needsUpdate = true;
-        }
+        return () => clearTimeout(timeoutId);
+    }, [filters, currentPage, itemsPerPage, sortConfig]);
 
-        // Update sort parameters
-        if (columnSortParam && columnSortParam !== newFilters.columnSort) {
-            newFilters.columnSort = columnSortParam;
-            setSortConfig((prev) => ({ ...prev, column: columnSortParam }));
-            needsUpdate = true;
-        }
-
-        if (sortByParam && sortByParam !== newFilters.sortBy) {
-            newFilters.sortBy = sortByParam;
-            setSortConfig((prev) => ({ ...prev, direction: sortByParam }));
-            needsUpdate = true;
-        }
-
-        // Update header filters
-        const newHeaderFilters = { ...newFilters.headerFilters };
-
-        // Helper function to parse and update header filter
-        const updateHeaderFilter = (paramValue, filterKey) => {
-            if (paramValue) {
-                try {
-                    const parsedValue = JSON.parse(paramValue);
-                    if (JSON.stringify(parsedValue) !== JSON.stringify(newHeaderFilters[filterKey])) {
-                        newHeaderFilters[filterKey] = parsedValue;
-                        return true;
-                    }
-                } catch (e) {
-                    if (paramValue !== newHeaderFilters[filterKey]) {
-                        newHeaderFilters[filterKey] = paramValue;
-                        return true;
-                    }
-                }
-            } else if (newHeaderFilters[filterKey] !== undefined) {
-                delete newHeaderFilters[filterKey];
-                return true;
-            }
-            return false;
-        };
-
-        // Update all header filters
-        if (updateHeaderFilter(sampleIdParam, "sampleId")) needsUpdate = true;
-        if (updateHeaderFilter(parameterNameParam, "parameterName")) needsUpdate = true;
-        if (updateHeaderFilter(protocolCodeParam, "protocolCode")) needsUpdate = true;
-        if (updateHeaderFilter(matrixParam, "matrix")) needsUpdate = true;
-        if (updateHeaderFilter(deadlineParam, "deadline")) needsUpdate = true;
-        if (updateHeaderFilter(docIdParam, "docId")) needsUpdate = true;
-        if (updateHeaderFilter(resultValueParam, "resultValue")) needsUpdate = true;
-        if (updateHeaderFilter(protocolSourceParam, "protocolSource")) needsUpdate = true;
-        if (updateHeaderFilter(technicianIdParam, "technicianId")) needsUpdate = true;
-
-        // Check for sidebar deadline params changes (these are handled separately in fetchAnalysisData)
-        // We need to trigger fetch if these change even though they're not in headerFilters
-        const prevSearchParams = new URLSearchParams(prevLocationSearchRef.current || "");
-        const prevDeadlineStartAt = prevSearchParams.get("deadlineStartAt");
-        const prevDeadlineEndAt = prevSearchParams.get("deadlineEndAt");
-        const prevDeadlineType = prevSearchParams.get("deadlineType");
-
-        if (deadlineStartAtParam !== prevDeadlineStartAt || deadlineEndAtParam !== prevDeadlineEndAt || deadlineTypeParam !== prevDeadlineType) {
-            needsUpdate = true;
-        }
-
-        // Store current search params for next comparison
-        prevLocationSearchRef.current = location.search;
-
-        newFilters.headerFilters = newHeaderFilters;
-
-        // If any filters changed, update state and fetch data
-        if (needsUpdate) {
-            if (JSON.stringify(newFilters) !== JSON.stringify(filters)) {
-                setFilters(newFilters);
-            }
-
-            // Debounce API calls to prevent rapid successive calls
-            const timeoutId = setTimeout(() => {
-                if (!isCurrentlyFetchingRef.current) {
-                    isCurrentlyFetchingRef.current = true;
-
-                    // Fetch data with new filters
-                    Promise.all([fetchParameters(parameterSearchTerm, newFilters), fetchAnalysisData(false, newFilters, pageNumber, itemsPerPageValue)]).finally(() => {
-                        isCurrentlyFetchingRef.current = false;
-                    });
-                }
-            }, 100);
-
-            return () => clearTimeout(timeoutId);
-        }
-    }, [location.search]); // Only depend on URL search params
-
-    // Search parameters with debounce (only for search box, doesn't update URL)
+    // Search parameters with debounce (only for search box)
     useEffect(() => {
-        // Don't fetch during initial load or initial data loading
-        if (!isInitialLoad && !isInitialDataLoading && lastSearchTermRef.current !== parameterSearchTerm) {
-            lastSearchTermRef.current = parameterSearchTerm;
+        if (isInitialLoad || isInitialDataLoading) return;
 
-            const timeoutId = setTimeout(() => {
-                if (!isCurrentlyFetchingRef.current) {
-                    fetchParameters(parameterSearchTerm);
-                }
-            }, 300);
+        const timeoutId = setTimeout(() => {
+            fetchAnalysisData(false);
+        }, 500);
 
-            return () => clearTimeout(timeoutId);
-        }
-    }, [parameterSearchTerm, isInitialLoad, isInitialDataLoading]); // Add isInitialDataLoading dependency
+        return () => clearTimeout(timeoutId);
+    }, [parameterSearchTerm]);
+
     useEffect(() => {
         if (activeFilterColumn) {
             // For special filter columns (except deadline), don't fetch from API
@@ -1517,34 +1271,9 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         const hasParameterFilters = filters.parameters && filters.parameters.length > 0;
         const hasProtocolFilters = filters.protocols && filters.protocols.length > 0;
         const hasHeaderFilters = filters.headerFilters && Object.keys(filters.headerFilters).length > 0;
-        const hasSearchTerm = parameterSearchTerm && parameterSearchTerm.trim().length > 0;
 
-        return hasParameterFilters || hasProtocolFilters || hasHeaderFilters || hasSearchTerm;
-    }, [filters.parameters, filters.protocols, filters.headerFilters, parameterSearchTerm]);
-
-    // Auto-refresh data every 60 seconds
-    useEffect(() => {
-        if (!isInitialLoad && !isInitialDataLoading) {
-            const autoRefreshInterval = setInterval(() => {
-                // Only auto-refresh when not fetching, no filters are active, and NOT in result entry session
-                if (
-                    !isCurrentlyFetchingRef.current &&
-                    !hasActiveFilters && // Only refresh when no filters are active
-                    !isResultEntrySession // Don't refresh during result entry session
-                ) {
-                    // Use current state instead of parsing URL to maintain filters
-                    fetchAnalysisData(true, filters, currentPage, itemsPerPage);
-                }
-            }, 60000); // 60 seconds
-
-            return () => clearInterval(autoRefreshInterval);
-        }
-    }, [
-        isInitialLoad, // Only depend on isInitialLoad to avoid unnecessary re-creation of interval
-        isInitialDataLoading, // Add isInitialDataLoading dependency
-        hasActiveFilters, // Add hasActiveFilters as dependency to update interval behavior
-        isResultEntrySession, // Add to prevent refresh during session
-    ]);
+        return hasParameterFilters || hasProtocolFilters || hasHeaderFilters;
+    }, [filters.parameters, filters.protocols, filters.headerFilters]);
 
     // Close technician dropdown when clicking outside
     useEffect(() => {
@@ -1612,55 +1341,59 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         // If same item is selected, clear it
         if (selectedParameter === itemKey) {
             setSelectedParameter("");
-            // Clear all related filters in URL
-            const queryParams = new URLSearchParams(location.search);
-            queryParams.delete("parameters");
-            queryParams.delete("protocols");
-            queryParams.delete("parameterName");
-            queryParams.delete("protocolCode");
-            queryParams.delete("page");
-            navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
+            // Clear all related filters
+            setFilters((prev) => {
+                const newFilters = { ...prev };
+                newFilters.parameters = [];
+                newFilters.protocols = [];
+                if (newFilters.headerFilters) {
+                    delete newFilters.headerFilters.parameterName;
+                    delete newFilters.headerFilters.protocolCode;
+                }
+                return newFilters;
+            });
+            setCurrentPage(1);
         } else {
             // Select new item
             setSelectedParameter(itemKey);
 
-            // Update URL parameters instead of directly setting filters
-            const queryParams = new URLSearchParams(location.search);
+            // Set new filters for analysis selection
+            setFilters((prev) => {
+                const newFilters = { ...prev };
+                // Clear existing sidebar filters
+                newFilters.parameters = [];
+                newFilters.protocols = [];
+                if (newFilters.headerFilters) {
+                    delete newFilters.headerFilters.parameterName;
+                    delete newFilters.headerFilters.protocolCode;
+                }
 
-            // Clear all existing sidebar filters first
-            queryParams.delete("parameters");
-            queryParams.delete("protocols");
-            queryParams.delete("parameterName");
-            queryParams.delete("protocolCode");
-            queryParams.delete("page");
-
-            if (type === "analysis") {
-                const normalizedProtocolCode = protocolCode && protocolCode.trim() ? protocolCode : "null";
-                // Set new filters for analysis selection
-                queryParams.set("parameterName", JSON.stringify([itemName]));
-                queryParams.set("protocolCode", JSON.stringify([normalizedProtocolCode]));
-            }
-
-            navigate(`${location.pathname}?${queryParams.toString()}`);
+                if (type === "analysis") {
+                    const normalizedProtocolCode = protocolCode && protocolCode.trim() ? protocolCode : "null";
+                    newFilters.headerFilters = {
+                        ...newFilters.headerFilters,
+                        parameterName: [itemName],
+                        protocolCode: [normalizedProtocolCode],
+                    };
+                }
+                return newFilters;
+            });
+            setCurrentPage(1);
         }
     };
 
     // Clear parameter
     const clearParameter = () => {
-        // Clear all filter parameters from URL
-        const queryParams = new URLSearchParams(location.search);
-        queryParams.delete("parameters");
-        queryParams.delete("protocols");
-        queryParams.delete("parameterName");
-        queryParams.delete("protocolCode");
-        queryParams.delete("deadline");
-        queryParams.delete("docId");
-        queryParams.delete("resultValue");
-        queryParams.delete("protocolSource");
-        queryParams.delete("page");
-
-        navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
+        // Clear all filter parameters
+        setFilters((prev) => ({
+            ...prev,
+            parameters: [],
+            protocols: [],
+            headerFilters: {},
+        }));
+        setCurrentPage(1);
         setSelectedParameter("");
+        setParameterSearchTerm("");
     };
 
     // Select deadline filter (sidebar version)
@@ -1672,54 +1405,53 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         setFilterResults([]);
         setSelectedFilterValues([]);
 
-        // Update URL parameters instead of directly setting filters
-        const queryParams = new URLSearchParams(location.search);
+        // Clear any existing deadline-related filters
+        setFilters((prev) => {
+            const newFilters = { ...prev };
+            if (newFilters.headerFilters) {
+                delete newFilters.headerFilters.deadline;
+                delete newFilters.headerFilters.deadlineStartAt;
+                delete newFilters.headerFilters.deadlineEndAt;
+                delete newFilters.headerFilters.deadlineType;
+            }
 
-        // Clear any existing deadline-related query params
-        queryParams.delete("deadline");
-        queryParams.delete("deadlineStartAt");
-        queryParams.delete("deadlineEndAt");
+            // Check if same deadline filter is selected, clear it
+            // We need to store the current deadline type somewhere if we want to toggle it off
+            // For now, let's assume clicking again doesn't toggle off unless we store it in state
+            // But we can check the current filters to see if they match
 
-        // Check if same deadline filter is selected, clear it
-        const currentDeadlineType = queryParams.get("deadlineType");
-        if (currentDeadlineType === deadlineType) {
-            queryParams.delete("deadlineType");
-        } else {
-            queryParams.set("deadlineType", deadlineType);
+            // Actually, let's just set the new filter
+            newFilters.headerFilters = newFilters.headerFilters || {};
+            newFilters.headerFilters.deadlineType = deadlineType;
 
             const today = new Date();
             const formatDate = (date) => {
                 return date.toISOString().split("T")[0]; // YYYY-MM-DD format
             };
 
-            // Handle different deadline types with specific query params
+            // Handle different deadline types
             switch (deadlineType) {
                 case "overdue":
-                    // Today's date for overdue items
-                    queryParams.set("deadlineEndAt", formatDate(today));
+                    newFilters.headerFilters.deadlineEndAt = formatDate(today);
                     break;
                 case "3days":
-                    // From today to 3 days later
                     const threeDaysLater = new Date(today);
                     threeDaysLater.setDate(today.getDate() + 3);
-                    queryParams.set("deadlineStartAt", formatDate(today));
-                    queryParams.set("deadlineEndAt", formatDate(threeDaysLater));
+                    newFilters.headerFilters.deadlineStartAt = formatDate(today);
+                    newFilters.headerFilters.deadlineEndAt = formatDate(threeDaysLater);
                     break;
                 case "week":
-                    // From today to 1 week later
                     const oneWeekLater = new Date(today);
                     oneWeekLater.setDate(today.getDate() + 7);
-                    queryParams.set("deadlineStartAt", formatDate(today));
-                    queryParams.set("deadlineEndAt", formatDate(oneWeekLater));
+                    newFilters.headerFilters.deadlineStartAt = formatDate(today);
+                    newFilters.headerFilters.deadlineEndAt = formatDate(oneWeekLater);
                     break;
                 default:
-                    // For specific date selection, will be handled by date picker
                     break;
             }
-        }
-
-        queryParams.delete("page"); // Reset to page 1
-        navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
+            return newFilters;
+        });
+        setCurrentPage(1);
     };
 
     // Select my tasks filter
@@ -1731,32 +1463,33 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         setFilterResults([]);
         setSelectedFilterValues([]);
 
-        // Check if my tasks filter is already active
-        const queryParams = new URLSearchParams(location.search);
-        const currentTechnicianId = queryParams.get("technicianId");
-        let isMyTasksActive = false;
+        setFilters((prev) => {
+            const newFilters = { ...prev };
+            newFilters.headerFilters = newFilters.headerFilters || {};
 
-        if (currentTechnicianId) {
-            try {
-                const technicianIds = JSON.parse(currentTechnicianId);
-                isMyTasksActive = Array.isArray(technicianIds) && technicianIds.includes(currentUser?.identity_uid);
-            } catch (e) {
-                isMyTasksActive = currentTechnicianId === currentUser?.identity_uid;
+            const currentTechnicianId = newFilters.headerFilters.technicianId;
+            let isMyTasksActive = false;
+
+            if (currentTechnicianId) {
+                try {
+                    // It might be an array or string depending on how it's stored
+                    const technicianIds = Array.isArray(currentTechnicianId) ? currentTechnicianId : JSON.parse(currentTechnicianId);
+                    isMyTasksActive = Array.isArray(technicianIds) && technicianIds.includes(currentUser?.identity_uid);
+                } catch (e) {
+                    isMyTasksActive = currentTechnicianId === currentUser?.identity_uid;
+                }
             }
-        }
 
-        if (isMyTasksActive) {
-            // Clear my tasks filter
-            queryParams.delete("technicianId");
-            toast.info("Đã tắt bộ lọc chỉ tiêu của bản thân");
-        } else {
-            // Apply my tasks filter
-            queryParams.set("technicianId", JSON.stringify([currentUser?.identity_uid]));
-            toast.info("Đã bật bộ lọc chỉ tiêu của bản thân");
-        }
-
-        queryParams.delete("page"); // Reset to page 1
-        navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
+            if (isMyTasksActive) {
+                delete newFilters.headerFilters.technicianId;
+                toast.info("Đã tắt bộ lọc chỉ tiêu của bản thân");
+            } else {
+                newFilters.headerFilters.technicianId = [currentUser?.identity_uid];
+                toast.info("Đã bật bộ lọc chỉ tiêu của bản thân");
+            }
+            return newFilters;
+        });
+        setCurrentPage(1);
     };
 
     // State for date picker visibility
@@ -1768,29 +1501,32 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
     const openDatePicker = (mode = "sidebar") => {
         setDatePickerMode(mode);
         setShowDatePicker(true);
-        setSelectedDate(filters.headerFilters.deadline || "");
+        setSelectedDate(filters.headerFilters?.deadline || "");
     };
 
     // Handle date selection
     const handleDateSelection = (date) => {
         if (date) {
             if (datePickerMode === "filter") {
-                // Header filter: Use deadline query param (existing behavior)
+                // Header filter
                 applySpecialFilter("deadline", date);
             } else {
-                // Sidebar filter: Use deadline query param for specific date
-                const queryParams = new URLSearchParams(location.search);
+                // Sidebar filter
+                setFilters((prev) => {
+                    const newFilters = { ...prev };
+                    newFilters.headerFilters = newFilters.headerFilters || {};
 
-                // Clear any existing deadline-related query params
-                queryParams.delete("deadline");
-                queryParams.delete("deadlineStartAt");
-                queryParams.delete("deadlineEndAt");
-                queryParams.delete("deadlineType");
+                    // Clear existing deadline params
+                    delete newFilters.headerFilters.deadline;
+                    delete newFilters.headerFilters.deadlineStartAt;
+                    delete newFilters.headerFilters.deadlineEndAt;
+                    delete newFilters.headerFilters.deadlineType;
 
-                // Set specific date in deadline param for sidebar
-                queryParams.set("deadline", date);
-                queryParams.delete("page"); // Reset to page 1
-                navigate(`${location.pathname}?${queryParams.toString()}`);
+                    // Set specific date
+                    newFilters.headerFilters.deadline = date;
+                    return newFilters;
+                });
+                setCurrentPage(1);
             }
         }
         setShowDatePicker(false);
@@ -1811,55 +1547,54 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
     };
 
     const handleTechnicianSelection = (technicianUid) => {
-        const queryParams = new URLSearchParams(location.search);
+        setFilters((prev) => {
+            const newFilters = { ...prev };
+            newFilters.headerFilters = newFilters.headerFilters || {};
 
-        if (technicianUid === null) {
-            // Remove technician filter
-            queryParams.delete("technicianId");
-            setSelectedTechnicianName("TOÀN BỘ");
-        } else {
-            // Apply technician filter
-            const technician = technicians?.find((tech) => tech.identity_uid === technicianUid);
-            const technicianName = technician ? technician.identity_name : "TOÀN BỘ";
+            if (technicianUid === null) {
+                delete newFilters.headerFilters.technicianId;
+                setSelectedTechnicianName("TOÀN BỘ");
+            } else {
+                const technician = technicians?.find((tech) => tech.identity_uid === technicianUid);
+                const technicianName = technician ? technician.identity_name : "TOÀN BỘ";
 
-            queryParams.set("technicianId", JSON.stringify([technicianUid]));
-            setSelectedTechnicianName(technicianName);
-        }
-
-        queryParams.delete("page"); // Reset to page 1
-        navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
+                newFilters.headerFilters.technicianId = [technicianUid];
+                setSelectedTechnicianName(technicianName);
+            }
+            return newFilters;
+        });
+        setCurrentPage(1);
         setTechnicianDropdownOpen(false);
     };
 
     // Get current selected technician name for display
     const getCurrentTechnicianName = () => {
-        const queryParams = new URLSearchParams(location.search);
-        const technicianIdParam = queryParams.get("technicianId");
+        const technicianIds = filters.headerFilters?.technicianId;
 
-        if (!technicianIdParam) {
+        if (!technicianIds || (Array.isArray(technicianIds) && technicianIds.length === 0)) {
             return "TOÀN BỘ";
         }
 
-        try {
-            const technicianIds = JSON.parse(technicianIdParam);
-            if (Array.isArray(technicianIds) && technicianIds.length > 0) {
-                const selectedUid = technicianIds[0];
-                const technician = technicians?.find((tech) => tech.identity_uid === selectedUid);
-                return technician ? technician.identity_name : "TOÀN BỘ";
-            }
-        } catch (e) {
-            // If parsing fails, treat as single value
-            const technician = technicians?.find((tech) => tech.identity_uid === technicianIdParam);
+        // technicianIds should be an array based on how we set it
+        if (Array.isArray(technicianIds) && technicianIds.length > 0) {
+            const selectedUid = technicianIds[0];
+            const technician = technicians?.find((tech) => tech.identity_uid === selectedUid);
+            return technician ? technician.identity_name : "TOÀN BỘ";
+        }
+
+        // Fallback if it's a single value (though we try to keep it as array)
+        if (technicianIds && !Array.isArray(technicianIds)) {
+            const technician = technicians?.find((tech) => tech.identity_uid === technicianIds);
             return technician ? technician.identity_name : "TOÀN BỘ";
         }
 
         return "TOÀN BỘ";
     };
 
-    // Sync selectedTechnicianName with current URL params when they change
+    // Sync selectedTechnicianName with current filters when they change
     useEffect(() => {
         setSelectedTechnicianName(getCurrentTechnicianName());
-    }, [location.search, technicians]);
+    }, [filters.headerFilters?.technicianId, technicians]);
 
     // Save pending changes to session storage whenever they change
     useEffect(() => {
@@ -1913,6 +1648,7 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         // Navigate to clean URL without any filter parameters
         navigate(location.pathname);
         setSelectedParameter("");
+        setParameterSearchTerm("");
     };
 
     // Result entry session handlers
@@ -2036,21 +1772,7 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         });
     };
 
-    // Pagination handlers
-    const handlePageChange = (newPage) => {
-        if (newPage >= 1 && newPage <= totalPages) {
-            const queryParams = new URLSearchParams(location.search);
-            queryParams.set("page", newPage.toString());
-            navigate(`${location.pathname}?${queryParams.toString()}`);
-        }
-    };
-
-    const handleItemsPerPageChange = (newItemsPerPage) => {
-        const queryParams = new URLSearchParams(location.search);
-        queryParams.set("itemsPerPage", newItemsPerPage.toString());
-        queryParams.delete("page"); // Reset to page 1
-        navigate(`${location.pathname}?${queryParams.toString()}`);
-    };
+    // Pagination handlers - REMOVED (Moved to state-based handlers)
 
     // Bulk edit functions - REMOVED
 
@@ -2189,31 +1911,15 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
 
         // Auto-add technician filter after login
         if (identityId) {
-            const queryParams = new URLSearchParams(location.search);
+            setFilters((prev) => {
+                const newFilters = { ...prev };
+                newFilters.headerFilters = newFilters.headerFilters || {};
 
-            // Add or update technicianId filter
-            const existingTechnicianIds = queryParams.get("technicianId");
-            let technicianIds = [];
+                // Replace with logged-in user
+                newFilters.headerFilters.technicianId = [identityId];
 
-            if (existingTechnicianIds) {
-                try {
-                    technicianIds = JSON.parse(existingTechnicianIds);
-                    if (!Array.isArray(technicianIds)) {
-                        technicianIds = [existingTechnicianIds];
-                    }
-                } catch {
-                    technicianIds = [existingTechnicianIds];
-                }
-            }
-
-            // Add identityId if not already in the list
-            if (!technicianIds.includes(identityId)) {
-                technicianIds = [identityId]; // Replace with logged-in user
-                queryParams.set("technicianId", JSON.stringify(technicianIds));
-
-                // Navigate to update URL with new filter
-                navigate(`${location.pathname}?${queryParams.toString()}`, { replace: true });
-            }
+                return newFilters;
+            });
         }
 
         // Proceed with the pending edit
@@ -2412,267 +2118,10 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [showUnitDropdown]);
 
-    const handleKeyDown = (e) => {
-        // Normal key handling for all cells
-        if (e.key === "Enter") {
-            e.preventDefault();
-            e.target.blur(); // This will trigger handleCellBlur
-        } else if (e.key === "Escape") {
-            setEditingCell(null);
-            setEditValue("");
-            setShowUnitDropdown(false);
-        }
-    };
-
-    // Bulk edit handlers
-    const handleBulkEdit = (field, value) => {
-        // This function will be called by the LabBulkUpdate component
-        toast.success(`Cập nhật ${selectedAnalysisIds.size} mục thành công`);
-        setSelectedAnalysisIds(new Set());
-        setSelectedRowsData(new Map());
-        setShowBulkEdit(false);
-    };
-
-    const clearSelection = () => {
-        setSelectedAnalysisIds(new Set());
-        setSelectedRowsData(new Map());
-        setShowBulkEdit(false);
-    };
-
-    const handleBulkEditClick = () => {
-        setShowBulkEdit(true);
-    };
-
-    // Check if there are selected samples
-    const hasSelectedSamples = selectedAnalysisIds.size > 0;
-
-    // Toggle row selection
-    // Row selection and editor functions - REMOVED
-
-    // Open document
-    const openDocument = async (docId) => {
-        // Use the new modal preview for all document types
-        handleDocumentPreview(docId);
-    };
-
-    // Handle sorting
-    const handleSort = (column) => {
-        // Calculate new sort direction
-        const newDirection = sortConfig.column === column && sortConfig.direction === "ASC" ? "DESC" : "ASC";
-
-        // Update local sortConfig state immediately
-        setSortConfig({
-            column,
-            direction: newDirection,
-        });
-
-        // Update URL parameters
-        const queryParams = new URLSearchParams(location.search);
-        queryParams.set("columnSort", column);
-        queryParams.set("sortBy", newDirection);
-        queryParams.delete("page"); // Reset to page 1 when sorting changes
-
-        navigate(`${location.pathname}?${queryParams.toString()}`);
-    };
-
-    // Toggle filter creation mode
-    const toggleFilterCreationMode = () => {
-        setIsFilterCreationMode(!isFilterCreationMode);
-        setActiveFilterColumn(null);
-        setFilterSearchTerm("");
-        setFilterResults([]);
-        setSelectedFilterValues([]);
-    };
-
-    // Open filter modal for specific column
-    const openFilterModal = async (column) => {
-        // Set filter creation mode if not already active
-        if (!isFilterCreationMode) {
-            setIsFilterCreationMode(true);
-        }
-
-        // If the same filter column is already active, close it
-        if (activeFilterColumn === column) {
-            setActiveFilterColumn(null);
-            setFilterSearchTerm("");
-            setFilterResults([]);
-            setSelectedFilterValues([]);
-            return;
-        }
-
-        // Set active filter column and loading state
-        setActiveFilterColumn(column);
-        setFilterLoading(true);
-        setFilterResults([]);
-        setSelectedFilterValues([]);
-        setFilterSearchTerm("");
-
-        try {
-            // Prepare request body with current filters
-            const requestBody = {
-                filterColumn: column,
-                searchTerm: "",
-                itemsPerPage: 50,
-                page: 1,
-            };
-
-            // Add current filters to request body directly from filters state
-            if (filters.headerFilters.sampleId) {
-                requestBody.sampleId = filters.headerFilters.sampleId;
-            }
-
-            if (filters.headerFilters.parameterName) {
-                requestBody.parameterName = filters.headerFilters.parameterName;
-            }
-
-            if (filters.headerFilters.protocolSource) {
-                requestBody.protocolSource = filters.headerFilters.protocolSource;
-            }
-
-            if (filters.headerFilters.protocolCode) {
-                requestBody.protocolCode = filters.headerFilters.protocolCode;
-            }
-
-            if (filters.headerFilters.matrix) {
-                requestBody.matrix = filters.headerFilters.matrix;
-            }
-
-            if (filters.headerFilters.technicianId) {
-                requestBody.technicianId = filters.headerFilters.technicianId;
-            }
-
-            if (filters.headerFilters.status === 1) {
-                requestBody.status = 1;
-            }
-
-            if (filters.headerFilters.done === true) {
-                requestBody.done = true;
-            }
-
-            if (filters.headerFilters.overdue === true) {
-                requestBody.overdue = true;
-            }
-
-            if (filters.headerFilters.deadline) {
-                requestBody.deadline = filters.headerFilters.deadline;
-            }
-
-            if (filters.headerFilters.docId) {
-                requestBody.docId = filters.headerFilters.docId;
-            }
-
-            if (filters.headerFilters.resultValue) {
-                requestBody.resultValue = filters.headerFilters.resultValue;
-            }
-
-            const response = await apiPost("https://red.irdop.org/v1/analysis/get/filter_column", requestBody);
-
-            if (response?.status < 300 && response?.data?.result) {
-                let formattedResults = [];
-
-                if (column === "docId") {
-                    // Special handling for docId column - predefined options
-                    formattedResults = [
-                        { value: "none", count: 0, label: "none" },
-                        { value: "pending", count: 0, label: "pending" },
-                        { value: "published", count: 0, label: "published" },
-                    ];
-                } else if (column === "technicianId") {
-                    // For technician filter, convert identity_uid to display name with alias
-                    formattedResults = response.data.result.map((item) => {
-                        // API returns technicianId field, not value
-                        const technicianUid = item.technicianId || item.value;
-                        const technician = technicians?.find((tech) => tech.identity_uid === technicianUid);
-                        const displayName = technician ? `${technician.identity_name}${technician.alias ? ` (${technician.alias})` : ""}` : technicianUid || "Không có người thực hiện";
-
-                        return {
-                            value: technicianUid, // Keep original identity_uid as value
-                            count: item.total || item.count || 0,
-                            label: displayName, // Display name with alias
-                        };
-                    });
-                } else if (column === "deadline") {
-                    // For deadline filter, convert deadline values to Vietnamese labels
-                    const deadlineLabels = {
-                        overdue: "Quá hạn",
-                        today: "Hôm nay",
-                        "3days": "3 ngày tới",
-                        week: "Tuần này",
-                        future: "Tương lai",
-                    };
-
-                    formattedResults = response.data.result.map((item) => ({
-                        value: item.deadline,
-                        count: item.total || item.count || 0,
-                        label: deadlineLabels[item.deadline] || item.deadline,
-                    }));
-                } else {
-                    // For other columns, use standard formatting
-                    formattedResults = response.data.result.map((item) => ({
-                        value: item[column] || item.parameterName || item.value,
-                        count: item.total || item.count || 0,
-                        label: item[column] || item.parameterName || item.value,
-                    }));
-                }
-
-                setFilterResults(formattedResults);
-
-                // Auto-select values based on current filters
-                const currentFilter = filters.headerFilters[column];
-                if (currentFilter) {
-                    if (Array.isArray(currentFilter)) {
-                        setSelectedFilterValues(currentFilter);
-                    } else {
-                        setSelectedFilterValues([currentFilter]);
-                    }
-                }
-            } else {
-                setFilterResults([]);
-            }
-        } catch (error) {
-            setFilterResults([]);
-            toast.error("Lỗi khi tải dữ liệu lọc");
-        } finally {
-            setFilterLoading(false);
-        }
-
-        // Set default center position for non-technician filters
-        if (column !== "technicianId") {
-            setFilterPosition({
-                top: window.scrollY + 100,
-                left: window.innerWidth / 2 - 160, // Center the modal
-            });
-        }
-        // technicianId position is set directly in the button click handler
-    };
-
-    // Handle filter value selection
-    const handleFilterValueSelect = (value) => {
-        setSelectedFilterValues((prev) => {
-            if (prev.includes(value)) {
-                return prev.filter((v) => v !== value);
-            } else {
-                return [...prev, value];
-            }
-        });
-    };
-
-    // Select all filter values
-    const selectAllFilterValues = () => {
-        const allValues = filterResults.map((result) => result.value);
-        setSelectedFilterValues(allValues);
-    };
-
-    // Unselect all filter values
-    const unselectAllFilterValues = () => {
-        setSelectedFilterValues([]);
-    };
-
     // Apply filter
     const applyFilter = () => {
         // Special handling for deadline with date range
         if (activeFilterColumn === "deadline" && (startDate || endDate || selectedFilterValues.length > 0)) {
-            const queryParams = new URLSearchParams(location.search);
             let filterValue = [];
 
             if (selectedFilterValues.length > 0) {
@@ -2690,14 +2139,18 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
                 filterValue.push(dateRange);
             }
 
-            if (filterValue.length > 0) {
-                queryParams.set("deadline", JSON.stringify(filterValue));
-            } else {
-                queryParams.delete("deadline");
-            }
-            queryParams.delete("page"); // Reset to page 1 when filter changes
+            setFilters((prev) => {
+                const newFilters = { ...prev };
+                newFilters.headerFilters = newFilters.headerFilters || {};
 
-            navigate(`${location.pathname}?${queryParams.toString()}`);
+                if (filterValue.length > 0) {
+                    newFilters.headerFilters.deadline = filterValue;
+                } else {
+                    delete newFilters.headerFilters.deadline;
+                }
+                return newFilters;
+            });
+            setCurrentPage(1);
 
             setActiveFilterColumn(null);
             setFilterResults([]);
@@ -2708,11 +2161,15 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
             setFilterSearchTerm("");
         } else if (activeFilterColumn && selectedFilterValues.length > 0) {
             // Regular filter handling
-            const queryParams = new URLSearchParams(location.search);
-            queryParams.set(activeFilterColumn, JSON.stringify(selectedFilterValues));
-            queryParams.delete("page"); // Reset to page 1 when filter changes
-
-            navigate(`${location.pathname}?${queryParams.toString()}`);
+            setFilters((prev) => {
+                const newFilters = { ...prev };
+                newFilters.headerFilters = {
+                    ...newFilters.headerFilters,
+                    [activeFilterColumn]: selectedFilterValues,
+                };
+                return newFilters;
+            });
+            setCurrentPage(1);
 
             setActiveFilterColumn(null);
             setFilterSearchTerm("");
@@ -2723,16 +2180,18 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
 
     // Apply special filter (for resultValue, deadline, docId)
     const applySpecialFilter = (column, value) => {
-        // Update URL parameters instead of directly setting filters
-        const queryParams = new URLSearchParams(location.search);
-        if (value !== null && value !== undefined && value !== "") {
-            queryParams.set(column, typeof value === "object" ? JSON.stringify(value) : value);
-        } else {
-            queryParams.delete(column);
-        }
-        queryParams.delete("page"); // Reset to page 1 when filter changes
+        setFilters((prev) => {
+            const newFilters = { ...prev };
+            newFilters.headerFilters = newFilters.headerFilters || {};
 
-        navigate(`${location.pathname}?${queryParams.toString()}`);
+            if (value !== null && value !== undefined && value !== "") {
+                newFilters.headerFilters[column] = value;
+            } else {
+                delete newFilters.headerFilters[column];
+            }
+            return newFilters;
+        });
+        setCurrentPage(1);
 
         setActiveFilterColumn(null);
         setFilterSearchTerm("");
@@ -2751,39 +2210,26 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         setShowDateRange(false);
     };
 
-    // Remove filter for specific column
-    const removeColumnFilter = (column) => {
-        // Update URL parameters instead of directly setting filters
-        const queryParams = new URLSearchParams(location.search);
-        queryParams.delete(column);
+    // Select all filter values
+    const selectAllFilterValues = () => {
+        const allValues = filterResults.map((result) => result.value);
+        setSelectedFilterValues(allValues);
+    };
 
-        // Handle deadline-specific cleanup
-        if (column === "deadline") {
-            // Clear all deadline-related params (both header and sidebar)
-            queryParams.delete("deadline");
-            queryParams.delete("deadlineStartAt");
-            queryParams.delete("deadlineEndAt");
-            queryParams.delete("deadlineType");
-        }
+    // Unselect all filter values
+    const unselectAllFilterValues = () => {
+        setSelectedFilterValues([]);
+    };
 
-        // Also clear related sidebar filters if needed
-        if (column === "parameterName") {
-            queryParams.delete("parameters");
-        } else if (column === "protocolCode") {
-            queryParams.delete("protocols");
-        }
-
-        queryParams.delete("page"); // Reset to page 1 when filter changes
-        navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
-
-        // Clear selected parameter if all related filters are cleared
-        const hasParameterFilters = queryParams.get("parameters") || queryParams.get("parameterName");
-        const hasProtocolFilters = queryParams.get("protocols") || queryParams.get("protocolCode");
-        const hasDeadlineFilters = queryParams.get("deadline") || queryParams.get("deadlineStartAt") || queryParams.get("deadlineEndAt") || queryParams.get("deadlineType");
-
-        if (!hasParameterFilters && !hasProtocolFilters && !hasDeadlineFilters) {
-            setSelectedParameter("");
-        }
+    // Handle filter value selection (toggle)
+    const handleFilterValueSelect = (value) => {
+        setSelectedFilterValues((prev) => {
+            if (prev.includes(value)) {
+                return prev.filter((v) => v !== value);
+            } else {
+                return [...prev, value];
+            }
+        });
     };
 
     // HeaderCell handlers
@@ -2830,20 +2276,59 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
         }
     };
 
-    const handleClearColumnFilter = (columnName) => {
-        removeColumnFilter(columnName);
+    // Handle sort changes
+    const handleSort = (column) => {
+        let direction = "asc";
+        if (sortConfig.column === column && sortConfig.direction === "asc") {
+            direction = "desc";
+        }
+        setSortConfig({ column, direction });
+        setFilters((prev) => ({
+            ...prev,
+            columnSort: column,
+            sortBy: direction,
+        }));
+    };
+
+    const handleClearColumnFilter = (column) => {
+        setFilters((prev) => {
+            const newFilters = { ...prev };
+            if (newFilters.headerFilters) {
+                delete newFilters.headerFilters[column];
+            }
+
+            // Handle deadline-specific cleanup
+            if (column === "deadline") {
+                delete newFilters.headerFilters.deadline;
+                delete newFilters.headerFilters.deadlineStartAt;
+                delete newFilters.headerFilters.deadlineEndAt;
+                delete newFilters.headerFilters.deadlineType;
+            }
+
+            return newFilters;
+        });
+        setCurrentPage(1);
+    };
+
+    // Handle page change
+    const handlePageChange = (pageNumber) => {
+        setCurrentPage(pageNumber);
+    };
+
+    // Handle items per page change
+    const handleItemsPerPageChange = (value) => {
+        setItemsPerPage(value);
+        setCurrentPage(1); // Reset to page 1
     };
 
     // Check if column is filtered
     const isColumnFiltered = (column) => {
-        const queryParams = new URLSearchParams(location.search);
-
         if (column === "deadline") {
             // Check both header and sidebar deadline filters
-            return filters.headerFilters[column] || queryParams.get("deadline") || queryParams.get("deadlineStartAt") || queryParams.get("deadlineEndAt") || queryParams.get("deadlineType");
+            return filters.headerFilters?.deadline || filters.headerFilters?.deadlineStartAt || filters.headerFilters?.deadlineEndAt || filters.headerFilters?.deadlineType;
         }
 
-        return filters.headerFilters[column] || (column === "parameterName" && filters.parameters.length > 0) || (column === "protocolCode" && filters.protocols.length > 0);
+        return filters.headerFilters?.[column] || (column === "parameterName" && filters.parameters.length > 0) || (column === "protocolCode" && filters.protocols.length > 0);
     };
 
     // Get sort direction for column
@@ -3248,30 +2733,18 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
     };
 
     return (
-        <div className="flex h-full bg-gray-100 relative overflow-y-hidden">
-            {/* Fixed Header with breadcrumb - đè lên toàn bộ chiều rộng */}
-            <div className="fixed top-0 left-16 right-0 z-40 bg-white p-2 shadow-md">
+        <div className="flex flex-col h-full w-full bg-gray-100 relative overflow-hidden">
+            {/* Header with breadcrumb */}
+            <div className="bg-white p-2 shadow-md z-40 shrink-0">
                 <div className="flex justify-between items-center w-full">
                     {/* Extended Breadcrumb with Technician Dropdown - chiếm hết chiều rộng */}
                     <div className="flex items-center space-x-2 font-bold text-sm text-gray-500 flex-1">
-                        {sidebarCollapsed && (
-                            <button
-                                onClick={toggleSidebarCollapse}
-                                className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors mr-2 flex-shrink-0"
-                                onMouseEnter={(e) => showTooltip(e, "Mở rộng sidebar")}
-                                onMouseLeave={hideTooltip}
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                                </svg>
-                            </button>
-                        )}
-                        <span className="hover:underline flex-shrink-0" onClick={() => onNavigateToLab && onNavigateToLab("analysis")}>
-                            LAB
+                        <span className="hover:underline flex-shrink-0 cursor-pointer" onClick={() => onNavigateToLab && onNavigateToLab("analysis")}>
+                            LAB DASHBOARD
                         </span>
-                        <span className="flex-shrink-0">/</span>
-                        <span className="hover:underline flex-shrink-0">PHÉP THỬ</span>
-                        <span className="flex-shrink-0">/</span>
+                        <span>/</span>
+                        <span className="text-blue-600 flex-shrink-0">TESTING PARAMETERS</span>
+
                         <div className="relative flex-shrink-0" data-technician-dropdown>
                             {viewMode === "admin" ? (
                                 <>
@@ -3310,6 +2783,23 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
                                 <span className="text-blue-600 font-bold px-1 py-0.5">{currentUser?.identity_name || "CÁ NHÂN"}</span>
                             )}
                         </div>
+
+                        {/* Sync Button */}
+                        <button
+                            onClick={() => fetchAnalysisData(false)}
+                            className="ml-4 flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors border border-blue-200 text-xs"
+                            title="Tải lại dữ liệu bảng"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                />
+                            </svg>
+                            Đồng bộ
+                        </button>
                     </div>
 
                     {/* Action buttons - flex-shrink-0 để không bị thu nhỏ */}
@@ -3402,142 +2892,8 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
                     </div>,
                     document.body,
                 )}
-            {/* Sidebar - nằm dưới breadcrumb */}
-            <div
-                className={`bg-gray-100 border-gray-300 z-30 flex flex-col box-border transition-all duration-300 ${sidebarCollapsed ? "min-w-0 max-w-0 overflow-hidden" : "min-w-72 max-w-80"}`}
-                style={{ height: "calc(100% - 50px)", marginTop: "50px" }}
-            >
-                <div className="flex-1 flex flex-col overflow-hidden">
-                    {/* Parameter search */}
-                    <div className="p-3 border-b border-gray-300 bg-gray-50">
-                        <div className="flex items-center gap-2 mb-3">
-                            <button
-                                onClick={toggleSidebarCollapse}
-                                className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
-                                onMouseEnter={(e) => showTooltip(e, "Thu gọn sidebar")}
-                                onMouseLeave={hideTooltip}
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                                </svg>
-                            </button>
-                            <div className="relative flex-1">
-                                <input
-                                    type="text"
-                                    placeholder="Tìm kiếm chỉ tiêu..."
-                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white text-black text-left"
-                                    value={parameterSearchTerm}
-                                    onChange={(e) => setParameterSearchTerm(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                            // Immediately fetch parameters when Enter is pressed, even with empty value
-                                            fetchParameters(parameterSearchTerm);
-                                        }
-                                    }}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Deadline filter buttons */}
-                        <div className="pt-3 border-gray-300">
-                            <div className="grid grid-cols-4 gap-1">
-                                <button
-                                    onClick={() => selectDeadlineFilter("overdue")}
-                                    className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
-                                        new URLSearchParams(location.search).get("deadlineType") === "overdue" ? "bg-red-600 text-white" : "bg-gray-100 text-black hover:bg-gray-200"
-                                    }`}
-                                >
-                                    Hôm nay
-                                </button>
-                                <button
-                                    onClick={() => selectDeadlineFilter("3days")}
-                                    className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
-                                        new URLSearchParams(location.search).get("deadlineType") === "3days" ? "bg-yellow-600 text-white" : "bg-gray-100 text-black hover:bg-gray-200"
-                                    }`}
-                                >
-                                    3 Ngày
-                                </button>
-                                <button
-                                    onClick={() => selectDeadlineFilter("week")}
-                                    className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${
-                                        new URLSearchParams(location.search).get("deadlineType") === "week" ? "bg-blue-600 text-white" : "bg-gray-100 text-black hover:bg-gray-200"
-                                    }`}
-                                >
-                                    1 Tuần
-                                </button>
-                                <button
-                                    onClick={openDatePicker}
-                                    className={`px-1 py-1 text-xs rounded-md font-medium transition-colors ${(() => {
-                                        const queryParams = new URLSearchParams(location.search);
-                                        const deadline = queryParams.get("deadline");
-                                        const deadlineType = queryParams.get("deadlineType");
-                                        return deadline && !deadlineType && !filters.headerFilters.deadline ? "bg-purple-600 text-white" : "bg-gray-100 text-black hover:bg-gray-200";
-                                    })()}`}
-                                >
-                                    Chọn
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Parameters list */}
-                    <div className="flex-1 overflow-y-auto p-3 bg-gray-50 pr-0">
-                        <div className="space-y-2">
-                            {/* Analysis Section */}
-                            <div className="mb-1">
-                                <div
-                                    className={`sidebar-section-header flex items-center justify-between py-2 cursor-pointer ${sidebarExpandedSections.analysis ? "active" : ""}`}
-                                    onClick={() => toggleSidebarSection("analysis")}
-                                >
-                                    <div className="flex items-center space-x-2">
-                                        <h3 className="text-sm font-bold text-gray-800">CHỈ TIÊU</h3>
-                                    </div>
-                                    <div className="flex items-center space-x-2 pr-2">
-                                        <span className="sidebar-subtitle text-blue-800">{parametersData.analysis.length}</span>
-                                        <span className="text-gray-500">{sidebarExpandedSections.analysis ? "▼" : "▶"}</span>
-                                    </div>
-                                </div>
-                                {sidebarExpandedSections.analysis && (
-                                    <div className="ml-2  pr-2 space-y-1 max-h-[calc(100vh-350px)] overflow-y-auto overflow-x-hidden custom-scrollbar">
-                                        {parametersData.analysis.map((param, index) => {
-                                            const protocolCode = param.protocolCode || "";
-                                            const normalizedProtocolCode = protocolCode && protocolCode.trim() ? protocolCode : "null";
-                                            const itemKey = `analysis|${param.parameterName}|${normalizedProtocolCode}`;
-                                            const isSelected = selectedParameter === itemKey;
-
-                                            return (
-                                                <div
-                                                    key={`${param.parameterName}-${normalizedProtocolCode}-${index}`}
-                                                    className={`sidebar-item py-1 cursor-pointer transition-all duration-200 flex items-center justify-between ${
-                                                        isSelected ? "text-blue-600 font-bold underline" : "text-gray-700"
-                                                    }`}
-                                                    onClick={() => selectItem("analysis", param.parameterName, protocolCode)}
-                                                >
-                                                    <div className="flex-1 min-w-0 text-left">
-                                                        <p className="text-xs font-medium text-left">
-                                                            <span className="text-left">{param.parameterName}</span>
-                                                            {protocolCode && <span className="ml-1 text-left text-gray-500">{protocolCode}</span>}
-                                                        </p>
-                                                    </div>
-                                                    <div className="item-count text-xs font-semibold text-gray-600">{param.total}</div>
-                                                </div>
-                                            );
-                                        })}
-                                        {parametersData.analysis.length === 0 && <div className="text-center py-4 text-gray-500 text-xs">Không có dữ liệu chỉ tiêu</div>}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {/* Main content */}
-            <div
-                className="transition-all w-full min-h-screen bg-white relative flex flex-col"
-                style={{
-                    paddingTop: "55px",
-                }}
-            >
+            {/* Main content - Full width, no sidebar */}
+            <div className="flex-1 bg-white relative flex flex-col h-full overflow-hidden">
                 {/* Scrollable content area */}
                 <div className="flex-1 overflow-y-auto flex flex-col custom-scrollbar" ref={scrollContainerRef}>
                     <div className="flex-1 p-4 overflow-auto custom-scrollbar relative">
@@ -3551,9 +2907,22 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
 
                         {/* Table container without stretching rows */}
                         <div className="w-full">
-                            <table className="w-full bg-white border-collapse min-w-[1050px] border-2 border-gray-300 rounded-lg overflow-hidden shadow-sm">
-                                <thead className="bg-blue-100">
-                                    <tr>
+                            <Table>
+                                <TableHeader className="bg-blue-100 sticky top-0 z-20 shadow-sm">
+                                    <TableRow>
+                                        <TableHead className="w-10 px-2 py-2 text-center border-b-2 border-blue-700 bg-blue-100">
+                                            <input
+                                                type="checkbox"
+                                                checked={data.length > 0 && selectedAnalysisIds.size === data.length}
+                                                ref={(input) => {
+                                                    if (input) {
+                                                        input.indeterminate = selectedAnalysisIds.size > 0 && selectedAnalysisIds.size < data.length;
+                                                    }
+                                                }}
+                                                onChange={handleSelectAll}
+                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                            />
+                                        </TableHead>
                                         {filters.columns
                                             .filter((col) => col !== "id" && col !== "sampleName")
                                             .map((column) => (
@@ -3561,7 +2930,7 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
                                                     key={column}
                                                     columnName={column}
                                                     displayName={availableColumns[column] || column}
-                                                    isFilterable={true}
+                                                    isFilterable={viewMode === "admin" || column !== "technicianId"}
                                                     isSortable={true}
                                                     isFiltered={isColumnFiltered(column)}
                                                     sortDirection={getSortDirection(column)}
@@ -3571,17 +2940,19 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
                                                     className="text-black"
                                                 />
                                             ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
                                     {data.length === 0 && !loading ? (
-                                        <tr>
-                                            <td colSpan="100" className="text-center py-12 text-gray-500">
-                                                <div className="text-4xl mb-4">📊</div>
-                                                <h3 className="text-lg font-semibold mb-2">Không có dữ liệu</h3>
-                                                <p>Không tìm thấy chỉ tiêu nào với tiêu chí tìm kiếm hiện tại</p>
-                                            </td>
-                                        </tr>
+                                        <TableRow>
+                                            <TableCell colSpan={filters.columns.length + 1} className="h-32 text-center">
+                                                <div className="flex flex-col items-center justify-center text-gray-500">
+                                                    <div className="text-4xl mb-4">📊</div>
+                                                    <h3 className="text-lg font-semibold mb-2">Không có dữ liệu</h3>
+                                                    <p>Không tìm thấy chỉ tiêu nào với tiêu chí tìm kiếm hiện tại</p>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
                                     ) : (
                                         data.map((row, index) => {
                                             const rowId = String(row.id);
@@ -3590,22 +2961,33 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
                                             const hasPendingChanges = pendingChanges.has(row.id);
 
                                             return (
-                                                <tr
-                                                    key={`${row.id}-${row.sampleId || "unknown"}-${row.parameterName || "unknown"}-${index}`}
+                                                <TableRow
+                                                    key={row.id}
                                                     className={`transition-colors cursor-pointer user-select-none ${
                                                         isSelected
-                                                            ? "row-selected"
+                                                            ? "bg-blue-50"
                                                             : hasPendingChanges
                                                             ? "bg-yellow-50 border-l-4 border-yellow-500"
                                                             : `${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-blue-50`
                                                     } ${isHighPriority ? "font-bold text-red-600" : ""}`}
                                                     onMouseDown={(e) => handleMouseDown(row.id, e)}
                                                     onMouseEnter={() => handleMouseEnter(row.id)}
+                                                    data-state={isSelected ? "selected" : undefined}
                                                 >
+                                                    <TableCell className="px-2 py-1 text-center w-10">
+                                                        <div className="flex items-center justify-center h-full" onClick={(e) => e.stopPropagation()}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => toggleSelection(row.id, row)}
+                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            />
+                                                        </div>
+                                                    </TableCell>
                                                     {filters.columns
                                                         .filter((col) => col !== "id" && col !== "sampleName" && col !== "technician")
                                                         .map((column) => (
-                                                            <td key={column} className={`px-2 py-1 text-sm align-top text-left ${isHighPriority ? "text-red-600 font-bold" : "text-gray-900"}`}>
+                                                            <TableCell key={column} className={`px-2 py-1 text-sm align-top text-left ${isHighPriority ? "text-red-600 font-bold" : "text-gray-900"}`}>
                                                                 {column === "sampleId" ? (
                                                                     <div
                                                                         className="relative text-left w-full cursor-pointer hover:bg-blue-50 p-1 rounded"
@@ -3689,7 +3071,7 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
                                                                     ) : (
                                                                         <div
                                                                             className="relative text-left w-full p-1 rounded cursor-pointer hover:bg-blue-50"
-                                                                            onClick={(e) => {
+                                                                            onClick={() => {
                                                                                 e.stopPropagation();
                                                                                 handleCellClick(row.id, "resultValue", row.resultValue || "");
                                                                             }}
@@ -3717,7 +3099,7 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
                                                                     ) : (
                                                                         <div
                                                                             className="relative text-left w-full p-1 rounded cursor-pointer hover:bg-blue-50"
-                                                                            onClick={(e) => {
+                                                                            onClick={() => {
                                                                                 e.stopPropagation();
                                                                                 handleCellClick(row.id, "resultUnit", row.resultUnit || "");
                                                                             }}
@@ -3766,14 +3148,14 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
                                                                 ) : (
                                                                     row[column] || ""
                                                                 )}
-                                                            </td>
+                                                            </TableCell>
                                                         ))}
-                                                </tr>
+                                                </TableRow>
                                             );
                                         })
                                     )}
-                                </tbody>
-                            </table>
+                                </TableBody>
+                            </Table>
                         </div>
                     </div>
 
