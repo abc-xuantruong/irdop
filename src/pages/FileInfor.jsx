@@ -645,6 +645,7 @@ const FileInfor = () => {
 		'Ảnh mẫu',
 		'Phiếu gửi mẫu',
 		'Đơn hàng',
+		'Hóa đơn',
 		'Phiếu phân tích',
 		'Biên bản bàn giao',
 		'Specification / COA',
@@ -652,6 +653,7 @@ const FileInfor = () => {
 
 	const userTagOptions = [
 		'Đơn hàng',
+		'Hóa đơn',
 		'Phiếu gửi mẫu',
 		'Nhật ký thử nghiệm',
 		'Biên bản thử nghiệm',

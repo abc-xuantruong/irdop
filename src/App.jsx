@@ -29,6 +29,7 @@ import HandoverSampleDash from "./pages/HandoverSampleDash";
 import LabResultReport from "./components/LabResultReport";
 import ProgressDashboard from "./pages/ProgressDashboard";
 import UserDashboard from "./pages/UserDashboard";
+import IncomingOrder from "./components/orderDashboard/IncomingOrder";
 
 const App = () => {
     return (
@@ -70,6 +71,7 @@ const App = () => {
 
                                             <Route path="/progress" element={<ProgressDashboard />} />
                                             <Route path="/user-dashboard" element={<UserDashboard />} />
+                                            <Route path="/incoming-orders" element={<IncomingOrder />} />
                                         </Routes>
                                     </div>
                                     <Footer />

@@ -34,7 +34,7 @@ const Header = () => {
             // Check if the user is a technician but not an admin
             if (currentUser?.role?.staff_technician && !currentUser?.role?.staff_admin) {
                 // Allow access to /processing and /files, redirect from other pages
-                if (!currentPath.includes("/processing") && !currentPath.includes("/files") && !currentPath.includes("handover")) {
+                if (!currentPath.includes("/processing") && !currentPath.includes("/files") && !currentPath.includes("handover") && !currentPath.includes("/user-dashboard")) {
                     navigate("/processing");
                 }
             }
@@ -138,6 +138,12 @@ const Header = () => {
                                 </Link>
                             )}{" "}
                             <Link
+                                to="/incoming-orders"
+                                className={`cursor-pointer md:text-md ml-4 text-md font-medium ${currentPath.includes("/incoming-orders") ? "text-primary" : "text-teritary hover:text-primary"}`}
+                            >
+                                Order  
+                            </Link>
+                            <Link
                                 to="/handover-dashboard"
                                 className={`cursor-pointer md:text-md ml-4 text-md font-medium ${currentPath.includes("/handover-dashboard") ? "text-primary" : "text-teritary hover:text-primary"}`}
                             >
@@ -164,7 +170,7 @@ const Header = () => {
                         {currentPath.includes("/login") ? (
                             <p className="text-primary  cursor-pointer text-end ml-4 text-lg font-semibold">Tài khoản</p>
                         ) : (
-                            <>
+                            <div className="relative" onMouseEnter={() => setDropdownOpen(true)} onMouseLeave={() => setDropdownOpen(false)}>
                                 <div className="relative flex items-center">
                                     {" "}
                                     <p ref={dropdownButtonRef} className="text-primary cursor-pointer text-end ml-8 text-md mb-0.5 font-semibold" onClick={() => navigate("/user-dashboard")}>
@@ -172,16 +178,18 @@ const Header = () => {
                                     </p>
                                 </div>
                                 {dropdownOpen && (
-                                    <div ref={dropdownRef} className="absolute right-0 top-full mt-3 w-52 bg-white border rounded shadow-lg z-10">
-                                        <p className="p-1 border-b text-base font-medium text-start" onClick={() => setDropdownOpen(!dropdownOpen)}>
-                                            {displayName}
-                                        </p>
-                                        <button onClick={handleLogout} className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 h-full text-center">
-                                            Đăng xuất
-                                        </button>
+                                    <div ref={dropdownRef} className="absolute right-0 top-full pt-3 w-52 z-10">
+                                        <div className="bg-white border rounded shadow-lg">
+                                            <p className="p-1 border-b text-base font-medium text-start" onClick={() => setDropdownOpen(!dropdownOpen)}>
+                                                {displayName}
+                                            </p>
+                                            <button onClick={handleLogout} className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 h-full text-center">
+                                                Đăng xuất
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
-                            </>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -243,6 +251,12 @@ const Header = () => {
                                                 Tiếp nhận
                                             </button>
                                         )}{" "}
+                                        <button
+                                            onClick={() => handleNavigate("/incoming-orders")}
+                                            className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
+                                        >
+                                            Mẫu đến
+                                        </button>
                                         <button
                                             onClick={() => handleNavigate("/library")}
                                             className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"

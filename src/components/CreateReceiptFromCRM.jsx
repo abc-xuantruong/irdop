@@ -217,6 +217,7 @@ const CreateReceiptFromCRM = () => {
                     updatedSamples[index] = {
                         ...updatedSamples[index],
                         analysis: response.data,
+                        analyses: response.data,
                     };
 
                     setCrmData({
@@ -397,7 +398,7 @@ const CreateReceiptFromCRM = () => {
                         };
 
                         const originalAnalyses = processAnalysis(sample.analyses || sample.analysis);
-                        const proposalAnalyses  = processAnalysis(sample.proposalAnalyses );
+                        const proposalAnalyses = processAnalysis(sample.proposalAnalyses);
 
                         return {
                             sampleName: sample.sampleName,
@@ -525,6 +526,7 @@ const CreateReceiptFromCRM = () => {
         updatedSamples[sampleIndex] = {
             ...updatedSamples[sampleIndex],
             analysis: updatedAnalysis,
+            analyses: updatedAnalysis,
         };
 
         setCrmData({
@@ -915,6 +917,11 @@ const CreateReceiptFromCRM = () => {
             originalParameterName: originalParamName,
         };
 
+        // Also update analyses to keep them in sync
+        if (updatedSamples[sampleIndex].analyses) {
+            updatedSamples[sampleIndex].analyses = updatedSamples[sampleIndex].analysis;
+        }
+
         setCrmData({
             ...crmData,
             samples: updatedSamples,
@@ -937,6 +944,11 @@ const CreateReceiptFromCRM = () => {
             parameterName: originalName,
             parameterId: "",
         };
+
+        // Also update analyses to keep them in sync
+        if (updatedSamples[sampleIndex].analyses) {
+            updatedSamples[sampleIndex].analyses = updatedSamples[sampleIndex].analysis;
+        }
 
         setCrmData({
             ...crmData,
@@ -967,6 +979,11 @@ const CreateReceiptFromCRM = () => {
 
         // Insert new rows after the current index
         updatedSamples[sampleIndex].analysis.splice(analysisIndex + 1, 0, ...newRows);
+
+        // Also update analyses to keep them in sync
+        if (updatedSamples[sampleIndex].analyses) {
+            updatedSamples[sampleIndex].analyses = updatedSamples[sampleIndex].analysis;
+        }
 
         setCrmData({
             ...crmData,
@@ -1820,7 +1837,7 @@ const CreateReceiptFromCRM = () => {
                         };
 
                         const originalAnalyses = processAnalysis(sample.analyses || sample.analysis);
-                        const proposalAnalyses  = processAnalysis(sample.proposalAnalyses );
+                        const proposalAnalyses = processAnalysis(sample.proposalAnalyses);
 
                         return {
                             sampleName: sample.sampleName,
@@ -1828,7 +1845,7 @@ const CreateReceiptFromCRM = () => {
                             sampleInformation: sample.sampleInformation || [],
                             analysis: originalAnalyses, // Default to original
                             originalAnalyses: originalAnalyses,
-                            proposalAnalyses : proposalAnalyses  || [],
+                            proposalAnalyses: proposalAnalyses || [],
                             activeAnalysisMode: "default", // 'default' or 'propose'
                         };
                     }),
@@ -2035,7 +2052,7 @@ const CreateReceiptFromCRM = () => {
                                 {crmData && (
                                     <div className="flex flex-col lg:flex-row gap-4 overflow-y-auto max-h-[calc(95vh-200px)]">
                                         {/* Left Column: Order and Customer Information */}
-                                        <div className="lg:w-1/3 space-y-4">
+                                        <div className="lg:w-1/4 space-y-4">
                                             <div className="border rounded-lg p-4 text-start w-full h-fit">
                                                 <h3 className="font-semibold text-lg mb-2">Thông tin đơn hàng</h3>
                                                 <p>
@@ -2071,67 +2088,67 @@ const CreateReceiptFromCRM = () => {
 
                                                 <div className="mb-2">
                                                     <label className="font-medium text-gray-500 block mb-1">Tên cá nhân / tổ chức</label>
-                                                    <input
-                                                        type="text"
+                                                    <textarea
                                                         value={clientInfo.clientName}
                                                         onChange={(e) => handleClientInfoChange("clientName", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập tên cá nhân / tổ chức"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-2">
                                                     <label className="font-medium text-gray-500 block mb-1">Địa chỉ</label>
-                                                    <input
-                                                        type="text"
+                                                    <textarea
                                                         value={clientInfo.clientAddress}
                                                         onChange={(e) => handleClientInfoChange("clientAddress", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập địa chỉ"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-1">
                                                     <label className="font-medium text-gray-500 block mb-1">Mã số thuế / CCCD</label>
-                                                    <input
-                                                        type="text"
+                                                    <textarea
                                                         value={clientInfo.legalId}
                                                         onChange={(e) => handleClientInfoChange("legalId", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập mã số thuế / CCCD"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-2">
                                                     <label className="font-medium text-gray-500 block mb-1">Điện thoại</label>
-                                                    <input
-                                                        type="tel"
+                                                    <textarea
                                                         value={clientInfo.clientPhone}
                                                         onChange={(e) => handleClientInfoChange("clientPhone", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập số điện thoại"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-2">
                                                     <label className="font-medium text-gray-500 block mb-1">Email hóa đơn</label>
-                                                    <input
-                                                        type="email"
+                                                    <textarea
                                                         value={clientInfo.invoiceEmail}
                                                         onChange={(e) => handleClientInfoChange("invoiceEmail", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập email hóa đơn"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-1">
                                                     <label className="font-medium text-gray-500 block mb-1">TT hóa đơn (khác)</label>
-                                                    <input
-                                                        type="text"
+                                                    <textarea
                                                         value={clientInfo.invoiceInfo}
                                                         onChange={(e) => handleClientInfoChange("invoiceInfo", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập thông tin hóa đơn khác"
+                                                        rows="3"
                                                     />
                                                 </div>
                                             </div>
@@ -2142,45 +2159,45 @@ const CreateReceiptFromCRM = () => {
 
                                                 <div className="mb-2">
                                                     <label className="font-medium text-gray-500 block mb-1">Người liên hệ</label>
-                                                    <input
-                                                        type="text"
+                                                    <textarea
                                                         value={contactInfo.name}
                                                         onChange={(e) => handleContactInfoChange("name", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập tên người liên hệ"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-2">
                                                     <label className="font-medium text-gray-500 block mb-1">Điện thoại</label>
-                                                    <input
-                                                        type="tel"
+                                                    <textarea
                                                         value={contactInfo.phone}
                                                         onChange={(e) => handleContactInfoChange("phone", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập số điện thoại"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-1">
                                                     <label className="font-medium text-gray-500 block mb-1">Email</label>
-                                                    <input
-                                                        type="email"
+                                                    <textarea
                                                         value={contactInfo.email}
                                                         onChange={(e) => handleContactInfoChange("email", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập địa chỉ email"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-2">
                                                     <label className="font-medium text-gray-500 block mb-1">CCCD</label>
-                                                    <input
-                                                        type="text"
+                                                    <textarea
                                                         value={contactInfo.id}
                                                         onChange={(e) => handleContactInfoChange("id", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập số CCCD"
+                                                        rows="3"
                                                     />
                                                 </div>
 
@@ -2196,12 +2213,12 @@ const CreateReceiptFromCRM = () => {
 
                                                 <div className="mb-1">
                                                     <label className="font-medium text-gray-500 block mb-1">Nơi cấp</label>
-                                                    <input
-                                                        type="text"
+                                                    <textarea
                                                         value={contactInfo.id_place}
                                                         onChange={(e) => handleContactInfoChange("id_place", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập nơi cấp CCCD"
+                                                        rows="3"
                                                     />
                                                 </div>
                                             </div>
@@ -2212,52 +2229,52 @@ const CreateReceiptFromCRM = () => {
 
                                                 <div className="mb-2">
                                                     <label className="font-medium text-gray-500 block mb-1">Tên người nhận</label>
-                                                    <input
-                                                        type="text"
+                                                    <textarea
                                                         value={receiverInfo.name}
                                                         onChange={(e) => handleReceiverInfoChange("name", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập tên người nhận (nếu khác với người liên hệ)"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-1">
                                                     <label className="font-medium text-gray-500 block mb-1">Địa chỉ người nhận</label>
-                                                    <input
-                                                        type="text"
+                                                    <textarea
                                                         value={receiverInfo.address}
                                                         onChange={(e) => handleReceiverInfoChange("address", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập địa chỉ người nhận (nếu khác với địa chỉ khách hàng)"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-2">
                                                     <label className="font-medium text-gray-500 block mb-1">Email KQ</label>
-                                                    <input
-                                                        type="email"
+                                                    <textarea
                                                         value={receiverInfo.email}
                                                         onChange={(e) => handleReceiverInfoChange("email", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập email nhận kết quả"
+                                                        rows="3"
                                                     />
                                                 </div>
 
                                                 <div className="mb-1">
                                                     <label className="font-medium text-gray-500 block mb-1">Khác</label>
-                                                    <input
-                                                        type="text"
+                                                    <textarea
                                                         value={receiverInfo.other}
                                                         onChange={(e) => handleReceiverInfoChange("other", e.target.value)}
-                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                                         placeholder="Nhập thông tin khác"
+                                                        rows="3"
                                                     />
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* Right Column: Sample List */}
-                                        <div className="lg:w-2/3">
+                                        <div className="lg:w-3/4">
                                             <div className="w-full">
                                                 {" "}
                                                 <div className="flex justify-between items-center mb-2">
@@ -2720,7 +2737,8 @@ const CreateReceiptFromCRM = () => {
                                                                             <th className="p-1 text-start">Chỉ tiêu</th>
                                                                             <th className="p-1 text-start">Nguồn</th>
                                                                             <th className="p-1 text-start">Mã Phương pháp</th>
-                                                                            <th className="p-1 text-start">Đơn vị</th>
+                                                                            <th className="p-1 text-start">KNV</th>
+                                                                            <th className="p-1 text-start">Họ tên</th>
                                                                             <th className="p-1 text-start w-10">Xóa</th>
                                                                         </tr>
                                                                     </thead>
@@ -2868,7 +2886,7 @@ const CreateReceiptFromCRM = () => {
                                                                                 <td className="p-1 text-start w-24">
                                                                                     {editingAnalysis.sampleIndex === index &&
                                                                                     editingAnalysis.analysisIndex === idx &&
-                                                                                    editingAnalysis.field === "resultUnit" ? (
+                                                                                    editingAnalysis.field === "technicianAlias" ? (
                                                                                         <input
                                                                                             type="text"
                                                                                             value={editAnalysisValue}
@@ -2877,17 +2895,20 @@ const CreateReceiptFromCRM = () => {
                                                                                             onBlur={saveAnalysisEdit}
                                                                                             autoFocus
                                                                                             className="w-full border p-1 rounded bg-white"
-                                                                                            placeholder="Đơn vị"
+                                                                                            placeholder="KNV"
                                                                                         />
                                                                                     ) : (
                                                                                         <span
                                                                                             className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
-                                                                                            onClick={() => startEditingAnalysis(index, idx, "resultUnit", item.resultUnit)}
-                                                                                            title="Nhấn để chỉnh sửa đơn vị"
+                                                                                            onClick={() => startEditingAnalysis(index, idx, "technicianAlias", item.technicianAlias)}
+                                                                                            title="Nhấn để chỉnh sửa KNV"
                                                                                         >
-                                                                                            {item.resultUnit || "--"}
+                                                                                            {item.technicianAlias || "--"}
                                                                                         </span>
                                                                                     )}
+                                                                                </td>
+                                                                                <td className="p-1 text-start">
+                                                                                    <span className="py-1 px-2">{item.technician?.identityName || "--"}</span>
                                                                                 </td>
                                                                                 <td className="p-1 text-center">
                                                                                     <button
