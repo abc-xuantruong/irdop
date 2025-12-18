@@ -118,6 +118,61 @@ const ReportEditor = () => {
         }
     };
 
+    const handleOpenFile = async (fileId) => {
+        if (!fileId) return;
+        try {
+            const response = await apiPost("https://red.irdop.org/v1/file/get/download_link", {
+                expiry: 60 * 10,
+                mode: "view",
+                fileRecord: { id: fileId },
+            });
+            if (response.status === 200 && response.data) {
+                window.open(response.data, "_blank");
+            }
+        } catch (error) {
+            console.error("Error opening file:", error);
+        }
+    };
+
+    // Handle opening all lab test files
+    const handleOpenAllLabTestFiles = async () => {
+        // Collect all file IDs first
+        const allFiles = new Set();
+        const samplesSource = receiptData?.samples || (sampleData ? [sampleData] : []);
+
+        if (!samplesSource || samplesSource.length === 0) {
+            alert("Không có dữ liệu mẫu!");
+            return;
+        }
+
+        samplesSource.forEach(sample => {
+            const analyses = sample.analyses || sample.analysis || [];
+            analyses.forEach(analysis => {
+                if (analysis.labTestFileId) {
+                    allFiles.add(analysis.labTestFileId);
+                }
+            });
+        });
+
+        const uniqueFiles = Array.from(allFiles);
+
+        if (uniqueFiles.length === 0) {
+            alert("Không tìm thấy tài liệu thử nghiệm nào!");
+            return;
+        }
+
+        // Open files
+        let openedCount = 0;
+        for (const fileId of uniqueFiles) {
+            await handleOpenFile(fileId);
+            openedCount++;
+            // Small delay to help with browser handling of multiple tabs
+            await new Promise(r => setTimeout(r, 500));
+        }
+
+        console.log(`Open ${openedCount} files.`);
+    };
+
     // Fetch full receipt data (for "all samples" mode)
     const fetchReceiptData = async (receiptId) => {
         try {
@@ -141,6 +196,7 @@ const ReportEditor = () => {
                     sample_information: sample.sampleInformation || [],
                     receiptId: receiptId,
                     reports: sample.reports || [],
+                    labTestFileId: sample.labTestFileId,
                     client: {
                         clientId: fullReceiptData.client?.clientUID || "",
                         clientName: fullReceiptData.client?.clientName || "",
@@ -148,6 +204,7 @@ const ReportEditor = () => {
                     },
                     analysis: (sample.analyses || []).map((analysis) => ({
                         id: analysis.id,
+                        labTestFileId: analysis.labTestFileId,
                         parameter_name: analysis.parameterName,
                         matrix: analysis.matrix || sample.matrix || "",
                         protocol_code: analysis.protocolCode,
@@ -261,6 +318,7 @@ const ReportEditor = () => {
                 sample_information: currentSample.sampleInformation || [],
                 receiptId: receiptId,
                 reports: currentSample.reports || [], // Add reports array
+                labTestFileId: currentSample.labTestFileId,
                 client: {
                     clientId: receiptData.client?.clientUID || "",
                     clientName: receiptData.client?.clientName || "",
@@ -268,6 +326,7 @@ const ReportEditor = () => {
                 },
                 analysis: (currentSample.analyses || []).map((analysis) => ({
                     id: analysis.id,
+                    labTestFileId: analysis.labTestFileId,
                     parameter_name: analysis.parameterName,
                     matrix: analysis.matrix || currentSample.matrix || "",
                     protocol_code: analysis.protocolCode,
@@ -724,9 +783,9 @@ const ReportEditor = () => {
 
                     const accreditationParts = item.accreditation
                         ? item.accreditation
-                              .split(",")
-                              .map((part) => part.trim())
-                              .filter((part) => part.length > 0)
+                            .split(",")
+                            .map((part) => part.trim())
+                            .filter((part) => part.length > 0)
                         : [];
                     const protocolSource = item.protocol_source || "";
                     const scope = protocolSource + (accreditationParts.length > 0 ? " " + accreditationParts.join(" ") : "");
@@ -851,11 +910,10 @@ ${tableHTML}
 <div id="signature-section" style="padding: 0 8px; display: flex; flex-direction:column; margin:0;">
 	<div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; justify-content:space-between;height:2.7cm;">
 		<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between; max-width:fit-content;">
-			${
-                showSign
-                    ? `<strong style="font-size:12px; line-height:1.2; margin:0;">TRƯỞNG PHÒNG KIỂM NGHIỆM<br>PHÒNG ĐẢM BẢO CHẤT LƯỢNG / Quality Assurance Manager</strong>
+			${showSign
+                ? `<strong style="font-size:12px; line-height:1.2; margin:0;">TRƯỞNG PHÒNG KIỂM NGHIỆM<br>PHÒNG ĐẢM BẢO CHẤT LƯỢNG / Quality Assurance Manager</strong>
 			<p style="font-size:12px; margin:0; line-height:1.4;">Trần Thị Lan</p>`
-                    : ""
+                : ""
             }
 		</div>
 		<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between; max-width:fit-content;">
@@ -2286,9 +2344,9 @@ ${tableHTML}
 
                             const accreditationParts = item.accreditation
                                 ? item.accreditation
-                                      .split(",")
-                                      .map((part) => part.trim())
-                                      .filter((part) => part.length > 0)
+                                    .split(",")
+                                    .map((part) => part.trim())
+                                    .filter((part) => part.length > 0)
                                 : [];
                             const protocolSource = item.protocol_source || "";
                             const scope = protocolSource + (accreditationParts.length > 0 ? " " + accreditationParts.join(" ") : "");
@@ -2398,12 +2456,11 @@ ${tableHTML}
 <div id="signature-section" style="padding: 0 8px; display: flex; flex-direction:column; margin:0;">
 	<div style="padding: 0pt; flex-grow: 1; position: relative; display:flex; justify-content:space-between;height:2.7cm;">
 		<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between; max-width:fit-content;">
-			${
-                sample.showSign
-                    ? `<strong style="font-size:12px; line-height:1.2; margin:0;">TRƯỞNG PHÒNG KIỂM NGHIỆM<br>PHÒNG ĐẢM BẢO CHẤT LƯỢNG / Quality Assurance Manager</strong>
+			${sample.showSign
+                        ? `<strong style="font-size:12px; line-height:1.2; margin:0;">TRƯỞNG PHÒNG KIỂM NGHIỆM<br>PHÒNG ĐẢM BẢO CHẤT LƯỢNG / Quality Assurance Manager</strong>
 			<p style="font-size:12px; margin:0; line-height:1.4;">Trần Thị Lan</p>`
-                    : ""
-            }
+                        : ""
+                    }
 		</div>
 		<div style="flex-grow:1; text-align:center; display:flex; flex-direction:column; justify-content:space-between; max-width:fit-content;">
 			<strong style="font-size:12px; line-height:1.2; margin:0;">KT.VIỆN TRƯỞNG<br>PHÓ VIỆN TRƯỞNG / Vice President</strong>
@@ -2436,7 +2493,7 @@ ${tableHTML}
     };
 
     return (
-        <div className="flex bg-gray-100 min-h-screen overflow-x-auto">
+        <div className="flex bg-gray-100 min-h-screen overflow-x-auto w-full">
             {/* Left Panel - Editor(s) */}
             <div className="flex-shrink-0" style={{ width: "794px", fontFamily: "'Wix Madefor Display', sans-serif" }}>
                 {viewMode === "single" ? (
@@ -2902,15 +2959,15 @@ ${tableHTML}
                                             value={
                                                 sample.contentContent ||
                                                 generateCustomerSection(sample.client) +
-                                                    spacing +
-                                                    generateSampleInfoSection(sample) +
-                                                    spacing +
-                                                    generateAnalysisSection(sample) +
-                                                    spacing +
-                                                    (sample.showComment ? generateCommentSection() + spacing : "") +
-                                                    generateNotesSection() +
-                                                    spacing +
-                                                    generateSignatureSection()
+                                                spacing +
+                                                generateSampleInfoSection(sample) +
+                                                spacing +
+                                                generateAnalysisSection(sample) +
+                                                spacing +
+                                                (sample.showComment ? generateCommentSection() + spacing : "") +
+                                                generateNotesSection() +
+                                                spacing +
+                                                generateSignatureSection()
                                             }
                                             onEditorChange={(content) => {
                                                 const updated = [...allSamplesData];
@@ -3050,7 +3107,7 @@ ${tableHTML}
             </div>
 
             {/* Right Panel - Controls */}
-            <div className="flex-1 bg-white shadow-lg p-6" style={{ maxWidth: "1000px" }}>
+            <div className="flex-1 bg-white shadow-lg p-6 w-full">
                 <h2 className="text-2xl font-bold text-primary mb-6">Phiếu phân tích</h2>
 
                 {/* View Mode Selection */}
@@ -3078,6 +3135,12 @@ ${tableHTML}
                             className={`px-4 py-2 rounded-lg transition ${invoiceFile ? "bg-green-500 text-white hover:bg-green-600 cursor-pointer" : "bg-gray-400 text-gray-200 cursor-not-allowed"}`}
                         >
                             Hóa đơn
+                        </button>
+                        <button
+                            onClick={handleOpenAllLabTestFiles}
+                            className="px-4 py-2 rounded-lg transition bg-orange-500 text-white hover:bg-orange-600"
+                        >
+                            Tài liệu thử nghiệm
                         </button>
                     </div>
                 </div>
@@ -3109,9 +3172,9 @@ ${tableHTML}
                                     value={
                                         selectedReport
                                             ? (() => {
-                                                  const idx = sampleData.reports.findIndex((r) => r.refNumber === selectedReport.refNumber);
-                                                  return idx >= 0 ? idx : "";
-                                              })()
+                                                const idx = sampleData.reports.findIndex((r) => r.refNumber === selectedReport.refNumber);
+                                                return idx >= 0 ? idx : "";
+                                            })()
                                             : ""
                                     }
                                     onChange={handleReportChange}
@@ -3203,54 +3266,48 @@ ${tableHTML}
                                     <button
                                         onClick={() => handleSampleToggleChange(index, "showVlas", !sample.showVlas)}
                                         disabled={sample.isHidden}
-                                        className={`${sample.showVlas ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
-                                            sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
-                                        }`}
+                                        className={`${sample.showVlas ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
+                                            }`}
                                     >
                                         VLAS
                                     </button>
                                     <button
                                         onClick={() => handleSampleToggleChange(index, "showComment", !sample.showComment)}
                                         disabled={sample.isHidden}
-                                        className={`${sample.showComment ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
-                                            sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
-                                        }`}
+                                        className={`${sample.showComment ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
+                                            }`}
                                     >
                                         Comment
                                     </button>
                                     <button
                                         onClick={() => handleSampleToggleChange(index, "showSign", !sample.showSign)}
                                         disabled={sample.isHidden}
-                                        className={`${sample.showSign ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
-                                            sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
-                                        }`}
+                                        className={`${sample.showSign ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
+                                            }`}
                                     >
                                         Sign
                                     </button>
                                     <button
                                         onClick={() => handleSampleToggleChange(index, "showReference", !sample.showReference)}
                                         disabled={sample.isHidden}
-                                        className={`${sample.showReference ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
-                                            sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
-                                        }`}
+                                        className={`${sample.showReference ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
+                                            }`}
                                     >
                                         Reference
                                     </button>
                                     <button
                                         onClick={() => handleSampleToggleChange(index, "showEnglish", !sample.showEnglish)}
                                         disabled={sample.isHidden}
-                                        className={`${sample.showEnglish ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
-                                            sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
-                                        }`}
+                                        className={`${sample.showEnglish ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
+                                            }`}
                                     >
                                         English / Vi
                                     </button>
                                     <button
                                         onClick={() => handleSampleToggleChange(index, "showKN", !sample.showKN)}
                                         disabled={sample.isHidden}
-                                        className={`${sample.showKN ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${
-                                            sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
-                                        }`}
+                                        className={`${sample.showKN ? "bg-sky-500 text-white" : "bg-gray-200 text-gray-700"} px-3 py-1 rounded text-xs hover:bg-sky-600 transition ${sample.isHidden ? "opacity-50 cursor-not-allowed" : ""
+                                            }`}
                                     >
                                         KN
                                     </button>
@@ -3317,19 +3374,108 @@ ${tableHTML}
                                         <th className="border border-gray-300 px-2 py-1 text-left">Mã phương pháp</th>
                                         <th className="border border-gray-300 px-2 py-1 text-left">Kết quả</th>
                                         <th className="border border-gray-300 px-2 py-1 text-left">Đơn vị</th>
+                                        <th className="border border-gray-300 px-2 py-1 text-left">File</th>
                                         <th className="border border-gray-300 px-2 py-1 text-left">Ghi chú</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {sampleData.analysis.map((item, index) => (
-                                        <tr key={item.id || index} className="hover:bg-gray-50">
+                                        <tr
+                                            key={item.id || index}
+                                            className={`hover:bg-gray-50 ${!item.labTestFileId ? "border-2 border-yellow-500" : ""}`}
+                                        >
                                             <td className="border border-gray-300 px-2 py-1 text-left">{item.parameter_name || "--"}</td>
                                             <td className="border border-gray-300 px-2 py-1 text-left">{item.protocol_code || "--"}</td>
-                                            <td className="border border-gray-300 px-2 py-1 text-left">{item.result_value || "--"}</td>
-                                            <td className="border border-gray-300 px-2 py-1 text-left">{item.result_unit || "--"}</td>
+                                            <td
+                                                className="border border-gray-300 px-2 py-1 text-left"
+                                                dangerouslySetInnerHTML={{ __html: item.result_value || "--" }}
+                                            />
+                                            <td
+                                                className="border border-gray-300 px-2 py-1 text-left"
+                                                dangerouslySetInnerHTML={{ __html: item.result_unit || "--" }}
+                                            />
+                                            <td className="border border-gray-300 px-2 py-1 text-left text-center">
+                                                {item.labTestFileId ? (
+                                                    <button
+                                                        onClick={() => handleOpenFile(item.labTestFileId)}
+                                                        className="text-blue-600 hover:text-blue-800 underline"
+                                                    >
+                                                        Mở
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-gray-400">Trống</span>
+                                                )}
+                                            </td>
                                             <td className="border border-gray-300 px-2 py-1 text-left">{item.note || "--"}</td>
                                         </tr>
                                     ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* Combined Analysis List for All Samples Mode */}
+                {viewMode === "all" && allSamplesData.length > 0 && (
+                    <div className="mt-6">
+                        <h3 className="font-semibold mb-3 text-lg text-left">Danh sách chỉ tiêu tổng hợp</h3>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm border-collapse border border-gray-300">
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th className="border border-gray-300 px-2 py-1 text-left">Mã mẫu</th>
+                                        <th className="border border-gray-300 px-2 py-1 text-left">Tên chỉ tiêu</th>
+                                        <th className="border border-gray-300 px-2 py-1 text-left">Mã phương pháp</th>
+                                        <th className="border border-gray-300 px-2 py-1 text-left">Kết quả</th>
+                                        <th className="border border-gray-300 px-2 py-1 text-left">Đơn vị</th>
+                                        <th className="border border-gray-300 px-2 py-1 text-left">File</th>
+                                        <th className="border border-gray-300 px-2 py-1 text-left">Ghi chú</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {allSamplesData.flatMap((sample, sampleIndex) => {
+                                        if (sample.isHidden) return [];
+                                        const analysisCount = sample.analysis ? sample.analysis.length : 0;
+
+                                        return (sample.analysis || []).map((item, index) => (
+                                            <tr
+                                                key={`${sample.sampleId}-${item.id || index}`}
+                                                className={`hover:bg-gray-50 ${!item.labTestFileId ? "border-2 border-yellow-500" : ""}`}
+                                            >
+                                                {index === 0 && (
+                                                    <td
+                                                        className="border border-gray-300 px-2 py-1 text-left align-top font-bold"
+                                                        rowSpan={analysisCount}
+                                                    >
+                                                        {sample.sampleId}
+                                                    </td>
+                                                )}
+                                                <td className="border border-gray-300 px-2 py-1 text-left">{item.parameter_name || "--"}</td>
+                                                <td className="border border-gray-300 px-2 py-1 text-left">{item.protocol_code || "--"}</td>
+                                                <td
+                                                    className="border border-gray-300 px-2 py-1 text-left"
+                                                    dangerouslySetInnerHTML={{ __html: item.result_value || "--" }}
+                                                />
+                                                <td
+                                                    className="border border-gray-300 px-2 py-1 text-left"
+                                                    dangerouslySetInnerHTML={{ __html: item.result_unit || "--" }}
+                                                />
+                                                <td className="border border-gray-300 px-2 py-1 text-left text-center">
+                                                    {item.labTestFileId ? (
+                                                        <button
+                                                            onClick={() => handleOpenFile(item.labTestFileId)}
+                                                            className="text-blue-600 hover:text-blue-800 underline"
+                                                        >
+                                                            Mở
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-gray-400">Trống</span>
+                                                    )}
+                                                </td>
+                                                <td className="border border-gray-300 px-2 py-1 text-left">{item.note || "--"}</td>
+                                            </tr>
+                                        ));
+                                    })}
                                 </tbody>
                             </table>
                         </div>

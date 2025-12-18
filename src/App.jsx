@@ -4,6 +4,8 @@ import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import "./App.css";
 import Header from "./sections/Header";
 import Dashboard from "./pages/Dashboard";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import ReceiptInfor from "./pages/ReceiptInfor";
 import SampleInfor from "./pages/SampleInfor";
 import Library from "./pages/Library";
@@ -34,6 +36,7 @@ import IncomingOrder from "./components/orderDashboard/IncomingOrder";
 const App = () => {
     return (
         <TaskQueueProvider>
+            <ToastContainer position="top-right" autoClose={3000} />
             <Router>
                 <AuthGuard>
                     <ProcessingQueue />

@@ -659,6 +659,7 @@ const FileInfor = () => {
 		'Biên bản thử nghiệm',
 		'Ảnh mẫu',
 		'Phiếu kết quả thử nghiệm',
+		'Tài liệu thử nghiệm',
 		'Tài liệu khác',
 	];
 

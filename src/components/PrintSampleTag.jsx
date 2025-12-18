@@ -196,10 +196,10 @@ const PrintSampleTag = () => {
 
     // Barcode component with multiple format options
     const BarcodeGenerator = ({ value, width = 1, height = 40, format = "CODE128" }) => {
-        const canvasRef = useRef(null);
+        const barcodeRef = useRef(null);
 
         useEffect(() => {
-            if (canvasRef.current && value) {
+            if (barcodeRef.current && value) {
                 try {
                     // Different barcode formats for different needs:
                     // CODE39: Best spacing, good for 1x2 ratio, supports alphanumeric
@@ -211,7 +211,7 @@ const PrintSampleTag = () => {
                             width: width,
                             height: height,
                             displayValue: false,
-                            margin: 3, // Good spacing to prevent sticking
+                            margin: 0, // Zero margin here, controlled by CSS
                             background: "transparent",
                             lineColor: "#000000",
                         },
@@ -220,7 +220,7 @@ const PrintSampleTag = () => {
                             width: width,
                             height: height,
                             displayValue: false,
-                            margin: 2,
+                            margin: 0,
                             background: "transparent",
                             lineColor: "#000000",
                         },
@@ -229,22 +229,22 @@ const PrintSampleTag = () => {
                             width: width,
                             height: height,
                             displayValue: false,
-                            margin: 2,
+                            margin: 0,
                             background: "transparent",
                             lineColor: "#000000",
                         },
                     };
 
-                    JsBarcode(canvasRef.current, value, formatOptions[format] || formatOptions.CODE39);
+                    JsBarcode(barcodeRef.current, value, formatOptions[format] || formatOptions.CODE39);
                 } catch (error) {
                     // Fallback to CODE128 if selected format fails
                     try {
-                        JsBarcode(canvasRef.current, value, {
+                        JsBarcode(barcodeRef.current, value, {
                             format: "CODE128",
                             width: width,
                             height: height,
                             displayValue: false,
-                            margin: 2,
+                            margin: 0,
                             background: "transparent",
                             lineColor: "#000000",
                         });
@@ -255,7 +255,7 @@ const PrintSampleTag = () => {
             }
         }, [value, width, height, format]);
 
-        return <canvas ref={canvasRef} style={{ maxWidth: "100%", height: "auto" }} />;
+        return <svg ref={barcodeRef} style={{ maxWidth: "100%", height: "auto", display: "block" }} />;
     };
 
     // Single tag component for each sample
@@ -266,7 +266,7 @@ const PrintSampleTag = () => {
         const techNameFontSize = "text-lg";
 
         return (
-            <div className={`p-2 pl-4 py-1 w-[50mm] h-[30mm] flex overflow-hidden text-sm ${!isPrintView ? "border-gray-300 border rounded-sm" : ""}`}>
+            <div className={`w-[50mm] h-[30mm] flex overflow-hidden text-sm ${!isPrintView ? "border-gray-300 border rounded-sm" : ""}`} style={{ padding: "2mm" }}>
                 <div className="flex-1 flex flex-col justify-start font-semibold">
                     <div className="flex w-full justify-between items-end">
                         <div className="text-left">
@@ -291,7 +291,7 @@ const PrintSampleTag = () => {
                             </div>
                         )}
                     </div>
-                    <div className="flex items-center justify-center">
+                    <div className="flex items-center justify-center w-full">
                         <BarcodeGenerator value={sample.sampleId} width={1} height={barcodeHeight} />
                     </div>
                     <div className={`flex justify-center mb-0.5 ${sampleIdFontSize}`}>

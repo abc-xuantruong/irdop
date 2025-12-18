@@ -1,0 +1,1861 @@
+{
+    "id": "TNMx24431008",
+    "receiptId": "TNMx24431008",
+    "status": "Đã tiếp nhận",
+    "clientId": "0",
+    "receiptDate": "2024-12-10T14:00:00.000Z",
+    "modifiedAt": "2025-10-27T06:31:08.582Z",
+    "deadline": "2025-05-23T00:00:00.000Z",
+    "internalMemo": null,
+    "paymentStatus": null,
+    "orderId": "DH0004567,DH0007777",
+    "quoteId": "1112",
+    "salePerson": "Trần Quang Tú (tutq)",
+    "totalFeeBeforeTax": 1,
+    "_deprecated_recordCode": "2443",
+    "_deprecated_postalOrderCreatedAt": null,
+    "_deprecated_postalOrderCreatedById": null,
+    "_deprecated_createdBy": null,
+    "_deprecated_transactions": null,
+    "_deprecated_invoiceNumber": null,
+    "_deprecated_trackingNumber": "",
+    "_deprecated_sampleImageId": "file_7c177e8ad59",
+    "client": {
+        "legalId": "038093001651",
+        "clientUID": "",
+        "clientName": "Trần Quang Tú 1 2  3",
+        "clientPhone": "0969504954  ",
+        "invoiceEmail": "12311 1",
+        "clientAddress": "Xóm Việt Thắng , Hà Thượng, Đại Từ, Thái Nguyên"
+    },
+    "contactPerson": {
+        "id": "",
+        "name": "",
+        "email": "231",
+        "phone": "1",
+        "id_date": "",
+        "id_place": ""
+    },
+    "reportRecipient": {
+        "name": "",
+        "email": "efd",
+        "other": "1",
+        "address": ""
+    },
+    "note": null,
+    "modifiedBy": {
+        "identityId": "IDx0dc77",
+        "identityName": "Trần Quang Tú",
+        "email": "trantu02.efw@gmail.com",
+        "roles": {
+            "LIMS-IRDOP-PRD": {
+                "staff": true,
+                "isTechnician": false,
+                "isAdminstrative": true,
+                "isCustomerService": true,
+                "isSampleManager": true,
+                "isAccountant": true,
+                "isAdmin": true,
+                "isSuperAdmin": true
+            }
+        }
+    },
+    "samples": [
+        {
+            "id": "SPx24431008-01",
+            "sampleId": "SPx24431008-01",
+            "receiptId": "TNMx24431008",
+            "sampleName": "SAMPLE TEST",
+            "handoverAt": null,
+            "productType": null,
+            "matrix": "Thực phẩm bảo vệ sức khỏe",
+            "sampleInformation": [
+                {
+                    "fname": "1232111",
+                    "fvalue": "1111"
+                },
+                {
+                    "fname": "Hạn sử dụng / exp.",
+                    "fvalue": "213213"
+                },
+                {
+                    "fname": "12321321",
+                    "fvalue": "21321321"
+                },
+                {
+                    "fname": "Ngày tiếp nhận / receipt date.",
+                    "fvalue": "21-11-2025"
+                },
+                {
+                    "fname": "Mô tả / desc.",
+                    "fvalue": "213213"
+                },
+                {
+                    "fname": "Ngày thử nghiệm / test date.",
+                    "fvalue": "3/8/2025 - 16/12/2025"
+                }
+            ],
+            "sampleVolume": null,
+            "additionalRequest": null,
+            "status": 3,
+            "purpose": "Dự án",
+            "sampleDescription": "213213",
+            "reports": [
+                {
+                    "id": "PPTx2443100801-s5BCQGO",
+                    "refNumber": "PPTx2443100801-s5BCQGO",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"header-section\" style=\"position: relative; height: fit-content;\">\n<div style=\"position: relative; display: flex; overflow: visible;\">\n<div><img style=\"width: 4cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p style=\"font-weight: bold; font-size: 14.4px; color: #0058a3; margin-bottom: 0; line-height: 17.6px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p style=\"font-weight: 400; font-size: 11.2px; margin: 0; line-height: 12px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 11.2px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept. </span></div>\n</div>\n<div style=\"padding-top: 2mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p style=\"font-weight: 900; font-size: 24pt; color: #0058a3; height: 36px;\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p style=\"font-weight: 800; font-size: 21pt; color: #0058a3; height: 36px;\">/ Certificate of Analysis</p>\n<div style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; margin-top: 0px; height: 20px;\">Xuất bản / ref.:\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-s5BCQGO</p>\n<span style=\"min-width: 5pt; margin: 0;\">Ng&agrave;y / Date: 28/11/2025</span></div>\n</div>\n<div class=\"vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img style=\"width: 4.16cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-11-28T02:51:09.643Z",
+                    "modifiedAt": "2025-11-28T02:51:09.643Z"
+                },
+                {
+                    "id": "PPTx2443100801-s5BCQ8P",
+                    "refNumber": "PPTx2443100801-s5BCQ8P",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"header-section\" style=\"position: relative; height: fit-content;\">\n<div style=\"position: relative; display: flex; overflow: visible;\">\n<div><img style=\"width: 4cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p style=\"font-weight: bold; font-size: 14.4px; color: #0058a3; margin-bottom: 0; line-height: 17.6px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p style=\"font-weight: 400; font-size: 11.2px; margin: 0; line-height: 12px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 11.2px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept. </span></div>\n</div>\n<div style=\"padding-top: 2mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p style=\"font-weight: 900; font-size: 24pt; color: #0058a3; height: 36px;\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p style=\"font-weight: 800; font-size: 21pt; color: #0058a3; height: 36px;\">/ Certificate of Analysis</p>\n<div style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; margin-top: 0px; height: 20px;\">Xuất bản / ref.:\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-s5BCQ8P</p>\n<span style=\"min-width: 5pt; margin: 0;\">Ng&agrave;y / Date: 28/11/2025</span></div>\n</div>\n<div class=\"vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img style=\"width: 4.16cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-11-28T02:50:47.964Z",
+                    "modifiedAt": "2025-11-28T02:50:47.964Z"
+                },
+                {
+                    "id": "PPTx2443100801-q5BD2K0",
+                    "refNumber": "PPTx2443100801-q5BD2K0",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">Trưởng Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept.</span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\">Xuất bản / ref.:\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-256KQJ</p>\n<span style=\"min-width: 5pt; margin: 0;\">&nbsp;Ng&agrave;y / Date: DD-MM-YYYY</span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-11-26T03:02:50.245Z",
+                    "modifiedAt": "2025-11-26T03:02:50.245Z"
+                },
+                {
+                    "id": "PPTx2443100801-q5BCN1H",
+                    "refNumber": "PPTx2443100801-q5BCN1H",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"header-section\" style=\"position: relative; height: fit-content;\">\n<div style=\"position: relative; display: flex; overflow: visible;\">\n<div><img style=\"width: 4cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p style=\"font-weight: bold; font-size: 14.4px; color: #0058a3; margin-bottom: 0; line-height: 17.6px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p style=\"font-weight: 400; font-size: 11.2px; margin: 0; line-height: 12px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 11.2px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept. </span></div>\n</div>\n<div style=\"padding-top: 2mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p style=\"font-weight: 900; font-size: 24pt; color: #0058a3; height: 36px;\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p style=\"font-weight: 800; font-size: 21pt; color: #0058a3; height: 36px;\">/ Certificate of Analysis</p>\n<div style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; margin-top: 0px; height: 20px;\">Xuất bản / ref.:\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-q5BCN1H</p>\n<span style=\"min-width: 5pt; margin: 0;\">Ng&agrave;y / Date: 26/11/2025</span></div>\n</div>\n<div class=\"vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img style=\"width: 4.16cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-11-26T02:46:09.320Z",
+                    "modifiedAt": "2025-11-26T02:46:09.320Z"
+                },
+                {
+                    "id": "PPTx2443100801-p5BDJ49",
+                    "refNumber": "PPTx2443100801-p5BDJ49",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"header-section\" style=\"position: relative; height: fit-content;\">\n<div style=\"position: relative; display: flex; overflow: visible;\">\n<div><img style=\"width: 4cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p style=\"font-weight: bold; font-size: 14.4px; color: #0058a3; margin-bottom: 0; line-height: 17.6px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p style=\"font-weight: 400; font-size: 11.2px; margin: 0; line-height: 12px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 11.2px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept. </span></div>\n</div>\n<div style=\"padding-top: 2mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p style=\"font-weight: 900; font-size: 24pt; color: #0058a3; height: 36px;\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p style=\"font-weight: 800; font-size: 21pt; color: #0058a3; height: 36px;\">/ Certificate of Analysis</p>\n<div style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; margin-top: 0px; height: 20px;\">Xuất bản / ref.:\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-p5BDJ49</p>\n<span style=\"min-width: 5pt; margin: 0;\">Ng&agrave;y / Date: 25/11/2025</span></div>\n</div>\n<div class=\"vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img style=\"width: 4.16cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-11-25T03:26:37.856Z",
+                    "modifiedAt": "2025-11-25T03:26:37.856Z"
+                },
+                {
+                    "id": "PPTx2443100801-p5BDJ2P",
+                    "refNumber": "PPTx2443100801-p5BDJ2P",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">Trưởng Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept.</span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\">Xuất bản / ref.:\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-256KQJ</p>\n<span style=\"min-width: 5pt; margin: 0;\">&nbsp;Ng&agrave;y / Date: DD-MM-YYYY</span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-11-25T03:26:31.546Z",
+                    "modifiedAt": "2025-11-25T03:26:31.546Z"
+                },
+                {
+                    "id": "PPTx2443100801-p5BDB9L",
+                    "refNumber": "PPTx2443100801-p5BDB9L",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"header-section\" style=\"position: relative; height: fit-content;\">\n<div style=\"position: relative; display: flex; overflow: visible;\">\n<div><img style=\"width: 4cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p style=\"font-weight: bold; font-size: 14.4px; color: #0058a3; margin-bottom: 0; line-height: 17.6px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p style=\"font-weight: 400; font-size: 11.2px; margin: 0; line-height: 12px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 11.2px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept. </span></div>\n</div>\n<div style=\"padding-top: 2mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p style=\"font-weight: 900; font-size: 24pt; color: #0058a3; height: 36px;\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p style=\"font-weight: 800; font-size: 21pt; color: #0058a3; height: 36px;\">/ Certificate of Analysis</p>\n<div style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; margin-top: 0px; height: 20px;\">Xuất bản / ref.:\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-p5BDB9L</p>\n<span style=\"min-width: 5pt; margin: 0;\">Ng&agrave;y / Date: 25/11/2025</span></div>\n</div>\n<div class=\"vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img style=\"width: 4.16cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-11-25T03:15:19.825Z",
+                    "modifiedAt": "2025-11-25T03:15:19.825Z"
+                },
+                {
+                    "id": "PPTx2443100801-DRAFT",
+                    "refNumber": "PPTx2443100801-DRAFT",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"header-section\" style=\"position: relative; height: fit-content;\">\n<div style=\"position: relative; display: flex; overflow: visible;\">\n<div><img style=\"width: 4cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p style=\"font-weight: bold; font-size: 14.4px; color: #0058a3; margin-bottom: 0; line-height: 17.6px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p style=\"font-weight: 400; font-size: 11.2px; margin: 0; line-height: 12px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 11.2px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept. </span></div>\n</div>\n<div style=\"padding-top: 2mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p style=\"font-weight: 900; font-size: 24pt; color: #0058a3; height: 36px;\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p style=\"font-weight: 800; font-size: 21pt; color: #0058a3; height: 36px;\">/ Certificate of Analysis</p>\n<div style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; margin-top: 0px; height: 20px;\">Xuất bản / ref.:\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-DRAFT</p>\n<span style=\"min-width: 5pt; margin: 0;\">Ng&agrave;y / Date: 25/11/2025</span></div>\n</div>\n<div class=\"vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img style=\"width: 4.16cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-11-24T11:58:10.547Z",
+                    "modifiedAt": "2025-11-25T03:26:26.049Z"
+                },
+                {
+                    "id": "7647",
+                    "refNumber": "PPTx2443100801-n57BMK",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">Trưởng Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept.</span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-DRAFT</p>\n<span style=\"min-width: 5pt; margin: 0;\">&nbsp;Ng&agrave;y / Date: DD-MM-YYYY</span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [
+                        "--",
+                        "--",
+                        "--"
+                    ],
+                    "createdAt": "2025-07-23T01:59:30.485Z",
+                    "modifiedAt": "2025-07-23T01:59:30.485Z"
+                },
+                {
+                    "id": "3637",
+                    "refNumber": "PPTx2443100801-256KQJ",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">Trưởng Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept.</span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-DRAFT</p>\n<span style=\"min-width: 5pt; margin: 0;\">&nbsp;Ng&agrave;y / Date: DD-MM-YYYY</span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [
+                        "--",
+                        "--",
+                        "--"
+                    ],
+                    "createdAt": "2025-06-02T08:59:56.182Z",
+                    "modifiedAt": "2025-06-02T08:59:56.182Z"
+                },
+                {
+                    "id": "3627",
+                    "refNumber": "PPTx2443100801-256IIJ",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"thead\" class=\"content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div style=\"position: relative; display: flex; overflow: visible;\">\n<div><img style=\"width: 5cm;\" src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis Control Department </span></div>\n</div>\n<div style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\"content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\"content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\"display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\" contenteditable=\"true\">PPTx25o260201-000000</p>\n<span style=\"min-width: 5pt; margin: 0;\">Ng&agrave;y / Date: DD-MM-YYYY</span></div>\n</div>\n<div class=\"vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [
+                        "--"
+                    ],
+                    "createdAt": "2025-06-02T07:16:13.818Z",
+                    "modifiedAt": "2025-06-02T07:16:13.818Z"
+                },
+                {
+                    "id": "1277",
+                    "refNumber": "PPTx2443100801-h54DAT",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-17T03:14:45.662Z",
+                    "modifiedAt": "2025-04-17T03:14:45.662Z"
+                },
+                {
+                    "id": "1273",
+                    "refNumber": "PPTx2443100801-h54CTB",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-17T02:55:14.369Z",
+                    "modifiedAt": "2025-04-17T02:55:14.369Z"
+                },
+                {
+                    "id": "1215",
+                    "refNumber": "PPTx2443100801-g54LFK",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-16T09:30:12.447Z",
+                    "modifiedAt": "2025-04-16T09:30:12.447Z"
+                },
+                {
+                    "id": "1212",
+                    "refNumber": "PPTx2443100801-g54LFE",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-16T09:29:57.609Z",
+                    "modifiedAt": "2025-04-16T09:29:57.609Z"
+                },
+                {
+                    "id": "1209",
+                    "refNumber": "PPTx2443100801-g54LEL",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-16T09:28:49.600Z",
+                    "modifiedAt": "2025-04-16T09:28:49.600Z"
+                },
+                {
+                    "id": "1156",
+                    "refNumber": "PPTx2443100801-DRAFT",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">Trưởng Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept.</span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100801-256KQJ</p>\n<span style=\"min-width: 5pt; margin: 0;\">&nbsp;Ng&agrave;y / Date: DD-MM-YYYY</span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [
+                        "--",
+                        "--",
+                        "--"
+                    ],
+                    "createdAt": "2025-04-15T04:35:56.784Z",
+                    "modifiedAt": "2025-06-05T07:32:11.555Z"
+                },
+                {
+                    "id": "1071",
+                    "refNumber": "PPTx2443100801-d54T09",
+                    "sampleId": "SPx24431008-01",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis Control Department </span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"  ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\" contenteditable=\"true\">SƠ BỘ / DRAFT</p>\n<span style=\"min-width: 5pt; margin: 0;\"> Ng&agrave;y / Date: 13-04-2025 </span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [
+                        "--",
+                        "--",
+                        "--",
+                        "--"
+                    ],
+                    "createdAt": "2025-04-13T15:16:46.046Z",
+                    "modifiedAt": "2025-04-13T15:16:46.046Z"
+                }
+            ],
+            "analyses": [
+                {
+                    "id": "ANL_MHVBOAEQ785",
+                    "sampleId": "SPx24431008-01",
+                    "matrix": "thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Tổng số vi sinh vật hiếu khí",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 4884 -1:2015",
+                    "resultValue": "<p>1</p>",
+                    "resultUnit": null,
+                    "technicianId": "IDxfab29",
+                    "technician": {
+                        "identityId": "IDxfab29",
+                        "identityName": "Chu Thị Thủy",
+                        "email": "chuthuy186@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K09",
+                    "technicianIds": [
+                        "IDxfab29"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDxfab29",
+                            "identityName": "Chu Thị Thủy",
+                            "email": "chuthuy186@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PMb9de97",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": "SINH HỌC - VI SINH",
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": "IDx0dc77",
+                    "submitLastResultAt": "2025-12-16T01:59:11.547Z"
+                }
+            ]
+        },
+        {
+            "id": "SPx24431008-02",
+            "sampleId": "SPx24431008-02",
+            "receiptId": "TNMx24431008",
+            "sampleName": "SAMPLE TEST",
+            "handoverAt": null,
+            "productType": null,
+            "matrix": "",
+            "sampleInformation": [
+                {
+                    "fname": "Tên mẫu thử / name.",
+                    "fvalue": "SAMPLE TEST"
+                },
+                {
+                    "fname": "1232111",
+                    "fvalue": "1111"
+                },
+                {
+                    "fname": "Hạn sử dụng / exp.",
+                    "fvalue": "213213"
+                },
+                {
+                    "fname": "12321321",
+                    "fvalue": "21321321"
+                },
+                {
+                    "fname": "Ngày tiếp nhận / receipt date.",
+                    "fvalue": "11/12/2024"
+                },
+                {
+                    "fname": "Ngày thử nghiệm / test date.",
+                    "fvalue": ""
+                },
+                {
+                    "fname": "Mô tả / desc.",
+                    "fvalue": "213213"
+                }
+            ],
+            "sampleVolume": "",
+            "additionalRequest": "",
+            "status": 3,
+            "purpose": "Dự án",
+            "sampleDescription": "213213",
+            "reports": [
+                {
+                    "id": "PPTx2443100802-s5AEQ8",
+                    "refNumber": "PPTx2443100802-s5AEQ8",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 4cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 14.4px; color: #0058a3; margin-bottom: 0; line-height: 17.6px; letter-spacing: 0.04em; word-spacing: 0.04em;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 11.2px; margin: 0; line-height: 12px; letter-spacing: 0.04em; word-spacing: 0.04em;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 11.2px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px; letter-spacing: 0.04em; word-spacing: 0.04em;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept. </span></div>\n</div>\n<div class=\" \" style=\"padding-top: 5mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: 840; font-size: 24pt; color: #0058a3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: 820; font-size: 21pt; color: #0058a3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\">Xuất bản / ref.:\n<p class=\"  ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\" contenteditable=\"true\">PPTx2443100802-s5AEQ8</p>\n<span style=\"min-width: 5pt; margin: 0;\"> Ng&agrave;y / Date: 05/08/2025 </span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img class=\"\" style=\"width: 4.16cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-10-28T04:22:56.773Z",
+                    "modifiedAt": "2025-10-28T04:22:56.773Z"
+                },
+                {
+                    "id": "PPTx2443100802-s5AEO7",
+                    "refNumber": "PPTx2443100802-s5AEO7",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"header-section\" style=\"position: relative; height: fit-content;\">\n<div style=\"position: relative; display: flex; overflow: visible;\">\n<div><img style=\"width: 4cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p style=\"font-weight: bold; font-size: 14.4px; color: #0058a3; margin-bottom: 0; line-height: 17.6px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p style=\"font-weight: 400; font-size: 11.2px; margin: 0; line-height: 12px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 11.2px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept. </span></div>\n</div>\n<div style=\"padding-top: 2mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p style=\"font-weight: 900; font-size: 24pt; color: #0058a3; height: 36px;\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p style=\"font-weight: 800; font-size: 21pt; color: #0058a3; height: 36px;\">/ Certificate of Analysis</p>\n<div style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; margin-top: 0px; height: 20px;\">Xuất bản / ref.:\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100802-s5AEO7</p>\n<span style=\"min-width: 5pt; margin: 0;\">Ng&agrave;y / Date: 28/10/2025</span></div>\n</div>\n<div class=\"vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img style=\"width: 4.16cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-10-28T04:20:01.642Z",
+                    "modifiedAt": "2025-10-28T04:20:01.642Z"
+                },
+                {
+                    "id": "8498",
+                    "refNumber": "PPTx2443100802-558APE",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 4cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 14.4px; color: #0058a3; margin-bottom: 0; line-height: 17.6px; letter-spacing: 0.04em; word-spacing: 0.04em;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 11.2px; margin: 0; line-height: 12px; letter-spacing: 0.04em; word-spacing: 0.04em;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 11.2px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px; letter-spacing: 0.04em; word-spacing: 0.04em;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept. </span></div>\n</div>\n<div class=\" \" style=\"padding-top: 5mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: 840; font-size: 24pt; color: #0058a3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: 820; font-size: 21pt; color: #0058a3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"  ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\" contenteditable=\"true\">SƠ BỘ / DRAFT</p>\n<span style=\"min-width: 5pt; margin: 0;\"> Ng&agrave;y / Date: 05/08/2025 </span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img class=\"\" style=\"width: 4.16cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [
+                        "--"
+                    ],
+                    "createdAt": "2025-08-05T01:17:27.315Z",
+                    "modifiedAt": "2025-08-05T01:17:27.315Z"
+                },
+                {
+                    "id": "7648",
+                    "refNumber": "PPTx2443100802-n57BML",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis Control Department </span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100802-i544F2</p>\n<span style=\"min-width: 5pt; margin: 0;\">&nbsp;Ng&agrave;y / Date:11-04-2025 </span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-07-23T01:59:32.393Z",
+                    "modifiedAt": "2025-07-23T01:59:32.393Z"
+                },
+                {
+                    "id": "5430",
+                    "refNumber": "PPTx2443100802-l56DE7",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis Control Department </span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100802-i544F2</p>\n<span style=\"min-width: 5pt; margin: 0;\">&nbsp;Ng&agrave;y / Date:11-04-2025 </span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-06-21T03:19:31.711Z",
+                    "modifiedAt": "2025-06-21T03:19:31.711Z"
+                },
+                {
+                    "id": "5429",
+                    "refNumber": "PPTx2443100802-l56DDJ",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis Control Department </span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100802-i544F2</p>\n<span style=\"min-width: 5pt; margin: 0;\">&nbsp;Ng&agrave;y / Date:11-04-2025 </span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-06-21T03:18:37.612Z",
+                    "modifiedAt": "2025-06-21T03:18:37.612Z"
+                },
+                {
+                    "id": "1329",
+                    "refNumber": "PPTx2443100802-i544F2",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis Control Department </span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\">PPTx2443100802-i5446T</p>\n<span style=\"min-width: 5pt; margin: 0;\">&nbsp;Ng&agrave;y / Date:11-04-2025 </span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-17T20:26:02.952Z",
+                    "modifiedAt": "2025-04-17T20:26:02.952Z"
+                },
+                {
+                    "id": "1328",
+                    "refNumber": "PPTx2443100802-i544C4",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"thead\" class=\"content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div style=\"position: relative; display: flex; overflow: visible;\">\n<div><img style=\"width: 5cm;\" src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis Control Department </span></div>\n</div>\n<div style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\"content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\"content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\"display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\" contenteditable=\"true\">PPTx2443100802-h54DAT</p>\n<span style=\"min-width: 5pt; margin: 0;\"> Ng&agrave;y / Date: 16/4/2025 </span></div>\n</div>\n<div class=\"vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-17T20:21:47.641Z",
+                    "modifiedAt": "2025-04-17T20:21:47.641Z"
+                },
+                {
+                    "id": "1327",
+                    "refNumber": "PPTx2443100802-i5446T",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis Control Department </span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"  ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\" contenteditable=\"true\">PPTx2443100802-DRAFT</p>\n<span style=\"min-width: 5pt; margin: 0;\">&nbsp;Ng&agrave;y / Date:11-04-2025 </span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-17T20:14:16.360Z",
+                    "modifiedAt": "2025-04-17T20:14:16.360Z"
+                },
+                {
+                    "id": "1326",
+                    "refNumber": "PPTx2443100802-i54469",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"thead\" class=\"content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div style=\"position: relative; display: flex; overflow: visible;\">\n<div><img style=\"width: 5cm;\" src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis Control Department </span></div>\n</div>\n<div style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\"content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\"content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\"display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\" contenteditable=\"true\">PPTx2443100802-g54HMN</p>\n<span style=\"min-width: 5pt; margin: 0;\"> Ng&agrave;y / Date: 16/4/2025 </span></div>\n</div>\n<div class=\"vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-17T20:13:24.787Z",
+                    "modifiedAt": "2025-04-17T20:13:24.787Z"
+                },
+                {
+                    "id": "1278",
+                    "refNumber": "PPTx2443100802-h54DAT",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-17T03:14:46.720Z",
+                    "modifiedAt": "2025-04-17T03:14:46.720Z"
+                },
+                {
+                    "id": "1274",
+                    "refNumber": "PPTx2443100802-h54CTB",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-17T02:55:15.603Z",
+                    "modifiedAt": "2025-04-17T02:55:15.603Z"
+                },
+                {
+                    "id": "1213",
+                    "refNumber": "PPTx2443100802-g54LFJ",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-16T09:30:09.934Z",
+                    "modifiedAt": "2025-04-16T09:30:09.934Z"
+                },
+                {
+                    "id": "1210",
+                    "refNumber": "PPTx2443100802-g54LFE",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-16T09:29:55.420Z",
+                    "modifiedAt": "2025-04-16T09:29:55.420Z"
+                },
+                {
+                    "id": "1208",
+                    "refNumber": "PPTx2443100802-g54LEL",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-16T09:28:48.564Z",
+                    "modifiedAt": "2025-04-16T09:28:48.564Z"
+                },
+                {
+                    "id": "1201",
+                    "refNumber": "PPTx2443100802-g54HMN",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-16T06:36:05.095Z",
+                    "modifiedAt": "2025-04-16T06:36:05.095Z"
+                },
+                {
+                    "id": "PPTx2443100802-DRAFT",
+                    "refNumber": "PPTx2443100802-DRAFT",
+                    "sampleId": "SPx24431008-02",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 4cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 14.4px; color: #0058a3; margin-bottom: 0; line-height: 17.6px; letter-spacing: 0.04em; word-spacing: 0.04em;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 11.2px; margin: 0; line-height: 12px; letter-spacing: 0.04em; word-spacing: 0.04em;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 11.2px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 12px; padding-bottom: 1px; letter-spacing: 0.04em; word-spacing: 0.04em;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis and Testing Dept. </span></div>\n</div>\n<div class=\" \" style=\"padding-top: 5mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: 840; font-size: 24pt; color: #0058a3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: 820; font-size: 21pt; color: #0058a3; height: 32px; letter-spacing: 0.03em; word-spacing: 0.03em;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\">Xuất bản / ref.:\n<p class=\"  ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\" contenteditable=\"true\">PPTx2443100802-s5AEQ8</p>\n<span style=\"min-width: 5pt; margin: 0;\"> Ng&agrave;y / Date: 05/08/2025 </span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img class=\"\" style=\"width: 4.16cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": {},
+                    "createdAt": "2025-04-03T06:38:42.709Z",
+                    "modifiedAt": "2025-10-28T05:01:46.556Z"
+                }
+            ],
+            "analyses": [
+                {
+                    "id": "ANL_MIFHNEJUSMF",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "E. coli",
+                    "protocolSource": "IRDOP VS",
+                    "protocolCode": "TCVN 7924-2:2008 12333",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx1f95e",
+                    "technician": {
+                        "identityId": "IDx1f95e",
+                        "identityName": "EX",
+                        "email": "EX",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "S00022",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIFHNEJWTEF",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Salmonella",
+                    "protocolSource": "IRDOP VS",
+                    "protocolCode": "TCVN 10780-1:2017",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx1f95e",
+                    "technician": {
+                        "identityId": "IDx1f95e",
+                        "identityName": "EX",
+                        "email": "EX",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "S00023",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIFHNEJYR2W",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Asen (As)",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 7770: 2007",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx6da25",
+                    "technician": {
+                        "identityId": "IDx6da25",
+                        "identityName": "Chu Thành Trung",
+                        "email": "chuthanhtrung2408@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K08",
+                    "technicianIds": [
+                        "IDx6da25"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDx6da25",
+                            "identityName": "Chu Thành Trung",
+                            "email": "chuthanhtrung2408@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PMf5cea7",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIFHNEJZJOE",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Chì (Pb)",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 8126:2009",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx6da25",
+                    "technician": {
+                        "identityId": "IDx6da25",
+                        "identityName": "Chu Thành Trung",
+                        "email": "chuthanhtrung2408@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K08",
+                    "technicianIds": [
+                        "IDx6da25"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDx6da25",
+                            "identityName": "Chu Thành Trung",
+                            "email": "chuthanhtrung2408@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PM080f16",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIFHNEK0PKX",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Thủy ngân (Hg)",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 7993:2009",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx6da25",
+                    "technician": {
+                        "identityId": "IDx6da25",
+                        "identityName": "Chu Thành Trung",
+                        "email": "chuthanhtrung2408@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K08",
+                    "technicianIds": [
+                        "IDx6da25"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDx6da25",
+                            "identityName": "Chu Thành Trung",
+                            "email": "chuthanhtrung2408@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PM46f518",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIFHNEK16BB",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Cadmi (Cd)",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 8126:2009",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx6da25",
+                    "technician": {
+                        "identityId": "IDx6da25",
+                        "identityName": "Chu Thành Trung",
+                        "email": "chuthanhtrung2408@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K08",
+                    "technicianIds": [
+                        "IDx6da25"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDx6da25",
+                            "identityName": "Chu Thành Trung",
+                            "email": "chuthanhtrung2408@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PM9e7151",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIFHNEK2VS5",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Flavonoid",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "HDPP101-KN",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDxba115",
+                    "technician": {
+                        "identityId": "IDxba115",
+                        "identityName": "Phạm Thị Thanh Nhàn",
+                        "email": "thanhnhanhh99@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K04",
+                    "technicianIds": [
+                        "IDxba115"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDxba115",
+                            "identityName": "Phạm Thị Thanh Nhàn",
+                            "email": "thanhnhanhh99@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PMf90e96",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIFHNEK4OD3",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Alkaloid",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "HDPP103-KN",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDxcd450",
+                    "technician": {
+                        "identityId": "IDxcd450",
+                        "identityName": "Hà Duy Thái",
+                        "email": "duythaix5hb@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "H00678",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIFHNEK4DBY",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Saponin",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "HDPP276-KN",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDxcd450",
+                    "technician": {
+                        "identityId": "IDxcd450",
+                        "identityName": "Hà Duy Thái",
+                        "email": "duythaix5hb@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "0",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIFHNEK5DDC",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Tổng số vi sinh vật hiếu khí",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 4884 -1:2015",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDxfab29",
+                    "technician": {
+                        "identityId": "IDxfab29",
+                        "identityName": "Chu Thị Thủy",
+                        "email": "chuthuy186@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K09",
+                    "technicianIds": [
+                        "IDxfab29"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDxfab29",
+                            "identityName": "Chu Thị Thủy",
+                            "email": "chuthuy186@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PMb9de97",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIFHNEK638F",
+                    "sampleId": "SPx24431008-02",
+                    "matrix": "Thực phẩm",
+                    "parameterName": "Định lượng Zearalenone",
+                    "protocolSource": "EX",
+                    "protocolCode": null,
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx1e82c",
+                    "technician": {
+                        "identityId": "IDx1e82c",
+                        "identityName": "Trần Thị Lan Anh",
+                        "email": "lananhttc2002@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": false,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "0",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                }
+            ]
+        },
+        {
+            "id": "SPx24431008-03",
+            "sampleId": "SPx24431008-03",
+            "receiptId": "TNMx24431008",
+            "sampleName": "SAMPLE TEST",
+            "handoverAt": null,
+            "productType": null,
+            "matrix": "",
+            "sampleInformation": [
+                {
+                    "fname": "Tên mẫu thử / name.",
+                    "fvalue": "SAMPLE TEST"
+                },
+                {
+                    "fname": "1232111",
+                    "fvalue": "1111"
+                },
+                {
+                    "fname": "Hạn sử dụng / exp.",
+                    "fvalue": "213213"
+                },
+                {
+                    "fname": "12321321",
+                    "fvalue": "21321321"
+                },
+                {
+                    "fname": "Ngày tiếp nhận / receipt date.",
+                    "fvalue": "11/12/2024"
+                },
+                {
+                    "fname": "Ngày thử nghiệm / test date.",
+                    "fvalue": ""
+                },
+                {
+                    "fname": "Mô tả / desc.",
+                    "fvalue": "213213"
+                }
+            ],
+            "sampleVolume": "",
+            "additionalRequest": "",
+            "status": 3,
+            "purpose": "Dự án",
+            "sampleDescription": "213213",
+            "reports": [
+                {
+                    "id": "7649",
+                    "refNumber": "PPTx2443100803-n57BMM",
+                    "sampleId": "SPx24431008-03",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-07-23T01:59:34.163Z",
+                    "modifiedAt": "2025-07-23T01:59:34.163Z"
+                },
+                {
+                    "id": "1279",
+                    "refNumber": "PPTx2443100803-h54DAT",
+                    "sampleId": "SPx24431008-03",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-17T03:14:47.971Z",
+                    "modifiedAt": "2025-04-17T03:14:47.971Z"
+                },
+                {
+                    "id": "1275",
+                    "refNumber": "PPTx2443100803-h54CTC",
+                    "sampleId": "SPx24431008-03",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-17T02:55:16.725Z",
+                    "modifiedAt": "2025-04-17T02:55:16.725Z"
+                },
+                {
+                    "id": "1214",
+                    "refNumber": "PPTx2443100803-g54LFK",
+                    "sampleId": "SPx24431008-03",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-16T09:30:11.029Z",
+                    "modifiedAt": "2025-04-16T09:30:11.029Z"
+                },
+                {
+                    "id": "1211",
+                    "refNumber": "PPTx2443100803-g54LFE",
+                    "sampleId": "SPx24431008-03",
+                    "headerSection": "\n<div class=\"content_page_header_box\" id=\"thead\" style=\"position:relative; height: fit-content;\">\n    <div style=\"position:relative; display:flex; overflow:visible;\">\n        <div>\n            <img src=\"https://irdop.org/wp-content/uploads/2024/07/IRDOP-LOGO-2710-02-2.png\" \n                 loading=\"lazy\" \n                 style=\"width:5cm;\">\n        </div>\n        <div style=\"text-align:right; flex-grow:1; display: flex; flex-direction: column; align-items: flex-end;\">\n            <p style=\"font-weight:700; font-size:18px; color:#0058A3; margin-bottom: 0; line-height: 22px;\">\n                Viện nghiên cứu và phát triển Sản phẩm thiên nhiên\n            </p>\n            <p style=\"font-weight:400; font-size:14px; margin: 0; line-height: 15px;\">\n                / Institute for Research and Development of Organic Products\n            </p>\n            <span style=\"font-weight:400; font-size:14px; border-bottom:1px solid rgba(128,128,128,0.5); \n                          width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\">\n                Phòng Phân tích - Kiểm nghiệm / Analysis Control Department\n            </span>\n        </div>\n    </div>\n    <div style=\"padding-top:6mm; position:relative;\">\n        <div style=\"position:relative; text-align:left;\">\n            <p contenteditable=\"true\" class=\"content-header-title\" \n               style=\"font-weight:700; font-size:24pt; color:#0058A3; height: 28px;\">\n                PHIẾU KẾT QUẢ THỬ NGHIỆM\n            </p>\n            <p class=\"content-header-title_eng\" \n               style=\"font-weight:700; font-size:21pt; color:#0058A3; height: 28px;\">\n                / Certificate of Analysis\n            </p>\n            <div class=\"display-flex\" \n                 style=\"display: flex; align-items: center; gap: 2mm; font-size:12px; font-weight:400; margin-top: 0px; height: 28px;\">\n                <span class=\"std_ref-title\">Xuất bản / ref.:</span>\n                <p contenteditable=\"true\" \n                   class=\"ref_code\" \n                   style=\"min-width:5pt; margin: 0; margin-right: 2mm;\">\n                    SƠ BỘ / DRAFT\n                </p>\n                <span class=\"published_date\" \n                      style=\"min-width:5pt; margin: 0;\">\n                      Ngày / Date: 16/4/2025\n                </span>\n            </div>\n        </div>\n        <div class=\"vlas_icon\" \n             style=\"position:absolute; right:0mm; top:0.2cm; display:none;\">\n            <img src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" \n                 loading=\"lazy\" \n                 style=\"width:5.2cm;\">\n        </div>\n    </div>\n</div>",
+                    "resultReference": [],
+                    "createdAt": "2025-04-16T09:29:56.519Z",
+                    "modifiedAt": "2025-04-16T09:29:56.519Z"
+                },
+                {
+                    "id": "895",
+                    "refNumber": "PPTx2443100803-DRAFT",
+                    "sampleId": "SPx24431008-03",
+                    "headerSection": "<div id=\"thead\" class=\" content_page_header_box\" style=\"position: relative; height: fit-content;\">\n<div class=\" \" style=\"position: relative; display: flex; overflow: visible;\">\n<div><img class=\"OQtYGs6LmEKlbdTnVjZ4oA\" style=\"width: 5cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/IRDOP%20LOGO%20with%20Name.w8flZn8NnkuLrYinAamIkw.PAAKeAHDVEm9mFvCFtA46Q.svg\" loading=\"lazy\"></div>\n<div style=\"text-align: right; flex-grow: 1; display: flex; flex-direction: column; align-items: flex-end;\">\n<p class=\"\" style=\"font-weight: bold; font-size: 18px; color: #0058a3; margin-bottom: 0; line-height: 22px;\">Viện nghi&ecirc;n cứu v&agrave; ph&aacute;t triển Sản phẩm thi&ecirc;n nhi&ecirc;n</p>\n<p class=\"\" style=\"font-weight: 400; font-size: 14px; margin: 0; line-height: 15px;\">/ Institute for Research and Development of Organic Products</p>\n<span style=\"font-weight: 400; font-size: 14px; border-bottom: 1px solid rgba(128,128,128,0.5); width: fit-content; display: block; margin: 0; line-height: 15px; padding-bottom: 1px;\"> Ph&ograve;ng Ph&acirc;n t&iacute;ch - Kiểm nghiệm / Analysis Control Department </span></div>\n</div>\n<div class=\" \" style=\"padding-top: 6mm; position: relative;\">\n<div style=\"position: relative; text-align: left;\">\n<p class=\" content-header-title\" style=\"font-weight: bold; font-size: 24pt; color: #0058a3; height: 28px;\" contenteditable=\"true\">PHIẾU KẾT QUẢ THỬ NGHIỆM</p>\n<p class=\" content-header-title_eng\" style=\"font-weight: bold; font-size: 21pt; color: #0058a3; height: 28px;\">/ Certificate of Analysis</p>\n<div class=\" display-flex\" style=\"display: flex; align-items: center; gap: 2mm; font-size: 12px; font-weight: 400; margin-top: 0px; ; height: 28px;\"><span>Xuất bản / ref.:</span>\n<p class=\"  ref_code\" style=\"min-width: 5pt; margin: 0; margin-right: 2mm;\" contenteditable=\"true\">PPTx2443100803-DRAFT</p>\n<span style=\"min-width: 5pt; margin: 0;\"> Ng&agrave;y / Date: 18-04-2025 </span></div>\n</div>\n<div class=\" vlas_icon\" style=\"position: absolute; right: 0mm; top: 0.2cm; display: none;\"><img class=\"\" style=\"width: 5.2cm;\" src=\"https://documents-sea.bildr.com/rc19670b8d48b4c5ba0f89058aa6e7e4b/doc/VILAS%20997.WIu1HeH5wkOQ5k1olzA3Wg.png\" loading=\"lazy\"></div>\n</div>\n</div>",
+                    "resultReference": [
+                        "--",
+                        "--",
+                        "--",
+                        "--",
+                        "--"
+                    ],
+                    "createdAt": "2025-04-03T06:38:42.843Z",
+                    "modifiedAt": "2025-04-17T19:47:47.634Z"
+                }
+            ],
+            "analyses": [
+                {
+                    "id": "ANL_MIMZY0WMY8E",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Tổng số vi sinh vật hiếu khí",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 4884 -1:2015",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDxfab29",
+                    "technician": {
+                        "identityId": "IDxfab29",
+                        "identityName": "Chu Thị Thủy",
+                        "email": "chuthuy186@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K09",
+                    "technicianIds": [
+                        "IDxfab29"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDxfab29",
+                            "identityName": "Chu Thị Thủy",
+                            "email": "chuthuy186@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PMb9de97",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0WUZ8W",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Tổng số nấm men, nấm mốc",
+                    "protocolSource": "IRDOP VS",
+                    "protocolCode": "TCVN 8275-1:2010",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx1f95e",
+                    "technician": {
+                        "identityId": "IDx1f95e",
+                        "identityName": "EX",
+                        "email": "EX",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "S00020",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0WWXX4",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Định lượng Enterobacteriaceae",
+                    "protocolSource": "IRDOP VS",
+                    "protocolCode": "TCVN 5518-2:2007",
+                    "resultValue": null,
+                    "resultUnit": "112",
+                    "technicianId": "IDx1f95e",
+                    "technician": {
+                        "identityId": "IDx1f95e",
+                        "identityName": "EX",
+                        "email": "EX",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "S00095",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0WZP4T",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "E. coli",
+                    "protocolSource": "IRDOP VS",
+                    "protocolCode": "TCVN 7924-2:2008",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx1f95e",
+                    "technician": {
+                        "identityId": "IDx1f95e",
+                        "identityName": "EX",
+                        "email": "EX",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "S00022",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0X1A9P",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Salmonella",
+                    "protocolSource": "IRDOP VS",
+                    "protocolCode": "TCVN 10780-1:2017",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx1f95e",
+                    "technician": {
+                        "identityId": "IDx1f95e",
+                        "identityName": "EX",
+                        "email": "EX",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "S00023",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0X3RD3",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Asen (As)",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 7770: 2007",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx6da25",
+                    "technician": {
+                        "identityId": "IDx6da25",
+                        "identityName": "Chu Thành Trung",
+                        "email": "chuthanhtrung2408@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K08",
+                    "technicianIds": [
+                        "IDx6da25"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDx6da25",
+                            "identityName": "Chu Thành Trung",
+                            "email": "chuthanhtrung2408@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PMf5cea7",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0X4QM1",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Chì (Pb)",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 8126:2009",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx6da25",
+                    "technician": {
+                        "identityId": "IDx6da25",
+                        "identityName": "Chu Thành Trung",
+                        "email": "chuthanhtrung2408@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K08",
+                    "technicianIds": [
+                        "IDx6da25"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDx6da25",
+                            "identityName": "Chu Thành Trung",
+                            "email": "chuthanhtrung2408@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PM080f16",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0X6KUW",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Thủy ngân (Hg)",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 7993:2009",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx6da25",
+                    "technician": {
+                        "identityId": "IDx6da25",
+                        "identityName": "Chu Thành Trung",
+                        "email": "chuthanhtrung2408@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K08",
+                    "technicianIds": [
+                        "IDx6da25"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDx6da25",
+                            "identityName": "Chu Thành Trung",
+                            "email": "chuthanhtrung2408@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PM46f518",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0X8SVK",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Cadmi (Cd)",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "TCVN 8126:2009",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx6da25",
+                    "technician": {
+                        "identityId": "IDx6da25",
+                        "identityName": "Chu Thành Trung",
+                        "email": "chuthanhtrung2408@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K08",
+                    "technicianIds": [
+                        "IDx6da25"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDx6da25",
+                            "identityName": "Chu Thành Trung",
+                            "email": "chuthanhtrung2408@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PM9e7151",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0XAMLN",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Flavonoid",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "HDPP101-KN",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDxba115",
+                    "technician": {
+                        "identityId": "IDxba115",
+                        "identityName": "Phạm Thị Thanh Nhàn",
+                        "email": "thanhnhanhh99@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": "K04",
+                    "technicianIds": [
+                        "IDxba115"
+                    ],
+                    "technicians": [
+                        {
+                            "identityId": "IDxba115",
+                            "identityName": "Phạm Thị Thanh Nhàn",
+                            "email": "thanhnhanhh99@gmail.com",
+                            "roles": {
+                                "LIMS-IRDOP-PRD": {
+                                    "staff": true,
+                                    "isTechnician": true,
+                                    "isAdminstrative": false,
+                                    "isCustomerService": false,
+                                    "isSampleManager": false,
+                                    "isAccountant": false,
+                                    "isAdmin": false,
+                                    "isSuperAdmin": false
+                                }
+                            }
+                        }
+                    ],
+                    "parameterId": "PMf90e96",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0XC3SM",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Alkaloid",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "HDPP103-KN",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDxcd450",
+                    "technician": {
+                        "identityId": "IDxcd450",
+                        "identityName": "Hà Duy Thái",
+                        "email": "duythaix5hb@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "H00678",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0XEU0U",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm bảo vệ sức khỏe",
+                    "parameterName": "Saponin",
+                    "protocolSource": "IRDOP",
+                    "protocolCode": "HDPP276-KN",
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDxcd450",
+                    "technician": {
+                        "identityId": "IDxcd450",
+                        "identityName": "Hà Duy Thái",
+                        "email": "duythaix5hb@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": true,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "0",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                },
+                {
+                    "id": "ANL_MIMZY0XGWMB",
+                    "sampleId": "SPx24431008-03",
+                    "matrix": "Thực phẩm",
+                    "parameterName": "Định lượng Zearalenone",
+                    "protocolSource": "EX",
+                    "protocolCode": null,
+                    "resultValue": null,
+                    "resultUnit": null,
+                    "technicianId": "IDx1e82c",
+                    "technician": {
+                        "identityId": "IDx1e82c",
+                        "identityName": "Trần Thị Lan Anh",
+                        "email": "lananhttc2002@gmail.com",
+                        "roles": {
+                            "LIMS-IRDOP-PRD": {
+                                "staff": false,
+                                "isTechnician": true,
+                                "isAdminstrative": false,
+                                "isCustomerService": false,
+                                "isSampleManager": false,
+                                "isAccountant": false,
+                                "isAdmin": false,
+                                "isSuperAdmin": false
+                            }
+                        }
+                    },
+                    "technicianAlias": null,
+                    "technicianIds": null,
+                    "technicians": [],
+                    "parameterId": "0",
+                    "deadline": "2025-11-12T00:00:00.000Z",
+                    "displayStyle": null,
+                    "docId": null,
+                    "scientificField": null,
+                    "reviewedById": null,
+                    "note": null,
+                    "submitLastResultById": null,
+                    "submitLastResultAt": null
+                }
+            ]
+        }
+    ]
+}

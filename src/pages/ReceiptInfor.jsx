@@ -1536,7 +1536,6 @@ const ReceiptInfor = ({ receipt }) => {
 
                 setListAnalytes(newAnalytesList);
                 setSelectedAnalytes([]);
-                setBulkAction(false);
 
                 showToast(`Đã cập nhật kỹ thuật viên cho ${analysesToUpdate.length} phân tích thành công!`);
             } else {
@@ -1755,8 +1754,8 @@ const ReceiptInfor = ({ receipt }) => {
                             reviewedById: newStatus,
                             reviewedBy: newStatus
                                 ? {
-                                      identityName: currentUserName ? currentUserName.identity_name : currentUser.identity_name || "Unknown",
-                                  }
+                                    identityName: currentUserName ? currentUserName.identity_name : currentUser.identity_name || "Unknown",
+                                }
                                 : null,
                         };
                     }
@@ -2238,9 +2237,8 @@ const ReceiptInfor = ({ receipt }) => {
                         {technicians.map((tech) => (
                             <div
                                 key={tech.identity_uid}
-                                className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 text-center ${
-                                    selectedTechnician === tech.identity_uid ? "border-primary bg-blue-50" : "border-gray-300"
-                                }`}
+                                className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 text-center ${selectedTechnician === tech.identity_uid ? "border-primary bg-blue-50" : "border-gray-300"
+                                    }`}
                                 onClick={() => setSelectedTechnician(tech.identity_uid)}
                             >
                                 <p className="font-bold text-primary text-sm mb-1">{tech.alias || ""}</p>
@@ -2444,9 +2442,8 @@ const ReceiptInfor = ({ receipt }) => {
                                 name="sampleDescription"
                                 value={newSample.sampleDescription || newSample.sample_description || ""}
                                 onChange={handleNewSampleChange}
-                                className={`w-full border rounded p-1 bg-white resize-none ${
-                                    checkConfirm && (newSample.sampleDescription || newSample.sample_description || "").trim() === "" ? "border-red-500" : ""
-                                }`}
+                                className={`w-full border rounded p-1 bg-white resize-none ${checkConfirm && (newSample.sampleDescription || newSample.sample_description || "").trim() === "" ? "border-red-500" : ""
+                                    }`}
                                 rows={2}
                             />
                         </div>
@@ -4269,9 +4266,8 @@ const ReceiptInfor = ({ receipt }) => {
                             {!isTechnician() && (
                                 <>
                                     <button
-                                        className={`w-[34px] h-[34px] p-2 rounded-lg transition-colors duration-200 border border-gray-400 focus:outline-none ${
-                                            isEditMode ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white text-black"
-                                        }`}
+                                        className={`w-[34px] h-[34px] p-2 rounded-lg transition-colors duration-200 border border-gray-400 focus:outline-none ${isEditMode ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white text-black"
+                                            }`}
                                         onClick={toggleEditMode}
                                     >
                                         {isEditMode ? <FaCheck /> : <FaEdit />}
@@ -4294,9 +4290,8 @@ const ReceiptInfor = ({ receipt }) => {
                                     <div className="flex -translate-y-0 md:translate-y-0 md:pt-0 w-full justify-end">
                                         {/* Sync Data button */}
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
-                                                selectedAnalytes.length > 0 ? "bg-green-500" : "bg-gray-300 cursor-not-allowed"
-                                            } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-green-500" : "bg-gray-300 cursor-not-allowed"
+                                                } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleSyncData : undefined}
                                             title="Đồng bộ dữ liệu"
                                         >
@@ -4305,9 +4300,8 @@ const ReceiptInfor = ({ receipt }) => {
                                         </button>
                                         {/* Search Parameter button */}
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
-                                                selectedAnalytes.length > 0 ? "bg-indigo-500" : "bg-gray-300 cursor-not-allowed"
-                                            } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-indigo-500" : "bg-gray-300 cursor-not-allowed"
+                                                } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleSearchParameters : undefined}
                                             disabled={isSearchingParameters}
                                             title="Tìm kiếm chỉ tiêu"
@@ -4344,8 +4338,7 @@ const ReceiptInfor = ({ receipt }) => {
                                         )}
                                         {/* Update Database button */}
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
-                                                (selectedAnalytes.length > 0 &&
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${(selectedAnalytes.length > 0 &&
                                                     listAnalytes
                                                         .filter((a) => selectedAnalytes.includes(a.id))
                                                         .every(
@@ -4357,19 +4350,19 @@ const ReceiptInfor = ({ receipt }) => {
                                                                 a.protocolSource &&
                                                                 a.scientificField,
                                                         )) ||
-                                                (selectedAnalytes.length === 0 &&
-                                                    listAnalytes.some(
-                                                        (a) =>
-                                                            (!a.parameterUid || a.parameterUid === "") &&
-                                                            a.parameterName &&
-                                                            a.matrix &&
-                                                            ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
-                                                            a.protocolSource &&
-                                                            a.scientificField,
-                                                    ))
+                                                    (selectedAnalytes.length === 0 &&
+                                                        listAnalytes.some(
+                                                            (a) =>
+                                                                (!a.parameterUid || a.parameterUid === "") &&
+                                                                a.parameterName &&
+                                                                a.matrix &&
+                                                                ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
+                                                                a.protocolSource &&
+                                                                a.scientificField,
+                                                        ))
                                                     ? "bg-blue-500"
                                                     : "bg-gray-300 cursor-not-allowed"
-                                            } mr-2`}
+                                                } mr-2`}
                                             onClick={
                                                 (selectedAnalytes.length > 0 &&
                                                     listAnalytes
@@ -4383,16 +4376,16 @@ const ReceiptInfor = ({ receipt }) => {
                                                                 a.protocolSource &&
                                                                 a.scientificField,
                                                         )) ||
-                                                (selectedAnalytes.length === 0 &&
-                                                    listAnalytes.some(
-                                                        (a) =>
-                                                            (!a.parameterUid || a.parameterUid === "") &&
-                                                            a.parameterName &&
-                                                            a.matrix &&
-                                                            ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
-                                                            a.protocolSource &&
-                                                            a.scientificField,
-                                                    ))
+                                                    (selectedAnalytes.length === 0 &&
+                                                        listAnalytes.some(
+                                                            (a) =>
+                                                                (!a.parameterUid || a.parameterUid === "") &&
+                                                                a.parameterName &&
+                                                                a.matrix &&
+                                                                ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
+                                                                a.protocolSource &&
+                                                                a.scientificField,
+                                                        ))
                                                     ? handleUpdateDatabase
                                                     : undefined
                                             }
@@ -4402,19 +4395,18 @@ const ReceiptInfor = ({ receipt }) => {
                                             {selectedAnalytes.length > 0
                                                 ? selectedAnalytes.length
                                                 : listAnalytes.filter(
-                                                      (a) =>
-                                                          (!a.parameterUid || a.parameterUid === "") &&
-                                                          a.parameterName &&
-                                                          a.matrix &&
-                                                          ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
-                                                          a.protocolSource &&
-                                                          a.scientificField,
-                                                  ).length || "0"}
+                                                    (a) =>
+                                                        (!a.parameterUid || a.parameterUid === "") &&
+                                                        a.parameterName &&
+                                                        a.matrix &&
+                                                        ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
+                                                        a.protocolSource &&
+                                                        a.scientificField,
+                                                ).length || "0"}
                                         </button>
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
-                                                selectedAnalytes.length > 0 ? "bg-red-500" : "bg-gray-300 cursor-not-allowed"
-                                            } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-red-500" : "bg-gray-300 cursor-not-allowed"
+                                                } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleDeleteSelected : undefined}
                                             title="Xóa hàng loạt"
                                         >
@@ -4422,9 +4414,8 @@ const ReceiptInfor = ({ receipt }) => {
                                             {selectedAnalytes.length > 0 ? selectedAnalytes.length : "0"}
                                         </button>
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
-                                                selectedAnalytes.length > 0 ? "bg-blue-500" : "bg-gray-300 cursor-not-allowed"
-                                            } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-blue-500" : "bg-gray-300 cursor-not-allowed"
+                                                } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleBulkTransfer : undefined}
                                         >
                                             <FaUserCog className="mr-1" />
@@ -4432,9 +4423,8 @@ const ReceiptInfor = ({ receipt }) => {
                                         </button>
                                         {/* Add the bulk deadline update button */}
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
-                                                selectedAnalytes.length > 0 ? "bg-orange-500" : "bg-gray-300 cursor-not-allowed"
-                                            } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-orange-500" : "bg-gray-300 cursor-not-allowed"
+                                                } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleBulkDeadlineUpdate : undefined}
                                             title="Cập nhật hạn trả"
                                         >
@@ -4443,9 +4433,8 @@ const ReceiptInfor = ({ receipt }) => {
                                         </button>
                                         {/* Add button to update field in bulk */}
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
-                                                selectedAnalytes.length > 0 ? "bg-purple-500" : "bg-gray-300 cursor-not-allowed"
-                                            } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-purple-500" : "bg-gray-300 cursor-not-allowed"
+                                                } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleBulkFieldUpdate : undefined}
                                             title="Cập nhật lĩnh vực"
                                         >
@@ -4455,15 +4444,14 @@ const ReceiptInfor = ({ receipt }) => {
                                         {/* Modify the review button to check for admin role */}
                                         {isAdmin() && (
                                             <button
-                                                className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
-                                                    selectedAnalytes.length > 0
+                                                className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0
                                                         ? listAnalytes
-                                                              .filter((item) => selectedAnalytes.includes(item.id))
-                                                              .every((item) => item.reviewedById && String(item.reviewedById).trim() !== "")
+                                                            .filter((item) => selectedAnalytes.includes(item.id))
+                                                            .every((item) => item.reviewedById && String(item.reviewedById).trim() !== "")
                                                             ? "bg-red-500"
                                                             : "bg-green-500"
                                                         : "bg-gray-300 cursor-not-allowed"
-                                                } mr-2`}
+                                                    } mr-2`}
                                                 onClick={selectedAnalytes.length > 0 ? handleReviewAnalyses : undefined}
                                                 title={
                                                     listAnalytes.filter((item) => selectedAnalytes.includes(item.id)).every((item) => item.reviewedById && String(item.reviewedById).trim() !== "")
@@ -4607,8 +4595,8 @@ const ReceiptInfor = ({ receipt }) => {
                                                                             reviewedById: newStatus,
                                                                             reviewedBy: newStatus
                                                                                 ? {
-                                                                                      identityName: currentUserName ? currentUserName.identity_name : currentUser.identity_name || "Unknown",
-                                                                                  }
+                                                                                    identityName: currentUserName ? currentUserName.identity_name : currentUser.identity_name || "Unknown",
+                                                                                }
                                                                                 : null,
                                                                         };
                                                                     }

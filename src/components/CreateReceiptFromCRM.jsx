@@ -203,6 +203,7 @@ const CreateReceiptFromCRM = () => {
                 const sample = updatedSamples[index];
                 // Create list of analyses with their parameter names and the new matrix
                 const analyses = sample.analysis.map((item) => ({
+                    parameterId: item.parameterId,
                     analysis: item.parameterName,
                     matrix: matrix,
                 }));
