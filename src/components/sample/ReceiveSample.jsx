@@ -59,7 +59,6 @@ const ReceiveSample = () => {
 					if (result && !hasDetected) {
 						hasDetected = true; // Đặt flag để không xử lý lần nữa
 
-						console.log('Barcode quét được:', result.getText());
 						setScanResult(result.getText());
 						setJustDetected(true);
 						setIsScanning(false);
@@ -76,9 +75,7 @@ const ReceiveSample = () => {
 						readerRef.current = null;
 
 						// Gọi API để lấy thông tin sample
-						console.log('Trước khi gọi fetchSampleDetail');
 						await fetchSampleDetail(result.getText());
-						console.log('Sau khi gọi fetchSampleDetail');
 
 						setTimeout(() => setJustDetected(false), 2000);
 					} else if (err && !(err instanceof Error) && err.name !== 'NotFoundException') {
@@ -95,19 +92,15 @@ const ReceiveSample = () => {
 
 	const fetchSampleDetail = async (sampleId) => {
 		try {
-			console.log('Đang gọi API với sampleId:', sampleId);
 			const response = await apiGet(`https://black.irdop.org/v1/sample/detail/get/${sampleId}`);
 
-			console.log('Dữ liệu trả về từ API:', response);
 
 			// Kiểm tra xem sample đã tồn tại trong danh sách chưa
 			const existingSample = samples.find((s) => s.id === response.data.id);
 			if (!existingSample) {
 				// Thêm sample mới vào đầu danh sách
 				setSamples((prevSamples) => [response.data, ...prevSamples]);
-				console.log('Đã thêm sample mới vào danh sách');
 			} else {
-				console.log('Sample đã tồn tại trong danh sách');
 			}
 		} catch (error) {
 			console.error('Lỗi khi lấy thông tin sample:', error);

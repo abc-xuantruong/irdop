@@ -13,7 +13,8 @@ import DatePicker from "react-datepicker";
 import axios from "axios";
 import ShipmentForm from "../components/ShipmentForm";
 
-import { FaCalendarDay, FaFileAlt, FaExternalLinkAlt, FaRegStickyNote, FaStickyNote, FaTimes } from "react-icons/fa";
+import { FaCalendarDay, FaFileAlt, FaExternalLinkAlt, FaRegStickyNote, FaStickyNote, FaTimes, FaExpand } from "react-icons/fa";
+import ReceiptInfor from "./ReceiptInfor";
 
 const Dashboard = () => {
     const location = useLocation();
@@ -147,6 +148,25 @@ const Dashboard = () => {
     const recordCodeDropdownRef = useRef(null);
     const requestNumberDropdownRef = useRef(null);
     const salesRecorderDropdownRef = useRef(null);
+
+    const [activeModal, setActiveModal] = useState({
+        type: null, // 'receipt'
+        id: null,
+    });
+
+    const handleOpenReceiptModal = (receiptId) => {
+        setActiveModal({ type: "receipt", id: receiptId });
+        const queryParams = new URLSearchParams(location.search);
+        queryParams.set("receiptId", receiptId);
+        navigate(`${location.pathname}?${queryParams.toString()}`);
+    };
+
+    const handleCloseModal = () => {
+        setActiveModal({ type: null, id: null });
+        const queryParams = new URLSearchParams(location.search);
+        queryParams.delete("receiptId");
+        navigate(`${location.pathname}?${queryParams.toString()}`);
+    };
 
     const handleCopyToClipboard = (text) => {
         navigator.clipboard
@@ -981,7 +1001,7 @@ const Dashboard = () => {
                     Swal.fire({
                         position: "top-end",
                         icon: "info",
-                        title: `Hiển thị ${receipts.length} tiếp nhận đã kiểm tra`,
+                        title: `Hiển thị ${receipts.length} tiếp nhận Đủ TLTN`,
                         showConfirmButton: false,
                         timer: 2000,
                         toast: true,
@@ -1012,7 +1032,6 @@ const Dashboard = () => {
         setCurrentTitlePage("Danh sách tiếp nhận mẫu");
     }, [setCurrentTitlePage]);
     const fetchReceipt = async (page = null, itemsPerPage = receiptsPerPage) => {
-        console.log("fetchReceipt called with page:", page, "itemsPerPage:", itemsPerPage);
         console.trace("fetchReceipt call stack"); // This will show us where it was called from
 
         // Get page from URL params if not explicitly provided
@@ -1045,13 +1064,11 @@ const Dashboard = () => {
 
             const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody);
             if (response.status === 200) {
-                console.log("fetchReceipt success, data length:", response.data?.result?.length || 0);
 
                 // Handle the new API response structure with pagination
                 const receipts = response.data?.result || [];
                 const pagination = response.data?.pagination || {};
 
-                console.log("Pagination info:", pagination);
 
                 // Update pagination state
                 setTotalItems(pagination.totalItems || 0);
@@ -1071,7 +1088,6 @@ const Dashboard = () => {
                 const hasActiveReviewedFilter = location.search.includes("reviewed=");
 
                 if (!hasActiveStatusFilter && !hasActiveDeadlineFilter && !hasActiveOverdueFilter && !hasActiveSearchFilter && !hasActiveResultsFilledFilter && !hasActiveReviewedFilter) {
-                    console.log("No filters active, updating current list");
                     setCurrentList(receipts);
                     setIsFilter(false);
 
@@ -1080,7 +1096,6 @@ const Dashboard = () => {
                         setShowTodayDeadlines(false);
                     }
                 } else {
-                    console.log("Filters active, this is filtered data");
                     setCurrentList(receipts);
                     setIsFilter(true);
                 }
@@ -2350,6 +2365,25 @@ const Dashboard = () => {
         return sampleUid;
     };
 
+    const renderModal = () => {
+        if (!activeModal.type) return null;
+
+        return createPortal(
+            <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[9999] flex justify-center items-center overflow-hidden">
+                <div className="bg-white w-full h-full md:w-[96vw] md:h-[96vh] md:rounded-lg shadow-xl relative flex flex-col overflow-hidden">
+                    <div className="flex justify-between items-center p-3 border-b bg-gray-50">
+                        <h3 className="font-bold text-lg text-gray-700">{activeModal.type === "receipt" ? `Chi tiết phiếu: ${activeModal.id}` : `Chi tiết: ${activeModal.id}`}</h3>
+                        <button onClick={handleCloseModal} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                            <FaTimes size={20} className="text-gray-500" />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-auto bg-gray-100 p-2 relative">{activeModal.type === "receipt" && <ReceiptInfor key={activeModal.id} />}</div>
+                </div>
+            </div>,
+            document.body,
+        );
+    };
+
     return (
         // Remove onMouseMove from the container div
         <div className="flex flex-col justify-between items-center w-full">
@@ -2662,10 +2696,10 @@ const Dashboard = () => {
                                     showReviewedFilter ? "text-white bg-blue-600" : "text-black"
                                 }`}
                                 onClick={toggleReviewedFilter}
-                                title={showReviewedFilter ? "Hiển thị tất cả" : "Hiển thị chỉ tiêu đã kiểm tra"}
+                                title={showReviewedFilter ? "Hiển thị tất cả" : "Hiển thị chỉ tiêu Đủ TLTN"}
                             >
                                 <FaCheck size={18} />
-                                <span className="font-normal">Đã kiểm tra</span>
+                                <span className="font-normal">Đủ TLTN</span>
                             </button>
                         </div>
                     </div>
@@ -2864,9 +2898,18 @@ const Dashboard = () => {
                                                 {/* Common columns for empty receipt */}
                                                 <td className="p-1 text-start align-top">
                                                     <div className="flex justify-between items-center">
-                                                        <NavLink className="text-primary font-semibold hover:text-[#103667]" to={`/dashboard/receipt?receiptId=${receipt.receiptId || receipt.id}`}>
-                                                            {receipt.receiptId || receipt.id}
-                                                        </NavLink>
+                                                        <div className="flex items-center gap-2">
+                                                            <NavLink className="text-primary font-semibold hover:text-[#103667]" to={`/dashboard/receipt?receiptId=${receipt.receiptId || receipt.id}`}>
+                                                                {receipt.receiptId || receipt.id}
+                                                            </NavLink>
+                                                            <button
+                                                                onClick={() => handleOpenReceiptModal(receipt.receiptId || receipt.id)}
+                                                                className="text-gray-500 hover:text-blue-600 focus:outline-none p-1"
+                                                                title="Xem nhanh"
+                                                            >
+                                                                <FaExpand size={14} />
+                                                            </button>
+                                                        </div>
                                                         {receipt?.note && receipt?.note?.trim() !== "" ? (
                                                             <FaStickyNote
                                                                 size={16}
@@ -2930,8 +2973,8 @@ const Dashboard = () => {
                                                 // Calculate assigned tests count (chỉ tiêu được phân công)
                                                 const assignedTests = sample?.analyses?.filter((analysis) => analysis?.technicianId !== null && analysis?.technicianId !== "")?.length || 0;
 
-                                                // Calculate reviewed tests count (chỉ tiêu đã được duyệt)
-                                                const reviewedTests = sample?.analyses?.filter((analysis) => analysis?.reviewedById && String(analysis?.reviewedById).trim() !== "")?.length || 0;
+                                                // Calculate uploaded tests count (chỉ tiêu đã có file lab)
+                                                const uploadedTest = sample?.analyses?.filter((analysis) => analysis?.labTestFileId && String(analysis?.labTestFileId).trim() !== "")?.length || 0;
 
                                                 // Get sample id or uid for lookup
                                                 const sampleKey = sample.id || sample.sampleId;
@@ -2959,12 +3002,21 @@ const Dashboard = () => {
                                                                     rowSpan={samplesToShow.length}
                                                                 >
                                                                     <div className="flex justify-between items-center">
-                                                                        <NavLink
-                                                                            className="text-primary font-semibold hover:text-[#103667]"
-                                                                            to={`/dashboard/receipt?receiptId=${receipt.receiptId || receipt.id}`}
-                                                                        >
-                                                                            {receipt.receiptId || receipt.id}
-                                                                        </NavLink>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <NavLink
+                                                                                className="text-primary font-semibold hover:text-[#103667]"
+                                                                                to={`/dashboard/receipt?receiptId=${receipt.receiptId || receipt.id}`}
+                                                                            >
+                                                                                {receipt.receiptId || receipt.id}
+                                                                            </NavLink>
+                                                                            <button
+                                                                                onClick={() => handleOpenReceiptModal(receipt.receiptId || receipt.id)}
+                                                                                className="text-gray-500 hover:text-blue-600 focus:outline-none"
+                                                                                title="Xem nhanh (Modal)"
+                                                                            >
+                                                                                <FaExpand size={14} />
+                                                                            </button>
+                                                                        </div>
                                                                         {receipt?.note && receipt?.note?.trim() !== "" ? (
                                                                             <FaStickyNote
                                                                                 size={16}
@@ -3271,7 +3323,7 @@ const Dashboard = () => {
                                                                 {totalTests > 0 ? (
                                                                     <span
                                                                         className={`font-medium ${
-                                                                            reviewedTests === totalTests
+                                                                            uploadedTest === totalTests
                                                                                 ? "text-green-800"
                                                                                 : completedTests === totalTests
                                                                                 ? "text-sky-600"
@@ -3280,7 +3332,7 @@ const Dashboard = () => {
                                                                                 : "text-gray-700"
                                                                         }`}
                                                                     >
-                                                                        {reviewedTests}/{completedTests}/{assignedTests}/{totalTests}
+                                                                        {uploadedTest}/{completedTests}/{assignedTests}/{totalTests}
                                                                     </span>
                                                                 ) : (
                                                                     <span className="text-gray-500">0/0/0/0</span>
@@ -3570,6 +3622,7 @@ const Dashboard = () => {
                     </div>
                 </div>
             )}
+            {renderModal()}
         </div>
     );
 };

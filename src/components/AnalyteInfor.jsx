@@ -207,7 +207,6 @@ const AnalyteInfor = () => {
 
 			// Remove existing editor if it exists
 			if (window.tinymce.get(selector)) {
-				console.log('Removing existing editor for:', selector);
 				window.tinymce.get(selector).remove();
 			}
 
@@ -339,7 +338,6 @@ const AnalyteInfor = () => {
 							// Handle _ key for subscript (Shift + - hoặc underscore key)
 							if ((e.shiftKey && e.keyCode === 189) || e.key === '_') {
 								e.preventDefault();
-								console.log('Subscript triggered');
 
 								const selectedText = editor.selection.getContent();
 								if (selectedText) {
@@ -387,7 +385,6 @@ const AnalyteInfor = () => {
 					},
 				})
 				.then((editors) => {
-					console.log('TinyMCE initialized successfully for:', selector, editors);
 				})
 				.catch((error) => {
 					console.error('TinyMCE initialization failed for:', selector, error);

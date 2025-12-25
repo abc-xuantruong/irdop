@@ -114,7 +114,6 @@ const ProgressDashboard = () => {
 				const receipts = response.data?.result || [];
 				const pagination = response.data?.pagination || {};
 
-				console.log('Pagination info:', pagination);
 
 				// Update pagination state
 				setTotalItems(pagination.totalItems || 0);

@@ -4,7 +4,7 @@ import TinyMceInput from "../components/Input";
 import { GlobalContext } from "../contexts/GlobalContext";
 import Breadcrumb from "../components/Breadcrumb";
 import FilterBar from "../components/FilterBar";
-import { NavLink, useSearchParams, useNavigate } from "react-router-dom";
+import { NavLink, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { PiDownloadSimpleBold } from "react-icons/pi";
 import { CgFileDocument } from "react-icons/cg";
 import { TiBusinessCard } from "react-icons/ti";
@@ -42,7 +42,7 @@ import EmailForm from "../components/EmailForm";
 import SampleImageUpload from "../components/SampleImageUpload";
 import { Html5QrcodeScanner } from "html5-qrcode";
 
-const ReceiptInfor = ({ receipt }) => {
+const ReceiptInfor = ({ receipt, onSampleClick }) => {
     const { setCurrentTitlePage, currentUser, technicians, status, purposes, formatDate, getIdenByUid, identityCache } = useContext(GlobalContext);
     const [listAnalytes, setListAnalytes] = useState([]);
     const [currentReceipt, setCurrentReceipt] = useState(null);
@@ -52,6 +52,7 @@ const ReceiptInfor = ({ receipt }) => {
     const [viewMode, setViewMode] = useState("analyte"); // 'analyte' or 'sample'
     const [isAddingSample, setIsAddingSample] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false); // Add edit mode state
+    const location = useLocation();
 
     // Keep editingRevenueField state but remove showRevenueSection
     const [editingRevenueField, setEditingRevenueField] = useState(null);
@@ -152,6 +153,20 @@ const ReceiptInfor = ({ receipt }) => {
     const [isSearchingParameters, setIsSearchingParameters] = useState(false);
     const [parameterSuggestions, setParameterSuggestions] = useState({}); // { analysisId: [suggestions] }
     const [selectedParameterUpdates, setSelectedParameterUpdates] = useState({}); // { analysisId: parameterId }
+
+    // Sync workflow states
+    const [matchedSyncData, setMatchedSyncData] = useState([]);
+    const [isSyncPreviewVisible, setIsSyncPreviewVisible] = useState(false);
+    const [isSyncFieldSelectionVisible, setIsSyncFieldSelectionVisible] = useState(false);
+    const [selectedSyncFields, setSelectedSyncFields] = useState({
+        parameterName: true,
+        protocolCode: true,
+        protocolSource: true,
+        resultUnit: true,
+        scientificField: true,
+        technicianId: true,
+        matrix: true,
+    });
 
     // Function to format date strings entered manually
     const formatDateString = (dateStr) => {
@@ -403,7 +418,6 @@ const ReceiptInfor = ({ receipt }) => {
                     setCameraPermission(null);
                 }
             } catch (error) {
-                console.log("Cannot check camera permission:", error);
                 setCameraPermission(null);
             }
         };
@@ -455,11 +469,9 @@ const ReceiptInfor = ({ receipt }) => {
     // Function to fetch sample image if _deprecated_sampleImageId exists
     const fetchSampleImage = async (sampleImgUid) => {
         if (!sampleImgUid) {
-            console.log("No sampleImgUid provided");
             return;
         }
 
-        console.log("Fetching sample image for UID:", sampleImgUid);
         setIsLoadingImage(true);
         setImageError(false);
 
@@ -470,13 +482,10 @@ const ReceiptInfor = ({ receipt }) => {
                 fileRecord: { id: sampleImgUid },
             });
 
-            console.log("Image fetch response:", response);
 
             if (response.status === 200 && response.data) {
-                console.log("Setting sample image URL:", response.data);
                 setSampleImageUrl(response.data);
             } else {
-                console.log("Error: Invalid response status or no data");
                 setImageError(true);
             }
         } catch (error) {
@@ -607,12 +616,10 @@ const ReceiptInfor = ({ receipt }) => {
                 }
 
                 // Fetch sample image if _deprecated_sampleImageId exists
-                console.log("Receipt data _deprecated_sampleImageId:", receiptData._deprecated_sampleImageId);
                 if (receiptData._deprecated_sampleImageId) {
                     fetchSampleImage(receiptData._deprecated_sampleImageId);
                 } else {
                     // Reset image state if no _deprecated_sampleImageId
-                    console.log("No _deprecated_sampleImageId found, resetting image state");
                     setSampleImageUrl("");
                     setImageError(false);
                     setIsLoadingImage(false);
@@ -641,7 +648,6 @@ const ReceiptInfor = ({ receipt }) => {
             const scientificFieldsResponse = await apiPost("https://red.irdop.org/v1/option/get/list", {
                 listType: "scientificFields",
             });
-            console.log("Scientific fields response:", scientificFieldsResponse);
             if (scientificFieldsResponse.data && Array.isArray(scientificFieldsResponse.data)) {
                 setScientificFields(scientificFieldsResponse.data.filter(Boolean));
             }
@@ -1173,44 +1179,86 @@ const ReceiptInfor = ({ receipt }) => {
             return;
         }
 
-        // Create samples sequentially based on copyCount
+        // Create or update samples sequentially based on copyCount
         for (let i = 0; i < copyCount; i++) {
             const sampleNameSuffix = copyCount > 1 ? ` - Bản sao ${i + 1}` : "";
-            const newSampleData = {
-                receiptId: currentReceipt.receiptId,
-                sampleName: (newSample.sampleName || newSample.sampleName || "") + sampleNameSuffix,
-                sampleDescription: newSample?.sampleDescription || newSample?.sample_description || "",
-                sampleVolume: newSample?.sampleVolume || newSample?.sample_volume || "",
-                matrix: newSample?.matrix || "",
-                status: newSample?.status || 0,
-                purpose: newSample?.purpose || "",
-                additionalRequest: newSample?.additionalRequest || newSample?.additionalRequest || "",
-                sampleInformation: [
-                    {
-                        fname: "Tên mẫu thử / name.",
-                        fvalue: (newSample?.sampleName || newSample?.sampleName || "") + sampleNameSuffix,
-                    },
-                    ...sampleInformation,
-                    {
-                        fname: "Ngày tiếp nhận / receipt date.",
-                        fvalue: formatDate(currentReceipt.receiptDate) || "",
-                    },
-                    { fname: "Ngày thử nghiệm / test date.", fvalue: "" },
-                    {
-                        fname: "Mô tả / desc.",
-                        fvalue: newSample?.sampleDescription || newSample?.sample_description || "",
-                    },
-                ],
-                createdById: currentUser.identity_uid,
-                modifiedById: currentUser.identity_uid,
-            };
+            const finalSampleName = (newSample.sampleName || newSample.sample_name || "") + sampleNameSuffix;
+
+            // Check if sample exists
+            const existingSample = currentReceipt.samples?.find((s) => (s.sampleName || s.sample_name || "").trim().toLowerCase() === finalSampleName.trim().toLowerCase());
+
+            // Construct sampleInformation
+            const updatedSampleInformation = [
+                {
+                    fname: "Tên mẫu thử / name.",
+                    fvalue: finalSampleName,
+                },
+                ...sampleInformation,
+                {
+                    fname: "Ngày tiếp nhận / receipt date.",
+                    fvalue: formatDate(currentReceipt.receiptDate) || "",
+                },
+                { fname: "Ngày thử nghiệm / test date.", fvalue: "" },
+                {
+                    fname: "Mô tả / desc.",
+                    fvalue: newSample?.sampleDescription || newSample?.sample_description || "",
+                },
+            ];
 
             try {
-                const response = await apiPost("https://red.irdop.org/v1/sample/create", { sample: newSampleData });
-                if (response.status === 200) {
-                    const newSampleId = response.data.id; // Use 'id' field from the response
+                let targetSampleId;
 
-                    // Check if we have a copied sample UID to copy analyses from
+                if (existingSample) {
+                    // Update existing sample
+                    const updateData = {
+                        id: existingSample.id,
+                        sampleId: existingSample.sampleId,
+                        sampleName: finalSampleName,
+                        sampleDescription: newSample?.sampleDescription || newSample?.sample_description || existingSample.sampleDescription || "",
+                        sampleVolume: newSample?.sampleVolume || newSample?.sample_volume || existingSample.sampleVolume || "",
+                        matrix: newSample?.matrix || existingSample.matrix || "",
+                        status: newSample?.status !== undefined ? newSample.status : existingSample.status,
+                        purpose: newSample?.purpose || existingSample.purpose || "",
+                        additionalRequest: newSample?.additionalRequest || existingSample.additionalRequest || "",
+                        sampleInformation: updatedSampleInformation,
+                        modifiedByUid: currentUser.identity_uid,
+                    };
+
+                    const response = await apiPost("https://red.irdop.org/v1/sample/edit", { sample: updateData });
+
+                    if (response.status === 200) {
+                        targetSampleId = existingSample.id;
+                        showToast(`Đã cập nhật thông tin mẫu: ${finalSampleName}`);
+                    } else {
+                        throw new Error(response.data?.message || "Lỗi cập nhật mẫu");
+                    }
+                } else {
+                    // Create new sample
+                    const newSampleData = {
+                        receiptId: currentReceipt.receiptId,
+                        sampleName: finalSampleName,
+                        sampleDescription: newSample?.sampleDescription || newSample?.sample_description || "",
+                        sampleVolume: newSample?.sampleVolume || newSample?.sample_volume || "",
+                        matrix: newSample?.matrix || "",
+                        status: newSample?.status || 0,
+                        purpose: newSample?.purpose || "",
+                        additionalRequest: newSample?.additionalRequest || "",
+                        sampleInformation: updatedSampleInformation,
+                        createdById: currentUser.identity_uid,
+                        modifiedById: currentUser.identity_uid,
+                    };
+
+                    const response = await apiPost("https://red.irdop.org/v1/sample/create", { sample: newSampleData });
+
+                    if (response.status === 200) {
+                        targetSampleId = response.data.id;
+                    } else {
+                        throw new Error(response.data?.message || "Lỗi tạo mẫu mới");
+                    }
+                }
+
+                // Copy analyses logic (Common for both Create and Update)
+                if (targetSampleId) {
                     const copiedSampleUid = newSample.copiedFromSampleUid;
                     if (copiedSampleUid) {
                         // Find the sample that was copied from
@@ -1218,12 +1266,23 @@ const ReceiptInfor = ({ receipt }) => {
 
                         const analysesToCopy = sampleToCopy?.analyses || sampleToCopy?.analysis || [];
                         if (sampleToCopy && analysesToCopy.length > 0) {
+                            // Helper function to safely parse displayStyle
+                            const getDisplayStyle = (style) => {
+                                if (!style) return { default: "", eng: "" };
+                                if (Array.isArray(style)) {
+                                    const def = style.find((i) => i.label === "default")?.value || "";
+                                    const eng = style.find((i) => i.label === "eng")?.value || "";
+                                    return { default: def, eng: eng };
+                                }
+                                return style;
+                            };
+
                             // Create analyses based on the copied sample
                             const analysesToCopyData = analysesToCopy.map((analysis) => {
                                 // Create the analysis object
                                 const analysisData = {
                                     receiptId: currentReceipt.receiptId,
-                                    sampleId: newSampleId,
+                                    sampleId: targetSampleId,
                                     parameterId: analysis.parameterId || 0,
                                     parameterName: analysis.parameterName,
                                     parameterUid: analysis.parameterUid || "",
@@ -1236,8 +1295,9 @@ const ReceiptInfor = ({ receipt }) => {
                                     protocolCode: analysis.protocolCode,
                                     resultUnit: analysis.resultUnit || "",
                                     protocolSource: analysis.protocolSource,
-                                    matrix: newSample.matrix || analysis.matrix,
-                                    field: analysis.field,
+                                    matrix: newSample.matrix || analysis.matrix, // Use new sample matrix if available
+                                    field: analysis.field || analysis.scientificField,
+                                    displayStyle: getDisplayStyle(analysis.displayStyle), // Ensure correct format
                                     createdById: currentUser.identity_uid,
                                     modifiedById: currentUser.identity_uid,
                                 };
@@ -1263,21 +1323,14 @@ const ReceiptInfor = ({ receipt }) => {
                             }
                         }
                     }
-                } else {
-                    Swal.fire({
-                        icon: "error",
-                        title: "Lỗi",
-                        text: response.data?.message || `Thêm mẫu ${i + 1} thất bại. Vui lòng thử lại`,
-                    });
-                    return; // Stop creating more samples if one fails
                 }
             } catch (error) {
                 Swal.fire({
                     icon: "error",
                     title: "Lỗi",
-                    text: error.message || `Có lỗi xảy ra khi tạo mẫu ${i + 1}. Vui lòng thử lại`,
+                    text: error.message || `Có lỗi xảy ra khi xử lý mẫu ${i + 1}. Vui lòng thử lại`,
                 });
-                return; // Stop creating more samples if one fails
+                return; // Stop processing more samples if one fails
             }
         }
 
@@ -1876,118 +1929,13 @@ const ReceiptInfor = ({ receipt }) => {
             });
 
             if (matchResponse.status === 200) {
-                // Create array of update objects for bulk update using matched data
-                const updateDataArray = selectedItems.map((analyte) => {
-                    // Find the corresponding matched data
-                    const matchedData = matchResponse.data.find((item) => {
-                        const apiParamName = (item.parameterName || "").toLowerCase().trim();
-                        const analyteParamName = (analyte.parameterName || analyte.parameter_name || "").toLowerCase().trim();
-                        const apiMatrix = (item.matrix || "").toLowerCase().trim();
-                        const analyteMatrix = (analyte.matrix || "").toLowerCase().trim();
-                        return apiParamName === analyteParamName && (apiMatrix === analyteMatrix || (!apiMatrix && !analyteMatrix));
-                    });
-
-                    // Create update object with matched data or original data
-                    const updateObj = {
-                        id: analyte.id,
-                        sampleId: analyte.sampleId,
-                        receiptId: analyte.receiptId || analyte.receipt_id,
-                        parameterName: matchedData?.parameterName || analyte.parameterName,
-                        parameterId: matchedData?.parameterId || analyte.parameterId,
-                        parameterUid: matchedData?.parameterUid || analyte.parameterUid || analyte.parameter_uid || "",
-                        protocolCode: matchedData?.protocolCode || analyte.protocolCode,
-                        protocolSource: matchedData?.protocolSource || analyte.protocolSource,
-                        matrix: matchedData?.matrix || analyte.matrix,
-                        scientificField: matchedData?.scientificField || analyte.scientificField,
-                        technicianAlias: matchedData?.technicianAlias || analyte.technicianAlias,
-                        modifiedByUid: currentUser.identityUid,
-                        displayStyle: analyte.displayStyle || [
-                            {
-                                label: "default",
-                                value: "",
-                            },
-                            {
-                                label: "eng",
-                                value: "",
-                            },
-                        ],
-                    };
-
-                    // Add technicianId and technicianIds if available in matched data
-                    if (matchedData) {
-                        // If technicians array exists, extract technicianIds
-                        if (matchedData.technicians && Array.isArray(matchedData.technicians) && matchedData.technicians.length > 0) {
-                            updateObj.technicianIds = matchedData.technicians.map((t) => t.technicianId).filter(Boolean);
-                            // Use first technician as primary technicianId
-                            updateObj.technicianId = matchedData.technicians[0].technicianId;
-                        }
-                        // If single technician object exists
-                        else if (matchedData.technician && matchedData.technician.technicianId) {
-                            updateObj.technicianId = matchedData.technician.technicianId;
-                            updateObj.technicianIds = [matchedData.technician.technicianId];
-                        }
-                        // If technicianId exists directly in matchedData
-                        else if (matchedData.technicianId) {
-                            updateObj.technicianId = matchedData.technicianId;
-                            if (matchedData.technicianIds && Array.isArray(matchedData.technicianIds)) {
-                                updateObj.technicianIds = matchedData.technicianIds;
-                            } else {
-                                updateObj.technicianIds = [matchedData.technicianId];
-                            }
-                        }
-                    }
-
-                    return updateObj;
-                });
-
-                // Make bulk update API call
-                const updateResponse = await apiPost("https://red.irdop.org/v1/analysis/update", {
-                    analyses: updateDataArray,
-                });
-
-                if (updateResponse.status === 200) {
-                    // Update the UI
-                    const newAnalytesList = listAnalytes.map((analyte) => {
-                        if (selectedAnalytes.includes(analyte.id)) {
-                            const updateData = updateDataArray.find((item) => item.id === analyte.id);
-
-                            // Find the matched data to get technician object
-                            const matchedData = matchResponse.data.find((item) => {
-                                const apiParamName = (item.parameterName || "").toLowerCase().trim();
-                                const analyteParamName = (analyte.parameterName || analyte.parameter_name || "").toLowerCase().trim();
-                                const apiMatrix = (item.matrix || "").toLowerCase().trim();
-                                const analyteMatrix = (analyte.matrix || "").toLowerCase().trim();
-                                return apiParamName === analyteParamName && (apiMatrix === analyteMatrix || (!apiMatrix && !analyteMatrix));
-                            });
-
-                            // Prepare technician object for UI
-                            let technicianObj = analyte.technician;
-                            if (matchedData) {
-                                if (matchedData.technicians && Array.isArray(matchedData.technicians) && matchedData.technicians.length > 0) {
-                                    technicianObj = matchedData.technicians[0];
-                                } else if (matchedData.technician) {
-                                    technicianObj = matchedData.technician;
-                                }
-                            }
-
-                            return {
-                                ...analyte,
-                                ...updateData,
-                                technician: technicianObj,
-                            };
-                        }
-                        return analyte;
-                    });
-                    setListAnalytes(newAnalytesList);
-
-                    showToast(`Đã đồng bộ dữ liệu cho ${selectedAnalytes.length} chỉ tiêu`);
-                } else {
-                    Swal.fire({
-                        icon: "error",
-                        title: "Lỗi",
-                        text: updateResponse.data?.message || "Có lỗi xảy ra khi cập nhật dữ liệu",
-                    });
-                }
+                setMatchedSyncData(
+                    selectedItems.map((item, index) => ({
+                        original: item,
+                        matched: matchResponse.data[index] || {},
+                    })),
+                );
+                setIsSyncPreviewVisible(true);
             } else {
                 Swal.fire({
                     icon: "error",
@@ -2003,6 +1951,361 @@ const ReceiptInfor = ({ receipt }) => {
                 text: error.message || "Đã xảy ra lỗi khi đồng bộ dữ liệu",
             });
         }
+    };
+
+
+    // Helper function to handle sync field toggle
+    const handleSyncFieldToggle = (field) => {
+        if (field === "parameterName") return; // parameterName is mandatory
+        setSelectedSyncFields((prev) => ({
+            ...prev,
+            [field]: !prev[field],
+        }));
+    };
+
+    // Helper function to confirm sync and perform update
+    const handleConfirmSync = async () => {
+        if (!matchedSyncData.length) return;
+
+        try {
+            const updateDataArray = matchedSyncData.map(({ original, matched }) => {
+                const updateObj = {
+                    id: original.id,
+                    sampleId: original.sampleId,
+                    receiptId: original.receiptId || original.receipt_id,
+                    modifiedByUid: currentUser.identityUid,
+                };
+
+                // Always update parameterName (mandatory)
+                updateObj.parameterName = matched?.parameterName || original.parameterName;
+                updateObj.parameterId = matched?.parameterId || original.parameterId;
+                updateObj.parameterUid = matched?.parameterUid || original.parameterUid || original.parameter_uid || "";
+
+                // Update display style if available in matched data
+                updateObj.displayStyle = matched?.displayStyle || original.displayStyle || [
+                    { label: "default", value: "" },
+                    { label: "eng", value: "" },
+                ];
+
+                // Conditionally update other fields based on user selection
+                if (selectedSyncFields.protocolCode) {
+                    updateObj.protocolCode = matched?.protocolCode || original.protocolCode;
+                }
+                if (selectedSyncFields.protocolSource) {
+                    updateObj.protocolSource = matched?.protocolSource || original.protocolSource;
+                }
+                if (selectedSyncFields.matrix) {
+                    updateObj.matrix = matched?.matrix || original.matrix;
+                }
+                if (selectedSyncFields.scientificField) {
+                    updateObj.scientificField = matched?.scientificField || original.scientificField;
+                }
+                if (selectedSyncFields.resultUnit) {
+                    updateObj.resultUnit = matched?.resultUnit || original.resultUnit;
+                }
+
+                // Handle Technician updates if selected
+                if (selectedSyncFields.technicianId && matched) {
+                    // Similar logic to original handleSyncData for technician extraction
+                    if (matched.technicians && Array.isArray(matched.technicians) && matched.technicians.length > 0) {
+                        updateObj.technicianIds = matched.technicians.map((t) => t.technicianId).filter(Boolean);
+                        updateObj.technicianId = matched.technicians[0].technicianId;
+                    } else if (matched.technician && matched.technician.technicianId) {
+                        updateObj.technicianId = matched.technician.technicianId;
+                        updateObj.technicianIds = [matched.technician.technicianId];
+                    } else if (matched.technicianId) {
+                        updateObj.technicianId = matched.technicianId;
+                        if (matched.technicianIds && Array.isArray(matched.technicianIds)) {
+                            updateObj.technicianIds = matched.technicianIds;
+                        } else {
+                            updateObj.technicianIds = [matched.technicianId];
+                        }
+                    }
+                    // Update technicianAlias if available
+                    if (matched.technicianAlias) {
+                        updateObj.technicianAlias = matched.technicianAlias;
+                    }
+                }
+
+                return updateObj;
+            });
+
+            const updateResponse = await apiPost("https://red.irdop.org/v1/analysis/update", {
+                analyses: updateDataArray,
+            });
+
+            if (updateResponse.status === 200) {
+                // Update UI state
+                const newAnalytesList = listAnalytes.map((analyte) => {
+                    if (selectedAnalytes.includes(analyte.id)) {
+                        const updateData = updateDataArray.find((item) => item.id === analyte.id);
+                        // We need the matched data to get the full technician object for display if it changed
+                        const matchInfo = matchedSyncData.find(m => m.original.id === analyte.id);
+                        const matched = matchInfo ? matchInfo.matched : null;
+
+                        let technicianObj = analyte.technician;
+                        if (selectedSyncFields.technicianId && matched) {
+                            if (matched.technicians && Array.isArray(matched.technicians) && matched.technicians.length > 0) {
+                                technicianObj = matched.technicians[0];
+                            } else if (matched.technician) {
+                                technicianObj = matched.technician;
+                            }
+                        }
+
+                        return {
+                            ...analyte,
+                            ...updateData,
+                            technician: technicianObj
+                        };
+                    }
+                    return analyte;
+                });
+                setListAnalytes(newAnalytesList);
+                showToast(`Đã đồng bộ dữ liệu cho ${selectedAnalytes.length} chỉ tiêu`);
+            } else {
+                Swal.fire({
+                    icon: "error",
+                    title: "Lỗi",
+                    text: updateResponse.data?.message || "Có lỗi xảy ra khi cập nhật dữ liệu",
+                });
+            }
+
+        } catch (error) {
+            console.error("Error confirming sync:", error);
+            Swal.fire({
+                icon: "error",
+                title: "Lỗi",
+                text: error.message || "Đã xảy ra lỗi khi đồng bộ dữ liệu",
+            });
+        } finally {
+            // Close modals and cleanup
+            setIsSyncFieldSelectionVisible(false);
+            setIsSyncPreviewVisible(false);
+            setMatchedSyncData([]);
+        }
+    };
+
+    // Render Sync Preview Dialog
+    const renderSyncPreviewDialog = () => {
+        if (!isSyncPreviewVisible) return null;
+
+        return (
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
+                <div className="bg-white p-6 rounded-lg w-[90%] max-w-6xl max-h-[90vh] flex flex-col">
+                    <h2 className="text-xl font-bold mb-4 text-blue-800 border-b pb-2">Xem trước thay đổi đồng bộ</h2>
+
+                    <div className="overflow-auto flex-1 mb-4">
+                        <table className="min-w-full text-sm border-collapse border border-gray-300">
+                            <thead className="bg-gray-100 sticky top-0">
+                                <tr>
+                                    <th className="border p-2 text-left">Chỉ tiêu (Hiện tại)</th>
+                                    <th className="border p-2 text-left">Matrix</th>
+                                    <th className="border p-2 text-left">Protocol Code</th>
+                                    <th className="border p-2 text-left">Result Unit</th>
+                                    <th className="border p-2 text-left">Scientific Field</th>
+                                    <th className="border p-2 text-left">Technician</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {matchedSyncData.map(({ original, matched }, index) => {
+                                    // Helper to render cell with difference highlighting
+                                    const renderCell = (current, proposed, label) => {
+                                        const isDifferent = String(current || "").trim() !== String(proposed || "").trim();
+                                        return (
+                                            <td className={`border p-2 align-top ${isDifferent ? "bg-yellow-50" : ""}`}>
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="text-gray-500 line-through text-xs px-1" title="Giá trị hiện tại">
+                                                        {current || "--"}
+                                                    </div>
+                                                    <div className={`font-medium px-1 ${isDifferent ? "text-green-600" : "text-gray-900"}`} title="Giá trị mới">
+                                                        {proposed || "--"}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        );
+                                    };
+
+                                    // Helper for technician which is an object/ID
+                                    const currentTechName = original.technician?.identityName || "Unknown";
+                                    let proposedTechName = "Unknown";
+                                    if (matched?.technicians?.length > 0) {
+                                        proposedTechName = matched.technicians[0].identityName || matched.technicians[0].alias;
+                                    } else if (matched?.technician) {
+                                        proposedTechName = matched.technician.identityName || matched.technician.alias;
+                                    }
+                                    const isTechDifferent = String(original.technicianId || "") !== String((matched?.technicians?.[0]?.technicianId || matched?.technician?.technicianId || matched?.technicianId) || "");
+
+
+                                    return (
+                                        <tr key={original.id} className="hover:bg-gray-50">
+                                            <td className="border p-2 font-medium">
+                                                <div>{original.parameterName}</div>
+                                                <div className="text-xs text-blue-500">ID: {original.sampleId}</div>
+                                            </td>
+                                            {renderCell(original.matrix, matched?.matrix)}
+                                            {renderCell(original.protocolCode, matched?.protocolCode)}
+                                            {renderCell(original.resultUnit, matched?.resultUnit)}
+                                            {renderCell(original.scientificField, matched?.scientificField)}
+                                            <td className={`border p-2 align-top ${isTechDifferent ? "bg-yellow-50" : ""}`}>
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="text-gray-500 line-through text-xs px-1">
+                                                        {currentTechName}
+                                                    </div>
+                                                    <div className={`font-medium px-1 ${isTechDifferent ? "text-green-600" : "text-gray-900"}`}>
+                                                        {proposedTechName}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t mt-auto">
+                        <button
+                            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded shadow-sm transition-colors"
+                            onClick={() => {
+                                setIsSyncPreviewVisible(false);
+                                setMatchedSyncData([]);
+                            }}
+                        >
+                            Hủy
+                        </button>
+                        <button
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded shadow-sm font-medium transition-colors"
+                            onClick={() => {
+                                // Close preview, open selection
+                                setIsSyncPreviewVisible(false);
+                                setIsSyncFieldSelectionVisible(true);
+                            }}
+                        >
+                            Tiếp tục
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Render Field Selection Dialog
+    const renderSyncFieldSelectionDialog = () => {
+        if (!isSyncFieldSelectionVisible) return null;
+
+        return (
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
+                <div className="bg-white p-6 rounded-lg w-[500px] max-w-[90vw] shadow-xl">
+                    <h2 className="text-xl font-bold mb-4 text-blue-800 border-b pb-2">Chọn trường cần cập nhật</h2>
+
+                    <div className="space-y-3 mb-6">
+                        <p className="text-sm text-gray-600 italic mb-2">Chọn các trường thông tin bạn muốn cập nhật từ dữ liệu đồng bộ:</p>
+
+                        <label className="flex items-center p-2 rounded hover:bg-gray-50 cursor-not-allowed opacity-70">
+                            <input
+                                type="checkbox"
+                                checked={true}
+                                disabled
+                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mr-3"
+                            />
+                            <div className="flex flex-col">
+                                <span className="font-medium text-gray-800">Tên chỉ tiêu (Parameter Name)</span>
+                                <span className="text-xs text-red-500 font-semibold">Bắt buộc</span>
+                            </div>
+                        </label>
+
+                        <label className="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={selectedSyncFields.matrix}
+                                onChange={() => handleSyncFieldToggle("matrix")}
+                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mr-3"
+                            />
+                            <span className="font-medium text-gray-800">Nền mẫu (Matrix)</span>
+                        </label>
+
+                        <label className="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={selectedSyncFields.protocolCode}
+                                onChange={() => handleSyncFieldToggle("protocolCode")}
+                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mr-3"
+                            />
+                            <span className="font-medium text-gray-800">Mã phương pháp (Protocol Code)</span>
+                        </label>
+
+                        <label className="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={selectedSyncFields.protocolSource}
+                                onChange={() => handleSyncFieldToggle("protocolSource")}
+                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mr-3"
+                            />
+                            <span className="font-medium text-gray-800">Nguồn phương pháp (Protocol Source)</span>
+                        </label>
+
+                        <label className="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={selectedSyncFields.resultUnit}
+                                onChange={() => handleSyncFieldToggle("resultUnit")}
+                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mr-3"
+                            />
+                            <span className="font-medium text-gray-800">Đơn vị tính (Unit)</span>
+                        </label>
+
+                        <label className="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={selectedSyncFields.scientificField}
+                                onChange={() => handleSyncFieldToggle("scientificField")}
+                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mr-3"
+                            />
+                            <span className="font-medium text-gray-800">Lĩnh vực (Scientific Field)</span>
+                        </label>
+
+                        <label className="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={selectedSyncFields.technicianId}
+                                onChange={() => handleSyncFieldToggle("technicianId")}
+                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mr-3"
+                            />
+                            <span className="font-medium text-gray-800">Người thực hiện (Technician)</span>
+                        </label>
+                    </div>
+
+                    <div className="flex justify-between pt-4 border-t mt-4">
+                        <button
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm underline"
+                            onClick={() => {
+                                setIsSyncFieldSelectionVisible(false);
+                                setIsSyncPreviewVisible(true);
+                            }}
+                        >
+                            Quay lại xem trước
+                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded transition-colors"
+                                onClick={() => {
+                                    setIsSyncFieldSelectionVisible(false);
+                                    setMatchedSyncData([]);
+                                }}
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-bold shadow-md transition-transform transform active:scale-95"
+                                onClick={handleConfirmSync}
+                            >
+                                Cập nhật
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     // Add handleUpdateDatabase function (based on SampleInfor.jsx)
@@ -2177,11 +2480,39 @@ const ReceiptInfor = ({ receipt }) => {
         try {
             // Prepare update data
             const updateDataArray = analysesToUpdate.map((analysisId) => {
-                const analysis = listAnalytes.find((a) => a.id === analysisId);
-                return {
+                const selectedParamId = selectedParameterUpdates[analysisId];
+                const suggestion = parameterSuggestions[analysisId]?.find((p) => String(p.parameterId) === String(selectedParamId));
+
+                const updateObj = {
                     id: analysisId,
-                    parameterId: selectedParameterUpdates[analysisId],
+                    parameterId: selectedParamId,
+                    parameterName: suggestion?.parameterName,
+                    matrix: suggestion?.matrix,
+                    protocolSource: suggestion?.protocolSource,
+                    protocolCode: suggestion?.protocolCode,
+                    scientificField: suggestion?.scientificField,
+                    technicianAlias: suggestion?.technicianAlias,
+                    displayStyle: suggestion?.displayStyle,
                 };
+
+                if (suggestion) {
+                    if (suggestion.technicians && Array.isArray(suggestion.technicians) && suggestion.technicians.length > 0) {
+                        updateObj.technicianIds = suggestion.technicians.map((t) => t.technicianId).filter(Boolean);
+                        updateObj.technicianId = suggestion.technicians[0].technicianId;
+                    } else if (suggestion.technician && suggestion.technician.technicianId) {
+                        updateObj.technicianId = suggestion.technician.technicianId;
+                        updateObj.technicianIds = [suggestion.technician.technicianId];
+                    } else if (suggestion.technicianId) {
+                        updateObj.technicianId = suggestion.technicianId;
+                        if (suggestion.technicianIds && Array.isArray(suggestion.technicianIds)) {
+                            updateObj.technicianIds = suggestion.technicianIds;
+                        } else {
+                            updateObj.technicianIds = [suggestion.technicianId];
+                        }
+                    }
+                }
+
+                return updateObj;
             });
 
             // Make API call
@@ -2194,9 +2525,20 @@ const ReceiptInfor = ({ receipt }) => {
                 const newAnalytesList = listAnalytes.map((analyte) => {
                     const updateData = updateDataArray.find((item) => item.id === analyte.id);
                     if (updateData) {
+                        const suggestion = parameterSuggestions[analyte.id]?.find((p) => String(p.parameterId) === String(updateData.parameterId));
+                        let technicianObj = analyte.technician;
+                        if (suggestion) {
+                            if (suggestion.technicians && Array.isArray(suggestion.technicians) && suggestion.technicians.length > 0) {
+                                technicianObj = suggestion.technicians[0];
+                            } else if (suggestion.technician) {
+                                technicianObj = suggestion.technician;
+                            }
+                        }
+
                         return {
                             ...analyte,
-                            parameterId: updateData.parameterId,
+                            ...updateData,
+                            technician: technicianObj,
                         };
                     }
                     return analyte;
@@ -2677,7 +3019,6 @@ const ReceiptInfor = ({ receipt }) => {
             setCameraPermission("granted");
             return true;
         } catch (error) {
-            console.log("Camera permission denied:", error);
             setCameraPermission("denied");
 
             // Hiển thị thông báo hướng dẫn người dùng
@@ -2720,7 +3061,6 @@ const ReceiptInfor = ({ receipt }) => {
     const initQRScanner = () => {
         // Kiểm tra xem có quyền camera không
         if (cameraPermission !== "granted") {
-            console.log("Camera permission not granted");
             return;
         }
 
@@ -2806,7 +3146,6 @@ const ReceiptInfor = ({ receipt }) => {
     };
 
     const handleQRScanError = (error) => {
-        console.log("QR Scan Error:", error);
     };
 
     // Function to handle Excel download
@@ -2814,7 +3153,6 @@ const ReceiptInfor = ({ receipt }) => {
         // Check if receipt status is undefined or empty
         if (!currentReceipt?.status || currentReceipt.status.trim() === "" || currentReceipt.status === "Chưa xác định") {
             try {
-
                 // Show warning with auto-close
                 Swal.fire({
                     icon: "warning",
@@ -3215,7 +3553,6 @@ const ReceiptInfor = ({ receipt }) => {
     // Function to handle email submission
     const handleEmailSubmit = async (emailData) => {
         try {
-            console.log("Sending receipt notification email:", emailData);
 
             const response = await apiPost("https://red.irdop.org/v1/mail/send/receipt", emailData);
 
@@ -3233,10 +3570,8 @@ const ReceiptInfor = ({ receipt }) => {
 
                     const updateResponse = await apiPost("https://red.irdop.org/v1/receipt/edit", updatePayload);
                     if (updateResponse.status === 200) {
-                        console.log('Receipt status updated successfully to "Đã tiếp nhận"');
                         updateReceiptStatus("Đã tiếp nhận");
                     } else {
-                        console.warn("Failed to update receipt status:", updateResponse.data?.message);
                     }
                 } catch (updateError) {
                     console.error("Error updating receipt status:", updateError);
@@ -4339,29 +4674,29 @@ const ReceiptInfor = ({ receipt }) => {
                                         {/* Update Database button */}
                                         <button
                                             className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${(selectedAnalytes.length > 0 &&
-                                                    listAnalytes
-                                                        .filter((a) => selectedAnalytes.includes(a.id))
-                                                        .every(
-                                                            (a) =>
-                                                                (!a.parameterUid || a.parameterUid === "") &&
-                                                                a.parameterName &&
-                                                                a.matrix &&
-                                                                ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
-                                                                a.protocolSource &&
-                                                                a.scientificField,
-                                                        )) ||
-                                                    (selectedAnalytes.length === 0 &&
-                                                        listAnalytes.some(
-                                                            (a) =>
-                                                                (!a.parameterUid || a.parameterUid === "") &&
-                                                                a.parameterName &&
-                                                                a.matrix &&
-                                                                ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
-                                                                a.protocolSource &&
-                                                                a.scientificField,
-                                                        ))
-                                                    ? "bg-blue-500"
-                                                    : "bg-gray-300 cursor-not-allowed"
+                                                listAnalytes
+                                                    .filter((a) => selectedAnalytes.includes(a.id))
+                                                    .every(
+                                                        (a) =>
+                                                            (!a.parameterUid || a.parameterUid === "") &&
+                                                            a.parameterName &&
+                                                            a.matrix &&
+                                                            ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
+                                                            a.protocolSource &&
+                                                            a.scientificField,
+                                                    )) ||
+                                                (selectedAnalytes.length === 0 &&
+                                                    listAnalytes.some(
+                                                        (a) =>
+                                                            (!a.parameterUid || a.parameterUid === "") &&
+                                                            a.parameterName &&
+                                                            a.matrix &&
+                                                            ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
+                                                            a.protocolSource &&
+                                                            a.scientificField,
+                                                    ))
+                                                ? "bg-blue-500"
+                                                : "bg-gray-300 cursor-not-allowed"
                                                 } mr-2`}
                                             onClick={
                                                 (selectedAnalytes.length > 0 &&
@@ -4445,12 +4780,12 @@ const ReceiptInfor = ({ receipt }) => {
                                         {isAdmin() && (
                                             <button
                                                 className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0
-                                                        ? listAnalytes
-                                                            .filter((item) => selectedAnalytes.includes(item.id))
-                                                            .every((item) => item.reviewedById && String(item.reviewedById).trim() !== "")
-                                                            ? "bg-red-500"
-                                                            : "bg-green-500"
-                                                        : "bg-gray-300 cursor-not-allowed"
+                                                    ? listAnalytes
+                                                        .filter((item) => selectedAnalytes.includes(item.id))
+                                                        .every((item) => item.reviewedById && String(item.reviewedById).trim() !== "")
+                                                        ? "bg-red-500"
+                                                        : "bg-green-500"
+                                                    : "bg-gray-300 cursor-not-allowed"
                                                     } mr-2`}
                                                 onClick={selectedAnalytes.length > 0 ? handleReviewAnalyses : undefined}
                                                 title={
@@ -4504,6 +4839,12 @@ const ReceiptInfor = ({ receipt }) => {
                                                     <NavLink
                                                         to={`/dashboard/sample?receiptId=${receiptId}&sampleId=${getSampleUid(order.sampleId || order.sample_id)}`}
                                                         className="text-primary font-semibold hover:text-[#103667]"
+                                                        onClick={(e) => {
+                                                            if (location.pathname !== "/dashboard/receipt" && onSampleClick) {
+                                                                e.preventDefault();
+                                                                onSampleClick(getSampleUid(order.sampleId || order.sample_id));
+                                                            }
+                                                        }}
                                                     >
                                                         {getSampleUid(order.sampleId || order.sample_id)}
                                                     </NavLink>
@@ -4681,7 +5022,16 @@ const ReceiptInfor = ({ receipt }) => {
                                         return (
                                             <tr key={sample.id}>
                                                 <td className="p-2 px-1 border text-start text-text-secondary relative">
-                                                    <NavLink to={`/dashboard/sample?receiptId=${receiptId}&sampleId=${sample.sampleId}`} className="text-primary font-semibold hover:text-[#103667]">
+                                                    <NavLink
+                                                        to={`/dashboard/sample?receiptId=${receiptId}&sampleId=${sample.sampleId}`}
+                                                        className="text-primary font-semibold hover:text-[#103667]"
+                                                        onClick={(e) => {
+                                                            if (location.pathname !== "/dashboard/receipt" && onSampleClick) {
+                                                                e.preventDefault();
+                                                                onSampleClick(sample.sampleId);
+                                                            }
+                                                        }}
+                                                    >
                                                         {sample.sampleId}
                                                     </NavLink>
                                                     {allAnalysesReviewed(sample) && <span className="absolute top-1 right-2 text-yellow-500 font-bold">*</span>}
@@ -4839,11 +5189,13 @@ const ReceiptInfor = ({ receipt }) => {
                 </div>
             </div>
             {/* Only show payment confirmation and delete confirmation dialogs for non-technicians */} {!isTechnician() && isPaymentConfirmVisible && renderPayStatusConfirm()}
-            {isDeleteConfirmVisible &&
+            {
+                isDeleteConfirmVisible &&
                 renderDeleteConfirm(
                     deleteType === "multiple" ? `Bạn có chắc chắn muốn xóa ${selectedAnalytes.length} chỉ tiêu đã chọn?` : "Bạn có chắc chắn muốn xóa mục này?",
                     deleteType === "multiple" ? handleDeleteMultipleConfirmAction : deleteType === "sample" ? handleDeleteSampleConfirmAction : handleDeleteAnalysisConfirmAction,
-                )}{" "}
+                )
+            } {" "}
             {/* EmailForm */}
             <EmailForm
                 from={emailFormData.from}
@@ -4865,84 +5217,89 @@ const ReceiptInfor = ({ receipt }) => {
                 onClose={() => setIsFileFormVisible(false)}
             />
             {/* QR Scanner Modal */}
-            {isQRScannerOpen && (
-                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50">
-                    <div className="bg-white p-4 rounded-lg w-[90%] max-w-2xl h-[80vh] max-h-[600px] relative flex flex-col">
-                        <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10" onClick={closeQRScanner}>
-                            ×
-                        </button>
-                        <h3 className="text-lg font-semibold mb-3 flex items-center">
-                            <FaCamera className="mr-2 text-blue-500" />
-                            Quét mã QR
-                        </h3>
+            {
+                isQRScannerOpen && (
+                    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50">
+                        <div className="bg-white p-4 rounded-lg w-[90%] max-w-2xl h-[80vh] max-h-[600px] relative flex flex-col">
+                            <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10" onClick={closeQRScanner}>
+                                ×
+                            </button>
+                            <h3 className="text-lg font-semibold mb-3 flex items-center">
+                                <FaCamera className="mr-2 text-blue-500" />
+                                Quét mã QR
+                            </h3>
 
-                        {/* Camera view area - takes most of the space */}
-                        <div className="flex-1 flex flex-col">
-                            <p className="text-gray-600 mb-3 text-center text-sm">Hướng camera vào mã QR để quét và điều hướng</p>
+                            {/* Camera view area - takes most of the space */}
+                            <div className="flex-1 flex flex-col">
+                                <p className="text-gray-600 mb-3 text-center text-sm">Hướng camera vào mã QR để quét và điều hướng</p>
 
-                            {/* QR Scanner area - maximized */}
-                            <div className="flex-1 relative">
-                                <div id="qr-reader" className="w-full h-full min-h-[300px] border-2 border-dashed border-gray-300 rounded-lg overflow-hidden">
-                                    {/* Placeholder content when scanner is not active */}
-                                    {cameraPermission !== "granted" && (
-                                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                            <div className="text-center">
-                                                <FaQrcode size={48} className="mx-auto mb-3" />
-                                                <p className="text-sm">Cấp quyền camera để bắt đầu quét</p>
+                                {/* QR Scanner area - maximized */}
+                                <div className="flex-1 relative">
+                                    <div id="qr-reader" className="w-full h-full min-h-[300px] border-2 border-dashed border-gray-300 rounded-lg overflow-hidden">
+                                        {/* Placeholder content when scanner is not active */}
+                                        {cameraPermission !== "granted" && (
+                                            <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                                <div className="text-center">
+                                                    <FaQrcode size={48} className="mx-auto mb-3" />
+                                                    <p className="text-sm">Cấp quyền camera để bắt đầu quét</p>
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Control buttons area */}
-                        <div className="mt-4 border-t pt-4">
-                            {/* Camera permission status */}
-                            {(cameraPermission === "denied" || cameraPermission === null) && (
-                                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-3">
-                                    <div className="flex items-center justify-center mb-2">
-                                        <FaCamera className="text-yellow-600 mr-2" />
-                                        <p className="text-sm text-yellow-800">{cameraPermission === null ? "Cần kiểm tra và cấp quyền camera" : "Cần cấp quyền camera để sử dụng chức năng này"}</p>
+                            {/* Control buttons area */}
+                            <div className="mt-4 border-t pt-4">
+                                {/* Camera permission status */}
+                                {(cameraPermission === "denied" || cameraPermission === null) && (
+                                    <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-3">
+                                        <div className="flex items-center justify-center mb-2">
+                                            <FaCamera className="text-yellow-600 mr-2" />
+                                            <p className="text-sm text-yellow-800">{cameraPermission === null ? "Cần kiểm tra và cấp quyền camera" : "Cần cấp quyền camera để sử dụng chức năng này"}</p>
+                                        </div>
+                                        <div className="text-center">
+                                            <button
+                                                onClick={requestCameraPermission}
+                                                disabled={isRequestingPermission}
+                                                className="bg-yellow-600 text-white px-4 py-2 rounded text-sm hover:bg-yellow-700 disabled:opacity-50 font-medium"
+                                            >
+                                                {isRequestingPermission ? "Đang yêu cầu..." : "Cấp quyền camera"}
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="text-center">
-                                        <button
-                                            onClick={requestCameraPermission}
-                                            disabled={isRequestingPermission}
-                                            className="bg-yellow-600 text-white px-4 py-2 rounded text-sm hover:bg-yellow-700 disabled:opacity-50 font-medium"
-                                        >
-                                            {isRequestingPermission ? "Đang yêu cầu..." : "Cấp quyền camera"}
-                                        </button>
+                                )}
+
+                                {/* Success message when camera is granted */}
+                                {cameraPermission === "granted" && (
+                                    <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-3">
+                                        <div className="flex items-center justify-center">
+                                            <FaCamera className="text-green-600 mr-2" />
+                                            <p className="text-sm text-green-800">Camera đã sẵn sàng - Hướng vào mã QR để quét</p>
+                                        </div>
                                     </div>
+                                )}
+
+                                {/* Help text */}
+                                <div className="text-xs text-gray-500 space-y-1 text-center">
+                                    <p>💡 Đảm bảo mã QR chứa URL hợp lệ</p>
+                                    <p>🔒 Quyền camera chỉ được sử dụng để quét mã QR</p>
+                                    <p>📱 Hướng camera về phía mã QR và giữ ổn định</p>
                                 </div>
-                            )}
-
-                            {/* Success message when camera is granted */}
-                            {cameraPermission === "granted" && (
-                                <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-3">
-                                    <div className="flex items-center justify-center">
-                                        <FaCamera className="text-green-600 mr-2" />
-                                        <p className="text-sm text-green-800">Camera đã sẵn sàng - Hướng vào mã QR để quét</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Help text */}
-                            <div className="text-xs text-gray-500 space-y-1 text-center">
-                                <p>💡 Đảm bảo mã QR chứa URL hợp lệ</p>
-                                <p>🔒 Quyền camera chỉ được sử dụng để quét mã QR</p>
-                                <p>📱 Hướng camera về phía mã QR và giữ ổn định</p>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+            {renderSyncPreviewDialog()}
+            {renderSyncFieldSelectionDialog()}
             {/* Bulk Transfer Modal */}
             {isTransferMultipleVisible && renderBulkTransferForm()}
             {/* Bulk Deadline Update Modal */}
             {isBulkDeadlineVisible && renderBulkDeadlinePicker()}
             {/* Tooltip Portal */}
-            {tooltip.visible &&
+            {
+                tooltip.visible &&
                 createPortal(
                     <div
                         className={`custom-tooltip ${tooltip.visible ? "visible" : ""} ${tooltip.position}`}
@@ -4955,78 +5312,81 @@ const ReceiptInfor = ({ receipt }) => {
                         {tooltip.content}
                     </div>,
                     document.body,
-                )}
+                )
+            }
             {/* Modal Ghi chú */}
-            {showNoteModal && selectedAnalysisForNote && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
-                        <div className="px-6 py-4 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-blue-600">Ghi chú</h3>
-                            <p className="text-sm text-gray-600 mt-1">
-                                Mẫu: {selectedAnalysisForNote.sampleId} - Chỉ tiêu: {selectedAnalysisForNote.parameterName}
-                            </p>
-                        </div>
+            {
+                showNoteModal && selectedAnalysisForNote && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
+                            <div className="px-6 py-4 border-b border-gray-200">
+                                <h3 className="text-lg font-semibold text-blue-600">Ghi chú</h3>
+                                <p className="text-sm text-gray-600 mt-1">
+                                    Mẫu: {selectedAnalysisForNote.sampleId} - Chỉ tiêu: {selectedAnalysisForNote.parameterName}
+                                </p>
+                            </div>
 
-                        <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
-                            {/* Ghi chú cũ - chỉ xem */}
-                            {selectedAnalysisForNote.note && (
-                                <div className="mb-4">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Ghi chú hiện tại:</label>
-                                    <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-sm text-gray-700 whitespace-pre-wrap">{selectedAnalysisForNote.note}</div>
+                            <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
+                                {/* Ghi chú cũ - chỉ xem */}
+                                {selectedAnalysisForNote.note && (
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Ghi chú hiện tại:</label>
+                                        <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-sm text-gray-700 whitespace-pre-wrap">{selectedAnalysisForNote.note}</div>
+                                    </div>
+                                )}
+
+                                {/* Thêm ghi chú mới */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">{selectedAnalysisForNote.note ? "Thêm ghi chú mới:" : "Ghi chú:"}</label>
+                                    <textarea
+                                        value={newNoteText}
+                                        onChange={(e) => setNewNoteText(e.target.value)}
+                                        placeholder="Nhập nội dung ghi chú..."
+                                        className="w-full bg-white border border-gray-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        rows={4}
+                                    />
                                 </div>
-                            )}
+                            </div>
 
-                            {/* Thêm ghi chú mới */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">{selectedAnalysisForNote.note ? "Thêm ghi chú mới:" : "Ghi chú:"}</label>
-                                <textarea
-                                    value={newNoteText}
-                                    onChange={(e) => setNewNoteText(e.target.value)}
-                                    placeholder="Nhập nội dung ghi chú..."
-                                    className="w-full bg-white border border-gray-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    rows={4}
-                                />
+                            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                                <button
+                                    onClick={() => {
+                                        setShowNoteModal(false);
+                                        setSelectedAnalysisForNote(null);
+                                        setNewNoteText("");
+                                    }}
+                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                                    disabled={isUpdatingNote}
+                                >
+                                    Hủy
+                                </button>
+                                <button
+                                    onClick={handleUpdateNote}
+                                    disabled={isUpdatingNote || !newNoteText.trim()}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
+                                >
+                                    {isUpdatingNote ? (
+                                        <>
+                                            <span className="mr-2">Đang cập nhật...</span>
+                                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                                <path
+                                                    className="opacity-75"
+                                                    fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                                />
+                                            </svg>
+                                        </>
+                                    ) : (
+                                        "Cập nhật"
+                                    )}
+                                </button>
                             </div>
                         </div>
-
-                        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
-                            <button
-                                onClick={() => {
-                                    setShowNoteModal(false);
-                                    setSelectedAnalysisForNote(null);
-                                    setNewNoteText("");
-                                }}
-                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-                                disabled={isUpdatingNote}
-                            >
-                                Hủy
-                            </button>
-                            <button
-                                onClick={handleUpdateNote}
-                                disabled={isUpdatingNote || !newNoteText.trim()}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
-                            >
-                                {isUpdatingNote ? (
-                                    <>
-                                        <span className="mr-2">Đang cập nhật...</span>
-                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                            <path
-                                                className="opacity-75"
-                                                fill="currentColor"
-                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                            />
-                                        </svg>
-                                    </>
-                                ) : (
-                                    "Cập nhật"
-                                )}
-                            </button>
-                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

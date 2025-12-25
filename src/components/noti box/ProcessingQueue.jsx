@@ -6,17 +6,10 @@ const ProcessingQueue = () => {
 	const { taskQueue, queueMinimized, removeTask, clearAllTasks, toggleMinimize } = useTaskQueue();
 
 	const handleTaskClick = (task) => {
-		console.log('🖱️ Task clicked:', task);
-		console.log('📊 Task status:', task.status);
-		console.log('📝 Task type:', task.type);
-		console.log('💾 Task data:', task.data);
-		console.log('🔍 Source component:', task.sourceComponent);
 
 		if (task.status === 'completed' && task.data && task.type === 'extract') {
-			console.log('✅ Task is completed extract with data');
 
 			if (task.sourceComponent === 'file') {
-				console.log('📁 Processing file source component');
 				// Format data để match với FileInfor expectations
 				// FileInfor expects: [{fileName: "...", data: [{fileRecord, docCopy}]}]
 				const formattedData = [
@@ -33,14 +26,11 @@ const ProcessingQueue = () => {
 				};
 
 				localStorage.setItem('extractedFileData', JSON.stringify(storageData));
-				console.log('💾 Saved to localStorage extractedFileData:', storageData);
 
 				// Trigger custom event để notify component
-				console.log('📢 Dispatching fileDataExtracted event');
 				window.dispatchEvent(new CustomEvent('fileDataExtracted'));
 				toast.success('Đã mở dữ liệu trích xuất');
 			} else {
-				console.log('📋 Processing protocol source component');
 				// Lưu vào localStorage để ProtocolInfor component đọc
 				const storageData = {
 					data: task.data,
@@ -48,21 +38,14 @@ const ProcessingQueue = () => {
 				};
 
 				localStorage.setItem('extractedProtocolData', JSON.stringify(storageData));
-				console.log('💾 Saved to localStorage extractedProtocolData:', storageData);
 
 				// Trigger custom event để notify component
-				console.log('📢 Dispatching protocolDataExtracted event');
 				window.dispatchEvent(new CustomEvent('protocolDataExtracted'));
 				toast.success('Đã mở dữ liệu trích xuất');
 			}
 		} else if (task.status === 'failed') {
-			console.log('❌ Task failed');
 			toast.error(task.error || 'Tác vụ thất bại');
 		} else {
-			console.log('⚠️ Task not eligible for click action');
-			console.log('  - Status:', task.status);
-			console.log('  - Type:', task.type);
-			console.log('  - Has data:', !!task.data);
 		}
 	};
 

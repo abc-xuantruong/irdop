@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { User, Package, Scan, X, Save, ArrowLeft, FilterX, Clock } from "lucide-react";
+import { User, Package, Scan, X, Save, ArrowLeft, FilterX, Clock, FileText } from "lucide-react";
+import HandoverReportModal from "../components/sample/HandoverReportModal";
+import TechnicianHandoverTable from "../components/sample/TechnicianHandoverTable";
 import { toast } from "react-toastify";
 import axios from "axios";
 import { apiPost } from "../contexts/helperFunctionCallAPI";
+import Cookies from "js-cookie";
+import irDopLogo from "../assets/IRDOP-LOGO_FULL.png";
 
 const HandoverSampleDash = () => {
     // State
@@ -11,6 +15,9 @@ const HandoverSampleDash = () => {
     const [samples, setSamples] = useState([]); // Master list
     const [lastScannedCode, setLastScannedCode] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showEditor, setShowEditor] = useState(false);
+    const [editorContent, setEditorContent] = useState("");
+    const [showTechnicianTasks, setShowTechnicianTasks] = useState(false);
 
     // Tooltip State
     const [activeTooltip, setActiveTooltip] = useState(null); // { data: object, x: number, y: number }
@@ -67,9 +74,6 @@ const HandoverSampleDash = () => {
         const cleanCode = code.trim();
         if (!cleanCode) return;
 
-        console.log("Processing code:", cleanCode);
-        setLastScannedCode(cleanCode);
-
         // 1. Numeric (Technician)
         if (/^\d+$/.test(cleanCode)) {
             try {
@@ -101,8 +105,9 @@ const HandoverSampleDash = () => {
 
         // 2. Sample (SP...)
         else if (cleanCode.startsWith("SP")) {
+            setLastScannedCode(cleanCode);
             try {
-                toast.info("Đang lấy dữ liệu mẫu...", { autoClose: 1000 });
+                // toast.info("Đang lấy dữ liệu mẫu...", { autoClose: 1000 });
                 const response = await apiPost("https://red.irdop.org/v1/sample/get/full", { sampleId: cleanCode });
 
                 if (response && response.data) {
@@ -118,15 +123,15 @@ const HandoverSampleDash = () => {
                         unit: "mẫu",
                         criteria: rawData.analyses
                             ? rawData.analyses.map((a) => ({
-                                  id: a.id,
-                                  parameterId: a.parameterId,
-                                  parameterName: a.parameterName,
-                                  protocolCode: a.protocolCode,
-                                  technicianId: a.technicianId,
-                                  technicianName: a.technician?.identityName || "---",
-                                  note: a.note,
-                                  handover: a.handover || {},
-                              }))
+                                id: a.id,
+                                parameterId: a.parameterId,
+                                parameterName: a.parameterName,
+                                protocolCode: a.protocolCode,
+                                technicianId: a.technicianId,
+                                technicianName: a.technician?.identityName || "---",
+                                note: a.note,
+                                handover: a.handover || {},
+                            }))
                             : [],
                     };
 
@@ -214,6 +219,7 @@ const HandoverSampleDash = () => {
 
     const removeReceiver = () => {
         setReceiver(null);
+        setShowTechnicianTasks(false);
         toast.info("Đã thoát chế độ lọc theo KTV. Hiển thị tất cả mẫu.");
     };
 
@@ -374,6 +380,171 @@ const HandoverSampleDash = () => {
         }
     };
 
+    const generateReport = () => {
+        if (displaySamples.length === 0) {
+            toast.warning("Chưa có dữ liệu để tạo báo cáo");
+            return;
+        }
+
+        // Validate: Every row must have a Technician and a Handover record for that Technician
+        const unconfirmedSamples = [];
+        displaySamples.forEach((sample) => {
+            sample.criteria.forEach((crit) => {
+                const hasTechnician = !!crit.technicianId;
+                const hasHandover = crit.handover && Object.values(crit.handover).some((h) => h.identityId === crit.technicianId);
+
+                if (!hasTechnician || !hasHandover) {
+                    unconfirmedSamples.push(sample.sampleId);
+                }
+            });
+        });
+
+        if (unconfirmedSamples.length > 0) {
+            const uniqueIds = [...new Set(unconfirmedSamples)].join(", ");
+            toast.error(`Vui lòng "Xác nhận lấy mẫu" trước! (Mẫu chưa bàn giao: ${uniqueIds})`);
+            return;
+        }
+
+        const currentUserName = Cookies.get("identityName") || ".....................";
+        const receiverName = receiver ? receiver.name : ".....................";
+        const currentTime = new Date().toLocaleString("vi-VN");
+
+        let rowCount = 1;
+
+        let rows = "";
+        displaySamples.forEach((sample) => {
+            const criteriaCount = sample.criteria.length;
+            const rowSpan = criteriaCount > 0 ? criteriaCount : 1;
+            const quantity = sample.quantity && sample.quantity.trim() !== "" ? sample.quantity.trim() : "";
+            const sampleId = sample.sampleId ? sample.sampleId.trim() : "";
+            const description = sample.sampleDescription ? sample.sampleDescription.trim() : "";
+
+            // First Row
+            if (criteriaCount > 0) {
+                const firstCrit = sample.criteria[0];
+                const paramName = firstCrit.parameterName ? firstCrit.parameterName.trim() : "";
+                const protoCode = firstCrit.protocolCode ? firstCrit.protocolCode.trim() : "";
+
+                rows += `
+                    <tr>
+                        <td rowspan="${rowSpan}" style="text-align: left; vertical-align: top;">${rowCount}</td>
+                        <td rowspan="${rowSpan}" style="text-align: left; vertical-align: top; font-weight: bold;">${sampleId}</td>
+                        <td rowspan="${rowSpan}" style="text-align: left; vertical-align: top;">${description}</td>
+                        <td rowspan="${rowSpan}" style="text-align: left; vertical-align: top;">${quantity}</td>
+                        <td style="text-align: left; vertical-align: top;">${paramName}</td>
+                        <td style="text-align: left; vertical-align: top;">${protoCode}</td>
+                        <td rowspan="${rowSpan}" style="text-align: left; vertical-align: top;"></td>
+                    </tr>
+                `;
+
+                // Subsequent Rows
+                for (let i = 1; i < criteriaCount; i++) {
+                    const crit = sample.criteria[i];
+                    const pName = crit.parameterName ? crit.parameterName.trim() : "";
+                    const pCode = crit.protocolCode ? crit.protocolCode.trim() : "";
+
+                    rows += `
+                        <tr>
+                            <td style="text-align: left; vertical-align: top;">${pName}</td>
+                            <td style="text-align: left; vertical-align: top;">${pCode}</td>
+                        </tr>
+                    `;
+                }
+            } else {
+                // Case where there are no criteria (shouldn't happen with filter filter but possible if master list)
+                rows += `
+                    <tr>
+                        <td style="text-align: left; vertical-align: top;">${rowCount}</td>
+                        <td style="text-align: left; vertical-align: top; font-weight: bold;">${sampleId}</td>
+                        <td style="text-align: left; vertical-align: top;">${description}</td>
+                        <td style="text-align: left; vertical-align: top;">${quantity}</td>
+                        <td style="text-align: left; vertical-align: top;">--</td>
+                        <td style="text-align: left; vertical-align: top;">--</td>
+                        <td style="text-align: left; vertical-align: top;"></td>
+                    </tr>
+                `;
+            }
+            rowCount++;
+        });
+
+        const content = `
+            <div style="font-family: 'Times New Roman', Times, serif; color: #000;">
+
+                <!-- HEADER -->
+                <table style="width: 100%; border: none !important; margin-bottom: 20px;">
+                    <tr style="border: none !important;">
+                        <td style="width: 35%; border: none !important; text-align: center; vertical-align: middle; padding-right: 15px;">
+                             <img src="${irDopLogo}" style="width: 200px; max-width: 100%; object-fit: contain;" alt="Logo" />
+                        </td>
+                        <td style="width: 65%; border: none !important; text-align: left; vertical-align: middle;">
+                             <p style="font-weight: bold; font-size: 14px; margin: 0; line-height: 1.4;">VIỆN NGHIÊN CỨU VÀ PHÁT TRIỂN SẢN PHẨM THIÊN NHIÊN</p>
+                             <p style="font-weight: bold; font-size: 13px; margin: 0; line-height: 1.4;">176 Phùng Khoang, Phường Đại Mỗ, Thành phố Hà Nội</p>
+                             <p style="font-weight: bold; font-size: 13px; margin: 0; line-height: 1.4;">Phòng phân tích - Kiểm nghiệm</p>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- TITLE -->
+                <h2 style="text-align: center; text-transform: uppercase; margin: 10px 0 20px 0; font-weight: bold; font-size: 22px;">
+                    BIÊN BẢN BÀN GIAO MẪU THỬ NỘI BỘ
+                </h2>
+
+                <!-- INFO -->
+                <div style="margin-bottom: 15px; font-size: 14px;">
+                     <p><b>Người bàn giao:</b> ${currentUserName}</p>
+                     <p><b>Người nhận bàn giao:</b> ${receiverName}</p>
+                     <p><b>Thời gian:</b> ${currentTime}</p>
+                </div>
+
+                <!-- TABLE -->
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="background-color: #f2f2f2;">
+                            <th style="width: 5%; text-align: left;">STT</th>
+                            <th style="width: 10%; text-align: left;">Mẫu thử</th>
+                            <th style="width: 20%; text-align: left;">Mô tả</th>
+                            <th style="width: 10%; text-align: left;">Lượng mẫu</th>
+                            <th style="width: 25%; text-align: left;">Chỉ tiêu</th>
+                            <th style="width: 20%; text-align: left;">Phương pháp</th>
+                            <th style="width: 10%; text-align: left;">Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+
+                <!-- SIGNATURE -->
+                <div class="signature-block" style="margin-top: 30px;">
+                    <table style="width: 100%; border: none !important; height: 150px;">
+                        <tr style="border: none !important; vertical-align: top;">
+                            <td style="border: none !important; text-align: center; width: 50%; padding-top: 0;">
+                                <div style="display: flex; flex-direction: column; height: 100%; justify-content: space-between; align-items: center;">
+                                    <p style="margin-bottom: 5px;"><b>NGƯỜI GIAO</b></p>
+                                    <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 80px;">
+                                        <span style="color: #fafafa; font-size: 18px; font-weight: bold;">[SIGNATURE_1]</span>
+                                    </div>
+                                    <p><b>${currentUserName}</b></p>
+                                </div>
+                            </td>
+                            <td style="border: none !important; text-align: center; width: 50%; padding-top: 0;">
+                                <div style="display: flex; flex-direction: column; height: 100%; justify-content: space-between; align-items: center;">
+                                    <p style="margin-bottom: 5px;"><b>NGƯỜI NHẬN</b></p>
+                                    <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 80px;">
+                                        <span style="color: #fafafa; font-size: 18px; font-weight: bold;">[SIGNATURE_2]</span>
+                                    </div>
+                                    <p><b>${receiver ? receiver.name : ""}</b></p>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        `;
+        setEditorContent(content);
+        setShowEditor(true);
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 p-6 font-sans text-gray-800 w-full">
             <div className="w-full mx-auto space-y-6 px-4">
@@ -388,6 +559,15 @@ const HandoverSampleDash = () => {
                     </div>
                     <div className="flex items-center gap-4">
                         {lastScannedCode && <span className="text-sm font-mono bg-gray-100 px-3 py-1 rounded-full text-gray-500">Last Scan: {lastScannedCode}</span>}
+                        <button
+                            onClick={generateReport}
+                            disabled={displaySamples.length === 0}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${displaySamples.length > 0 ? "bg-blue-50 text-blue-600 hover:bg-blue-100" : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                }`}
+                        >
+                            <FileText className="w-5 h-5" />
+                            Tạo biên bản
+                        </button>
                         <button onClick={clearAll} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-medium transition-colors">
                             Làm mới
                         </button>
@@ -396,62 +576,75 @@ const HandoverSampleDash = () => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     {/* Left Column: Receiver Info */}
-                    <div className="lg:col-span-1">
-                        <div
-                            className={`h-full p-6 text-center rounded-2xl border transition-all duration-300 relative overflow-hidden ${
-                                receiver ? "bg-blue-50 border-blue-200 shadow-blue-100" : "bg-white border-dashed border-gray-300"
-                            }`}
-                        >
-                            {receiver && (
-                                <button
-                                    onClick={removeReceiver}
-                                    className="absolute top-4 right-4 p-2 bg-white/50 hover:bg-white rounded-full text-gray-500 hover:text-red-500 transition-colors"
-                                    title="Bỏ chọn người nhận (Hiển thị tất cả)"
-                                >
-                                    <FilterX className="w-5 h-5" />
-                                </button>
-                            )}
-
-                            <h2 className="text-lg font-semibold mb-4 flex items-center justify-center gap-2">
-                                <User className="w-5 h-5 text-gray-600" />
-                                {receiver ? "Đang lọc theo KTV" : "Người nhận / Bộ lọc"}
-                            </h2>
-
-                            {receiver ? (
-                                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                    <div className="flex items-center justify-center p-4 bg-white rounded-full w-24 h-24 mx-auto mb-4 shadow-sm text-3xl font-bold text-blue-600 border border-blue-100">
-                                        {receiver.name.charAt(0)}
-                                    </div>
-                                    <div className="text-center">
-                                        <h3 className="text-xl font-bold text-gray-900">{receiver.name}</h3>
-                                        <p className="text-blue-600 font-medium">{receiver.id}</p>
-                                        <p className="text-gray-500 text-sm mt-1">{receiver.department}</p>
-                                    </div>
-
-                                    <div className="pt-4 border-t border-blue-100">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-500">Số mẫu liên quan:</span>
-                                            <span className="font-bold text-blue-600 text-lg">
-                                                {displaySamples.length} <span className="text-xs font-normal text-gray-400">/ {samples.length}</span>
-                                            </span>
-                                        </div>
-                                    </div>
-
+                    <div className="lg:col-span-1 h-[calc(100vh-200px)] min-h-[500px]">
+                        {showTechnicianTasks && receiver ? (
+                            <TechnicianHandoverTable technicianId={receiver.identityId} onClose={() => setShowTechnicianTasks(false)} />
+                        ) : (
+                            <div
+                                className={`h-full p-6 text-center rounded-2xl border transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${receiver ? "bg-blue-50 border-blue-200 shadow-blue-100" : "bg-white border-dashed border-gray-300"
+                                    }`}
+                            >
+                                {receiver && (
                                     <button
                                         onClick={removeReceiver}
-                                        className="mt-4 flex items-center justify-center w-full py-2 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors"
+                                        className="absolute top-4 right-4 p-2 bg-white/50 hover:bg-white rounded-full text-gray-500 hover:text-red-500 transition-colors"
+                                        title="Bỏ chọn người nhận (Hiển thị tất cả)"
                                     >
-                                        <ArrowLeft className="w-4 h-4 mr-2" />
-                                        Chọn người khác / Xem tất cả
+                                        <FilterX className="w-5 h-5" />
                                     </button>
+                                )}
+
+                                <div className="flex-grow flex flex-col items-center justify-center">
+                                    <h2 className="text-lg font-semibold mb-4 flex items-center justify-center gap-2">
+                                        <User className="w-5 h-5 text-gray-600" />
+                                        {receiver ? "Đang lọc theo KTV" : "Người nhận / Bộ lọc"}
+                                    </h2>
+
+                                    {receiver ? (
+                                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full">
+                                            <div className="flex items-center justify-center p-4 bg-white rounded-full w-24 h-24 mx-auto mb-4 shadow-sm text-3xl font-bold text-blue-600 border border-blue-100">
+                                                {receiver.name.charAt(0)}
+                                            </div>
+                                            <div className="text-center">
+                                                <h3 className="text-xl font-bold text-gray-900">{receiver.name}</h3>
+                                                <p className="text-blue-600 font-medium">{receiver.id}</p>
+                                                <p className="text-gray-500 text-sm mt-1">{receiver.department}</p>
+                                            </div>
+
+                                            <div className="pt-4 border-t border-blue-100 w-full">
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-gray-500">Số mẫu liên quan:</span>
+                                                    <span className="font-bold text-blue-600 text-lg">
+                                                        {displaySamples.length} <span className="text-xs font-normal text-gray-400">/ {samples.length}</span>
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={() => setShowTechnicianTasks(true)}
+                                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 font-medium transition-colors shadow-sm"
+                                            >
+                                                <Scan className="w-4 h-4" />
+                                                Kiểm tra chỉ tiêu bàn giao
+                                            </button>
+
+                                            <button
+                                                onClick={removeReceiver}
+                                                className="mt-2 flex items-center justify-center w-full py-2 bg-transparent border border-dashed border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors"
+                                            >
+                                                <ArrowLeft className="w-4 h-4 mr-2" />
+                                                Chọn người khác
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="h-64 flex flex-col items-center justify-center text-center text-gray-400">
+                                            <Scan className="w-16 h-16 mb-3 opacity-20" />
+                                            <p>Quét thẻ nhân viên để lọc danh sách công việc</p>
+                                        </div>
+                                    )}
                                 </div>
-                            ) : (
-                                <div className="h-64 flex flex-col items-center justify-center text-center text-gray-400">
-                                    <Scan className="w-16 h-16 mb-3 opacity-20" />
-                                    <p>Quét thẻ nhân viên để lọc danh sách công việc</p>
-                                </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Right Column: Samples List */}
@@ -616,11 +809,10 @@ const HandoverSampleDash = () => {
                                 <button
                                     onClick={handleConfirm}
                                     disabled={!receiver || displaySamples.length === 0 || isSubmitting}
-                                    className={`flex items-center px-6 py-3 rounded-xl font-bold text-white shadow-lg transition-all transform hover:scale-105 active:scale-95 ${
-                                        receiver && displaySamples.length > 0 && !isSubmitting
+                                    className={`flex items-center px-6 py-3 rounded-xl font-bold text-white shadow-lg transition-all transform hover:scale-105 active:scale-95 ${receiver && displaySamples.length > 0 && !isSubmitting
                                             ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-blue-200 cursor-pointer"
                                             : "bg-gray-300 cursor-not-allowed shadow-none"
-                                    }`}
+                                        }`}
                                 >
                                     {isSubmitting ? (
                                         <>
@@ -670,6 +862,9 @@ const HandoverSampleDash = () => {
                         </div>,
                         document.body,
                     )}
+
+                {/* Handover Report Modal */}
+                <HandoverReportModal isOpen={showEditor} onClose={() => setShowEditor(false)} initialContent={editorContent} />
             </div>
         </div>
     );

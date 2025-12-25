@@ -418,7 +418,6 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 
 		// Check for circular references
 		if (seen.has(obj)) {
-			console.warn('Circular reference detected, removing');
 			return null;
 		}
 
@@ -435,7 +434,6 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 			(obj.constructor && obj.constructor.name === 'HTMLButtonElement') ||
 			(obj.constructor && obj.constructor.name === 'FiberNode')
 		) {
-			console.warn('DOM/React element detected and removed:', obj.constructor?.name || 'Unknown');
 			return null;
 		}
 
@@ -468,7 +466,6 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 					key === 'domElement' ||
 					key === 'reactComponent'
 				) {
-					console.warn(`Skipping problematic property: ${key}`);
 					continue;
 				}
 
@@ -2055,7 +2052,6 @@ const ExperimentDetail = ({ docCopy, processingAnalyses, isOpen, onClose }) => {
 
 	// Handle double-click on table row
 	const handleTableRowDoubleClick = (rowId, rowData, event) => {
-		console.log('Double-clicked row:', rowId, rowData);
 		// TODO: Add specific double-click behavior (edit, view details, etc.)
 	};
 

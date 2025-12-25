@@ -82,8 +82,6 @@ const SampleInfor = () => {
     const sampleId = searchParams.get("sampleId");
 
     // Debug URL parameters
-    console.log("URL Parameters:", { receiptId, sampleId });
-    console.log("Full search params:", searchParams.toString());
 
     const { setCurrentTitlePage, formatDate, status, purposes, currentUser, getIdenByUid } = useContext(GlobalContext);
 
@@ -153,16 +151,10 @@ const SampleInfor = () => {
         technicianId: "",
         sampleId: 0,
         scientificField: "",
-        displayStyle: [
-            {
-                label: "default",
-                value: "",
-            },
-            {
-                label: "eng",
-                value: "",
-            },
-        ],
+        displayStyle: {
+            default: "",
+            eng: "",
+        },
     });
     const [editingParameterField, setEditingParameterField] = useState(null); // Add state to track which parameter field is being edited
     const [editingMatrixField, setEditingMatrixField] = useState(null); // Add state to track which matrix field is being edited
@@ -182,6 +174,20 @@ const SampleInfor = () => {
         resultUnit: true,
         scientificField: true,
         technicianId: true,
+    });
+
+    // Add state for sync workflow
+    const [matchedSyncData, setMatchedSyncData] = useState([]);
+    const [isSyncPreviewVisible, setIsSyncPreviewVisible] = useState(false);
+    const [isSyncFieldSelectionVisible, setIsSyncFieldSelectionVisible] = useState(false);
+    const [selectedSyncFields, setSelectedSyncFields] = useState({
+        parameterName: true,
+        protocolCode: true,
+        protocolSource: true,
+        resultUnit: true,
+        scientificField: true,
+        technicianId: true,
+        matrix: true,
     });
 
     // Add state for drag and drop functionality
@@ -533,7 +539,6 @@ const SampleInfor = () => {
     // Helper function to find technician group by alias
     const findTechnicianGroupByAlias = (technicianAlias) => {
         if (!technicianAlias || !technicians || !Array.isArray(technicians)) {
-            console.log("Missing technicianAlias or technicians data:", { technicianAlias, technicians });
             return null;
         }
 
@@ -545,7 +550,6 @@ const SampleInfor = () => {
             group = technicians.find((group) => group.technicians && Array.isArray(group.technicians) && group.technicians.some((tech) => tech.technicianAlias === technicianAlias));
         }
 
-        console.log("Found technician group for alias", technicianAlias, ":", group);
         return group;
     };
 
@@ -554,7 +558,6 @@ const SampleInfor = () => {
         const receiptId2 = receiptId || sample?.receiptId;
 
         if (!receiptId2) {
-            console.log("No receiptId available (neither from URL nor sample), skipping fetch");
             return;
         }
 
@@ -632,6 +635,7 @@ const SampleInfor = () => {
                                 protocolId: analysis.protocolId || analysis.protocol_id,
                                 parameterId: analysis.parameterId || analysis.parameter_id,
                                 technicianId: analysis.technicianId || analysis.technician_uid,
+                                technicianIds: analysis.technicianIds || analysis.technician_ids || [],
                                 parameterName: analysis.parameterName || analysis.parameter_name,
                                 protocolSource: analysis.protocolSource || analysis.protocol_source,
                                 protocolCode: analysis.protocolCode || analysis.protocol_code,
@@ -654,10 +658,8 @@ const SampleInfor = () => {
                             }));
 
                             setSampleAnalyses(analysesWithTempId);
-                            console.log("Loaded analyses from sample:", analysesWithTempId);
                         } else {
                             setSampleAnalyses([]);
-                            console.warn("No analyses found for sample:", value.trim());
                         }
                     } catch (error) {
                         console.error("Error fetching sample analyses:", error);
@@ -720,7 +722,6 @@ const SampleInfor = () => {
             });
 
             if (response.status === 200) {
-                console.log("Parameter search response:", response.data);
                 setParameterList(response.data.result || []);
                 setParameterPagination(
                     response.data.pagination || {
@@ -751,8 +752,9 @@ const SampleInfor = () => {
                     // Tạo object mới không có resultValue và reviewedBy
                     const { resultValue, reviewedBy, result_value, reviewed_by, ...cleanAnalysis } = analysis;
 
-                    // Kiểm tra xem parameterName đã tồn tại trong listAnalytes chưa
-                    const isDuplicate = listAnalytes.some((existingAnalysis) => existingAnalysis.parameterName === (cleanAnalysis.parameterName || cleanAnalysis.parameter_name));
+                    // Kiểm tra xem parameterName đã tồn tại trong listAnalytes chưa (ignore case)
+                    const cleanName = (cleanAnalysis.parameterName || cleanAnalysis.parameter_name || "").trim().toLowerCase();
+                    const isDuplicate = listAnalytes.some((existingAnalysis) => (existingAnalysis.parameterName || "").trim().toLowerCase() === cleanName);
 
                     return {
                         ...cleanAnalysis,
@@ -770,6 +772,7 @@ const SampleInfor = () => {
                         protocolId: cleanAnalysis.protocolId || cleanAnalysis.protocol_id,
                         parameterId: cleanAnalysis.parameterId || cleanAnalysis.parameter_id,
                         technicianId: cleanAnalysis.technicianId || cleanAnalysis.technician_uid,
+                        technicianIds: cleanAnalysis.technicianIds || cleanAnalysis.technician_ids || [],
                         parameterName: cleanAnalysis.parameterName || cleanAnalysis.parameter_name,
                         protocolSource: cleanAnalysis.protocolSource || cleanAnalysis.protocol_source,
                         protocolCode: cleanAnalysis.protocolCode || cleanAnalysis.protocol_code,
@@ -785,16 +788,10 @@ const SampleInfor = () => {
                         _deprecated_receiptUid: cleanAnalysis._deprecated_receiptUid || cleanAnalysis.receipt_uid,
                         docId: cleanAnalysis.docId || cleanAnalysis.doc_id,
                         displayStyle: cleanAnalysis.displayStyle ||
-                            cleanAnalysis.display_style || [
-                                {
-                                    label: "default",
-                                    value: "",
-                                },
-                                {
-                                    label: "eng",
-                                    value: "",
-                                },
-                            ],
+                            cleanAnalysis.display_style || {
+                                default: "",
+                                eng: "",
+                            },
                     };
                 });
 
@@ -832,16 +829,10 @@ const SampleInfor = () => {
                         parameterId: parameter.parameterId || parameter.parameter_id || parameter.id,
                         _deprecated_parameterUid: parameter._deprecated_parameterUid || parameter.parameter_uid || "",
                         displayStyle: parameter.displayStyle ||
-                            parameter.display_style || [
-                                {
-                                    label: "default",
-                                    value: "",
-                                },
-                                {
-                                    label: "eng",
-                                    value: "",
-                                },
-                            ],
+                            parameter.display_style || {
+                                default: "",
+                                eng: "",
+                            },
                     },
                 ]);
             }
@@ -855,16 +846,10 @@ const SampleInfor = () => {
                         parameterId: parameter.id, // Map id to parameterId
                         _deprecated_parameterUid: parameter._deprecated_parameterUid || parameter.parameter_uid || "",
                         displayStyle: parameter.displayStyle ||
-                            parameter.display_style || [
-                                {
-                                    label: "default",
-                                    value: "",
-                                },
-                                {
-                                    label: "eng",
-                                    value: "",
-                                },
-                            ],
+                            parameter.display_style || {
+                                default: "",
+                                eng: "",
+                            },
                     },
                 ]);
             }
@@ -906,7 +891,6 @@ const SampleInfor = () => {
     // Hàm để refetch dữ liệu sample
     const refetchSampleData = async () => {
         try {
-            console.log("Refetching sample data with sampleId:", sampleId);
             const response = await apiPost("https://red.irdop.org/v1/sample/get/full", {
                 sampleId: sampleId,
             });
@@ -944,7 +928,6 @@ const SampleInfor = () => {
             setCurrentSample(mappedSample);
             setListAnalytes(mappedSample.analysis);
 
-            console.log("Sample data refetched successfully");
         } catch (error) {
             console.error("Error refetching sample data:", error);
         }
@@ -965,38 +948,42 @@ const SampleInfor = () => {
             const parametersToCreate = [];
 
             selectedParameters.forEach((parameter) => {
-                if (parameter.isDuplicate) {
-                    // Tìm analysis đã tồn tại trong listAnalytes
-                    const existingAnalysis = listAnalytes.find((analysis) => analysis.parameterName === parameter.parameterName);
+                // Normalize parameter name for comparison
+                const parameterName = (parameter.parameterName || parameter.parameter_name || "").trim();
+                const parameterNameLower = parameterName.toLowerCase();
 
-                    if (existingAnalysis) {
-                        // Chuẩn bị data để update - chỉ thêm các trường được chọn
-                        const updateData = {
-                            id: existingAnalysis.id,
-                            sampleId: existingAnalysis.sampleId,
-                            receiptId: existingAnalysis.receiptId,
-                            modifiedByUid: currentUser.identity_uid,
-                        };
+                // Check for duplicate dynamically using case-insensitive name matching
+                const existingAnalysis = listAnalytes.find((analysis) => (analysis.parameterName || "").trim().toLowerCase() === parameterNameLower);
 
-                        // Thêm các trường theo selectedFields
-                        if (selectedFields.scientificField) {
-                            updateData.scientificField = parameter.scientificField || existingAnalysis.scientificField || "";
-                        }
-                        if (selectedFields.technicianId) {
-                            updateData.technicianId = parameter.technicianId || parameter.technicianUid || existingAnalysis.technicianId;
-                        }
-                        if (selectedFields.resultUnit) {
-                            updateData.resultUnit = parameter.defaultUnit || parameter.resultUnit || existingAnalysis.resultUnit;
-                        }
-                        if (selectedFields.protocolCode) {
-                            updateData.protocolCode = parameter.protocolCode || existingAnalysis.protocolCode;
-                        }
-                        if (selectedFields.protocolSource) {
-                            updateData.protocolSource = parameter.protocolSource || existingAnalysis.protocolSource;
-                        }
+                if (existingAnalysis) {
+                    // Chuẩn bị data để update - chỉ thêm các trường được chọn
+                    const updateData = {
+                        id: existingAnalysis.id,
+                        sampleId: existingAnalysis.sampleId,
+                        receiptId: existingAnalysis.receiptId,
+                        modifiedByUid: currentUser.identity_uid,
+                        parameterName: parameterName, // Luôn update parameterName
+                    };
 
-                        parametersToUpdate.push(updateData);
+                    // Thêm các trường theo selectedFields
+                    if (selectedFields.scientificField) {
+                        updateData.scientificField = parameter.scientificField || existingAnalysis.scientificField || "";
                     }
+                    if (selectedFields.technicianId) {
+                        updateData.technicianId = parameter.technicianId || parameter.technicianUid || existingAnalysis.technicianId;
+                        updateData.technicianIds = parameter.technicianIds || existingAnalysis.technicianIds || [];
+                    }
+                    if (selectedFields.resultUnit) {
+                        updateData.resultUnit = parameter.defaultUnit || parameter.resultUnit || existingAnalysis.resultUnit;
+                    }
+                    if (selectedFields.protocolCode) {
+                        updateData.protocolCode = parameter.protocolCode || existingAnalysis.protocolCode;
+                    }
+                    if (selectedFields.protocolSource) {
+                        updateData.protocolSource = parameter.protocolSource || existingAnalysis.protocolSource;
+                    }
+
+                    parametersToUpdate.push(updateData);
                 } else {
                     // Chuẩn bị data để create - luôn có parameterName, các trường khác theo selectedFields
                     const analysisData = {
@@ -1006,16 +993,10 @@ const SampleInfor = () => {
                         parameterName: parameter.parameterName, // Bắt buộc
                         _deprecated_parameterUid: parameter._deprecated_parameterUid || parameter.parameterUid || "",
                         matrix: parameter.matrix || "",
-                        displayStyle: parameter.displayStyle || [
-                            {
-                                label: "default",
-                                value: "",
-                            },
-                            {
-                                label: "eng",
-                                value: "",
-                            },
-                        ],
+                        displayStyle: parameter.displayStyle || {
+                            default: "",
+                            eng: "",
+                        },
                         accrenditation: parameter.accrenditation,
                         protocolId: parameter.protocolId,
                         deadline: parameter.deadline
@@ -1031,6 +1012,7 @@ const SampleInfor = () => {
                     }
                     if (selectedFields.technicianId) {
                         analysisData.technicianId = parameter.technicianId || parameter.technicianUid;
+                        analysisData.technicianIds = parameter.technicianIds || [];
                     }
                     if (selectedFields.resultUnit) {
                         analysisData.resultUnit = parameter.defaultUnit || parameter.resultUnit;
@@ -1173,16 +1155,10 @@ const SampleInfor = () => {
             ...newParameter,
             sample_id: currentSample?.id,
             matrix: currentSample?.matrix || "",
-            displayStyle: [
-                {
-                    label: "default",
-                    value: "",
-                },
-                {
-                    label: "eng",
-                    value: "",
-                },
-            ],
+            displayStyle: {
+                default: "",
+                eng: "",
+            },
         });
         // Scroll to the top of the table
         window.scrollTo({
@@ -1230,16 +1206,10 @@ const SampleInfor = () => {
                 receiptId: analysis.receiptId,
                 modifiedByUid: currentUser.identity_uid,
                 ...changedFields,
-                displayStyle: analysis.displayStyle || [
-                    {
-                        label: "default",
-                        value: "",
-                    },
-                    {
-                        label: "eng",
-                        value: "",
-                    },
-                ],
+                displayStyle: analysis.displayStyle || {
+                    default: "",
+                    eng: "",
+                },
             };
 
             const response = await apiPost("https://red.irdop.org/v1/analysis/update", {
@@ -1289,16 +1259,10 @@ const SampleInfor = () => {
                 receiptId: analysis.receiptId,
                 modifiedByUid: currentUser.identity_uid,
                 ...fieldBeingUpdated,
-                displayStyle: analysis.displayStyle || [
-                    {
-                        label: "default",
-                        value: "",
-                    },
-                    {
-                        label: "eng",
-                        value: "",
-                    },
-                ],
+                displayStyle: analysis.displayStyle || {
+                    default: "",
+                    eng: "",
+                },
             };
 
             const response = await apiPost("https://red.irdop.org/v1/analysis/update", {
@@ -1370,16 +1334,10 @@ const SampleInfor = () => {
                     deadline: adjustDateForApiSubmission(new Date()),
                     technicianUid: "",
                     sampleId: currentSample?.id || 0,
-                    displayStyle: [
-                        {
-                            label: "default",
-                            value: "",
-                        },
-                        {
-                            label: "eng",
-                            value: "",
-                        },
-                    ],
+                    displayStyle: {
+                        default: "",
+                        eng: "",
+                    },
                 });
             } else {
                 Swal.fire({
@@ -1407,10 +1365,12 @@ const SampleInfor = () => {
 
     // Function to handle displayStyle changes for new parameter
     const handleNewParameterDisplayStyleChange = (label, value) => {
-        const updatedDisplayStyle = newParameter.displayStyle.map((item) => (item.label === label ? { ...item, value } : item));
         setNewParameter({
             ...newParameter,
-            displayStyle: updatedDisplayStyle,
+            displayStyle: {
+                ...newParameter.displayStyle,
+                [label]: value,
+            },
         });
     };
 
@@ -1819,7 +1779,6 @@ const SampleInfor = () => {
             const scientificFieldsResponse = await apiPost("https://red.irdop.org/v1/option/get/list", {
                 listType: "scientificFields",
             });
-            console.log("Scientific fields response:", scientificFieldsResponse);
             if (scientificFieldsResponse.data && Array.isArray(scientificFieldsResponse.data)) {
                 setScientificFields(scientificFieldsResponse.data.filter(Boolean));
             }
@@ -1878,12 +1837,10 @@ const SampleInfor = () => {
     useEffect(() => {
         const fetchSample = async () => {
             try {
-                console.log("Fetching sample with sampleId:", sampleId);
                 const response = await apiPost("https://red.irdop.org/v1/sample/get/full", {
                     sampleId: sampleId,
                 });
 
-                console.log("Sample API response:", response);
 
                 // Process data with new camelCase structure
                 if (response.data && response.data.analyses) {
@@ -1900,7 +1857,6 @@ const SampleInfor = () => {
                 }
 
                 // Debug: Log the API response to see what fields are actually returned
-                console.log("API Response data:", response.data);
 
                 // Map camelCase response to component state
                 const mappedSample = {
@@ -1918,7 +1874,6 @@ const SampleInfor = () => {
                     analysis: response.data.analyses || [],
                 };
 
-                console.log("Mapped Sample:", mappedSample);
 
                 setSample(mappedSample);
                 setCurrentSample(mappedSample);
@@ -1974,10 +1929,8 @@ const SampleInfor = () => {
             }
         };
         if (sampleId) {
-            console.log("sampleId exists, calling fetchSample");
             fetchSample();
         } else {
-            console.log("No sampleId provided in URL");
         }
     }, [sampleId]);
 
@@ -1999,7 +1952,6 @@ const SampleInfor = () => {
         // Convert HTML to plain text for editing
         const rawValue = order.resultValue ? String(order.resultValue) : "";
         const originalValue = convertHTMLToValue(rawValue);
-        console.log("handleResultValueClick:", { rawValue, originalValue });
         setInputValue(originalValue);
         // Store original value for comparison
         setOriginalValues((prev) => ({
@@ -2015,7 +1967,6 @@ const SampleInfor = () => {
         // Convert HTML to plain text for editing
         const rawValue = order.resultUnit ? String(order.resultUnit) : "";
         const originalValue = convertHTMLToValue(rawValue);
-        console.log("handleResultUnitClick:", { rawValue, originalValue });
         setInputValue(originalValue);
         // Store original value for comparison
         setOriginalValues((prev) => ({
@@ -2030,14 +1981,12 @@ const SampleInfor = () => {
         const fieldType = fieldParts[0];
         const analysisId = fieldParts[1]; // Keep as string to handle both numeric and text IDs
 
-        console.log("handleSaveContent called:", { currentField, fieldType, analysisId, newValue });
 
         // Get original value for comparison
         const originalValue = originalValues[currentField] || "";
 
         // Check if value has changed
         if (newValue === originalValue) {
-            console.log("Value unchanged, skipping API call:", { newValue, originalValue });
             // No change, just close editor without API call
             setIsEditorVisible(false);
             setEditingField(null);
@@ -2082,7 +2031,6 @@ const SampleInfor = () => {
                 // Convert special characters to HTML format
                 const convertedValue = newValue ? convertValueToHTML(newValue) : "";
                 updateData.resultValue = convertedValue;
-                console.log("Updating resultValue:", { newValue, convertedValue, updateData });
                 // Add submission information when updating result value
                 if (newValue !== "") {
                     updateData.submitResultBy = currentUser?.identity_name;
@@ -2093,19 +2041,16 @@ const SampleInfor = () => {
                 // Convert special characters to HTML format (allow empty values)
                 const convertedValue = newValue ? convertValueToHTML(newValue) : "";
                 updateData.resultUnit = convertedValue;
-                console.log("Updating resultUnit:", { newValue, convertedValue, updateData });
             } else if (fieldType === "technicianId") {
                 // Cột 8: technicianId
                 updateData.technicianId = newValue;
             }
 
-            console.log("Sending API request with payload:", { analysis: updateData });
             const response = await apiPost("https://red.irdop.org/v1/analysis/update", {
                 analysis: updateData,
             });
 
             if (response.status === 200) {
-                console.log("API response success:", response.data);
                 // Show more specific toast message based on what was updated
                 if (fieldType === "result_value") {
                     showToast(`Đã cập nhật kết quả thành công!`);
@@ -2550,11 +2495,39 @@ const SampleInfor = () => {
         try {
             // Prepare update data
             const updateDataArray = analysesToUpdate.map((analysisId) => {
-                const analysis = listAnalytes.find((a) => a.id === analysisId);
-                return {
+                const selectedParamId = selectedParameterUpdates[analysisId];
+                const suggestion = parameterSuggestions[analysisId]?.find((p) => String(p.parameterId) === String(selectedParamId));
+
+                const updateObj = {
                     id: analysisId,
-                    parameterId: selectedParameterUpdates[analysisId],
+                    parameterId: selectedParamId,
+                    parameterName: suggestion?.parameterName,
+                    matrix: suggestion?.matrix,
+                    protocolSource: suggestion?.protocolSource,
+                    protocolCode: suggestion?.protocolCode,
+                    scientificField: suggestion?.scientificField,
+                    technicianAlias: suggestion?.technicianAlias,
+                    displayStyle: suggestion?.displayStyle,
                 };
+
+                if (suggestion) {
+                    if (suggestion.technicians && Array.isArray(suggestion.technicians) && suggestion.technicians.length > 0) {
+                        updateObj.technicianIds = suggestion.technicians.map((t) => t.technicianId).filter(Boolean);
+                        updateObj.technicianId = suggestion.technicians[0].technicianId;
+                    } else if (suggestion.technician && suggestion.technician.technicianId) {
+                        updateObj.technicianId = suggestion.technician.technicianId;
+                        updateObj.technicianIds = [suggestion.technician.technicianId];
+                    } else if (suggestion.technicianId) {
+                        updateObj.technicianId = suggestion.technicianId;
+                        if (suggestion.technicianIds && Array.isArray(suggestion.technicianIds)) {
+                            updateObj.technicianIds = suggestion.technicianIds;
+                        } else {
+                            updateObj.technicianIds = [suggestion.technicianId];
+                        }
+                    }
+                }
+
+                return updateObj;
             });
 
             // Make API call
@@ -2567,9 +2540,20 @@ const SampleInfor = () => {
                 const newAnalytesList = listAnalytes.map((analyte) => {
                     const updateData = updateDataArray.find((item) => item.id === analyte.id);
                     if (updateData) {
+                        const suggestion = parameterSuggestions[analyte.id]?.find((p) => String(p.parameterId) === String(updateData.parameterId));
+                        let technicianObj = analyte.technician;
+                        if (suggestion) {
+                            if (suggestion.technicians && Array.isArray(suggestion.technicians) && suggestion.technicians.length > 0) {
+                                technicianObj = suggestion.technicians[0];
+                            } else if (suggestion.technician) {
+                                technicianObj = suggestion.technician;
+                            }
+                        }
+
                         return {
                             ...analyte,
-                            parameterId: updateData.parameterId,
+                            ...updateData,
+                            technician: technicianObj,
                         };
                     }
                     return analyte;
@@ -4557,118 +4541,9 @@ const SampleInfor = () => {
             });
 
             if (matchResponse.status === 200) {
-                // Create array of update objects for bulk update using matched data
-                const updateDataArray = selectedItems.map((analyte) => {
-                    // Find the corresponding matched data
-                    const matchedData = matchResponse.data.find((item) => {
-                        const apiParamName = (item.parameterName || "").toLowerCase().trim();
-                        const analyteParamName = (analyte.parameterName || analyte.parameter_name || "").toLowerCase().trim();
-                        const apiMatrix = (item.matrix || "").toLowerCase().trim();
-                        const analyteMatrix = (analyte.matrix || sample?.matrix || "").toLowerCase().trim();
-                        return apiParamName === analyteParamName && (apiMatrix === analyteMatrix || (!apiMatrix && !analyteMatrix));
-                    });
-
-                    // Create update object with matched data or original data
-                    const updateObj = {
-                        id: analyte.id,
-                        sampleId: analyte.sampleId,
-                        receiptId: analyte.receiptId,
-                        parameterName: matchedData?.parameterName || analyte.parameterName,
-                        parameterId: matchedData?.parameterId || analyte.parameterId,
-                        parameterUid: matchedData?.parameterUid || analyte.parameterUid || analyte.parameter_uid || "",
-                        protocolCode: matchedData?.protocolCode || analyte.protocolCode,
-                        protocolSource: matchedData?.protocolSource || analyte.protocolSource,
-                        matrix: matchedData?.matrix || analyte.matrix,
-                        scientificField: matchedData?.scientificField || analyte.scientificField,
-                        technicianAlias: matchedData?.technicianAlias || analyte.technicianAlias,
-                        modifiedByUid: currentUser.identityUid,
-                        displayStyle: analyte.displayStyle || [
-                            {
-                                label: "default",
-                                value: "",
-                            },
-                            {
-                                label: "eng",
-                                value: "",
-                            },
-                        ],
-                    };
-
-                    // Add technicianId and technicianIds if available in matched data
-                    if (matchedData) {
-                        // If technicians array exists, extract technicianIds
-                        if (matchedData.technicians && Array.isArray(matchedData.technicians) && matchedData.technicians.length > 0) {
-                            updateObj.technicianIds = matchedData.technicians.map((t) => t.technicianId).filter(Boolean);
-                            // Use first technician as primary technicianId
-                            updateObj.technicianId = matchedData.technicians[0].technicianId;
-                        }
-                        // If single technician object exists
-                        else if (matchedData.technician && matchedData.technician.technicianId) {
-                            updateObj.technicianId = matchedData.technician.technicianId;
-                            updateObj.technicianIds = [matchedData.technician.technicianId];
-                        }
-                        // If technicianId exists directly in matchedData
-                        else if (matchedData.technicianId) {
-                            updateObj.technicianId = matchedData.technicianId;
-                            if (matchedData.technicianIds && Array.isArray(matchedData.technicianIds)) {
-                                updateObj.technicianIds = matchedData.technicianIds;
-                            } else {
-                                updateObj.technicianIds = [matchedData.technicianId];
-                            }
-                        }
-                    }
-
-                    return updateObj;
-                });
-
-                // Make bulk update API call
-                const updateResponse = await apiPost("https://red.irdop.org/v1/analysis/update", {
-                    analyses: updateDataArray,
-                });
-
-                if (updateResponse.status === 200) {
-                    // Update the UI
-                    const newAnalytesList = listAnalytes.map((analyte) => {
-                        if (selectedAnalytes.includes(analyte.id)) {
-                            const updateData = updateDataArray.find((item) => item.id === analyte.id);
-
-                            // Find the matched data to get technician object
-                            const matchedData = matchResponse.data.find((item) => {
-                                const apiParamName = (item.parameterName || "").toLowerCase().trim();
-                                const analyteParamName = (analyte.parameterName || analyte.parameter_name || "").toLowerCase().trim();
-                                const apiMatrix = (item.matrix || "").toLowerCase().trim();
-                                const analyteMatrix = (analyte.matrix || sample?.matrix || "").toLowerCase().trim();
-                                return apiParamName === analyteParamName && (apiMatrix === analyteMatrix || (!apiMatrix && !analyteMatrix));
-                            });
-
-                            // Prepare technician object for UI
-                            let technicianObj = analyte.technician;
-                            if (matchedData) {
-                                if (matchedData.technicians && Array.isArray(matchedData.technicians) && matchedData.technicians.length > 0) {
-                                    technicianObj = matchedData.technicians[0];
-                                } else if (matchedData.technician) {
-                                    technicianObj = matchedData.technician;
-                                }
-                            }
-
-                            return {
-                                ...analyte,
-                                ...updateData,
-                                technician: technicianObj,
-                            };
-                        }
-                        return analyte;
-                    });
-                    setListAnalytes(newAnalytesList);
-
-                    showToast(`Đã đồng bộ dữ liệu cho ${selectedAnalytes.length} chỉ tiêu`);
-                } else {
-                    Swal.fire({
-                        icon: "error",
-                        title: "Lỗi",
-                        text: updateResponse.data?.message || "Có lỗi xảy ra khi cập nhật dữ liệu",
-                    });
-                }
+                // Store matched data and show preview
+                setMatchedSyncData(matchResponse.data);
+                setIsSyncPreviewVisible(true);
             } else {
                 Swal.fire({
                     icon: "error",
@@ -4786,6 +4661,293 @@ const SampleInfor = () => {
                 text: error.message || "Đã xảy ra lỗi khi cập nhật CSDL",
             });
         }
+    };
+
+    // Toggle sync fields
+    const handleSyncFieldToggle = (fieldName) => {
+        if (fieldName === "parameterName") return;
+        setSelectedSyncFields((prev) => ({
+            ...prev,
+            [fieldName]: !prev[fieldName],
+        }));
+    };
+
+    // Handle confirm sync - Perform the update
+    const handleConfirmSync = async () => {
+        try {
+            // Get the selected analytes
+            const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
+
+            // Create array of update objects for bulk update using matched data
+            const updateDataArray = selectedItems.map((analyte, index) => {
+                // Use index to find matched data as the API preserves order (matchedSyncData was set in handleSyncData)
+                const matchedData = matchedSyncData[index] || null;
+
+                // Base update object
+                const updateObj = {
+                    id: analyte.id,
+                    sampleId: analyte.sampleId,
+                    receiptId: analyte.receiptId,
+                    modifiedByUid: currentUser.identityUid,
+                    // Always update parameterName if user confirms? Actually selectedSyncFields.parameterName is always true
+                    parameterName: matchedData?.parameterName || analyte.parameterName,
+                    parameterId: matchedData?.parameterId || analyte.parameterId,
+                    parameterUid: matchedData?.parameterUid || analyte.parameterUid || analyte.parameter_uid || "",
+
+                    displayStyle: matchedData?.displayStyle ||
+                        analyte.displayStyle || {
+                            default: "",
+                            eng: "",
+                        },
+                };
+
+                // Conditionally update fields based on selectedSyncFields
+                if (selectedSyncFields.protocolCode) {
+                    updateObj.protocolCode = matchedData?.protocolCode || analyte.protocolCode;
+                }
+                if (selectedSyncFields.protocolSource) {
+                    updateObj.protocolSource = matchedData?.protocolSource || analyte.protocolSource;
+                }
+                if (selectedSyncFields.resultUnit) {
+                    updateObj.resultUnit = matchedData?.defaultUnit || matchedData?.resultUnit || analyte.resultUnit;
+                }
+                if (selectedSyncFields.scientificField) {
+                    updateObj.scientificField = matchedData?.scientificField || analyte.scientificField;
+                }
+                if (selectedSyncFields.matrix) {
+                    updateObj.matrix = matchedData?.matrix || analyte.matrix;
+                }
+
+                // Technician update logic
+                if (selectedSyncFields.technicianId && matchedData) {
+                    updateObj.technicianAlias = matchedData.technicianAlias || analyte.technicianAlias;
+
+                    // If technicians array exists, extract technicianIds
+                    if (matchedData.technicians && Array.isArray(matchedData.technicians) && matchedData.technicians.length > 0) {
+                        updateObj.technicianIds = matchedData.technicians.map((t) => t.technicianId).filter(Boolean);
+                        // Use first technician as primary technicianId
+                        updateObj.technicianId = matchedData.technicians[0].technicianId;
+                    }
+                    // If single technician object exists
+                    else if (matchedData.technician && matchedData.technician.technicianId) {
+                        updateObj.technicianId = matchedData.technician.technicianId;
+                        updateObj.technicianIds = [matchedData.technician.technicianId];
+                    }
+                    // If technicianId exists directly in matchedData
+                    else if (matchedData.technicianId) {
+                        updateObj.technicianId = matchedData.technicianId;
+                        if (matchedData.technicianIds && Array.isArray(matchedData.technicianIds)) {
+                            updateObj.technicianIds = matchedData.technicianIds;
+                        } else {
+                            updateObj.technicianIds = [matchedData.technicianId];
+                        }
+                    }
+                }
+
+                return updateObj;
+            });
+
+            // Make bulk update API call
+            const updateResponse = await apiPost("https://red.irdop.org/v1/analysis/update", {
+                analyses: updateDataArray,
+            });
+
+            // Create a map of analyte ID to matched data for reliable UI updates
+            const analyteIdToMatchedData = {};
+            selectedItems.forEach((item, index) => {
+                analyteIdToMatchedData[item.id] = matchedSyncData[index] || null;
+            });
+
+            if (updateResponse.status === 200) {
+                // Update the UI
+                const newAnalytesList = listAnalytes.map((analyte) => {
+                    if (selectedAnalytes.includes(analyte.id)) {
+                        const updateData = updateDataArray.find((item) => item.id === analyte.id);
+                        const matchedData = analyteIdToMatchedData[analyte.id];
+
+                        let technicianObj = analyte.technician;
+                        if (selectedSyncFields.technicianId && matchedData) {
+                            if (matchedData.technicians && Array.isArray(matchedData.technicians) && matchedData.technicians.length > 0) {
+                                technicianObj = matchedData.technicians[0];
+                            } else if (matchedData.technician) {
+                                technicianObj = matchedData.technician;
+                            }
+                        }
+
+                        return {
+                            ...analyte,
+                            ...updateData,
+                            technician: technicianObj,
+                        };
+                    }
+                    return analyte;
+                });
+
+                setListAnalytes(newAnalytesList);
+                showToast(`Đã đồng bộ dữ liệu cho ${selectedAnalytes.length} chỉ tiêu`);
+
+                // Close modals and reset
+                setIsSyncFieldSelectionVisible(false);
+                setMatchedSyncData([]);
+            } else {
+                Swal.fire({
+                    icon: "error",
+                    title: "Lỗi",
+                    text: updateResponse.data?.message || "Có lỗi xảy ra khi cập nhật dữ liệu",
+                });
+            }
+        } catch (error) {
+            console.error("Error confirming sync:", error);
+            Swal.fire({
+                icon: "error",
+                title: "Lỗi",
+                text: error.message || "Đã xảy ra lỗi khi đồng bộ dữ liệu",
+            });
+        }
+    };
+
+    // Render Sync Preview Modal
+    const renderSyncPreviewDialog = () => {
+        if (!isSyncPreviewVisible) return null;
+
+        const selectedItems = listAnalytes.filter((analyte) => selectedAnalytes.includes(analyte.id));
+
+        return (
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
+                <div className="bg-white p-4 rounded-lg w-[90%] max-w-[1200px] max-h-[90vh] flex flex-col relative">
+                    <h2 className="text-xl font-semibold mb-4">Kiểm tra thông tin đồng bộ ({selectedItems.length} chỉ tiêu)</h2>
+
+                    <div className="overflow-auto flex-1 border rounded mb-4">
+                        <table className="w-full text-sm text-left border-collapse">
+                            <thead className="bg-gray-100 sticky top-0 z-10">
+                                <tr>
+                                    <th className="p-2 border">Chỉ tiêu</th>
+                                    <th className="p-2 border">Nền mẫu (Mới)</th>
+                                    <th className="p-2 border">Phương pháp (Mới)</th>
+                                    <th className="p-2 border">Đơn vị (Mới)</th>
+                                    <th className="p-2 border">Lĩnh vực (Mới)</th>
+                                    <th className="p-2 border">Kỹ thuật viên (Mới)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {selectedItems.map((analyte, index) => {
+                                    const matched = matchedSyncData[index] || {};
+                                    // Helper to compare and style
+                                    const renderDiff = (current, createNew) => {
+                                        const isDiff = current != createNew && createNew;
+                                        return (
+                                            <div>
+                                                <div className="text-gray-500 line-through text-xs">{current || "--"}</div>
+                                                <div className={isDiff ? "text-green-600 font-medium" : ""}>{createNew || "--"}</div>
+                                            </div>
+                                        );
+                                    };
+
+                                    // Extract tech name safely
+                                    let newTechName = "--";
+                                    if (matched.technicians && matched.technicians.length > 0) newTechName = matched.technicians[0].identityName;
+                                    else if (matched.technician) newTechName = matched.technician.identityName;
+
+                                    return (
+                                        <tr key={analyte.id} className="border-b hover:bg-gray-50">
+                                            <td className="p-2 border max-w-xs truncate" title={analyte.parameterName}>
+                                                {analyte.parameterName}
+                                            </td>
+                                            <td className="p-2 border">{renderDiff(analyte.matrix, matched.matrix)}</td>
+                                            <td className="p-2 border">{renderDiff(analyte.protocolCode, matched.protocolCode)}</td>
+                                            <td className="p-2 border">{renderDiff(analyte.resultUnit, matched.resultUnit || matched.defaultUnit)}</td>
+                                            <td className="p-2 border">{renderDiff(analyte.scientificField, matched.scientificField)}</td>
+                                            <td className="p-2 border">{renderDiff(analyte.technician?.identityName, newTechName)}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="flex justify-end gap-2 mt-2">
+                        <button
+                            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                            onClick={() => {
+                                setIsSyncPreviewVisible(false);
+                                setMatchedSyncData([]);
+                            }}
+                        >
+                            Hủy
+                        </button>
+                        <button
+                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                            onClick={() => {
+                                setIsSyncPreviewVisible(false);
+                                setIsSyncFieldSelectionVisible(true);
+                            }}
+                        >
+                            Tiếp tục
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Render Sync Field Selection Dialog
+    const renderSyncFieldSelectionDialog = () => {
+        if (!isSyncFieldSelectionVisible) return null;
+
+        return (
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
+                <div className="bg-white p-6 rounded-lg w-[500px] max-w-[90%] relative">
+                    <h2 className="text-xl font-semibold mb-4">Chọn thông tin cần cập nhật</h2>
+                    <p className="text-sm text-gray-600 mb-4">Chọn các trường bạn muốn cập nhật từ dữ liệu đồng bộ.</p>
+
+                    <div className="space-y-3 mb-6">
+                        <label className="flex items-center cursor-not-allowed text-gray-400">
+                            <input type="checkbox" checked={true} disabled className="mr-3 w-4 h-4" />
+                            <span className="font-medium">Tên chỉ tiêu (Bắt buộc)</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" checked={selectedSyncFields.matrix} onChange={() => handleSyncFieldToggle("matrix")} className="mr-3 w-4 h-4" />
+                            <span>Nền mẫu</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" checked={selectedSyncFields.protocolCode} onChange={() => handleSyncFieldToggle("protocolCode")} className="mr-3 w-4 h-4" />
+                            <span>Mã phương pháp</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" checked={selectedSyncFields.protocolSource} onChange={() => handleSyncFieldToggle("protocolSource")} className="mr-3 w-4 h-4" />
+                            <span>Nguồn phương pháp</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" checked={selectedSyncFields.resultUnit} onChange={() => handleSyncFieldToggle("resultUnit")} className="mr-3 w-4 h-4" />
+                            <span>Đơn vị</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" checked={selectedSyncFields.scientificField} onChange={() => handleSyncFieldToggle("scientificField")} className="mr-3 w-4 h-4" />
+                            <span>Lĩnh vực</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" checked={selectedSyncFields.technicianId} onChange={() => handleSyncFieldToggle("technicianId")} className="mr-3 w-4 h-4" />
+                            <span>Kỹ thuật viên</span>
+                        </label>
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                        <button
+                            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                            onClick={() => {
+                                setIsSyncFieldSelectionVisible(false);
+                                setIsSyncPreviewVisible(true); // Go back to preview
+                            }}
+                        >
+                            Quay lại
+                        </button>
+                        <button className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600" onClick={handleConfirmSync}>
+                            Cập nhật
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     if (!sample) {
@@ -5298,6 +5460,8 @@ const SampleInfor = () => {
                     </div>
                     {isAddingParameter && renderNewParameter()}
                     {renderFieldSelectionDialog()}
+                    {renderSyncPreviewDialog()}
+                    {renderSyncFieldSelectionDialog()}
                 </div>
 
                 <div className="hover:overflow-auto overflow-hidden xl:pb-0 md:pb-2 hover:pb-0 pb-2 border-x xl:border-x-0">

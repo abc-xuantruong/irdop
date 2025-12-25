@@ -249,7 +249,6 @@ const DiagramEditor = ({ showMathPopup, closeMathPopup, showDiagramPopup, closeD
 							useLibraryRendering = true;
 						}
 					} catch (libraryError) {
-						console.warn('Math library error:', libraryError);
 						html = null;
 						useLibraryRendering = false;
 					}
@@ -510,7 +509,6 @@ const DiagramEditor = ({ showMathPopup, closeMathPopup, showDiagramPopup, closeD
 						useLibraryRendering = true;
 					}
 				} catch (libraryError) {
-					console.warn('Math library error:', libraryError);
 					html = null;
 					useLibraryRendering = false;
 				}
@@ -754,7 +752,6 @@ const DiagramEditor = ({ showMathPopup, closeMathPopup, showDiagramPopup, closeD
 					// Enhanced fallback với HTML đơn giản
 					const basicRendered = renderBasicMath(latexValue);
 					editorRef.current.insertContent(basicRendered);
-					console.warn('Inserted enhanced Unicode math with HTML fractions');
 				}
 				closeMathPopup();
 			} catch (error) {
@@ -984,7 +981,6 @@ const DiagramEditor = ({ showMathPopup, closeMathPopup, showDiagramPopup, closeD
 				};
 
 				img.onerror = function () {
-					console.warn('Could not render diagram as image, inserting SVG directly');
 					// Fallback: chèn SVG trực tiếp
 					editorRef.current.insertContent(svgContent);
 					URL.revokeObjectURL(url);

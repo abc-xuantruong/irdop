@@ -170,7 +170,6 @@ const ReportEditor = () => {
             await new Promise(r => setTimeout(r, 500));
         }
 
-        console.log(`Open ${openedCount} files.`);
     };
 
     // Fetch full receipt data (for "all samples" mode)
@@ -280,7 +279,6 @@ const ReportEditor = () => {
 
             // If receipt API fails, try to get receiptId from sample API
             if (receiptResponse.status !== 200 || receiptResponse.data == null) {
-                console.warn("⚠️ Receipt API failed, trying to get receiptId from sample API");
 
                 const sampleResponse = await apiPost("https://red.irdop.org/v1/sample/get/full", {
                     sampleId: sampleIdToFetch,
@@ -288,7 +286,6 @@ const ReportEditor = () => {
 
                 if (sampleResponse.status === 200 && sampleResponse.data?.receiptId) {
                     receiptId = sampleResponse.data.receiptId;
-                    console.log("✅ Got receiptId from sample API:", receiptId);
 
                     // Retry receipt API with correct receiptId
                     receiptResponse = await apiPost("https://red.irdop.org/v1/receipt/get/full", {
@@ -409,11 +406,9 @@ const ReportEditor = () => {
 
                 // After sample data is loaded, check if we need to load a specific report
                 if (refNumberFromUrl) {
-                    console.log("🔍 Loading report from URL:", refNumberFromUrl);
                     await fetchReportData(refNumberFromUrl);
                     setCurrentRefNumber(refNumberFromUrl);
                 } else if (reportId) {
-                    console.log("🔍 Loading report from reportId:", reportId);
                     await fetchReportData(reportId);
                     setCurrentRefNumber(reportId);
                 }
@@ -436,7 +431,6 @@ const ReportEditor = () => {
             // Check if this report exists in sampleData.reports
             const matchingReport = sampleData.reports.find((r) => r.refNumber === targetRefNumber);
             if (matchingReport) {
-                console.log("🔄 Auto-loading report after sampleData is ready:", targetRefNumber);
                 fetchReportData(targetRefNumber);
                 setCurrentRefNumber(targetRefNumber);
             }
@@ -466,11 +460,9 @@ const ReportEditor = () => {
     // Handle report selection change
     const handleReportChange = async (e) => {
         const reportIndex = e.target.value;
-        console.log("📝 handleReportChange called with value:", reportIndex);
 
         // Check if user selected default option (empty string or "")
         if (reportIndex === "" || reportIndex === undefined || reportIndex === null) {
-            console.log("🔄 Clearing report selection");
             setSelectedReport(null);
             setUserClearedReport(true); // Mark that user manually cleared selection
 
@@ -481,16 +473,13 @@ const ReportEditor = () => {
 
             // Clear current refNumber state
             setCurrentRefNumber("");
-            console.log("✅ Report selection cleared");
             return;
         }
 
         const parsedIndex = parseInt(reportIndex);
-        console.log("📊 Parsed index:", parsedIndex);
 
         if (sampleData && sampleData.reports && sampleData.reports[parsedIndex]) {
             const report = sampleData.reports[parsedIndex];
-            console.log("✅ Setting report:", report.refNumber);
             setSelectedReport(report);
             setUserClearedReport(false); // Reset flag when user selects a report
 
@@ -608,7 +597,6 @@ const ReportEditor = () => {
                     }
                 }
 
-                console.log("✅ Report data loaded successfully:", refNumber);
             }
 
             setLoading(false);
@@ -1067,7 +1055,6 @@ ${tableHTML}
 
     // Update header based on all dependencies
     useEffect(() => {
-        console.log("🔄 Header update triggered:", { showVlas, showKN, currentRefNumber });
 
         // Generate new header HTML with current state
         const newHeaderHTML = generateHeaderForSample(showVlas, currentRefNumber, showKN);
@@ -1078,14 +1065,12 @@ ${tableHTML}
         // Wait for editor to be ready, then update it
         const updateEditor = () => {
             if (!headerEditorRef.current) {
-                console.log("⏳ Header editor not ready yet");
                 return;
             }
 
             try {
                 if (typeof headerEditorRef.current.setContent === "function") {
                     headerEditorRef.current.setContent(newHeaderHTML);
-                    console.log("✅ Header editor content updated with VLAS:", showVlas);
                 }
             } catch (error) {
                 console.error("❌ Error updating header editor:", error);
@@ -1223,8 +1208,6 @@ ${tableHTML}
     // Preview for all samples mode
     const handleAllSamplesPreview = async () => {
         try {
-            console.log("🚀 Starting all samples preview...");
-            console.log("📊 Total samples:", allSamplesData.length);
 
             // Wait a bit for editors to be ready
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1237,11 +1220,9 @@ ${tableHTML}
 
                 // Skip hidden samples
                 if (sample.isHidden) {
-                    console.log(`⏭️ Skipping hidden sample: ${sample.sampleId}`);
                     continue;
                 }
 
-                console.log(`\n📝 Processing sample ${i + 1}/${allSamplesData.length}:`, sample.sampleId);
 
                 const headerRef = sample.headerEditorRef;
                 const contentRef = sample.contentEditorRef;
@@ -1260,7 +1241,6 @@ ${tableHTML}
 
                 // If still no content, generate from sample data
                 if (!contentHTML || contentHTML.trim() === "") {
-                    console.log("⚙️ Generating content from sample data...");
                     const contentParts = [
                         generateCustomerSection(sample.client),
                         spacing,
@@ -1286,7 +1266,6 @@ ${tableHTML}
                     continue;
                 }
 
-                console.log("🔧 Processing pagination for sample:", sample.sampleId);
 
                 // Normalize table widths in content before processing
                 contentHTML = normalizeTableWidths(contentHTML, contentRef);
@@ -1302,38 +1281,30 @@ ${tableHTML}
                 try {
                     // Process this sample exactly like single mode
                     const measurementData = await measureSectionsInDOM(headerHTML, contentHTML, footerHTML);
-                    console.log("📏 Measurement data:", measurementData);
 
                     const paginatedPages = applyClientSidePagination(headerHTML, contentHTML, footerHTML, measurementData);
-                    console.log("📄 Paginated pages:", paginatedPages.length);
 
                     if (paginatedPages.length === 0) {
-                        console.warn("⚠️ No pages generated for sample:", sample.sampleId);
                         continue;
                     }
 
                     const sampleHTML = generatePreviewHTML(paginatedPages, measurementData, headerHTML, footerHTML, sampleRefNumber);
-                    console.log("✅ Generated HTML length:", sampleHTML.length);
 
                     // Extract only the pages (body content) from the generated HTML
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(sampleHTML, "text/html");
                     const pages = doc.querySelectorAll(".a4-page");
 
-                    console.log("📑 Extracted pages:", pages.length);
 
                     if (pages.length === 0) {
-                        console.warn("⚠️ No .a4-page elements found in HTML for sample:", sample.sampleId);
                         // Try to add the whole body as a page
                         const bodyContent = doc.body.innerHTML;
                         if (bodyContent && bodyContent.trim() !== "") {
-                            console.log("📦 Using body content as fallback");
                             allSamplesHTML.push(`<div class="a4-page">${bodyContent}</div>`);
                         }
                     } else {
                         // Collect all page HTML
                         pages.forEach((page, pageIndex) => {
-                            console.log(`  - Adding page ${pageIndex + 1} from sample ${sample.sampleId}`);
                             allSamplesHTML.push(page.outerHTML);
                         });
                     }
@@ -1343,7 +1314,6 @@ ${tableHTML}
                 }
             }
 
-            console.log("\n🎯 Total pages collected:", allSamplesHTML.length);
 
             if (allSamplesHTML.length === 0) {
                 console.error("❌ No pages generated!");
@@ -1484,7 +1454,6 @@ ${tableHTML}
 </body>
 </html>`;
 
-            console.log("✅ Final HTML generated, opening preview window...");
             openPreviewWindow(finalHTML, allSampleIds);
         } catch (error) {
             console.error("❌ Error generating all samples preview:", error);
@@ -1539,7 +1508,6 @@ ${tableHTML}
                     action: "save",
                 };
 
-                console.log("Saving single report:", body);
 
                 const response = await apiPost("https://red.irdop.org/v1/report/publish", body);
 
@@ -1581,7 +1549,6 @@ ${tableHTML}
 
                     // Reload report data from API to ensure consistency
                     if (savedReport.refNumber) {
-                        console.log("🔄 Reloading report data after save:", savedReport.refNumber);
                         await fetchReportData(savedReport.refNumber);
                     }
 
@@ -1596,7 +1563,6 @@ ${tableHTML}
 
                     // Skip hidden samples
                     if (sample.isHidden) {
-                        console.log(`⏭️ Skipping hidden sample in save: ${sample.sampleId}`);
                         continue;
                     }
 
@@ -1641,14 +1607,12 @@ ${tableHTML}
                     action: "save",
                 };
 
-                console.log("Saving multiple reports:", body);
 
                 const response = await apiPost("https://red.irdop.org/v1/report/publish", body);
 
                 if (response.status === 200 && response.data) {
                     const savedReports = Array.isArray(response.data) ? response.data : [response.data];
 
-                    console.log("Saved reports from API:", savedReports);
 
                     // Apply saved data to editors in order
                     for (let i = 0; i < savedReports.length && i < allSamplesData.length; i++) {
@@ -1769,7 +1733,6 @@ ${tableHTML}
                     action: "publish",
                 };
 
-                console.log("Publishing single report:", body);
 
                 const response = await apiPost("https://red.irdop.org/v1/report/publish", body);
 
@@ -1811,7 +1774,6 @@ ${tableHTML}
 
                     // Reload report data from API to ensure consistency
                     if (savedReport.refNumber) {
-                        console.log("🔄 Reloading report data after publish:", savedReport.refNumber);
                         await fetchReportData(savedReport.refNumber);
                     }
 
@@ -1826,7 +1788,6 @@ ${tableHTML}
 
                     // Skip hidden samples
                     if (sample.isHidden) {
-                        console.log(`⏭️ Skipping hidden sample in publish: ${sample.sampleId}`);
                         continue;
                     }
 
@@ -1879,14 +1840,12 @@ ${tableHTML}
                     action: "publish",
                 };
 
-                console.log("Publishing multiple reports:", body);
 
                 const response = await apiPost("https://red.irdop.org/v1/report/publish", body);
 
                 if (response.status === 200 && response.data) {
                     const savedReports = Array.isArray(response.data) ? response.data : [response.data];
 
-                    console.log("Published reports from API:", savedReports);
 
                     // Apply saved data to editors in order
                     for (let i = 0; i < savedReports.length && i < allSamplesData.length; i++) {
@@ -2025,7 +1984,6 @@ ${tableHTML}
 
                     // Skip hidden samples
                     if (sample.isHidden) {
-                        console.log(`⏭️ Skipping hidden sample in select latest: ${sample.sampleId}`);
                         continue;
                     }
 
@@ -2900,7 +2858,6 @@ ${tableHTML}
                                                 setAllSamplesData(updated);
                                             }}
                                             onInit={(evt, editor) => {
-                                                console.log(`✅ Header editor initialized for ${sample.sampleId}`);
                                                 allSamplesData[index].headerEditorRef = editor;
                                             }}
                                             init={{
@@ -2975,7 +2932,6 @@ ${tableHTML}
                                                 setAllSamplesData(updated);
                                             }}
                                             onInit={(evt, editor) => {
-                                                console.log(`✅ Content editor initialized for ${sample.sampleId}`);
                                                 allSamplesData[index].contentEditorRef = editor;
                                             }}
                                             init={{
@@ -3047,7 +3003,6 @@ ${tableHTML}
                                                 setAllSamplesData(updated);
                                             }}
                                             onInit={(evt, editor) => {
-                                                console.log(`✅ Footer editor initialized for ${sample.sampleId}`);
                                                 allSamplesData[index].footerEditorRef = editor;
                                             }}
                                             init={{

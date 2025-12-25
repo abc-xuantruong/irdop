@@ -878,8 +878,8 @@ const OrderDetail = ({ order, isOpen, onClose }) => {
                                                 <thead className="bg-gray-50">
                                                     <tr>
                                                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-12">STT</th>
-                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tên chỉ tiêu</th>
                                                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Mã CT</th>
+                                                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tên chỉ tiêu</th>
                                                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nền mẫu</th>
                                                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nguồn</th>
                                                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Phương pháp</th>
@@ -892,6 +892,7 @@ const OrderDetail = ({ order, isOpen, onClose }) => {
                                                         sample.analysis.map((analysis, analysisIndex) => (
                                                             <tr key={analysisIndex} className="hover:bg-gray-50">
                                                                 <td className="px-3 py-2 text-gray-900 text-left">{analysisIndex + 1}</td>
+                                                                <td className="px-3 py-2 text-gray-600 font-mono text-xs text-left">{analysis.parameterId || "--"}</td>
                                                                 <td className="px-3 py-2 text-left">
                                                                     {editingAnalysis.sampleIndex === sampleIndex &&
                                                                     editingAnalysis.analysisIndex === analysisIndex &&
@@ -925,7 +926,7 @@ const OrderDetail = ({ order, isOpen, onClose }) => {
                                                                         </div>
                                                                     )}
                                                                 </td>
-                                                                <td className="px-3 py-2 text-gray-600 font-mono text-xs text-left">{analysis.parameterId || "--"}</td>
+
                                                                 <td className="px-3 py-2 text-left">
                                                                     {editingAnalysis.sampleIndex === sampleIndex &&
                                                                     editingAnalysis.analysisIndex === analysisIndex &&

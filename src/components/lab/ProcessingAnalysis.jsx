@@ -1059,7 +1059,6 @@ const ProcessingAnalysis = ({ onNavigateToLab, viewMode = "admin" }) => {
                     deadline = JSON.parse(deadline);
                 } catch (e) {
                     // If parsing fails, keep as string
-                    console.warn("Failed to parse deadline from query params:", e);
                 }
             }
 

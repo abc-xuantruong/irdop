@@ -39,7 +39,6 @@ const AccountInfor = () => {
 				}
 			});
 			setNewRowData(emptyRow);
-			console.log('Initialized newRowData:', emptyRow);
 		}
 	}, [columns]);
 
@@ -254,7 +253,6 @@ const AccountInfor = () => {
 		}
 
 		// Log the formatted data
-		console.log('updated_data:', logObject);
 
 		try {
 			// Send update to API
@@ -335,7 +333,6 @@ const AccountInfor = () => {
 		});
 
 		// Log the formatted data
-		console.log('updated_data:', logObject);
 
 		try {
 			// Send update to API
@@ -422,14 +419,10 @@ const AccountInfor = () => {
 		const roles = {};
 
 		// Debug logging
-		console.log('columns:', columns);
-		console.log('newRowData:', newRowData);
-		console.log('columns.length:', columns.length);
 		console.log(
 			'columns with index > 4:',
 			columns.filter((col, index) => index > 4),
 		);
-		console.log('technician_alias in columns:', columns.includes('technician_alias'));
 
 		columns.forEach((col, index) => {
 			if (index <= 4 && col !== 'technician_alias') {
@@ -450,19 +443,13 @@ const AccountInfor = () => {
 			}
 		});
 
-		console.log('basicFields:', basicFields);
-		console.log('roles before sending:', roles);
-		console.log('roles object keys:', Object.keys(roles));
-		console.log('roles object length:', Object.keys(roles).length);
 
 		// Check if there are any role columns at all
 		const hasRoleColumns = columns.some((col, index) => index > 4 || col === 'technician_alias');
-		console.log('Has role columns:', hasRoleColumns);
 
 		const newRow = { ...basicFields, roles };
 
 		// Log the new row
-		console.log('Adding new row:', newRow);
 
 		try {
 			// Send new row data to API
@@ -487,7 +474,6 @@ const AccountInfor = () => {
 				},
 			};
 
-			console.log('Final payload being sent to API:', JSON.stringify(payload, null, 2));
 
 			const response = await apiPost(url, payload);
 			toast.success('Thêm tài khoản thành công!');
@@ -547,7 +533,6 @@ const AccountInfor = () => {
 
 			// Log changes if this is a role column
 			if (colIndex > 4 && column !== 'technician_alias') {
-				console.log('Role updated:', column, value);
 
 				// Extract and log all roles
 				const roles = {};
@@ -556,7 +541,6 @@ const AccountInfor = () => {
 						roles[col] = col === column ? value : newData[col] || false;
 					}
 				});
-				console.log('Current roles:', roles);
 			}
 
 			return newData;
@@ -626,7 +610,6 @@ const AccountInfor = () => {
 			// Find all rows with this key in their roles object and log them before deletion
 			const rowsWithKey = accountData.filter((row) => row.roles && row.roles[columnName] !== undefined);
 
-			console.log(`Deleting column "${columnName}" from roles object in these rows:`, rowsWithKey);
 
 			// Remove the column from the columns list
 			const updatedColumns = columns.filter((col) => col !== columnName);
@@ -655,7 +638,6 @@ const AccountInfor = () => {
 	// Function to handle row deletion
 	const handleDeleteRow = async (rowIndex, row) => {
 		if (window.confirm('Bạn có chắc chắn muốn xóa hàng này không?')) {
-			console.log('Deleting row:', row);
 
 			try {
 				// Here you would add the API call to delete the row

@@ -103,7 +103,6 @@ const Event = () => {
 
 		const updatedParameter = newListParameters[editableCell.row];
 		const response = await apiPost('https://black.irdop.org/eventc1/db/insert/event', { parameter: updatedParameter });
-		console.log(response);
 		if (response?.status === 200) {
 			toast.success(`Nhập kết quả thành công.`);
 		} else {
@@ -118,7 +117,6 @@ const Event = () => {
 			const newListParameters = [...listParameters];
 			newListParameters[editableCell.row][editableCell.column] = content;
 			setListParameters(newListParameters);
-			console.log(newListParameters[editableCell.row]);
 			setEditableCell({ row: null, column: null });
 		} else {
 			setInputValue(content);

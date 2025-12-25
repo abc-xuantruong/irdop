@@ -7,6 +7,8 @@ import { FaSearch, FaTimes, FaFilter, FaCalendarAlt } from "react-icons/fa";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import OrderDetail from "./OrderDetail";
+import FileColumn from "../file/FileColumn";
+import PaymentButton from "./PaymentButton";
 
 const IncomingOrder = () => {
     const navigate = useNavigate();
@@ -37,6 +39,18 @@ const IncomingOrder = () => {
     });
     const [showFilters, setShowFilters] = useState(false);
     const [selectedDate, setSelectedDate] = useState(getTodayDate());
+
+    // Handle payment update from modal
+    const handlePaymentUpdate = () => {
+        const filterParams = {};
+        if (selectedDate) {
+            const year = selectedDate.getFullYear();
+            const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+            const day = String(selectedDate.getDate()).padStart(2, "0");
+            filterParams.createdAt = `${year}-${month}-${day}`;
+        }
+        fetchOrders(currentPage, searchTerm, filterParams);
+    };
 
     // Fetch orders from API
     const fetchOrders = useCallback(
@@ -162,6 +176,27 @@ const IncomingOrder = () => {
         }, 0);
     };
 
+    // Calculate total paid from transactions
+    const getTotalPaid = (transactions) => {
+        if (!transactions || !Array.isArray(transactions)) return 0;
+        return transactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    };
+
+    // Get payment status
+    const getPaymentStatus = (order) => {
+        const totalAmount = order.totalAmount || 0;
+        const totalPaid = getTotalPaid(order.transactions);
+
+        if (totalPaid === 0) {
+            return { text: "Chưa thanh toán", color: "text-red-600 bg-red-50" };
+        } else if (totalPaid !== totalAmount && totalPaid > 0) {
+            return { text: "Thanh toán chưa khớp", color: "text-orange-600 bg-orange-50" };
+        } else if (totalPaid === totalAmount) {
+            return { text: "Đã thanh toán", color: "text-green-600 bg-green-50" };
+        }
+        return { text: "--", color: "text-gray-600 bg-gray-50" };
+    };
+
     // Modal state for order details
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState(null);
@@ -216,6 +251,9 @@ const IncomingOrder = () => {
                 </div>
             </div>
 
+            {/* Payment Button */}
+            <PaymentButton onPaymentUpdate={handlePaymentUpdate} />
+
             {/* Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 {loading ? (
@@ -234,13 +272,12 @@ const IncomingOrder = () => {
                                     <tr>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mã đơn hàng</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Khách hàng</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NV Kinh doanh</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Số mẫu</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tổng chỉ tiêu</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Người nhận KQ</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mã tiếp nhận</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">File</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tổng tiền</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ngày tạo</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thanh toán</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -248,39 +285,50 @@ const IncomingOrder = () => {
                                         <tr key={order.id || index} onClick={() => handleRowClick(order)} className="hover:bg-gray-50 cursor-pointer transition-colors">
                                             <td className="px-4 py-3 text-left whitespace-nowrap">
                                                 <div className="text-sm font-medium text-blue-600">{order.orderId || order.id || "--"}</div>
+                                                <div className="text-xs text-gray-500 mt-1">{order.createdAt ? formatDate(order.createdAt) : "--"}</div>
                                             </td>
                                             <td className="px-4 py-3 text-left whitespace-nowrap">
                                                 <div className="text-sm text-gray-900">{order.client?.clientName || "--"}</div>
                                                 {order.client?.clientPhone && <div className="text-xs text-gray-500">{order.client.clientPhone}</div>}
                                             </td>
-                                            <td className="px-4 py-3 text-left whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{order.salePerson || "--"}</div>
-                                            </td>
+
                                             <td className="px-4 py-3 text-left whitespace-nowrap">
                                                 <div className="text-sm text-gray-900 text-center">{order.samples?.length || 0}</div>
                                             </td>
                                             <td className="px-4 py-3 text-left whitespace-nowrap">
                                                 <div className="text-sm text-gray-900 text-center">{getTotalAnalyses(order.samples)}</div>
                                             </td>
-                                            <td className="px-4 py-3 text-left whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{order.reportRecipient?.name || "--"}</div>
-                                                {order.reportRecipient?.email && <div className="text-xs text-gray-500">{order.reportRecipient.email}</div>}
-                                            </td>
+
                                             <td className="px-4 py-3 text-left whitespace-nowrap">
                                                 <div className="text-sm text-gray-900">{order.receiptId || "--"}</div>
                                             </td>
+                                            <td className="px-4 py-3 text-left" onClick={(e) => e.stopPropagation()}>
+                                                {(order.orderId || order.id) && (
+                                                    <div className="overflow-hidden min-w-[150px]">
+                                                        <FileColumn
+                                                            id={order.orderId || order.id}
+                                                            files={order.files}
+                                                            showName={true}
+                                                            truncateName={true}
+                                                            enableModalPreview={true}
+                                                            allowExtract={true}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-3 text-left whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900">
-                                                    {order.totalFeeBeforeTax
-                                                        ? new Intl.NumberFormat("vi-VN", {
-                                                              style: "currency",
-                                                              currency: "VND",
-                                                          }).format(order.totalFeeBeforeTax)
-                                                        : "--"}
+                                                    {new Intl.NumberFormat("vi-VN", {
+                                                        style: "currency",
+                                                        currency: "VND",
+                                                    }).format(order.totalAmount || order.totalFeeBeforeTax || 0)}
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3 text-left whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{order.createdAt ? formatDate(order.createdAt) : "--"}</div>
+                                                {(() => {
+                                                    const status = getPaymentStatus(order);
+                                                    return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}>{status.text}</span>;
+                                                })()}
                                             </td>
                                         </tr>
                                     ))}

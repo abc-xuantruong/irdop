@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import { MdLibraryAdd } from "react-icons/md";
 import { FaTrashAlt } from "react-icons/fa";
 import { AiOutlinePlus } from "react-icons/ai";
+import FileColumn from "./file/FileColumn";
 
 class ErrorBoundary extends React.Component {
     constructor(props) {
@@ -57,19 +58,6 @@ const CreateReceiptFromCRM = () => {
     const [allUrgent, setAllUrgent] = useState(false);
     const [selectedPurpose, setSelectedPurpose] = useState(""); // Default purpose
     const [deadline, setDeadline] = useState(""); // Add state for deadline
-    // Add new states for parameter selection
-    const [isAddingParameter, setIsAddingParameter] = useState(false);
-    const [currentSampleIndex, setCurrentSampleIndex] = useState(null);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [parameterList, setParameterList] = useState([]);
-    const [selectedParameters, setSelectedParameters] = useState([]);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [typingTimeout, setTypingTimeout] = useState(null);
-
-    // Add states for partner link
-    const [isCreatingLink, setIsCreatingLink] = useState(false);
-    const [partnerLink, setPartnerLink] = useState("");
-    const [linkError, setLinkError] = useState("");
 
     // Add new states for inline editing
     const [editingField, setEditingField] = useState({
@@ -328,8 +316,6 @@ const CreateReceiptFromCRM = () => {
             email: "",
             other: "",
         });
-        setPartnerLink(""); // Reset partner link
-        setLinkError(""); // Reset link error
 
         try {
             // Check auth cookies before making API call
@@ -358,9 +344,12 @@ const CreateReceiptFromCRM = () => {
                     quoteId: response.data.quoteId, // If available in response
                     salePerson: response.data.salePerson, // If available in response
                     totalFeeBeforeTax: response.data.totalFeeBeforeTax, // If available in response
-                    client: response.data.client,
-                    contact: response.data.contactPerson,
-                    receiver: response.data.reportRecipient,
+                    files: response.data.files || [],
+                    totalAmount: response.data.totalAmount || 0,
+                    transactions: response.data.transactions || [],
+                    client: response.data.client || { clientName: "", clientAddress: "", legalId: "", clientPhone: "", invoiceEmail: "", invoiceInfo: "" },
+                    contact: response.data.contactPerson || { name: "", phone: "", email: "", id: "", id_date: "", id_place: "" },
+                    receiver: response.data.reportRecipient || { name: "", address: "", email: "", other: "" },
                     samples: response.data.samples.map((sample) => {
                         // Helper function to process analysis array
                         const processAnalysis = (analysisArray) => {
@@ -393,7 +382,10 @@ const CreateReceiptFromCRM = () => {
                                     field: analysis.field || "",
                                     matrix: analysis.matrix || sample.matrix || "",
                                     params: analysis.params || null,
+                                    matrix: analysis.matrix || sample.matrix || "",
+                                    params: analysis.params || null,
                                     fromParams: !!analysis.params,
+                                    displayStyle: analysis.displayStyle || "",
                                 };
                             });
                         };
@@ -618,6 +610,7 @@ const CreateReceiptFromCRM = () => {
                 quoteId: crmData.quoteId,
                 salePerson: crmData.salePerson,
                 totalFeeBeforeTax: crmData.totalFeeBeforeTax,
+                totalAmount: crmData.totalAmount,
                 deadline: deadline, // Add deadline to payload
             };
 
@@ -914,7 +907,8 @@ const CreateReceiptFromCRM = () => {
         updatedSamples[sampleIndex].analysis[analysisIndex] = {
             ...currentAnalysis,
             parameterId: suggestion.parameterId,
-            parameterName: suggestion.analyteReportName,
+            parameterName: suggestion.parameterName,
+            displayStyle: suggestion.displayStyle || "",
             originalParameterName: originalParamName,
         };
 
@@ -974,7 +968,8 @@ const CreateReceiptFromCRM = () => {
         const newRows = suggestionsList.map((suggestion) => ({
             ...currentAnalysis,
             parameterId: suggestion.parameterId,
-            parameterName: suggestion.analyteReportName,
+            parameterName: suggestion.parameterName,
+            displayStyle: suggestion.displayStyle || "",
             originalParameterName: originalParamName,
         }));
 
@@ -1767,8 +1762,6 @@ const CreateReceiptFromCRM = () => {
             email: "",
             other: "",
         });
-        setPartnerLink(""); // Reset partner link
-        setLinkError(""); // Reset link error
 
         try {
             // Check auth cookies before making API call
@@ -1797,6 +1790,9 @@ const CreateReceiptFromCRM = () => {
                     quoteId: response.data.quoteId, // If available in response
                     salePerson: response.data.salePerson, // If available in response
                     totalFeeBeforeTax: response.data.totalFeeBeforeTax, // If available in response
+                    files: response.data.files || [],
+                    totalAmount: response.data.totalAmount || 0,
+                    transactions: response.data.transactions || [],
                     client: response.data.client,
                     contact: response.data.contactPerson,
                     receiver: response.data.reportRecipient,
@@ -1901,10 +1897,10 @@ const CreateReceiptFromCRM = () => {
                 order_code: crmData.orderId || "",
                 quote_code: crmData.quoteId || "",
                 sale_recorder: crmData.salePerson || "",
-                client: crmData.client,
-                contact: crmData.contact,
+                client: clientInfo,
+                contact: contactInfo,
                 receiver: receiverInfo,
-                total_amount: crmData.totalFeeBeforeTax || 0,
+                total_amount: crmData.totalAmount || crmData.totalFeeBeforeTax || 0,
                 samples: crmData.samples.map((sample, index) => {
                     // Include sample_information if it exists for this sample
                     const sampleData = { ...sample };
@@ -1917,101 +1913,19 @@ const CreateReceiptFromCRM = () => {
                 default_information: defaultSampleInformation,
             };
 
-            const response = await apiPost("https://black.irdop.org/db/save/order", { order: orderData });
+            const response = await apiPost("https://red.irdop.org/v1/order/update", { order: orderData });
 
             // Check if the response contains an error
             if (response && response.data && response.data.error) {
                 setError(response.data.message || "Đã xảy ra lỗi khi lưu dữ liệu.");
             } else if (response && response.data) {
-                showBriefNotification("Lưu thử nghiệm thành công!", "success");
+                showBriefNotification("Lưu phiếu thành công!", "success");
             }
         } catch (error) {
             console.error("Error saving test data:", error);
             setError(error.response?.data?.message || "Không thể lưu dữ liệu. Vui lòng thử lại sau.");
         } finally {
             setIsCreating(false);
-        }
-    };
-    // Function to handle creating partner link
-    const handleCreatePartnerLink = async () => {
-        if (!crmData) {
-            Swal.fire({
-                icon: "error",
-                title: "Lỗi",
-                text: "Không có dữ liệu đơn hàng!",
-            });
-            return;
-        }
-
-        const orderCode = crmData.orderId;
-        if (!orderCode) {
-            Swal.fire({
-                icon: "error",
-                title: "Lỗi",
-                text: "Không tìm thấy mã đơn hàng!",
-            });
-            return;
-        }
-
-        setIsCreatingLink(true);
-        setLinkError("");
-
-        try {
-            const res = await apiGet(`https://black.irdop.org/db/order/create_uri/${orderCode}`);
-            const result = res.data;
-            if (result.order_code && result.partner_uri) {
-                const domain = window.location.origin;
-
-                const fullLink = `${domain}/partner_request_form.html?orderCode=${encodeURIComponent(result.order_code)}&uri=${encodeURIComponent(result.partner_uri)}`;
-                console.log("Generated partner link:", fullLink);
-                setPartnerLink(fullLink);
-                Swal.fire({
-                    icon: "success",
-                    title: "Thành công",
-                    text: "Đã tạo link điền phiếu thành công!",
-                    timer: 2000,
-                    showConfirmButton: false,
-                });
-            } else {
-                console.error("API response:", result);
-                setLinkError("Phản hồi API không hợp lệ: " + JSON.stringify(result));
-                Swal.fire({
-                    icon: "error",
-                    title: "Lỗi",
-                    text: "API trả về không đúng định dạng. Xem console để biết chi tiết!",
-                });
-            }
-        } catch (error) {
-            console.error("Error creating partner link:", error);
-            setLinkError("Không thể tạo link điền phiếu!");
-            Swal.fire({
-                icon: "error",
-                title: "Lỗi",
-                text: error.message || "Không thể tạo link điền phiếu!",
-            });
-        } finally {
-            setIsCreatingLink(false);
-        }
-    };
-
-    // Function to copy link to clipboard
-    const handleCopyLink = async () => {
-        try {
-            await navigator.clipboard.writeText(partnerLink);
-            Swal.fire({
-                icon: "success",
-                title: "Đã sao chép",
-                text: "Link đã được sao chép vào clipboard!",
-                timer: 1500,
-                showConfirmButton: false,
-            });
-        } catch (error) {
-            console.error("Error copying to clipboard:", error);
-            Swal.fire({
-                icon: "error",
-                title: "Lỗi",
-                text: "Không thể sao chép link!",
-            });
         }
     };
 
@@ -2027,6 +1941,15 @@ const CreateReceiptFromCRM = () => {
                         <ErrorBoundary>
                             <div>
                                 <h2 className="text-xl font-bold mb-4">Tạo tiếp nhận mẫu từ CRM</h2>
+                                <style>{`
+                                    .no-scrollbar::-webkit-scrollbar {
+                                        display: none;
+                                    }
+                                    .no-scrollbar {
+                                        -ms-overflow-style: none;
+                                        scrollbar-width: none;
+                                    }
+                                `}</style>
                                 <form onSubmit={handleSubmit} className="mb-4">
                                     {" "}
                                     <div className="flex items-center gap-2">
@@ -2051,9 +1974,9 @@ const CreateReceiptFromCRM = () => {
                                     </div>
                                 )}
                                 {crmData && (
-                                    <div className="flex flex-col lg:flex-row gap-4 overflow-y-auto max-h-[calc(95vh-200px)]">
+                                    <div className="flex flex-col lg:flex-row gap-4 h-[calc(95vh-200px)] overflow-hidden">
                                         {/* Left Column: Order and Customer Information */}
-                                        <div className="lg:w-1/4 space-y-4">
+                                        <div className="lg:w-1/4 space-y-4 overflow-y-auto no-scrollbar">
                                             <div className="border rounded-lg p-4 text-start w-full h-fit">
                                                 <h3 className="font-semibold text-lg mb-2">Thông tin đơn hàng</h3>
                                                 <p>
@@ -2070,7 +1993,7 @@ const CreateReceiptFromCRM = () => {
                                                 </p>
 
                                                 <p>
-                                                    <span className="font-medium text-gray-500">Tổng tiền: </span>
+                                                    <span className="font-medium text-gray-500">Tổng tiền trước thuế: </span>
                                                     {crmData.totalFeeBeforeTax
                                                         ? new Intl.NumberFormat("vi-VN", {
                                                               style: "currency",
@@ -2078,6 +2001,45 @@ const CreateReceiptFromCRM = () => {
                                                           }).format(crmData.totalFeeBeforeTax)
                                                         : "--"}
                                                 </p>
+                                                <p>
+                                                    <span className="font-medium text-gray-500">Tổng tiền sau thuế: </span>
+                                                    {crmData.totalAmount
+                                                        ? new Intl.NumberFormat("vi-VN", {
+                                                              style: "currency",
+                                                              currency: "VND",
+                                                          }).format(crmData.totalAmount)
+                                                        : "--"}
+                                                </p>
+                                                <p>
+                                                    <span className="font-medium text-gray-500">Đã thanh toán: </span>
+                                                    <span className="font-bold text-green-600">
+                                                        {new Intl.NumberFormat("vi-VN", {
+                                                            style: "currency",
+                                                            currency: "VND",
+                                                        }).format(crmData.transactions?.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0)}
+                                                    </span>
+                                                </p>
+                                                {crmData.transactions && crmData.transactions.length > 0 && (
+                                                    <div className="mt-2">
+                                                        <span className="font-medium text-gray-500 block mb-1">Giao dịch:</span>
+                                                        <ul className="text-sm list-disc pl-4 space-y-1">
+                                                            {crmData.transactions.map((t, idx) => (
+                                                                <li key={idx}>
+                                                                    <span className="text-gray-700">{t.date}:</span>{" "}
+                                                                    <span className="font-semibold text-green-600">
+                                                                        {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(t.amount)}
+                                                                    </span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                                {(crmData.files && crmData.files.length > 0) || crmData.orderId ? (
+                                                    <div className="mt-3 border-t pt-2">
+                                                        <span className="font-medium text-gray-500 block mb-1">File đính kèm:</span>
+                                                        <FileColumn id={crmData.orderId} files={crmData.files} showName={true} enableModalPreview={true} allowExtract={true} showViewButton={true} />
+                                                    </div>
+                                                ) : null}
                                             </div>
 
                                             <div className="border rounded-lg p-4 text-start w-full h-fit">
@@ -2275,7 +2237,7 @@ const CreateReceiptFromCRM = () => {
                                         </div>
 
                                         {/* Right Column: Sample List */}
-                                        <div className="lg:w-3/4">
+                                        <div className="lg:w-3/4 overflow-y-auto no-scrollbar">
                                             <div className="w-full">
                                                 {" "}
                                                 <div className="flex justify-between items-center mb-2">
@@ -2947,14 +2909,6 @@ const CreateReceiptFromCRM = () => {
                                                                     >
                                                                         {sample.activeAnalysisMode === "default" ? "Đề xuất" : "Mặc định"}
                                                                     </button>
-
-                                                                    <button
-                                                                        onClick={() => handleOpenAddParameter(index)}
-                                                                        className="border border-primary text-primary text-sm rounded-lg p-1 flex items-center"
-                                                                        title="Thêm chỉ tiêu"
-                                                                    >
-                                                                        <MdLibraryAdd size={16} className="mr-1" /> Thêm chỉ tiêu
-                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -2988,33 +2942,6 @@ const CreateReceiptFromCRM = () => {
                                             >
                                                 Lưu phiếu
                                             </button>
-                                            <button
-                                                onClick={handleCreatePartnerLink}
-                                                disabled={isCreatingLink || isCreating}
-                                                className="bg-orange-500 border border-orange-500 text-white font-semibold rounded-md py-2 px-4 cursor-pointer hover:bg-orange-600 hover:border-orange-600 disabled:bg-orange-300 disabled:border-orange-300 disabled:cursor-not-allowed"
-                                            >
-                                                {isCreatingLink ? "Đang tạo link..." : "Tạo link điền phiếu"}
-                                            </button>
-                                            {partnerLink && (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm text-gray-600">Link:</span>
-                                                    <button
-                                                        onClick={handleCopyLink}
-                                                        className="bg-green-500 text-white text-sm rounded-md py-1 px-3 cursor-pointer hover:bg-green-600 flex items-center gap-1"
-                                                        title="Click để sao chép link"
-                                                    >
-                                                        <span className="max-w-xs truncate">{partnerLink}</span>
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path
-                                                                strokeLinecap="round"
-                                                                strokeLinejoin="round"
-                                                                strokeWidth={2}
-                                                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                                                            />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
                                         {/* Right side buttons */}
                                         <div className="flex gap-3">
@@ -3040,8 +2967,6 @@ const CreateReceiptFromCRM = () => {
                     </div>
                 </div>
             )}
-            {/* Add the parameter selection modal */}
-            {isAddingParameter && currentSampleIndex !== null && renderAddParameterModal()}
             {/* Suggestion dropdown using createPortal */}
             {showSuggestionDropdown.sampleIndex !== null &&
                 showSuggestionDropdown.analysisIndex !== null &&
@@ -3081,7 +3006,7 @@ const CreateReceiptFromCRM = () => {
                                         suggestions[key].map((suggestion, idx) => (
                                             <div key={idx} className="p-2 hover:bg-gray-100 cursor-pointer border-b text-xs" onClick={() => handleApplySuggestion(sIdx, aIdx, suggestion)}>
                                                 <div className="font-medium text-primary">
-                                                    {suggestion.parameterId} - {suggestion.analyteReportName}
+                                                    {suggestion.parameterId} - {suggestion.parameterName}
                                                 </div>
                                             </div>
                                         ))}

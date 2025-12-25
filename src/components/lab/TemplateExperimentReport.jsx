@@ -1119,7 +1119,6 @@ const TemplateExperimentReport = ({
 			return;
 		}
 
-		console.log('Saving template:', templateForm);
 
 		try {
 			setIsLoading(true);

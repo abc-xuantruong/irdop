@@ -5,12 +5,235 @@ import { GlobalContext } from "../contexts/GlobalContext";
 import { useTaskQueue } from "../contexts/TaskQueueContext";
 import { apiPost, apiGet, apiPostFormData } from "../contexts/helperFunctionCallAPI";
 import { toast, ToastContainer } from "react-toastify";
-import { FaEye, FaDownload, FaTrashAlt, FaEdit, FaPlus, FaCheck, FaTimes, FaFilter, FaUndo, FaSync } from "react-icons/fa";
+import { FaEye, FaDownload, FaTrashAlt, FaEdit, FaPlus, FaCheck, FaTimes, FaFilter, FaUndo, FaSync, FaFile } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
 import Swal from "sweetalert2";
 import EmailForm from "../components/EmailForm";
 import FileDetail from "../components/file/FileDetail";
 import CopyDetail from "../components/file/CopyDetail";
+
+import { FaThList, FaTable } from "react-icons/fa";
+
+const TLTNPreview = React.memo(({ file }) => {
+    const [previewUrl, setPreviewUrl] = useState(null);
+
+    useEffect(() => {
+        if (!file) {
+            setPreviewUrl(null);
+            return;
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        setPreviewUrl(objectUrl);
+
+        return () => {
+            URL.revokeObjectURL(objectUrl);
+        };
+    }, [file]);
+
+    if (!file) return <p className="text-gray-400">Chọn một file để xem trước</p>;
+
+    const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
+    const isImage = file.type.startsWith("image/");
+
+    if (isPdf) {
+        return (
+            <iframe
+                src={previewUrl}
+                className="w-full h-full border rounded-lg shadow-sm bg-white"
+                title="Document Preview"
+            />
+        );
+    } else if (isImage) {
+        return (
+            <img
+                src={previewUrl}
+                alt="Preview"
+                className="max-w-full max-h-full object-contain rounded-lg shadow-sm bg-white"
+            />
+        );
+    } else {
+        return (
+            <div className="text-center text-gray-500">
+                <div className="mb-4 text-6xl mx-auto w-fit text-gray-300">
+                    <FaFile />
+                </div>
+                <p className="font-medium">Không thể xem trước định dạng này</p>
+                <p className="text-sm mt-1 text-gray-400">({file.type || "Unknown type"})</p>
+            </div>
+        );
+    }
+});
+
+// Parameter Selection Modal for TLTN
+const TLTNParameterSelectModal = ({
+    isVisible,
+    onClose,
+    onConfirm,
+    sampleIds,
+}) => {
+    const [loading, setLoading] = useState(false);
+    const [parameterOptions, setParameterOptions] = useState([]);
+    const [selectedParameters, setSelectedParameters] = useState([]);
+    const [searchTerm, setSearchTerm] = useState("");
+
+    // Fetch parameter options when modal opens or sampleIds change
+    useEffect(() => {
+        if (isVisible && sampleIds.length > 0) {
+            fetchParameterOptions();
+        } else if (!isVisible) {
+            // Reset state when closed
+            setParameterOptions([]);
+            setSelectedParameters([]);
+            setSearchTerm("");
+        }
+    }, [isVisible, sampleIds]);
+
+    const fetchParameterOptions = async () => {
+        setLoading(true);
+        try {
+            // Fetch available parameters for the given sample IDs
+            // Use filter_column to get distinct parameter names
+            const response = await apiPost("https://red.irdop.org/v1/analysis/get/filter_column", {
+                filterColumn: "parameterName",
+                sampleId: sampleIds,
+                itemsPerPage: 1000,
+                page: 1
+            });
+
+            const data = response?.data?.result || response?.data;
+
+            if (data && Array.isArray(data)) {
+                // Map result to simple string array or object { value, label, count }
+                const options = data.map(item => ({
+                    value: item.parameterName || item.value || item.filterValue, // Handle various key names
+                    count: item.total || item.count || item.analysisCount || 0
+                })).filter(opt => opt.value); // Filter out empty values
+                setParameterOptions(options);
+            }
+        } catch (error) {
+            console.error("Error fetching parameters:", error);
+            toast.error("Không thể tải danh sách chỉ tiêu");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleConfirm = async () => {
+        if (selectedParameters.length === 0) {
+            onClose();
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // Fetch Analysis IDs for the selected parameters and sample IDs
+            const response = await apiPost("https://red.irdop.org/v1/analysis/get/processing", {
+                sampleId: sampleIds,
+                parameterName: selectedParameters,
+                itemsPerPage: 2000, // Fetch enough to cover all
+                page: 1
+            });
+
+            if (response && response.data && response.data.result) {
+                const analysisIds = response.data.result.map(item => item.id);
+                onConfirm(analysisIds);
+            } else {
+                toast.warning("Không tìm thấy kết quả phân tích phù hợp");
+                onConfirm([]);
+            }
+        } catch (error) {
+            console.error("Error fetching analysis IDs:", error);
+            toast.error("Lỗi khi lấy ID chỉ tiêu");
+        } finally {
+            setLoading(false);
+            onClose();
+        }
+    };
+
+    const toggleParameter = (paramValue) => {
+        setSelectedParameters(prev => {
+            if (prev.includes(paramValue)) {
+                return prev.filter(p => p !== paramValue);
+            } else {
+                return [...prev, paramValue];
+            }
+        });
+    };
+
+    const filteredOptions = parameterOptions.filter(opt =>
+        opt.value.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (!isVisible) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] modal-backdrop">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6 flex flex-col max-h-[80vh]">
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 className="text-lg font-semibold text-gray-800">Chọn Chỉ Tiêu</h3>
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+                        <FaTimes size={20} />
+                    </button>
+                </div>
+
+                <div className="mb-4">
+                    <input
+                        type="text"
+                        placeholder="Tìm kiếm chỉ tiêu..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    />
+                </div>
+
+                <div className="flex-1 overflow-y-auto min-h-[200px] border rounded bg-gray-50 p-2 mb-4 text-left">
+                    {loading && parameterOptions.length === 0 ? (
+                        <div className="flex items-center justify-center h-full text-gray-500">
+                            <FaSync className="animate-spin mr-2" /> Đang tải...
+                        </div>
+                    ) : filteredOptions.length === 0 ? (
+                        <div className="text-center text-gray-500 py-4">Không tìm thấy chỉ tiêu</div>
+                    ) : (
+                        <div className="space-y-1 text-left">
+                            {filteredOptions.map((opt, idx) => (
+                                <label key={idx} className="flex items-center p-2 hover:bg-white rounded cursor-pointer transition-colors border border-transparent hover:border-gray-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedParameters.includes(opt.value)}
+                                        onChange={() => toggleParameter(opt.value)}
+                                        className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <div className="flex-1 text-left">
+                                        <div className="text-sm font-medium text-gray-800">{opt.value}</div>
+                                        <div className="text-xs text-gray-500">Số lượng: {opt.count}</div>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm font-medium"
+                    >
+                        Hủy
+                    </button>
+                    <button
+                        onClick={handleConfirm}
+                        disabled={loading || selectedParameters.length === 0}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
+                    >
+                        {loading && <FaSync className="animate-spin" />}
+                        Xác nhận ({selectedParameters.length})
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const FileInfor = () => {
     const { setCurrentTitlePage, getIdenByUid, currentUser } = useContext(GlobalContext);
@@ -89,6 +312,8 @@ const FileInfor = () => {
     const [isDraggingOverModal, setIsDraggingOverModal] = useState(false);
     const [samplePrefix, setSamplePrefix] = useState("SP25"); // SP25 default
 
+
+
     // Add refs to prevent multiple API calls
     const isLoadingRef = useRef(false);
     const lastFetchParamsRef = useRef(null);
@@ -125,12 +350,11 @@ const FileInfor = () => {
 
     // Initialize component
     useEffect(() => {
-        setCurrentTitlePage("Danh sách File");
+        setCurrentTitlePage("Quản lý tài liệu");
 
         // Load from localStorage
         const savedMode = loadFromLocalStorage(STORAGE_KEYS.CURRENT_MODE, "personal");
         const savedUserTags = loadFromLocalStorage(STORAGE_KEYS.SELECTED_USER_TAGS, []);
-
         setCurrentMode(savedMode);
         setSelectedUserTags(savedUserTags);
 
@@ -145,6 +369,8 @@ const FileInfor = () => {
 
         setInitialized(true);
     }, [setCurrentTitlePage]); // Only run once on mount
+
+
 
     // Save to localStorage when state changes
     useEffect(() => {
@@ -162,19 +388,14 @@ const FileInfor = () => {
     // Listen for extracted data from ProcessingQueue
     useEffect(() => {
         const handleFileDataExtracted = () => {
-            console.log("🎯 FileInfor: fileDataExtracted event received");
             const storedData = localStorage.getItem("extractedFileData");
-            console.log("📦 FileInfor: storedData from localStorage:", storedData);
 
             if (storedData) {
                 try {
                     const { data, timestamp } = JSON.parse(storedData);
-                    console.log("✅ FileInfor: Parsed data:", { data, timestamp });
-                    console.log("⏰ FileInfor: Time difference:", Date.now() - timestamp, "ms");
 
                     // Check if data is fresh (less than 5 seconds old)
                     if (Date.now() - timestamp < 5000) {
-                        console.log("🚀 FileInfor: Opening modal with data");
                         setExtractedDataList(data);
                         setCurrentExtractedIndex(0);
                         setActiveTab("file");
@@ -182,17 +403,14 @@ const FileInfor = () => {
                         // Clear localStorage after reading
                         localStorage.removeItem("extractedFileData");
                     } else {
-                        console.warn("⚠️ FileInfor: Data is too old, ignoring");
                     }
                 } catch (error) {
                     console.error("❌ FileInfor: Error parsing extracted file data:", error);
                 }
             } else {
-                console.log("📭 FileInfor: No data in localStorage");
             }
         };
 
-        console.log("🔧 FileInfor: Setting up fileDataExtracted event listener");
         // Add event listener
         window.addEventListener("fileDataExtracted", handleFileDataExtracted);
 
@@ -201,12 +419,10 @@ const FileInfor = () => {
 
         // Cleanup
         return () => {
-            console.log("🧹 FileInfor: Cleaning up fileDataExtracted event listener");
             window.removeEventListener("fileDataExtracted", handleFileDataExtracted);
         };
     }, []);
 
-    // Main effect to handle data fetching - ONLY ONE useEffect for data fetching
     useEffect(() => {
         if (!initialized) return;
 
@@ -248,6 +464,8 @@ const FileInfor = () => {
 
         fetchData();
     }, [initialized, isTrashMode, isSearchMode, searchTerm, currentMode, currentPage, filesPerPage, currentSort, currentStatus, filters.fileNameInclude, selectedUserTags]);
+
+
 
     // Function to fetch trash files
     const fetchTrashFiles = useCallback(async () => {
@@ -326,6 +544,7 @@ const FileInfor = () => {
 
         setCurrentSort(newSort);
         setCurrentPage(1);
+        setDashboardPage(1);
         // Reset fetch params to allow new fetch
         lastFetchParamsRef.current = null;
     };
@@ -342,6 +561,7 @@ const FileInfor = () => {
     const handleSortChange = (column, direction) => {
         setCurrentSort({ column, direction });
         setCurrentPage(1);
+        setDashboardPage(1);
         // Reset fetch params to allow new fetch
         lastFetchParamsRef.current = null;
     };
@@ -350,6 +570,7 @@ const FileInfor = () => {
     const handleClearTrashMode = () => {
         setIsTrashMode(false);
         setCurrentPage(1);
+        setDashboardPage(1);
         // Reset fetch params to allow new fetch
         lastFetchParamsRef.current = null;
     };
@@ -517,6 +738,7 @@ const FileInfor = () => {
         setSearchResults([]);
         setIsSearchMode(false);
         setCurrentPage(1);
+        setDashboardPage(1);
 
         // Remove search term from URL
         const urlParams = new URLSearchParams(location.search);
@@ -533,6 +755,7 @@ const FileInfor = () => {
         if (e.key === "Enter" || e.type === "click") {
             setIsSearchMode(true);
             setCurrentPage(1);
+            setDashboardPage(1);
             // Reset fetch params to allow new fetch
             lastFetchParamsRef.current = null;
         }
@@ -1247,10 +1470,73 @@ const FileInfor = () => {
         setIsDraggingOverModal(false);
     };
 
+    const [activePreviewFileId, setActivePreviewFileId] = useState(null);
+
+    // State for TLTN Parameter Select Modal
+    const [showParameterModal, setShowParameterModal] = useState(false);
+    const [currentParameterRowId, setCurrentParameterRowId] = useState(null);
+    const [currentSampleIdsForFilter, setCurrentSampleIdsForFilter] = useState([]);
+
+    const handleOpenParameterSelect = (rowId, sampleIdsString) => {
+        // Parse sample IDs from the input string
+        const cleanedIds = sampleIdsString
+            .split(/[,;]/)
+            .map((id) => id.trim())
+            .filter((id) => id); // Remove empty strings
+
+        if (cleanedIds.length === 0) {
+            toast.warning("Vui lòng nhập Mã mẫu (Sample ID) trước để lọc chỉ tiêu");
+            return;
+        }
+
+        setCurrentParameterRowId(rowId);
+        setCurrentSampleIdsForFilter(cleanedIds);
+        setShowParameterModal(true);
+    };
+
+    const handleConfirmParameterSelect = (analysisIds) => {
+        if (currentParameterRowId && analysisIds.length > 0) {
+            setTltnData((prev) =>
+                prev.map((item) => {
+                    if (item.id !== currentParameterRowId) return item;
+
+                    // Get existing IDs from current value
+                    const currentIds = (item.sampleIds || "")
+                        .split(/[,;]/)
+                        .map((id) => id.trim())
+                        .filter((id) => id);
+
+                    // Merge with new analysisIds, removing duplicates
+                    const uniqueIds = Array.from(new Set([...currentIds, ...analysisIds]));
+
+                    return { ...item, sampleIds: uniqueIds.join("; ") };
+                })
+            );
+            toast.success(`Đã thêm ${analysisIds.length} ID chỉ tiêu`);
+        }
+        setShowParameterModal(false);
+        setCurrentParameterRowId(null);
+        setCurrentSampleIdsForFilter([]);
+    };
+
+
+    // Auto-select first file for preview
+    useEffect(() => {
+        if (tltnData.length > 0) {
+            // If current active file is no longer in list/null, select first
+            if (!activePreviewFileId || !tltnData.find(f => f.id === activePreviewFileId)) {
+                setActivePreviewFileId(tltnData[0].id);
+            }
+        } else {
+            setActivePreviewFileId(null);
+        }
+    }, [tltnData, activePreviewFileId]);
+
     const handleCloseTLTNModal = () => {
         setShowUploadTLTNModal(false);
         setTltnData([]);
         setIsDraggingOverModal(false);
+        setActivePreviewFileId(null);
     };
 
     const handleTLTNDrop = (event) => {
@@ -1317,7 +1603,7 @@ const FileInfor = () => {
                     // If user typed a separator (comma or semicolon), append prefix for next item
                     const lastChar = updatedValue.slice(-1);
                     if (lastChar === ";" || lastChar === ",") {
-                        updatedValue = updatedValue + samplePrefix;
+                        updatedValue = updatedValue + " " + samplePrefix;
                     }
                 }
 
@@ -1404,6 +1690,10 @@ const FileInfor = () => {
                             <span>{isTrashMode ? "File chờ xóa" : "File hiện có"}</span>
                         </button>
 
+
+
+
+
                         {/* Filters and Controls */}
                         {!isTrashMode && (
                             <>
@@ -1484,9 +1774,8 @@ const FileInfor = () => {
                                 {/* Action Buttons */}
                                 <button
                                     onClick={toggleSelectColumn}
-                                    className={`max-w-24 px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${
-                                        showSelectColumn ? "bg-blue-600 text-white focus:ring-blue-500" : "bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-gray-300"
-                                    }`}
+                                    className={`max-w-24 px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${showSelectColumn ? "bg-blue-600 text-white focus:ring-blue-500" : "bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-gray-300"
+                                        }`}
                                 >
                                     <FaCheck size={12} />
                                     Chọn file
@@ -1496,11 +1785,10 @@ const FileInfor = () => {
                                     <button
                                         onClick={handleSendEmail}
                                         disabled={selectedFiles.size === 0 || processing}
-                                        className={`max-w-28 px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${
-                                            selectedFiles.size > 0 && !processing
-                                                ? "bg-orange-500 text-white hover:bg-orange-600 focus:ring-orange-500"
-                                                : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                        }`}
+                                        className={`max-w-28 px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${selectedFiles.size > 0 && !processing
+                                            ? "bg-orange-500 text-white hover:bg-orange-600 focus:ring-orange-500"
+                                            : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                            }`}
                                     >
                                         {processing && <FaSync className="animate-spin" size={12} />}
                                         {!processing && <FaSync size={12} />}
@@ -1511,9 +1799,8 @@ const FileInfor = () => {
                                     <button
                                         onClick={handleExtractData}
                                         disabled={selectedFiles.size === 0 || processing}
-                                        className={`px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${
-                                            selectedFiles.size > 0 && !processing ? "bg-green-500 text-white hover:bg-green-600 focus:ring-green-500" : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                        }`}
+                                        className={`px-3 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap text-sm flex items-center gap-1 ${selectedFiles.size > 0 && !processing ? "bg-green-500 text-white hover:bg-green-600 focus:ring-green-500" : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                            }`}
                                     >
                                         {processing && <FaSync className="animate-spin" size={12} />}
                                         {!processing && <FaSync size={12} />}
@@ -1622,15 +1909,15 @@ const FileInfor = () => {
                                             <td className="py-1 px-2 border text-left">
                                                 {file.createdAt
                                                     ? new Date(file.createdAt).toLocaleString("vi-VN", {
-                                                          timeZone: "Asia/Ho_Chi_Minh",
-                                                          year: "numeric",
-                                                          month: "2-digit",
-                                                          day: "2-digit",
-                                                          hour: "2-digit",
-                                                          minute: "2-digit",
-                                                          second: "2-digit",
-                                                          hour12: false,
-                                                      })
+                                                        timeZone: "Asia/Ho_Chi_Minh",
+                                                        year: "numeric",
+                                                        month: "2-digit",
+                                                        day: "2-digit",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                        second: "2-digit",
+                                                        hour12: false,
+                                                    })
                                                     : "-"}
                                             </td>
                                             <td className="py-1 px-2 border text-left">
@@ -1673,7 +1960,8 @@ const FileInfor = () => {
                             {trashFiles.length === 0 && <div className="text-center py-8 text-gray-400">{loading ? "Đang tải..." : "Không có file nào trong thùng rác"}</div>}
                         </div>
                     </>
-                ) : (
+                ) : ( // Show File List (Default/Fallback) - Logic simplified
+
                     <div className="flex-1 overflow-auto">
                         <div className="min-w-[1200px]">
                             <Table className="w-full text-black border text-left">
@@ -1828,15 +2116,15 @@ const FileInfor = () => {
                                                         <div className="h-full max-h-[50px] overflow-y-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
                                                             {file.createdAt
                                                                 ? new Date(file.createdAt).toLocaleString("vi-VN", {
-                                                                      timeZone: "Asia/Ho_Chi_Minh",
-                                                                      year: "numeric",
-                                                                      month: "2-digit",
-                                                                      day: "2-digit",
-                                                                      hour: "2-digit",
-                                                                      minute: "2-digit",
-                                                                      second: "2-digit",
-                                                                      hour12: false,
-                                                                  })
+                                                                    timeZone: "Asia/Ho_Chi_Minh",
+                                                                    year: "numeric",
+                                                                    month: "2-digit",
+                                                                    day: "2-digit",
+                                                                    hour: "2-digit",
+                                                                    minute: "2-digit",
+                                                                    second: "2-digit",
+                                                                    hour12: false,
+                                                                })
                                                                 : "-"}
                                                         </div>
                                                     </TableCell>
@@ -2022,104 +2310,106 @@ const FileInfor = () => {
             </div>
 
             {/* Upload Modal */}
-            {showUploadModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal-backdrop">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4 modal-content">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-semibold">Tải file lên</h3>
-                            <button onClick={handleCloseUploadModal} className="text-gray-500 hover:text-gray-700">
-                                <FaTimes size={20} />
-                            </button>
-                        </div>
-
-                        {/* File Selection Area */}
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Chọn file</label>
-                            <div
-                                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
-                                onDragOver={handleDragOver}
-                                onDragEnter={handleDragEnter}
-                                onDragLeave={handleDragLeave}
-                                onDrop={handleDrop}
-                                onClick={() => document.getElementById("file-upload-input").click()}
-                            >
-                                <input id="file-upload-input" type="file" multiple onChange={handleFileSelect} className="hidden" />
-                                <FaPlus className="mx-auto text-gray-400 mb-2" size={24} />
-                                <p className="text-sm text-gray-600">Kéo thả file vào đây hoặc click để chọn</p>
-                                <p className="text-xs text-gray-500 mt-1">Có thể chọn nhiều file cùng lúc</p>
+            {
+                showUploadModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal-backdrop">
+                        <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4 modal-content">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-semibold">Tải file lên</h3>
+                                <button onClick={handleCloseUploadModal} className="text-gray-500 hover:text-gray-700">
+                                    <FaTimes size={20} />
+                                </button>
                             </div>
 
-                            {/* File Preview List */}
-                            {uploadData.files.length > 0 && (
-                                <div className="mt-4 max-h-32 overflow-y-auto">
-                                    <p className="text-sm text-gray-600 mb-2">Đã chọn {uploadData.files.length} file:</p>
-                                    <div className="space-y-2">
-                                        {uploadData.files.map((file, index) => (
-                                            <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-                                                    <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(2)} KB</p>
-                                                </div>
-                                                <button onClick={() => handleRemoveFile(index)} className="text-red-500 hover:text-red-700 p-1" title="Xóa file">
-                                                    <FaTimes size={14} />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
+                            {/* File Selection Area */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Chọn file</label>
+                                <div
+                                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                                    onDragOver={handleDragOver}
+                                    onDragEnter={handleDragEnter}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={handleDrop}
+                                    onClick={() => document.getElementById("file-upload-input").click()}
+                                >
+                                    <input id="file-upload-input" type="file" multiple onChange={handleFileSelect} className="hidden" />
+                                    <FaPlus className="mx-auto text-gray-400 mb-2" size={24} />
+                                    <p className="text-sm text-gray-600">Kéo thả file vào đây hoặc click để chọn</p>
+                                    <p className="text-xs text-gray-500 mt-1">Có thể chọn nhiều file cùng lúc</p>
                                 </div>
-                            )}
-                        </div>
 
-                        {/* Category Selection */}
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Danh mục</label>
-                            <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2">
-                                {userTagOptions.map((category) => (
-                                    <label key={category} className="flex items-center py-1 px-1 hover:bg-gray-100 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={uploadData.userTags.includes(category)}
-                                            onChange={(e) => handleUploadCategoryChange(category, e.target.checked)}
-                                            className="mr-2"
-                                        />
-                                        <span className="text-sm">{category}</span>
-                                    </label>
-                                ))}
+                                {/* File Preview List */}
+                                {uploadData.files.length > 0 && (
+                                    <div className="mt-4 max-h-32 overflow-y-auto">
+                                        <p className="text-sm text-gray-600 mb-2">Đã chọn {uploadData.files.length} file:</p>
+                                        <div className="space-y-2">
+                                            {uploadData.files.map((file, index) => (
+                                                <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                                                        <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(2)} KB</p>
+                                                    </div>
+                                                    <button onClick={() => handleRemoveFile(index)} className="text-red-500 hover:text-red-700 p-1" title="Xóa file">
+                                                        <FaTimes size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        </div>
 
-                        {/* Foreign Keys Input */}
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Khóa liên kết (phân cách bằng dấu phẩy)</label>
-                            <input
-                                type="text"
-                                placeholder="Nhập UID, phân cách bằng dấu phẩy..."
-                                onChange={(e) => handleForeignKeyInput(e.target.value)}
-                                className="w-full px-3 py-1 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
+                            {/* Category Selection */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Danh mục</label>
+                                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2">
+                                    {userTagOptions.map((category) => (
+                                        <label key={category} className="flex items-center py-1 px-1 hover:bg-gray-100 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={uploadData.userTags.includes(category)}
+                                                onChange={(e) => handleUploadCategoryChange(category, e.target.checked)}
+                                                className="mr-2"
+                                            />
+                                            <span className="text-sm">{category}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex justify-end gap-2">
-                            <button
-                                onClick={handleCloseUploadModal}
-                                className="px-4 py-1 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                                disabled={uploading}
-                            >
-                                Hủy
-                            </button>
-                            <button
-                                onClick={handleFileUpload}
-                                disabled={uploading || uploadData.files.length === 0}
-                                className="px-4 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                            >
-                                {uploading && <FaSync className="animate-spin" size={12} />}
-                                {uploading ? "Đang tải..." : "Tải lên"}
-                            </button>
+                            {/* Foreign Keys Input */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Khóa liên kết (phân cách bằng dấu phẩy)</label>
+                                <input
+                                    type="text"
+                                    placeholder="Nhập UID, phân cách bằng dấu phẩy..."
+                                    onChange={(e) => handleForeignKeyInput(e.target.value)}
+                                    className="w-full px-3 py-1 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    onClick={handleCloseUploadModal}
+                                    className="px-4 py-1 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                                    disabled={uploading}
+                                >
+                                    Hủy
+                                </button>
+                                <button
+                                    onClick={handleFileUpload}
+                                    disabled={uploading || uploadData.files.length === 0}
+                                    className="px-4 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {uploading && <FaSync className="animate-spin" size={12} />}
+                                    {uploading ? "Đang tải..." : "Tải lên"}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* EmailForm Component */}
             <EmailForm
@@ -2138,216 +2428,280 @@ const FileInfor = () => {
             />
 
             {/* Extracted Data Modal */}
-            {showExtractedDataModal && extractedDataList.length > 0 && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-                        {/* Header */}
-                        <div className="flex justify-between items-center mb-4 pb-4 border-b">
-                            <div>
-                                <h2 className="text-xl font-bold">Dữ liệu trích xuất</h2>
-                                <p className="text-sm text-gray-600 mt-1">
-                                    File {currentExtractedIndex + 1}/{extractedDataList.length}: {extractedDataList[currentExtractedIndex].fileName}
-                                </p>
+            {
+                showExtractedDataModal && extractedDataList.length > 0 && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg p-6 w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+                            {/* Header */}
+                            <div className="flex justify-between items-center mb-4 pb-4 border-b">
+                                <div>
+                                    <h2 className="text-xl font-bold">Dữ liệu trích xuất</h2>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        File {currentExtractedIndex + 1}/{extractedDataList.length}: {extractedDataList[currentExtractedIndex].fileName}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setShowExtractedDataModal(false);
+                                        setExtractedDataList([]);
+                                        setCurrentExtractedIndex(0);
+                                        setActiveTab("file");
+                                    }}
+                                    className="text-gray-500 hover:text-gray-700"
+                                >
+                                    <FaTimes size={24} />
+                                </button>
                             </div>
-                            <button
-                                onClick={() => {
-                                    setShowExtractedDataModal(false);
-                                    setExtractedDataList([]);
-                                    setCurrentExtractedIndex(0);
-                                    setActiveTab("file");
-                                }}
-                                className="text-gray-500 hover:text-gray-700"
-                            >
-                                <FaTimes size={24} />
-                            </button>
-                        </div>
 
-                        {/* Tabs */}
-                        <div className="flex gap-2 mb-4 border-b">
-                            <button
-                                onClick={() => setActiveTab("file")}
-                                className={`px-4 py-2 font-semibold transition-colors ${activeTab === "file" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-                            >
-                                File Record
-                            </button>
-                            <button
-                                onClick={() => setActiveTab("docCopy")}
-                                className={`px-4 py-2 font-semibold transition-colors ${activeTab === "docCopy" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-                            >
-                                Doc Copy
-                            </button>
-                        </div>
-
-                        {/* Content - Tab Display */}
-                        <div className="flex-1 overflow-auto mb-4">
-                            {(() => {
-                                const currentData = extractedDataList[currentExtractedIndex].data;
-
-                                // Data format: [{ fileRecord: {...}, docCopy: {...} }, ...]
-                                // Get first item from array
-                                const extractedItem = Array.isArray(currentData) && currentData.length > 0 ? currentData[0] : null;
-
-                                if (!extractedItem) {
-                                    return <div className="text-center text-gray-500 py-8">Không có dữ liệu để hiển thị</div>;
-                                }
-
-                                if (activeTab === "file") {
-                                    return <FileDetail fileData={extractedItem.fileRecord} />;
-                                } else {
-                                    return <CopyDetail copyData={extractedItem.docCopy} />;
-                                }
-                            })()}
-                        </div>
-
-                        {/* Navigation and Actions */}
-                        <div className="flex justify-between items-center pt-4 border-t">
-                            <div className="flex gap-2">
+                            {/* Tabs */}
+                            <div className="flex gap-2 mb-4 border-b">
                                 <button
-                                    onClick={() => {
-                                        setCurrentExtractedIndex((prev) => Math.max(0, prev - 1));
-                                        setActiveTab("file"); // Reset to file tab when navigating
-                                    }}
-                                    disabled={currentExtractedIndex === 0}
-                                    className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    onClick={() => setActiveTab("file")}
+                                    className={`px-4 py-2 font-semibold transition-colors ${activeTab === "file" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
                                 >
-                                    Trước
+                                    File Record
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        setCurrentExtractedIndex((prev) => Math.min(extractedDataList.length - 1, prev + 1));
-                                        setActiveTab("file"); // Reset to file tab when navigating
-                                    }}
-                                    disabled={currentExtractedIndex === extractedDataList.length - 1}
-                                    className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    onClick={() => setActiveTab("docCopy")}
+                                    className={`px-4 py-2 font-semibold transition-colors ${activeTab === "docCopy" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}
                                 >
-                                    Sau
+                                    Doc Copy
                                 </button>
+                            </div>
+
+                            {/* Content - Tab Display */}
+                            <div className="flex-1 overflow-auto mb-4">
+                                {(() => {
+                                    const currentData = extractedDataList[currentExtractedIndex].data;
+
+                                    // Data format: [{ fileRecord: {...}, docCopy: {...} }, ...]
+                                    // Get first item from array
+                                    const extractedItem = Array.isArray(currentData) && currentData.length > 0 ? currentData[0] : null;
+
+                                    if (!extractedItem) {
+                                        return <div className="text-center text-gray-500 py-8">Không có dữ liệu để hiển thị</div>;
+                                    }
+
+                                    if (activeTab === "file") {
+                                        return <FileDetail fileData={extractedItem.fileRecord} />;
+                                    } else {
+                                        return <CopyDetail copyData={extractedItem.docCopy} />;
+                                    }
+                                })()}
+                            </div>
+
+                            {/* Navigation and Actions */}
+                            <div className="flex justify-between items-center pt-4 border-t">
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => {
+                                            setCurrentExtractedIndex((prev) => Math.max(0, prev - 1));
+                                            setActiveTab("file"); // Reset to file tab when navigating
+                                        }}
+                                        disabled={currentExtractedIndex === 0}
+                                        className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Trước
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setCurrentExtractedIndex((prev) => Math.min(extractedDataList.length - 1, prev + 1));
+                                            setActiveTab("file"); // Reset to file tab when navigating
+                                        }}
+                                        disabled={currentExtractedIndex === extractedDataList.length - 1}
+                                        className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Sau
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Upload TLTN Modal */}
-            {showUploadTLTNModal && (
-                <div
-                    className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-                    onDrop={handleTLTNDrop}
-                    onDragOver={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setIsDraggingOverModal(true);
-                    }}
-                    onDragLeave={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        // Only set false if leaving the container
-                        if (e.currentTarget === e.target) {
-                            setIsDraggingOverModal(false);
-                        }
-                    }}
-                >
+            {
+                showUploadTLTNModal && (
                     <div
-                        className={`bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-[modalSlideIn_0.3s_ease-out] relative transition-colors duration-200 ${
-                            isDraggingOverModal ? "border-4 border-blue-500 bg-blue-50" : ""
-                        }`}
+                        className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+                        onDrop={handleTLTNDrop}
+                        onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsDraggingOverModal(true);
+                        }}
+                        onDragLeave={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            // Only set false if leaving the container
+                            if (e.currentTarget === e.target) {
+                                setIsDraggingOverModal(false);
+                            }
+                        }}
                     >
-                        {/* Visual overlay for drag state */}
-                        {isDraggingOverModal && (
-                            <div className="absolute inset-0 bg-blue-100 bg-opacity-70 z-50 flex items-center justify-center rounded-lg pointer-events-none">
-                                <div className="text-3xl font-bold text-blue-600 border-4 border-dashed border-blue-400 p-10 rounded-xl bg-white bg-opacity-80">Thả file vào đây để upload</div>
-                            </div>
-                        )}
+                        <div
+                            className={`bg-white rounded-lg shadow-xl w-[90vw] h-[90vh] max-w-none flex flex-col animate-[modalSlideIn_0.3s_ease-out] relative transition-colors duration-200 ${isDraggingOverModal ? "border-4 border-blue-500 bg-blue-50" : ""
+                                }`}
+                        >
+                            {/* Visual overlay for drag state */}
+                            {isDraggingOverModal && (
+                                <div className="absolute inset-0 bg-blue-100 bg-opacity-70 z-50 flex items-center justify-center rounded-lg pointer-events-none">
+                                    <div className="text-3xl font-bold text-blue-600 border-4 border-dashed border-blue-400 p-10 rounded-xl bg-white bg-opacity-80">Thả file vào đây để upload</div>
+                                </div>
+                            )}
 
-                        <div className="p-4 border-b flex justify-between items-center">
-                            <h3 className="text-lg font-semibold">Upload Tài liệu thử nghiệm</h3>
-                            <button onClick={handleCloseTLTNModal} className="text-gray-500 hover:text-gray-700">
-                                <FaTimes size={20} />
-                            </button>
-                        </div>
-
-                        <div className="p-6 flex-1 overflow-y-auto">
-                            {/* Prefix Selection */}
-                            <div className="mb-4 flex items-center gap-4 bg-gray-50 p-3 rounded-lg border">
-                                <span className="font-medium text-sm text-gray-700">Prefix mặc định:</span>
-                                <label className="flex items-center cursor-pointer">
-                                    <input type="radio" name="samplePrefix" value="SP25" checked={samplePrefix === "SP25"} onChange={(e) => setSamplePrefix(e.target.value)} className="mr-2" />
-                                    <span className="text-sm">SP25</span>
-                                </label>
-                                <label className="flex items-center cursor-pointer">
-                                    <input type="radio" name="samplePrefix" value="SP26" checked={samplePrefix === "SP26"} onChange={(e) => setSamplePrefix(e.target.value)} className="mr-2" />
-                                    <span className="text-sm">SP26</span>
-                                </label>
-                            </div>
-
-                            <div className="mb-6 flex justify-between items-center">
-                                <p className="text-gray-600 text-sm">Hỗ trợ file: .doc, .docx, .pdf. Kéo thả file vào popup để upload.</p>
-                                <button
-                                    onClick={() => document.getElementById("tltn-file-input").click()}
-                                    className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-2 text-sm font-medium"
-                                >
-                                    <FaPlus size={14} /> Chọn file từ máy
+                            <div className="p-4 border-b flex justify-between items-center shrink-0">
+                                <h3 className="text-lg font-semibold">Upload Tài liệu thử nghiệm</h3>
+                                <button onClick={handleCloseTLTNModal} className="text-gray-500 hover:text-gray-700">
+                                    <FaTimes size={20} />
                                 </button>
-                                <input id="tltn-file-input" type="file" multiple accept=".doc,.docx,.pdf" className="hidden" onChange={handleTLTNFileSelect} />
                             </div>
 
-                            {/* List */}
-                            <div className="space-y-4">
-                                {tltnData.length === 0 && !isDraggingOverModal && (
-                                    <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50">
-                                        <div className="mb-3">
-                                            <FaPlus className="mx-auto text-gray-300" size={40} />
+                            <div className="flex-1 overflow-hidden flex flex-row">
+                                {/* Left Column: List & Inputs */}
+                                <div className={`flex-1 overflow-y-auto p-6 border-r ${tltnData.length > 0 ? "w-1/2" : "w-full"}`}>
+                                    {/* Prefix Selection */}
+                                    <div className="mb-4 flex items-center gap-4 bg-gray-50 p-3 rounded-lg border">
+                                        <span className="font-medium text-sm text-gray-700">Prefix mặc định:</span>
+                                        <label className="flex items-center cursor-pointer">
+                                            <input type="radio" name="samplePrefix" value="SP25" checked={samplePrefix === "SP25"} onChange={(e) => setSamplePrefix(e.target.value)} className="mr-2" />
+                                            <span className="text-sm">SP25</span>
+                                        </label>
+                                        <label className="flex items-center cursor-pointer">
+                                            <input type="radio" name="samplePrefix" value="SP26" checked={samplePrefix === "SP26"} onChange={(e) => setSamplePrefix(e.target.value)} className="mr-2" />
+                                            <span className="text-sm">SP26</span>
+                                        </label>
+                                    </div>
+
+                                    <div className="mb-6 flex justify-between items-center">
+                                        <p className="text-gray-600 text-sm">Hỗ trợ file: .doc, .docx, .pdf. Kéo thả file vào popup để upload.</p>
+                                        <button
+                                            onClick={() => document.getElementById("tltn-file-input").click()}
+                                            className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-2 text-sm font-medium"
+                                        >
+                                            <FaPlus size={14} /> Chọn file từ máy
+                                        </button>
+                                        <input id="tltn-file-input" type="file" multiple accept=".doc,.docx,.pdf" className="hidden" onChange={handleTLTNFileSelect} />
+                                    </div>
+
+                                    {/* List */}
+                                    <div className="space-y-4">
+                                        {tltnData.length === 0 && !isDraggingOverModal && (
+                                            <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50">
+                                                <div className="mb-3">
+                                                    <FaPlus className="mx-auto text-gray-300" size={40} />
+                                                </div>
+                                                <p>Chưa có file nào được chọn</p>
+                                                <p className="text-sm mt-2">Kéo thả file vào đây hoặc nhấn nút "Chọn file từ máy"</p>
+                                            </div>
+                                        )}
+                                        {tltnData.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                className={`flex gap-4 items-start p-3 border rounded cursor-pointer transition-all ${activePreviewFileId === item.id ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500" : "bg-gray-50 border-gray-200 hover:border-blue-300"
+                                                    }`}
+                                                onClick={() => setActivePreviewFileId(item.id)}
+                                            >
+                                                <div className="flex-1 flex items-center gap-2 overflow-hidden">
+                                                    <div className="bg-blue-100 p-2 rounded shrink-0">
+                                                        <FaEdit className="text-blue-600" />
+                                                    </div>
+                                                    <span className="truncate font-medium text-sm" title={item.file.name}>
+                                                        {item.file.name}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex-[2]">
+                                                    <input
+                                                        type="text"
+                                                        value={item.sampleIds}
+                                                        onChange={(e) => handleSampleIdsChange(item.id, e.target.value)}
+                                                        onFocus={() => setActivePreviewFileId(item.id)}
+                                                        placeholder="Nhập Sample IDs (phân cách bởi dấu phẩy hoặc chấm phẩy)"
+                                                        className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
+                                                    />
+                                                    <div className="text-right mt-1">
+                                                        <span className={`text-xs font-medium ${item.sampleIds.split(/[,;]/).filter(id => id.trim().length > 0).length > 0 ? "text-blue-600" : "text-gray-400"}`}>
+                                                            Số lượng: {item.sampleIds.split(/[,;]/).filter(id => id.trim().length > 0).length}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Parameter Select Button Column */}
+                                                <div className="shrink-0 flex items-start">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleOpenParameterSelect(item.id, item.sampleIds);
+                                                        }}
+                                                        className="px-3 py-2 mt-0.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors text-xs font-semibold whitespace-nowrap"
+                                                        title="Chọn chỉ tiêu theo Sample ID"
+                                                    >
+                                                        Thêm chỉ tiêu
+                                                    </button>
+                                                </div>
+
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleRemoveTLTNItem(item.id);
+                                                    }}
+                                                    className="text-gray-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-colors"
+                                                >
+                                                    <FaTimes />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Right Column: Preview */}
+                                {tltnData.length > 0 && (
+                                    <div className="w-1/2 bg-gray-100 border-l flex flex-col overflow-hidden">
+                                        <div className="p-3 bg-white border-b shadow-sm shrink-0">
+                                            <h4 className="font-semibold text-gray-700 flex items-center gap-2">
+                                                <FaEye className="text-blue-500" />
+                                                Xem trước: <span className="text-blue-600 font-normal truncate max-w-[300px]">{tltnData.find(f => f.id === activePreviewFileId)?.file.name || "Chưa chọn file"}</span>
+                                            </h4>
                                         </div>
-                                        <p>Chưa có file nào được chọn</p>
-                                        <p className="text-sm mt-2">Kéo thả file vào đây hoặc nhấn nút "Chọn file từ máy"</p>
+                                        <div className="flex-1 p-4 flex items-center justify-center overflow-auto">
+                                            {(() => {
+                                                const activeItem = tltnData.find(f => f.id === activePreviewFileId);
+                                                if (!activeItem) return <p className="text-gray-400">Chọn một file để xem trước</p>;
+                                                return <TLTNPreview file={activeItem.file} />;
+                                            })()}
+                                        </div>
                                     </div>
                                 )}
-                                {tltnData.map((item) => (
-                                    <div key={item.id} className="flex gap-4 items-start p-3 border rounded bg-gray-50">
-                                        <div className="flex-1 flex items-center gap-2 overflow-hidden">
-                                            <div className="bg-blue-100 p-2 rounded">
-                                                <FaEdit className="text-blue-600" />
-                                            </div>
-                                            <span className="truncate" title={item.file.name}>
-                                                {item.file.name}
-                                            </span>
-                                        </div>
+                            </div>
 
-                                        <div className="flex-[2]">
-                                            <input
-                                                type="text"
-                                                value={item.sampleIds}
-                                                onChange={(e) => handleSampleIdsChange(item.id, e.target.value)}
-                                                placeholder="Nhập Sample IDs (phân cách bởi dấu phẩy hoặc chấm phẩy)"
-                                                className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                                            />
-                                        </div>
-
-                                        <button onClick={() => handleRemoveTLTNItem(item.id)} className="text-red-500 hover:text-red-700 p-2">
-                                            <FaTimes />
-                                        </button>
-                                    </div>
-                                ))}
+                            <div className="p-4 border-t flex justify-end gap-2 bg-gray-50 shrink-0">
+                                <button onClick={handleCloseTLTNModal} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg" disabled={uploadingTLTN}>
+                                    Hủy
+                                </button>
+                                <button
+                                    onClick={handleUploadTLTN}
+                                    disabled={uploadingTLTN || tltnData.length === 0}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {uploadingTLTN ? <FaSync className="animate-spin" /> : <FaCheck />}
+                                    {uploadingTLTN ? "Đang xử lý..." : "Bắt đầu Upload"}
+                                </button>
                             </div>
                         </div>
-
-                        <div className="p-4 border-t flex justify-end gap-2 bg-gray-50">
-                            <button onClick={handleCloseTLTNModal} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg" disabled={uploadingTLTN}>
-                                Hủy
-                            </button>
-                            <button
-                                onClick={handleUploadTLTN}
-                                disabled={uploadingTLTN || tltnData.length === 0}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                            >
-                                {uploadingTLTN ? <FaSync className="animate-spin" /> : <FaCheck />}
-                                {uploadingTLTN ? "Đang xử lý..." : "Bắt đầu Upload"}
-                            </button>
-                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+
+            {/* TLTN Parameter Select Modal */}
+            <TLTNParameterSelectModal
+                isVisible={showParameterModal}
+                onClose={() => setShowParameterModal(false)}
+                onConfirm={handleConfirmParameterSelect}
+                sampleIds={currentSampleIdsForFilter}
+            />
+        </div >
     );
 };
 

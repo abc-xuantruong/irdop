@@ -149,9 +149,6 @@ const ProtocolDetail = ({ protocol, isOpen, onClose, onProtocolUpdate }) => {
 				protocol: filteredProtocol,
 			});
 
-			console.log('Save response:', response);
-			console.log('Save response.data:', response.data);
-			console.log('Save response.status:', response.status);
 
 			// Check status 200 or success flags
 			if (response.status === 200 || response.status === 201 || response.success || response.data?.success) {

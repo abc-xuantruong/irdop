@@ -32,6 +32,7 @@ import LabResultReport from "./components/LabResultReport";
 import ProgressDashboard from "./pages/ProgressDashboard";
 import UserDashboard from "./pages/UserDashboard";
 import IncomingOrder from "./components/orderDashboard/IncomingOrder";
+import FileDashboard from "./pages/FileDashboard";
 
 const App = () => {
     return (
@@ -69,6 +70,7 @@ const App = () => {
                                             <Route path="/login" element={<Login />} />
                                             <Route path="library/client" element={<ClientInfor />} />
                                             <Route path="/files" element={<FileInfor />} />
+                                            <Route path="/file-dashboard" element={<FileDashboard />} />
                                             <Route path="/filterable" element={<ProcessingSampleV2 />} />
                                             <Route path="/handover-dashboard" element={<HandoverSampleDash />} />
 

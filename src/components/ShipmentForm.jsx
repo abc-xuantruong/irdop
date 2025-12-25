@@ -4,8 +4,6 @@ import { GlobalContext } from '../contexts/GlobalContext';
 import { FaBox, FaUser, FaTruck } from 'react-icons/fa';
 
 const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
-	console.log('Receipt data:', receipt);
-	console.log('Mode:', mode);
 	const { currentUser } = useContext(GlobalContext);
 
 	// Initialize form data based on mode
@@ -809,7 +807,6 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 				},
 				foreignKeyUIDs: getCurrentForeignkeyUIDS(),
 			};
-			console.log('Sending order:', requestBody);
 
 			const response = await apiPost('https://red.irdop.org/v1/postal/vietel/new-order', requestBody);
 
@@ -931,7 +928,6 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 			const updateResponse = await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 			if (updateResponse.status === 200) {
-				console.log('Receipt updated successfully with direct pickup tracking number:', trackingNumber);
 
 				// Call onOrderUpdate to refresh dashboard data
 				if (onOrderUpdate) {
@@ -1119,7 +1115,6 @@ const ShipmentForm = ({ receipt, onClose, onOrderUpdate, mode = 'auto' }) => {
 			const updateResponse = await apiPost('https://red.irdop.org/v1/receipt/edit', payload);
 
 			if (updateResponse.status === 200) {
-				console.log('Receipt updated successfully with existing tracking number:', newTrackingNumber.trim());
 
 				// Call onOrderUpdate to refresh dashboard data
 				if (onOrderUpdate) {

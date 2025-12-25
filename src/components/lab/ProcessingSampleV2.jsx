@@ -48,7 +48,6 @@ const ProcessingSampleV2 = ({ onNavigateToLab, filter = {} }) => {
 
     const handleDoubleClick = (data) => {
         // Handle double click on analysis
-        console.log("Double clicked analysis:", data.analysis);
     };
 
     const handleUrgentFilter = () => {

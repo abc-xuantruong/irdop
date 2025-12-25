@@ -86,7 +86,6 @@ const CreateReceipt = ({ receipt: initialReceipt = null, setUpdatedReceipt }) =>
 
 	const handleCustomerSearch = (e) => {
 		const { value } = e.target;
-		console.log(value);
 		setCustomer((prevState) => ({ ...prevState, search: value }));
 
 		if (value.length > 2) {

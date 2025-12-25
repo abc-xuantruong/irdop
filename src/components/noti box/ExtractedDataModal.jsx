@@ -11,19 +11,14 @@ const ExtractedDataModal = () => {
 	useEffect(() => {
 		// Listen for file data extracted event
 		const handleFileDataExtracted = () => {
-			console.log('🎯 ExtractedDataModal: fileDataExtracted event received');
 			const storedData = localStorage.getItem('extractedFileData');
-			console.log('📦 ExtractedDataModal: storedData from localStorage:', storedData);
 
 			if (storedData) {
 				try {
 					const { data, timestamp } = JSON.parse(storedData);
-					console.log('✅ ExtractedDataModal: Parsed data:', { data, timestamp });
-					console.log('⏰ ExtractedDataModal: Time difference:', Date.now() - timestamp, 'ms');
 
 					// Check if data is fresh (less than 5 seconds old)
 					if (Date.now() - timestamp < 5000) {
-						console.log('🚀 ExtractedDataModal: Opening modal with file data');
 						setExtractedDataList(data);
 						setCurrentIndex(0);
 						setActiveTab('copyDetail');
@@ -32,31 +27,24 @@ const ExtractedDataModal = () => {
 						// Clear localStorage after reading
 						localStorage.removeItem('extractedFileData');
 					} else {
-						console.warn('⚠️ ExtractedDataModal: Data is too old, ignoring');
 					}
 				} catch (error) {
 					console.error('❌ ExtractedDataModal: Error parsing extracted file data:', error);
 				}
 			} else {
-				console.log('📭 ExtractedDataModal: No file data in localStorage');
 			}
 		};
 
 		// Listen for protocol data extracted event
 		const handleProtocolDataExtracted = () => {
-			console.log('🎯 ExtractedDataModal: protocolDataExtracted event received');
 			const storedData = localStorage.getItem('extractedProtocolData');
-			console.log('📦 ExtractedDataModal: storedData from localStorage:', storedData);
 
 			if (storedData) {
 				try {
 					const { data, timestamp } = JSON.parse(storedData);
-					console.log('✅ ExtractedDataModal: Parsed data:', { data, timestamp });
-					console.log('⏰ ExtractedDataModal: Time difference:', Date.now() - timestamp, 'ms');
 
 					// Check if data is fresh (less than 5 seconds old)
 					if (Date.now() - timestamp < 5000) {
-						console.log('🚀 ExtractedDataModal: Opening modal with protocol data');
 						setExtractedDataList(data);
 						setCurrentIndex(0);
 						setActiveTab('protocol');
@@ -65,17 +53,14 @@ const ExtractedDataModal = () => {
 						// Clear localStorage after reading
 						localStorage.removeItem('extractedProtocolData');
 					} else {
-						console.warn('⚠️ ExtractedDataModal: Data is too old, ignoring');
 					}
 				} catch (error) {
 					console.error('❌ ExtractedDataModal: Error parsing extracted protocol data:', error);
 				}
 			} else {
-				console.log('📭 ExtractedDataModal: No protocol data in localStorage');
 			}
 		};
 
-		console.log('🔧 ExtractedDataModal: Setting up event listeners');
 		window.addEventListener('fileDataExtracted', handleFileDataExtracted);
 		window.addEventListener('protocolDataExtracted', handleProtocolDataExtracted);
 
@@ -85,7 +70,6 @@ const ExtractedDataModal = () => {
 
 		// Cleanup
 		return () => {
-			console.log('🧹 ExtractedDataModal: Cleaning up event listeners');
 			window.removeEventListener('fileDataExtracted', handleFileDataExtracted);
 			window.removeEventListener('protocolDataExtracted', handleProtocolDataExtracted);
 		};

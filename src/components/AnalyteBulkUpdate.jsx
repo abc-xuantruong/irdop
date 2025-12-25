@@ -77,7 +77,6 @@ const AnalyteBulkUpdate = ({
 
 			// Remove existing editor if it exists
 			if (window.tinymce.get(selector)) {
-				console.log('Removing existing editor for:', selector);
 				window.tinymce.get(selector).remove();
 			}
 
@@ -159,7 +158,6 @@ const AnalyteBulkUpdate = ({
 					},
 				})
 				.then((editors) => {
-					console.log('TinyMCE initialized successfully for:', selector, editors);
 				})
 				.catch((error) => {
 					console.error('TinyMCE initialization failed for:', selector, error);
@@ -347,9 +345,6 @@ const AnalyteBulkUpdate = ({
 		const updates = [];
 
 		// Debug logging
-		console.log('Bulk edit values:', bulkEditValues);
-		console.log('Selected rows:', Array.from(selectedRows));
-		console.log('Selected data:', selectedData);
 		console.log(
 			'Selected data IDs:',
 			selectedData.map((item) => item.id),
@@ -365,7 +360,6 @@ const AnalyteBulkUpdate = ({
 			} else if (typeof rowId === 'number') {
 				analyteId = rowId;
 			} else {
-				console.warn(`Invalid rowId type: ${typeof rowId}, value: ${rowId}`);
 				return;
 			}
 
@@ -418,7 +412,6 @@ const AnalyteBulkUpdate = ({
 							});
 							updateData[dataField] = updatedDisplayStyle;
 							hasChanges = true;
-							console.log(`Display style change for analyte ${analyteId}:`, updatedDisplayStyle);
 						}
 					} else {
 						// Regular field comparison - allow empty strings and null values
@@ -439,11 +432,9 @@ const AnalyteBulkUpdate = ({
 			if (hasChanges && Object.keys(updateData).length > 1) {
 				// More than just id and has actual changes
 				updates.push(updateData);
-				console.log(`Update data for analyte ${analyteId}:`, updateData);
 			}
 		});
 
-		console.log('Final updates array:', updates);
 
 		if (updates.length === 0) {
 			toast.warning('Không có thay đổi nào để cập nhật. Tất cả giá trị đã giống với dữ liệu hiện tại.');

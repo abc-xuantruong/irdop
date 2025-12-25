@@ -130,9 +130,8 @@ const Header = () => {
                             {shouldShowReception() && (
                                 <Link
                                     to="/dashboard"
-                                    className={`cursor-pointer md:text-md ml-4 text-md font-medium ${
-                                        currentPath === "/" || currentPath.includes("/dashboard") ? "text-primary" : "text-teritary hover:text-primary"
-                                    }`}
+                                    className={`cursor-pointer md:text-md ml-4 text-md font-medium ${currentPath === "/" || currentPath.includes("/dashboard") ? "text-primary" : "text-teritary hover:text-primary"
+                                        }`}
                                 >
                                     Tiếp nhận
                                 </Link>
@@ -141,7 +140,7 @@ const Header = () => {
                                 to="/incoming-orders"
                                 className={`cursor-pointer md:text-md ml-4 text-md font-medium ${currentPath.includes("/incoming-orders") ? "text-primary" : "text-teritary hover:text-primary"}`}
                             >
-                                Order  
+                                Order
                             </Link>
                             <Link
                                 to="/handover-dashboard"
@@ -163,6 +162,9 @@ const Header = () => {
                             </Link>
                             <Link to="/files" className={`cursor-pointer md:text-md ml-4 text-md font-medium ${currentPath.includes("/files") ? "text-primary" : "text-teritary hover:text-primary"}`}>
                                 Files
+                            </Link>
+                            <Link to="/file-dashboard" className={`cursor-pointer md:text-md ml-4 text-md font-medium ${currentPath.includes("/file-dashboard") ? "text-primary" : "text-teritary hover:text-primary"}`}>
+                                HSDT
                             </Link>
                         </>
                     )}
@@ -207,9 +209,8 @@ const Header = () => {
                                 </p>
                             </div>
                             <div
-                                className={`fixed top-0 right-0 h-full w-60 bg-white border-l shadow-lg z-50 transition-transform duration-300 ease-in-out transform ${
-                                    dropdownOpen ? "translate-x-0" : "translate-x-full"
-                                }`}
+                                className={`fixed top-0 right-0 h-full w-60 bg-white border-l shadow-lg z-50 transition-transform duration-300 ease-in-out transform ${dropdownOpen ? "translate-x-0" : "translate-x-full"
+                                    }`}
                             >
                                 <div className="flex flex-col w-full h-full">
                                     <div className="p-2 pl-3 border-b-2 bg-gray-50 flex justify-between items-center">
@@ -268,6 +269,12 @@ const Header = () => {
                                             className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
                                         >
                                             Files
+                                        </button>
+                                        <button
+                                            onClick={() => handleNavigate("/file-dashboard")}
+                                            className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 border-b-gray-200 rounded-none hover:rounded-lg"
+                                        >
+                                            File Dashboard
                                         </button>
                                         <button onClick={handleLogout} className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-100 mt-auto">
                                             Đăng xuất
