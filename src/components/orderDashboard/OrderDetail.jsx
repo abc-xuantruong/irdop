@@ -383,26 +383,28 @@ const OrderDetail = ({ order, isOpen, onClose }) => {
 
         try {
             const payload = {
-                orderId: orderData.orderId,
-                client: {
-                    clientName: clientInfo.clientName,
-                    clientAddress: clientInfo.clientAddress,
-                    legalId: clientInfo.legalId,
-                    clientPhone: clientInfo.clientPhone,
-                    invoiceEmail: clientInfo.invoiceEmail,
-                    invoiceInfo: clientInfo.invoiceInfo,
+                order: {
+                    orderId: orderData.orderId,
+                    client: {
+                        clientName: clientInfo.clientName,
+                        clientAddress: clientInfo.clientAddress,
+                        legalId: clientInfo.legalId,
+                        clientPhone: clientInfo.clientPhone,
+                        invoiceEmail: clientInfo.invoiceEmail,
+                        invoiceInfo: clientInfo.invoiceInfo,
+                    },
+                    contactPerson: {
+                        name: contactInfo.name,
+                        phone: contactInfo.phone,
+                        email: contactInfo.email,
+                        legalId: contactInfo.id,
+                    },
+                    reportRecipient: {
+                        email: receiverInfo.email,
+                        address: receiverInfo.address,
+                    },
+                    samples: orderData.samples,
                 },
-                contactPerson: {
-                    name: contactInfo.name,
-                    phone: contactInfo.phone,
-                    email: contactInfo.email,
-                    legalId: contactInfo.id,
-                },
-                reportRecipient: {
-                    email: receiverInfo.email,
-                    address: receiverInfo.address,
-                },
-                samples: orderData.samples,
             };
 
             // TODO: Replace with actual API endpoint
