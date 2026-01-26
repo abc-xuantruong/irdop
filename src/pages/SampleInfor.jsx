@@ -745,7 +745,7 @@ const SampleInfor = () => {
 
     const fetchSampleFullAndAddAll = async (sampleUid) => {
         try {
-            const response = await apiGet(`https://black.irdop.org/to82oe92i/db/get/sample_full/${sampleUid}`);
+            const response = await apiPost(`https://red.irdop.org/v1/sample/get/full`, { sampleId: sampleUid });
             if (response.data && response.data.analysis) {
                 // Tạo danh sách analysis để thêm trực tiếp
                 const analyses = response.data.analysis.map((analysis) => {

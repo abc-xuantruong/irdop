@@ -3276,8 +3276,9 @@ const Dashboard = () => {
                                                                     <option value={1}>Khẩn</option>
                                                                     <option value={2}>Đang thực hiện</option>
                                                                     <option value={3}>Đủ kết quả</option>
-                                                                    <option value={4}>Hoàn thành</option>
-                                                                    <option value={5}>Hủy bỏ</option>
+                                                                    <option value={4}>Khiếu nại</option>
+                                                                    <option value={5}>Hoàn thành</option>
+                                                                    <option value={6}>Hủy bỏ</option>
                                                                 </select>
                                                             ) : (
                                                                 <div className="text-sm">

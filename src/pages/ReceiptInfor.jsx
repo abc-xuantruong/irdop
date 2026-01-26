@@ -482,7 +482,6 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                 fileRecord: { id: sampleImgUid },
             });
 
-
             if (response.status === 200 && response.data) {
                 setSampleImageUrl(response.data);
             } else {
@@ -1184,9 +1183,6 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
             const sampleNameSuffix = copyCount > 1 ? ` - Bản sao ${i + 1}` : "";
             const finalSampleName = (newSample.sampleName || newSample.sample_name || "") + sampleNameSuffix;
 
-            // Check if sample exists
-            const existingSample = currentReceipt.samples?.find((s) => (s.sampleName || s.sample_name || "").trim().toLowerCase() === finalSampleName.trim().toLowerCase());
-
             // Construct sampleInformation
             const updatedSampleInformation = [
                 {
@@ -1208,53 +1204,27 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
             try {
                 let targetSampleId;
 
-                if (existingSample) {
-                    // Update existing sample
-                    const updateData = {
-                        id: existingSample.id,
-                        sampleId: existingSample.sampleId,
-                        sampleName: finalSampleName,
-                        sampleDescription: newSample?.sampleDescription || newSample?.sample_description || existingSample.sampleDescription || "",
-                        sampleVolume: newSample?.sampleVolume || newSample?.sample_volume || existingSample.sampleVolume || "",
-                        matrix: newSample?.matrix || existingSample.matrix || "",
-                        status: newSample?.status !== undefined ? newSample.status : existingSample.status,
-                        purpose: newSample?.purpose || existingSample.purpose || "",
-                        additionalRequest: newSample?.additionalRequest || existingSample.additionalRequest || "",
-                        sampleInformation: updatedSampleInformation,
-                        modifiedByUid: currentUser.identity_uid,
-                    };
+                // Create new sample
+                const newSampleData = {
+                    receiptId: currentReceipt.receiptId,
+                    sampleName: finalSampleName,
+                    sampleDescription: newSample?.sampleDescription || newSample?.sample_description || "",
+                    sampleVolume: newSample?.sampleVolume || newSample?.sample_volume || "",
+                    matrix: newSample?.matrix || "",
+                    status: newSample?.status || 0,
+                    purpose: newSample?.purpose || "",
+                    additionalRequest: newSample?.additionalRequest || "",
+                    sampleInformation: updatedSampleInformation,
+                    createdById: currentUser.identity_uid,
+                    modifiedById: currentUser.identity_uid,
+                };
 
-                    const response = await apiPost("https://red.irdop.org/v1/sample/edit", { sample: updateData });
+                const response = await apiPost("https://red.irdop.org/v1/sample/create", { sample: newSampleData });
 
-                    if (response.status === 200) {
-                        targetSampleId = existingSample.id;
-                        showToast(`Đã cập nhật thông tin mẫu: ${finalSampleName}`);
-                    } else {
-                        throw new Error(response.data?.message || "Lỗi cập nhật mẫu");
-                    }
+                if (response.status === 200) {
+                    targetSampleId = response.data.id;
                 } else {
-                    // Create new sample
-                    const newSampleData = {
-                        receiptId: currentReceipt.receiptId,
-                        sampleName: finalSampleName,
-                        sampleDescription: newSample?.sampleDescription || newSample?.sample_description || "",
-                        sampleVolume: newSample?.sampleVolume || newSample?.sample_volume || "",
-                        matrix: newSample?.matrix || "",
-                        status: newSample?.status || 0,
-                        purpose: newSample?.purpose || "",
-                        additionalRequest: newSample?.additionalRequest || "",
-                        sampleInformation: updatedSampleInformation,
-                        createdById: currentUser.identity_uid,
-                        modifiedById: currentUser.identity_uid,
-                    };
-
-                    const response = await apiPost("https://red.irdop.org/v1/sample/create", { sample: newSampleData });
-
-                    if (response.status === 200) {
-                        targetSampleId = response.data.id;
-                    } else {
-                        throw new Error(response.data?.message || "Lỗi tạo mẫu mới");
-                    }
+                    throw new Error(response.data?.message || "Lỗi tạo mẫu mới");
                 }
 
                 // Copy analyses logic (Common for both Create and Update)
@@ -1807,8 +1777,8 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                             reviewedById: newStatus,
                             reviewedBy: newStatus
                                 ? {
-                                    identityName: currentUserName ? currentUserName.identity_name : currentUser.identity_name || "Unknown",
-                                }
+                                      identityName: currentUserName ? currentUserName.identity_name : currentUser.identity_name || "Unknown",
+                                  }
                                 : null,
                         };
                     }
@@ -1953,7 +1923,6 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
         }
     };
 
-
     // Helper function to handle sync field toggle
     const handleSyncFieldToggle = (field) => {
         if (field === "parameterName") return; // parameterName is mandatory
@@ -1982,10 +1951,11 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                 updateObj.parameterUid = matched?.parameterUid || original.parameterUid || original.parameter_uid || "";
 
                 // Update display style if available in matched data
-                updateObj.displayStyle = matched?.displayStyle || original.displayStyle || [
-                    { label: "default", value: "" },
-                    { label: "eng", value: "" },
-                ];
+                updateObj.displayStyle = matched?.displayStyle ||
+                    original.displayStyle || [
+                        { label: "default", value: "" },
+                        { label: "eng", value: "" },
+                    ];
 
                 // Conditionally update other fields based on user selection
                 if (selectedSyncFields.protocolCode) {
@@ -2040,7 +2010,7 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                     if (selectedAnalytes.includes(analyte.id)) {
                         const updateData = updateDataArray.find((item) => item.id === analyte.id);
                         // We need the matched data to get the full technician object for display if it changed
-                        const matchInfo = matchedSyncData.find(m => m.original.id === analyte.id);
+                        const matchInfo = matchedSyncData.find((m) => m.original.id === analyte.id);
                         const matched = matchInfo ? matchInfo.matched : null;
 
                         let technicianObj = analyte.technician;
@@ -2055,7 +2025,7 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                         return {
                             ...analyte,
                             ...updateData,
-                            technician: technicianObj
+                            technician: technicianObj,
                         };
                     }
                     return analyte;
@@ -2069,7 +2039,6 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                     text: updateResponse.data?.message || "Có lỗi xảy ra khi cập nhật dữ liệu",
                 });
             }
-
         } catch (error) {
             console.error("Error confirming sync:", error);
             Swal.fire({
@@ -2133,8 +2102,8 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                     } else if (matched?.technician) {
                                         proposedTechName = matched.technician.identityName || matched.technician.alias;
                                     }
-                                    const isTechDifferent = String(original.technicianId || "") !== String((matched?.technicians?.[0]?.technicianId || matched?.technician?.technicianId || matched?.technicianId) || "");
-
+                                    const isTechDifferent =
+                                        String(original.technicianId || "") !== String(matched?.technicians?.[0]?.technicianId || matched?.technician?.technicianId || matched?.technicianId || "");
 
                                     return (
                                         <tr key={original.id} className="hover:bg-gray-50">
@@ -2148,12 +2117,8 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                             {renderCell(original.scientificField, matched?.scientificField)}
                                             <td className={`border p-2 align-top ${isTechDifferent ? "bg-yellow-50" : ""}`}>
                                                 <div className="flex flex-col gap-1">
-                                                    <div className="text-gray-500 line-through text-xs px-1">
-                                                        {currentTechName}
-                                                    </div>
-                                                    <div className={`font-medium px-1 ${isTechDifferent ? "text-green-600" : "text-gray-900"}`}>
-                                                        {proposedTechName}
-                                                    </div>
+                                                    <div className="text-gray-500 line-through text-xs px-1">{currentTechName}</div>
+                                                    <div className={`font-medium px-1 ${isTechDifferent ? "text-green-600" : "text-gray-900"}`}>{proposedTechName}</div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -2202,12 +2167,7 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                         <p className="text-sm text-gray-600 italic mb-2">Chọn các trường thông tin bạn muốn cập nhật từ dữ liệu đồng bộ:</p>
 
                         <label className="flex items-center p-2 rounded hover:bg-gray-50 cursor-not-allowed opacity-70">
-                            <input
-                                type="checkbox"
-                                checked={true}
-                                disabled
-                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mr-3"
-                            />
+                            <input type="checkbox" checked={true} disabled className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 mr-3" />
                             <div className="flex flex-col">
                                 <span className="font-medium text-gray-800">Tên chỉ tiêu (Parameter Name)</span>
                                 <span className="text-xs text-red-500 font-semibold">Bắt buộc</span>
@@ -2579,8 +2539,9 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                         {technicians.map((tech) => (
                             <div
                                 key={tech.identity_uid}
-                                className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 text-center ${selectedTechnician === tech.identity_uid ? "border-primary bg-blue-50" : "border-gray-300"
-                                    }`}
+                                className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 text-center ${
+                                    selectedTechnician === tech.identity_uid ? "border-primary bg-blue-50" : "border-gray-300"
+                                }`}
                                 onClick={() => setSelectedTechnician(tech.identity_uid)}
                             >
                                 <p className="font-bold text-primary text-sm mb-1">{tech.alias || ""}</p>
@@ -2784,8 +2745,9 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                 name="sampleDescription"
                                 value={newSample.sampleDescription || newSample.sample_description || ""}
                                 onChange={handleNewSampleChange}
-                                className={`w-full border rounded p-1 bg-white resize-none ${checkConfirm && (newSample.sampleDescription || newSample.sample_description || "").trim() === "" ? "border-red-500" : ""
-                                    }`}
+                                className={`w-full border rounded p-1 bg-white resize-none ${
+                                    checkConfirm && (newSample.sampleDescription || newSample.sample_description || "").trim() === "" ? "border-red-500" : ""
+                                }`}
                                 rows={2}
                             />
                         </div>
@@ -3145,8 +3107,7 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
         }
     };
 
-    const handleQRScanError = (error) => {
-    };
+    const handleQRScanError = (error) => {};
 
     // Function to handle Excel download
     const handleExcelDownload = async () => {
@@ -3553,7 +3514,6 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
     // Function to handle email submission
     const handleEmailSubmit = async (emailData) => {
         try {
-
             const response = await apiPost("https://red.irdop.org/v1/mail/send/receipt", emailData);
 
             if (response.status === 200) {
@@ -4463,7 +4423,43 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                                 className="w-2/3 px-2 py-0 text-sm text-left cursor-pointer border border-white hover:border-gray-300 rounded-lg h-fit align-top"
                                                 onClick={() => handleFieldClick("client.invoiceInfo")}
                                             >
-                                                {displayValue(currentReceipt?.client?.invoiceInfo)}
+                                                {(() => {
+                                                    const info = currentReceipt?.client?.invoiceInfo;
+                                                    if (info && typeof info === "object") {
+                                                        const mapping = {
+                                                            taxName: "Tên đơn vị",
+                                                            taxAddress: "Địa chỉ thuế",
+                                                            taxCode: "Mã số thuế",
+                                                            taxEmail: "Email hóa đơn",
+                                                        };
+                                                        const order = ["taxName", "taxCode", "taxAddress", "taxEmail"];
+                                                        return (
+                                                            <div className="flex flex-col">
+                                                                {order.map((key) => {
+                                                                    if (info[key]) {
+                                                                        return (
+                                                                            <div key={key}>
+                                                                                <span className="font-semibold">{mapping[key]}:</span> {info[key]}
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                    return null;
+                                                                })}
+                                                                {Object.keys(info).map((key) => {
+                                                                    if (!order.includes(key) && info[key]) {
+                                                                        return (
+                                                                            <div key={key}>
+                                                                                <span className="font-semibold">{key}:</span> {info[key]}
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                    return null;
+                                                                })}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return displayValue(info);
+                                                })()}
                                             </div>
                                         )}
                                     </div>
@@ -4601,8 +4597,9 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                             {!isTechnician() && (
                                 <>
                                     <button
-                                        className={`w-[34px] h-[34px] p-2 rounded-lg transition-colors duration-200 border border-gray-400 focus:outline-none ${isEditMode ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white text-black"
-                                            }`}
+                                        className={`w-[34px] h-[34px] p-2 rounded-lg transition-colors duration-200 border border-gray-400 focus:outline-none ${
+                                            isEditMode ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white text-black"
+                                        }`}
                                         onClick={toggleEditMode}
                                     >
                                         {isEditMode ? <FaCheck /> : <FaEdit />}
@@ -4625,8 +4622,9 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                     <div className="flex -translate-y-0 md:translate-y-0 md:pt-0 w-full justify-end">
                                         {/* Sync Data button */}
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-green-500" : "bg-gray-300 cursor-not-allowed"
-                                                } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+                                                selectedAnalytes.length > 0 ? "bg-green-500" : "bg-gray-300 cursor-not-allowed"
+                                            } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleSyncData : undefined}
                                             title="Đồng bộ dữ liệu"
                                         >
@@ -4635,8 +4633,9 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                         </button>
                                         {/* Search Parameter button */}
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-indigo-500" : "bg-gray-300 cursor-not-allowed"
-                                                } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+                                                selectedAnalytes.length > 0 ? "bg-indigo-500" : "bg-gray-300 cursor-not-allowed"
+                                            } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleSearchParameters : undefined}
                                             disabled={isSearchingParameters}
                                             title="Tìm kiếm chỉ tiêu"
@@ -4673,18 +4672,19 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                         )}
                                         {/* Update Database button */}
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${(selectedAnalytes.length > 0 &&
-                                                listAnalytes
-                                                    .filter((a) => selectedAnalytes.includes(a.id))
-                                                    .every(
-                                                        (a) =>
-                                                            (!a.parameterUid || a.parameterUid === "") &&
-                                                            a.parameterName &&
-                                                            a.matrix &&
-                                                            ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
-                                                            a.protocolSource &&
-                                                            a.scientificField,
-                                                    )) ||
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+                                                (selectedAnalytes.length > 0 &&
+                                                    listAnalytes
+                                                        .filter((a) => selectedAnalytes.includes(a.id))
+                                                        .every(
+                                                            (a) =>
+                                                                (!a.parameterUid || a.parameterUid === "") &&
+                                                                a.parameterName &&
+                                                                a.matrix &&
+                                                                ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
+                                                                a.protocolSource &&
+                                                                a.scientificField,
+                                                        )) ||
                                                 (selectedAnalytes.length === 0 &&
                                                     listAnalytes.some(
                                                         (a) =>
@@ -4695,9 +4695,9 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                                             a.protocolSource &&
                                                             a.scientificField,
                                                     ))
-                                                ? "bg-blue-500"
-                                                : "bg-gray-300 cursor-not-allowed"
-                                                } mr-2`}
+                                                    ? "bg-blue-500"
+                                                    : "bg-gray-300 cursor-not-allowed"
+                                            } mr-2`}
                                             onClick={
                                                 (selectedAnalytes.length > 0 &&
                                                     listAnalytes
@@ -4711,16 +4711,16 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                                                 a.protocolSource &&
                                                                 a.scientificField,
                                                         )) ||
-                                                    (selectedAnalytes.length === 0 &&
-                                                        listAnalytes.some(
-                                                            (a) =>
-                                                                (!a.parameterUid || a.parameterUid === "") &&
-                                                                a.parameterName &&
-                                                                a.matrix &&
-                                                                ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
-                                                                a.protocolSource &&
-                                                                a.scientificField,
-                                                        ))
+                                                (selectedAnalytes.length === 0 &&
+                                                    listAnalytes.some(
+                                                        (a) =>
+                                                            (!a.parameterUid || a.parameterUid === "") &&
+                                                            a.parameterName &&
+                                                            a.matrix &&
+                                                            ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
+                                                            a.protocolSource &&
+                                                            a.scientificField,
+                                                    ))
                                                     ? handleUpdateDatabase
                                                     : undefined
                                             }
@@ -4730,18 +4730,19 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                             {selectedAnalytes.length > 0
                                                 ? selectedAnalytes.length
                                                 : listAnalytes.filter(
-                                                    (a) =>
-                                                        (!a.parameterUid || a.parameterUid === "") &&
-                                                        a.parameterName &&
-                                                        a.matrix &&
-                                                        ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
-                                                        a.protocolSource &&
-                                                        a.scientificField,
-                                                ).length || "0"}
+                                                      (a) =>
+                                                          (!a.parameterUid || a.parameterUid === "") &&
+                                                          a.parameterName &&
+                                                          a.matrix &&
+                                                          ((a.protocolSource !== "EX" && a.protocolCode) || a.protocolSource === "EX") &&
+                                                          a.protocolSource &&
+                                                          a.scientificField,
+                                                  ).length || "0"}
                                         </button>
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-red-500" : "bg-gray-300 cursor-not-allowed"
-                                                } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+                                                selectedAnalytes.length > 0 ? "bg-red-500" : "bg-gray-300 cursor-not-allowed"
+                                            } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleDeleteSelected : undefined}
                                             title="Xóa hàng loạt"
                                         >
@@ -4749,8 +4750,9 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                             {selectedAnalytes.length > 0 ? selectedAnalytes.length : "0"}
                                         </button>
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-blue-500" : "bg-gray-300 cursor-not-allowed"
-                                                } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+                                                selectedAnalytes.length > 0 ? "bg-blue-500" : "bg-gray-300 cursor-not-allowed"
+                                            } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleBulkTransfer : undefined}
                                         >
                                             <FaUserCog className="mr-1" />
@@ -4758,8 +4760,9 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                         </button>
                                         {/* Add the bulk deadline update button */}
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-orange-500" : "bg-gray-300 cursor-not-allowed"
-                                                } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+                                                selectedAnalytes.length > 0 ? "bg-orange-500" : "bg-gray-300 cursor-not-allowed"
+                                            } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleBulkDeadlineUpdate : undefined}
                                             title="Cập nhật hạn trả"
                                         >
@@ -4768,8 +4771,9 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                         </button>
                                         {/* Add button to update field in bulk */}
                                         <button
-                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0 ? "bg-purple-500" : "bg-gray-300 cursor-not-allowed"
-                                                } mr-2`}
+                                            className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+                                                selectedAnalytes.length > 0 ? "bg-purple-500" : "bg-gray-300 cursor-not-allowed"
+                                            } mr-2`}
                                             onClick={selectedAnalytes.length > 0 ? handleBulkFieldUpdate : undefined}
                                             title="Cập nhật lĩnh vực"
                                         >
@@ -4779,14 +4783,15 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                         {/* Modify the review button to check for admin role */}
                                         {isAdmin() && (
                                             <button
-                                                className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${selectedAnalytes.length > 0
-                                                    ? listAnalytes
-                                                        .filter((item) => selectedAnalytes.includes(item.id))
-                                                        .every((item) => item.reviewedById && String(item.reviewedById).trim() !== "")
-                                                        ? "bg-red-500"
-                                                        : "bg-green-500"
-                                                    : "bg-gray-300 cursor-not-allowed"
-                                                    } mr-2`}
+                                                className={`text-white text-sm rounded-lg px-2 py-1 flex-shrink-0 flex items-center ${
+                                                    selectedAnalytes.length > 0
+                                                        ? listAnalytes
+                                                              .filter((item) => selectedAnalytes.includes(item.id))
+                                                              .every((item) => item.reviewedById && String(item.reviewedById).trim() !== "")
+                                                            ? "bg-red-500"
+                                                            : "bg-green-500"
+                                                        : "bg-gray-300 cursor-not-allowed"
+                                                } mr-2`}
                                                 onClick={selectedAnalytes.length > 0 ? handleReviewAnalyses : undefined}
                                                 title={
                                                     listAnalytes.filter((item) => selectedAnalytes.includes(item.id)).every((item) => item.reviewedById && String(item.reviewedById).trim() !== "")
@@ -4936,8 +4941,8 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                                                             reviewedById: newStatus,
                                                                             reviewedBy: newStatus
                                                                                 ? {
-                                                                                    identityName: currentUserName ? currentUserName.identity_name : currentUser.identity_name || "Unknown",
-                                                                                }
+                                                                                      identityName: currentUserName ? currentUserName.identity_name : currentUser.identity_name || "Unknown",
+                                                                                  }
                                                                                 : null,
                                                                         };
                                                                     }
@@ -5189,13 +5194,11 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                 </div>
             </div>
             {/* Only show payment confirmation and delete confirmation dialogs for non-technicians */} {!isTechnician() && isPaymentConfirmVisible && renderPayStatusConfirm()}
-            {
-                isDeleteConfirmVisible &&
+            {isDeleteConfirmVisible &&
                 renderDeleteConfirm(
                     deleteType === "multiple" ? `Bạn có chắc chắn muốn xóa ${selectedAnalytes.length} chỉ tiêu đã chọn?` : "Bạn có chắc chắn muốn xóa mục này?",
                     deleteType === "multiple" ? handleDeleteMultipleConfirmAction : deleteType === "sample" ? handleDeleteSampleConfirmAction : handleDeleteAnalysisConfirmAction,
-                )
-            } {" "}
+                )}{" "}
             {/* EmailForm */}
             <EmailForm
                 from={emailFormData.from}
@@ -5217,80 +5220,78 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                 onClose={() => setIsFileFormVisible(false)}
             />
             {/* QR Scanner Modal */}
-            {
-                isQRScannerOpen && (
-                    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50">
-                        <div className="bg-white p-4 rounded-lg w-[90%] max-w-2xl h-[80vh] max-h-[600px] relative flex flex-col">
-                            <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10" onClick={closeQRScanner}>
-                                ×
-                            </button>
-                            <h3 className="text-lg font-semibold mb-3 flex items-center">
-                                <FaCamera className="mr-2 text-blue-500" />
-                                Quét mã QR
-                            </h3>
+            {isQRScannerOpen && (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50">
+                    <div className="bg-white p-4 rounded-lg w-[90%] max-w-2xl h-[80vh] max-h-[600px] relative flex flex-col">
+                        <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10" onClick={closeQRScanner}>
+                            ×
+                        </button>
+                        <h3 className="text-lg font-semibold mb-3 flex items-center">
+                            <FaCamera className="mr-2 text-blue-500" />
+                            Quét mã QR
+                        </h3>
 
-                            {/* Camera view area - takes most of the space */}
-                            <div className="flex-1 flex flex-col">
-                                <p className="text-gray-600 mb-3 text-center text-sm">Hướng camera vào mã QR để quét và điều hướng</p>
+                        {/* Camera view area - takes most of the space */}
+                        <div className="flex-1 flex flex-col">
+                            <p className="text-gray-600 mb-3 text-center text-sm">Hướng camera vào mã QR để quét và điều hướng</p>
 
-                                {/* QR Scanner area - maximized */}
-                                <div className="flex-1 relative">
-                                    <div id="qr-reader" className="w-full h-full min-h-[300px] border-2 border-dashed border-gray-300 rounded-lg overflow-hidden">
-                                        {/* Placeholder content when scanner is not active */}
-                                        {cameraPermission !== "granted" && (
-                                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                                <div className="text-center">
-                                                    <FaQrcode size={48} className="mx-auto mb-3" />
-                                                    <p className="text-sm">Cấp quyền camera để bắt đầu quét</p>
-                                                </div>
+                            {/* QR Scanner area - maximized */}
+                            <div className="flex-1 relative">
+                                <div id="qr-reader" className="w-full h-full min-h-[300px] border-2 border-dashed border-gray-300 rounded-lg overflow-hidden">
+                                    {/* Placeholder content when scanner is not active */}
+                                    {cameraPermission !== "granted" && (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                            <div className="text-center">
+                                                <FaQrcode size={48} className="mx-auto mb-3" />
+                                                <p className="text-sm">Cấp quyền camera để bắt đầu quét</p>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Control buttons area */}
-                            <div className="mt-4 border-t pt-4">
-                                {/* Camera permission status */}
-                                {(cameraPermission === "denied" || cameraPermission === null) && (
-                                    <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-3">
-                                        <div className="flex items-center justify-center mb-2">
-                                            <FaCamera className="text-yellow-600 mr-2" />
-                                            <p className="text-sm text-yellow-800">{cameraPermission === null ? "Cần kiểm tra và cấp quyền camera" : "Cần cấp quyền camera để sử dụng chức năng này"}</p>
                                         </div>
-                                        <div className="text-center">
-                                            <button
-                                                onClick={requestCameraPermission}
-                                                disabled={isRequestingPermission}
-                                                className="bg-yellow-600 text-white px-4 py-2 rounded text-sm hover:bg-yellow-700 disabled:opacity-50 font-medium"
-                                            >
-                                                {isRequestingPermission ? "Đang yêu cầu..." : "Cấp quyền camera"}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Success message when camera is granted */}
-                                {cameraPermission === "granted" && (
-                                    <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-3">
-                                        <div className="flex items-center justify-center">
-                                            <FaCamera className="text-green-600 mr-2" />
-                                            <p className="text-sm text-green-800">Camera đã sẵn sàng - Hướng vào mã QR để quét</p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Help text */}
-                                <div className="text-xs text-gray-500 space-y-1 text-center">
-                                    <p>💡 Đảm bảo mã QR chứa URL hợp lệ</p>
-                                    <p>🔒 Quyền camera chỉ được sử dụng để quét mã QR</p>
-                                    <p>📱 Hướng camera về phía mã QR và giữ ổn định</p>
+                                    )}
                                 </div>
                             </div>
                         </div>
+
+                        {/* Control buttons area */}
+                        <div className="mt-4 border-t pt-4">
+                            {/* Camera permission status */}
+                            {(cameraPermission === "denied" || cameraPermission === null) && (
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-3">
+                                    <div className="flex items-center justify-center mb-2">
+                                        <FaCamera className="text-yellow-600 mr-2" />
+                                        <p className="text-sm text-yellow-800">{cameraPermission === null ? "Cần kiểm tra và cấp quyền camera" : "Cần cấp quyền camera để sử dụng chức năng này"}</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <button
+                                            onClick={requestCameraPermission}
+                                            disabled={isRequestingPermission}
+                                            className="bg-yellow-600 text-white px-4 py-2 rounded text-sm hover:bg-yellow-700 disabled:opacity-50 font-medium"
+                                        >
+                                            {isRequestingPermission ? "Đang yêu cầu..." : "Cấp quyền camera"}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Success message when camera is granted */}
+                            {cameraPermission === "granted" && (
+                                <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-3">
+                                    <div className="flex items-center justify-center">
+                                        <FaCamera className="text-green-600 mr-2" />
+                                        <p className="text-sm text-green-800">Camera đã sẵn sàng - Hướng vào mã QR để quét</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Help text */}
+                            <div className="text-xs text-gray-500 space-y-1 text-center">
+                                <p>💡 Đảm bảo mã QR chứa URL hợp lệ</p>
+                                <p>🔒 Quyền camera chỉ được sử dụng để quét mã QR</p>
+                                <p>📱 Hướng camera về phía mã QR và giữ ổn định</p>
+                            </div>
+                        </div>
                     </div>
-                )
-            }
+                </div>
+            )}
             {renderSyncPreviewDialog()}
             {renderSyncFieldSelectionDialog()}
             {/* Bulk Transfer Modal */}
@@ -5298,8 +5299,7 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
             {/* Bulk Deadline Update Modal */}
             {isBulkDeadlineVisible && renderBulkDeadlinePicker()}
             {/* Tooltip Portal */}
-            {
-                tooltip.visible &&
+            {tooltip.visible &&
                 createPortal(
                     <div
                         className={`custom-tooltip ${tooltip.visible ? "visible" : ""} ${tooltip.position}`}
@@ -5312,81 +5312,78 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                         {tooltip.content}
                     </div>,
                     document.body,
-                )
-            }
+                )}
             {/* Modal Ghi chú */}
-            {
-                showNoteModal && selectedAnalysisForNote && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
-                            <div className="px-6 py-4 border-b border-gray-200">
-                                <h3 className="text-lg font-semibold text-blue-600">Ghi chú</h3>
-                                <p className="text-sm text-gray-600 mt-1">
-                                    Mẫu: {selectedAnalysisForNote.sampleId} - Chỉ tiêu: {selectedAnalysisForNote.parameterName}
-                                </p>
-                            </div>
+            {showNoteModal && selectedAnalysisForNote && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
+                        <div className="px-6 py-4 border-b border-gray-200">
+                            <h3 className="text-lg font-semibold text-blue-600">Ghi chú</h3>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Mẫu: {selectedAnalysisForNote.sampleId} - Chỉ tiêu: {selectedAnalysisForNote.parameterName}
+                            </p>
+                        </div>
 
-                            <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
-                                {/* Ghi chú cũ - chỉ xem */}
-                                {selectedAnalysisForNote.note && (
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Ghi chú hiện tại:</label>
-                                        <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-sm text-gray-700 whitespace-pre-wrap">{selectedAnalysisForNote.note}</div>
-                                    </div>
-                                )}
-
-                                {/* Thêm ghi chú mới */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">{selectedAnalysisForNote.note ? "Thêm ghi chú mới:" : "Ghi chú:"}</label>
-                                    <textarea
-                                        value={newNoteText}
-                                        onChange={(e) => setNewNoteText(e.target.value)}
-                                        placeholder="Nhập nội dung ghi chú..."
-                                        className="w-full bg-white border border-gray-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        rows={4}
-                                    />
+                        <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
+                            {/* Ghi chú cũ - chỉ xem */}
+                            {selectedAnalysisForNote.note && (
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Ghi chú hiện tại:</label>
+                                    <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-sm text-gray-700 whitespace-pre-wrap">{selectedAnalysisForNote.note}</div>
                                 </div>
-                            </div>
+                            )}
 
-                            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
-                                <button
-                                    onClick={() => {
-                                        setShowNoteModal(false);
-                                        setSelectedAnalysisForNote(null);
-                                        setNewNoteText("");
-                                    }}
-                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-                                    disabled={isUpdatingNote}
-                                >
-                                    Hủy
-                                </button>
-                                <button
-                                    onClick={handleUpdateNote}
-                                    disabled={isUpdatingNote || !newNoteText.trim()}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
-                                >
-                                    {isUpdatingNote ? (
-                                        <>
-                                            <span className="mr-2">Đang cập nhật...</span>
-                                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                                <path
-                                                    className="opacity-75"
-                                                    fill="currentColor"
-                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                                />
-                                            </svg>
-                                        </>
-                                    ) : (
-                                        "Cập nhật"
-                                    )}
-                                </button>
+                            {/* Thêm ghi chú mới */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">{selectedAnalysisForNote.note ? "Thêm ghi chú mới:" : "Ghi chú:"}</label>
+                                <textarea
+                                    value={newNoteText}
+                                    onChange={(e) => setNewNoteText(e.target.value)}
+                                    placeholder="Nhập nội dung ghi chú..."
+                                    className="w-full bg-white border border-gray-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    rows={4}
+                                />
                             </div>
                         </div>
+
+                        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                            <button
+                                onClick={() => {
+                                    setShowNoteModal(false);
+                                    setSelectedAnalysisForNote(null);
+                                    setNewNoteText("");
+                                }}
+                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                                disabled={isUpdatingNote}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={handleUpdateNote}
+                                disabled={isUpdatingNote || !newNoteText.trim()}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
+                            >
+                                {isUpdatingNote ? (
+                                    <>
+                                        <span className="mr-2">Đang cập nhật...</span>
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                            <path
+                                                className="opacity-75"
+                                                fill="currentColor"
+                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                            />
+                                        </svg>
+                                    </>
+                                ) : (
+                                    "Cập nhật"
+                                )}
+                            </button>
+                        </div>
                     </div>
-                )
-            }
-        </div >
+                </div>
+            )}
+        </div>
     );
 };
 
