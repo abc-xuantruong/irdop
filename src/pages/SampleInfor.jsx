@@ -746,9 +746,11 @@ const SampleInfor = () => {
     const fetchSampleFullAndAddAll = async (sampleUid) => {
         try {
             const response = await apiPost(`https://red.irdop.org/v1/sample/get/full`, { sampleId: sampleUid });
-            if (response.data && response.data.analysis) {
+            const analysesData = response.data?.analyses || response.data?.analysis;
+
+            if (analysesData) {
                 // Tạo danh sách analysis để thêm trực tiếp
-                const analyses = response.data.analysis.map((analysis) => {
+                const analyses = analysesData.map((analysis) => {
                     // Tạo object mới không có resultValue và reviewedBy
                     const { resultValue, reviewedBy, result_value, reviewed_by, ...cleanAnalysis } = analysis;
 
@@ -927,7 +929,6 @@ const SampleInfor = () => {
             setSample(mappedSample);
             setCurrentSample(mappedSample);
             setListAnalytes(mappedSample.analysis);
-
         } catch (error) {
             console.error("Error refetching sample data:", error);
         }
@@ -1841,7 +1842,6 @@ const SampleInfor = () => {
                     sampleId: sampleId,
                 });
 
-
                 // Process data with new camelCase structure
                 if (response.data && response.data.analyses) {
                     for (const analysis of response.data.analyses) {
@@ -1873,7 +1873,6 @@ const SampleInfor = () => {
                     productType: response.data.productType,
                     analysis: response.data.analyses || [],
                 };
-
 
                 setSample(mappedSample);
                 setCurrentSample(mappedSample);
@@ -1980,7 +1979,6 @@ const SampleInfor = () => {
         const fieldParts = currentField.split("-");
         const fieldType = fieldParts[0];
         const analysisId = fieldParts[1]; // Keep as string to handle both numeric and text IDs
-
 
         // Get original value for comparison
         const originalValue = originalValues[currentField] || "";
@@ -6174,8 +6172,8 @@ const SampleInfor = () => {
                     deleteType === "sample"
                         ? "Bạn có chắc chắn muốn xóa mẫu này?"
                         : deleteType === "multiple"
-                        ? `Bạn có chắc chắn muốn xóa ${selectedAnalytes.length} chỉ tiêu đã chọn?`
-                        : "Bạn có chắc chắn muốn xóa chỉ tiêu này?",
+                          ? `Bạn có chắc chắn muốn xóa ${selectedAnalytes.length} chỉ tiêu đã chọn?`
+                          : "Bạn có chắc chắn muốn xóa chỉ tiêu này?",
                     deleteType === "sample" ? handleDeleteSampleConfirmAction : deleteType === "multiple" ? handleDeleteMultipleConfirmAction : handleDeleteAnalysisConfirmAction,
                 )}
             {isBulkDeadlineVisible && renderBulkDeadlinePicker()}
