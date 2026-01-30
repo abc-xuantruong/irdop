@@ -1693,6 +1693,12 @@ const SampleInfor = () => {
                             <span>Đơn vị kết quả (Result Unit)</span>
                         </label>
 
+                        {/* Hạn trả */}
+                        <label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" checked={selectedFields.deadline} onChange={() => handleFieldToggle("deadline")} className="mr-3 w-4 h-4" />
+                            <span>Hạn trả (Deadline)</span>
+                        </label>
+
                         {/* Lĩnh vực */}
                         <label className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
                             <input type="checkbox" checked={selectedFields.scientificField} onChange={() => handleFieldToggle("scientificField")} className="mr-3 w-4 h-4" />
