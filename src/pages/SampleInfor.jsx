@@ -2820,12 +2820,14 @@ const SampleInfor = () => {
         const buttonRect = event.target.getBoundingClientRect(); // Lấy vị trí button trên màn hình
         // Tính toán vị trí để dropdown không bị tràn ra ngoài màn hình
         const viewportWidth = window.innerWidth;
-        const dropdownWidth = Math.min(600, viewportWidth - 40); // Chiều rộng thực tế của dropdown
+        const dropdownWidth = Math.min(650, viewportWidth - 40); // Chiều rộng thực tế của dropdown (đã cập nhật theo UI mới)
         let leftPosition = buttonRect.left + window.scrollX;
 
-        // Nếu dropdown sẽ tràn ra ngoài màn hình bên phải, đặt nó bên trái
+        // Nếu dropdown sẽ tràn ra ngoài màn hình bên phải, điều chỉnh vị trí
         if (leftPosition + dropdownWidth > viewportWidth - 20) {
-            leftPosition = viewportWidth - dropdownWidth - 20; // Để lại 20px margin
+            // Thay vì cố định margin 20px, hãy căn phải dropdown với lề phải màn hình (trừ đi một chút padding)
+            // Hoặc đơn giản là dịch sang trái đủ để hiển thị hết
+            leftPosition = Math.max(20, viewportWidth - dropdownWidth - 20);
         }
 
         // Đảm bảo dropdown không bị tràn ra ngoài màn hình bên trái
@@ -2910,7 +2912,7 @@ const SampleInfor = () => {
                     identityName: selectedTechnician.identityName,
                 },
                 technicianAlias: technicianAlias, // Add group alias
-                identityIds: technicianIds, // Add list of all technician IDs in the group
+                technicianIds: technicianIds, // Updated key from identityIds to technicianIds
             };
 
             // Send the update to the server
@@ -2940,6 +2942,7 @@ const SampleInfor = () => {
             });
         }
     };
+    // ... (keep existing code)
 
     const handleDateInputChange = (id, e) => {
         const value = e.target.value;
@@ -4096,76 +4099,28 @@ const SampleInfor = () => {
                             return (
                                 <div
                                     key={group.alias}
-                                    className={`relative p-3 border rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 text-center ${
-                                        selectedTechnician === primaryTechnician.technicianId ? "border-primary bg-blue-50" : "border-gray-300"
+                                    className={`relative p-3 border rounded-lg cursor-pointer transition-all duration-200 text-left hover:bg-gray-50 bg-white ${
+                                        selectedTechnician === primaryTechnician.technicianId ? "border-blue-500 ring-1 ring-blue-500 bg-blue-50" : "border-gray-200"
                                     }`}
                                     onClick={() => setSelectedTechnician(primaryTechnician.technicianId)}
-                                    onMouseEnter={(e) => {
-                                        if (group.technicians && group.technicians.length > 1) {
-                                            const rect = e.currentTarget.getBoundingClientRect();
-                                            setDropdownRect({
-                                                top: rect.top,
-                                                left: rect.left,
-                                                width: rect.width,
-                                                height: rect.height,
-                                            });
-                                            setHoveredGroup(group.alias);
-                                        }
-                                    }}
                                 >
-                                    <p className="font-bold text-primary text-sm mb-1">
-                                        {group.alias}: {group.groupName}
-                                    </p>
-                                    <p className="text-xs text-gray-600 leading-tight">{primaryTechnician.identityName}</p>
+                                    <div className="border-b border-gray-200 pb-2 mb-2">
+                                        <p className="font-bold text-gray-800 text-sm">
+                                            {group.alias}: {group.groupName}
+                                        </p>
+                                    </div>
+                                    <div className="text-xs text-gray-600 flex flex-col gap-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                                        {group.technicians.map((tech) => (
+                                            <div key={tech.technicianId} className="flex items-center gap-2">
+                                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tech.technicianId === selectedTechnician ? "bg-blue-500" : "bg-gray-300"}`}></span>
+                                                <span className={`${tech.technicianId === selectedTechnician ? "font-semibold text-blue-700" : "text-gray-700"}`}>{tech.identityName}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             );
                         })}
                     </div>
-
-                    {/* Portal for hover dropdown */}
-                    {hoveredGroup &&
-                        dropdownRect &&
-                        createPortal(
-                            <div
-                                className="fixed z-[9999]"
-                                style={{
-                                    top: `${dropdownRect.top}px`,
-                                    left: `${dropdownRect.left - 200}px`,
-                                    width: "200px",
-                                    height: `${dropdownRect.height}px`,
-                                }}
-                                onMouseLeave={() => {
-                                    setHoveredGroup(null);
-                                    setDropdownRect(null);
-                                }}
-                            >
-                                {/* Bridge area - invisible but hoverable to prevent gap issues */}
-                                <div className="absolute right-0 top-0 w-12 h-full bg-transparent"></div>
-
-                                {/* Actual dropdown */}
-                                <div className="absolute left-0 top-0 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-48">
-                                    <p className="text-xs font-medium text-gray-500 mb-2">Tất cả thành viên:</p>
-                                    {technicians
-                                        .find((g) => g.alias === hoveredGroup)
-                                        ?.technicians?.map((tech) => (
-                                            <div
-                                                key={tech.technicianId}
-                                                className="p-2 hover:bg-gray-100 rounded cursor-pointer text-left"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedTechnician(tech.technicianId);
-                                                    setHoveredGroup(null);
-                                                    setDropdownRect(null);
-                                                }}
-                                            >
-                                                <p className="text-sm font-medium">{tech.identityName}</p>
-                                                <p className="text-xs text-gray-500">{tech.technicianAlias}</p>
-                                            </div>
-                                        ))}
-                                </div>
-                            </div>,
-                            document.body,
-                        )}
                 </div>
                 <div className="flex justify-end">
                     <button className="bg-gray-500 text-white p-2 rounded mr-2" onClick={() => setIsTransferMultipleVisible(false)}>
@@ -6044,44 +5999,49 @@ const SampleInfor = () => {
                                         {technicianDropdownVisible === order.id &&
                                             createPortal(
                                                 <div
-                                                    className="fixed bg-white border rounded shadow-lg z-[99] p-4 technician-dropdown"
+                                                    className="fixed bg-white border rounded shadow-lg z-[99] p-4 technician-dropdown text-left"
                                                     style={{
                                                         top: dropdownPosition.top + "px",
                                                         left: dropdownPosition.left + "px",
                                                         position: "absolute",
-                                                        minWidth: "400px",
-                                                        maxWidth: Math.min(600, window.innerWidth - 40) + "px",
+                                                        minWidth: "550px",
+                                                        maxWidth: Math.min(900, window.innerWidth - 40) + "px",
                                                         width: "max-content",
                                                     }}
                                                 >
-                                                    <div className="grid grid-cols-3 md:grid-cols-4 gap-3 max-h-96 overflow-y-auto">
+                                                    <div className="max-h-96 overflow-y-auto w-full grid grid-cols-2 gap-3">
                                                         {technicians.map((group) => {
-                                                            const primaryTechnician = group.technicians?.[0];
-                                                            if (!primaryTechnician) return null;
+                                                            if (!group.technicians || group.technicians.length === 0) return null;
+                                                            const primaryTech = group.technicians[0];
+                                                            const isGroupSelected = order.technicianAlias === group.alias || group.technicians.some((t) => t.technicianId === order.technicianId);
 
                                                             return (
                                                                 <div
                                                                     key={group.alias}
-                                                                    className="p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 hover:border-primary transition-all duration-200 min-w-[100px] text-center"
-                                                                    onClick={() => handleTechnicianChange(order.id, primaryTechnician.technicianId)}
-                                                                    onMouseEnter={(e) => {
-                                                                        if (group.technicians && group.technicians.length > 1) {
-                                                                            const rect = e.currentTarget.getBoundingClientRect();
-                                                                            setIndividualDropdownRect({
-                                                                                top: rect.top,
-                                                                                left: rect.left,
-                                                                                width: rect.width,
-                                                                                height: rect.height,
-                                                                            });
-                                                                            setHoveredIndividualGroup(group.alias);
-                                                                            setCurrentAnalysisId(order.id);
-                                                                        }
-                                                                    }}
+                                                                    className={`relative p-3 border rounded-lg cursor-pointer transition-all duration-200 text-left hover:bg-gray-50 bg-white ${
+                                                                        isGroupSelected ? "border-blue-500 ring-1 ring-blue-500 bg-blue-50" : "border-gray-200"
+                                                                    }`}
+                                                                    onClick={() => handleTechnicianChange(order.id, primaryTech.technicianId)}
                                                                 >
-                                                                    <p className="font-bold text-primary text-sm mb-1">
-                                                                        {group.alias}: {group.groupName}
-                                                                    </p>
-                                                                    <p className="text-xs text-gray-600 leading-tight">{primaryTechnician.identityName}</p>
+                                                                    <div className="border-b border-gray-200 pb-2 mb-2">
+                                                                        <p className="font-bold text-gray-800 text-sm">
+                                                                            {group.alias}: {group.groupName}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="text-xs text-gray-600 flex flex-col gap-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                                                                        {group.technicians.map((tech) => (
+                                                                            <div key={tech.technicianId} className="flex items-center gap-2">
+                                                                                <span
+                                                                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                                                                        tech.technicianId === order.technicianId ? "bg-blue-500" : "bg-gray-300"
+                                                                                    }`}
+                                                                                ></span>
+                                                                                <span className={`${tech.technicianId === order.technicianId ? "font-semibold text-blue-700" : "text-gray-700"}`}>
+                                                                                    {tech.identityName}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
                                                             );
                                                         })}
@@ -6119,53 +6079,6 @@ const SampleInfor = () => {
                     </table>
                 </div>
             </div>
-            {/* Portal for individual technician hover dropdown */}
-            {hoveredIndividualGroup &&
-                individualDropdownRect &&
-                currentAnalysisId &&
-                createPortal(
-                    <div
-                        className="fixed z-[9999]"
-                        style={{
-                            top: `${individualDropdownRect.top}px`,
-                            left: `${individualDropdownRect.left - 200}px`,
-                            width: "200px",
-                            height: `${individualDropdownRect.height}px`,
-                        }}
-                        onMouseLeave={() => {
-                            setHoveredIndividualGroup(null);
-                            setIndividualDropdownRect(null);
-                            setCurrentAnalysisId(null);
-                        }}
-                    >
-                        {/* Bridge area - invisible but hoverable to prevent gap issues */}
-                        <div className="absolute right-0 top-0 w-12 h-full bg-transparent"></div>
-
-                        {/* Actual dropdown */}
-                        <div className="absolute left-0 top-0 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-48">
-                            <p className="text-xs font-medium text-gray-500 mb-2">Tất cả thành viên:</p>
-                            {technicians
-                                .find((g) => g.alias === hoveredIndividualGroup)
-                                ?.technicians?.map((tech) => (
-                                    <div
-                                        key={tech.technicianId}
-                                        className="p-2 hover:bg-gray-100 rounded cursor-pointer text-left"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleTechnicianChange(currentAnalysisId, tech.technicianId);
-                                            setHoveredIndividualGroup(null);
-                                            setIndividualDropdownRect(null);
-                                            setCurrentAnalysisId(null);
-                                        }}
-                                    >
-                                        <p className="text-sm font-medium">{tech.identityName}</p>
-                                        <p className="text-xs text-gray-500">{tech.technicianAlias}</p>
-                                    </div>
-                                ))}
-                        </div>
-                    </div>,
-                    document.body,
-                )}
             {isTransferMultipleVisible && renderBulkTransferForm()}
             {isDeleteConfirmVisible &&
                 renderDeleteConfirm(

@@ -11,6 +11,7 @@ module.exports = {
 					black: '#000000', // chữ màu đen
 					gray: '#808080', // chữ màu xám
 					secondary: '#3366CC',
+					
 				},
 				checkbox: {
 					bg: '#1e3a8a', // Màu nền mặc định

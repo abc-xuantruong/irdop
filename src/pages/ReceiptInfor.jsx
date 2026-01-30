@@ -1,5 +1,6 @@
 import * as React from "react";
 const { useContext, useState, useEffect, useRef } = React;
+import { createPortal } from "react-dom";
 import TinyMceInput from "../components/Input";
 import { GlobalContext } from "../contexts/GlobalContext";
 import Breadcrumb from "../components/Breadcrumb";
@@ -62,6 +63,113 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
     const [selectAllAnalytes, setSelectAllAnalytes] = useState(false); // Add state for select all checkbox
     const [isTransferMultipleVisible, setIsTransferMultipleVisible] = useState(false);
     const [selectedTechnician, setSelectedTechnician] = useState(null);
+
+    // Technician grouping states
+    const [technicianGroups, setTechnicianGroups] = useState([]);
+    const [technicianDropdownVisible, setTechnicianDropdownVisible] = useState(null);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+
+    const fetchTechnicianGroups = async () => {
+        try {
+            const response = await apiGet("https://pink.irdop.org/v1/iden/get/techinicians");
+            if (response.data && Array.isArray(response.data)) {
+                setTechnicianGroups(response.data);
+            }
+        } catch (error) {
+            console.error("Error fetching technician groups:", error);
+        }
+    };
+
+    useEffect(() => {
+        fetchTechnicianGroups();
+    }, []);
+
+    const toggleTechnicianDropdown = (analysisId, event) => {
+        const buttonRect = event.currentTarget.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const dropdownWidth = Math.min(650, viewportWidth - 40);
+        let leftPosition = buttonRect.left + window.scrollX;
+
+        if (leftPosition + dropdownWidth > viewportWidth - 20) {
+            leftPosition = Math.max(20, viewportWidth - dropdownWidth - 20);
+        }
+        if (leftPosition < 20) {
+            leftPosition = 20;
+        }
+
+        setDropdownPosition({
+            top: buttonRect.bottom + window.scrollY + 4,
+            left: leftPosition,
+        });
+
+        setTechnicianDropdownVisible(technicianDropdownVisible === analysisId ? null : analysisId);
+    };
+
+    const handleTechnicianChange = async (analysisId, technicianId) => {
+        // Find technician group and info
+        let selectedTech = null;
+        let selectedGroup = null;
+
+        for (const group of technicianGroups) {
+            const found = group.technicians?.find((t) => t.technicianId === technicianId);
+            if (found) {
+                selectedTech = found;
+                selectedGroup = group;
+                break;
+            }
+        }
+
+        if (!selectedTech) return;
+
+        // API Update Loop Logic (optimistic update)
+        const updatedAnalytes = listAnalytes.map((item) => {
+            if (item.id === analysisId) {
+                return {
+                    ...item,
+                    technicianId: technicianId,
+                    technicianUid: technicianId,
+                    technician: {
+                        identityId: technicianId,
+                        identityName: selectedTech.identityName,
+                    },
+                    technicianAlias: selectedGroup.alias,
+                    technicianIds: selectedGroup.technicians.map((t) => t.technicianId),
+                };
+            }
+            return item;
+        });
+        setListAnalytes(updatedAnalytes);
+        setTechnicianDropdownVisible(null);
+
+        try {
+            const analysis = listAnalytes.find((item) => item.id === analysisId);
+            const updateData = {
+                id: analysis.id,
+                technicianId: technicianId,
+                technicianIds: selectedGroup.technicians.map((t) => t.technicianId),
+                technicianAlias: selectedGroup.alias,
+                technician: {
+                    identityId: technicianId,
+                    identityName: selectedTech.identityName,
+                },
+                modifiedByUid: currentUser.identityUid,
+            };
+
+            const response = await apiPost("https://red.irdop.org/v1/analysis/update", {
+                analysis: updateData,
+            });
+
+            if (response.status === 200) {
+                showToast(`Đã gán ${selectedTech.identityName} thực hiện`);
+            } else {
+                throw new Error(response.data?.message || "Lỗi cập nhật");
+            }
+        } catch (error) {
+            console.error("Error updating technician:", error);
+            fetchReceipt(); // Revert on error
+            Swal.fire({ icon: "error", title: "Lỗi", text: "Cập nhật thất bại" });
+        }
+    };
     const [isBulkDeadlineVisible, setIsBulkDeadlineVisible] = useState(false);
     const [bulkDeadlineDate, setBulkDeadlineDate] = useState(new Date());
     const [newSample, setNewSample] = useState({
@@ -1517,6 +1625,15 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
             // Find technician information
             const technicianInfo = technicians.find((tech) => tech.identity_uid === selectedTechnician);
 
+            // Find group info
+            let selectedGroup = null;
+            for (const group of technicianGroups) {
+                if (group.technicians?.some((t) => t.technicianId === selectedTechnician)) {
+                    selectedGroup = group;
+                    break;
+                }
+            }
+
             // Prepare bulk update data with proper structure
             const analysesToUpdate = selectedItems.map((analyte) => ({
                 id: analyte.id,
@@ -1528,6 +1645,8 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                     identityId: selectedTechnician,
                     identityName: technicianInfo?.identityName || "Unknown",
                 },
+                technicianAlias: selectedGroup?.alias,
+                technicianIds: selectedGroup?.technicians?.map((t) => t.technicianId) || [],
                 modifiedByUid: currentUser.identityUid,
                 displayStyle: analyte.displayStyle || [
                     { label: "default", value: "" },
@@ -2535,24 +2654,40 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                 <h2 className="text-2xl font-semibold mb-4">Bàn giao {selectedAnalytes.length} chỉ tiêu</h2>
                 <div className="overflow-auto mb-4 flex-1">
                     <p className="font-medium mb-2">Chọn người thực hiện:</p>
-                    <div className="grid grid-cols-4 gap-3">
-                        {technicians.map((tech) => (
-                            <div
-                                key={tech.identity_uid}
-                                className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 text-center ${
-                                    selectedTechnician === tech.identity_uid ? "border-primary bg-blue-50" : "border-gray-300"
-                                }`}
-                                onClick={() => setSelectedTechnician(tech.identity_uid)}
-                            >
-                                <p className="font-bold text-primary text-sm mb-1">{tech.alias || ""}</p>
-                                <p className="text-xs text-gray-600 leading-tight">{tech.identity_name || ""}</p>
-                            </div>
-                        ))}
+                    <div className="grid grid-cols-2 gap-3">
+                        {technicianGroups.map((group) => {
+                            const primaryTechnician = group.technicians?.[0];
+                            if (!primaryTechnician) return null;
+
+                            return (
+                                <div
+                                    key={group.alias}
+                                    className={`relative p-3 border rounded-lg cursor-pointer transition-all duration-200 text-left hover:bg-gray-50 bg-white ${
+                                        selectedTechnician === primaryTechnician.technicianId ? "border-blue-500 ring-1 ring-blue-500 bg-blue-50" : "border-gray-200"
+                                    }`}
+                                    onClick={() => setSelectedTechnician(primaryTechnician.technicianId)}
+                                >
+                                    <div className="border-b border-gray-200 pb-2 mb-2">
+                                        <p className="font-bold text-gray-800 text-sm">
+                                            {group.alias}: {group.groupName}
+                                        </p>
+                                    </div>
+                                    <div className="text-xs text-gray-600 flex flex-col gap-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                                        {group.technicians.map((tech) => (
+                                            <div key={tech.technicianId} className="flex items-center gap-2">
+                                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tech.technicianId === selectedTechnician ? "bg-blue-500" : "bg-gray-300"}`}></span>
+                                                <span className={`${tech.technicianId === selectedTechnician ? "font-semibold text-blue-700" : "text-gray-700"}`}>{tech.identityName}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2 mt-4 pt-2 border-t">
                     <button
-                        className="bg-gray-500 text-white p-2 rounded mr-2"
+                        className="px-4 py-2 border rounded hover:bg-gray-50 bg-white text-gray-700"
                         onClick={() => {
                             setIsTransferMultipleVisible(false);
                             setSelectedTechnician(null);
@@ -2560,7 +2695,11 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                     >
                         Hủy bỏ
                     </button>
-                    <button className={`${selectedTechnician ? "bg-green-500" : "bg-gray-400"} text-white p-2 rounded`} onClick={handleBulkTransferConfirm} disabled={!selectedTechnician}>
+                    <button
+                        className={`px-4 py-2 rounded text-white ${selectedTechnician ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"}`}
+                        onClick={handleBulkTransferConfirm}
+                        disabled={!selectedTechnician}
+                    >
                         Xác nhận
                     </button>
                 </div>
@@ -4915,7 +5054,73 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                                     )}
                                                 </td>
                                                 <td className="p-1 border text-start">{canViewDeadline() ? formatDate(order.deadline) : "--"}</td>
-                                                <td className="p-1 border text-start">{getTechnicianName(order.technicianId)}</td>
+                                                <td className="p-1 border text-start relative" style={{ minWidth: "150px" }}>
+                                                    <div
+                                                        className="cursor-pointer hover:bg-gray-100 p-1 rounded flex justify-between items-center"
+                                                        onClick={(e) => toggleTechnicianDropdown(order.id, e)}
+                                                    >
+                                                        <span>{order.technician?.identityName || getTechnicianName(order.technicianId) || "Chọn KTV"}</span>
+                                                    </div>
+                                                    {technicianDropdownVisible === order.id &&
+                                                        createPortal(
+                                                            <div
+                                                                className="fixed bg-white border rounded shadow-lg z-[9999] p-4 text-left"
+                                                                style={{
+                                                                    top: dropdownPosition.top + "px",
+                                                                    left: dropdownPosition.left + "px",
+                                                                    position: "absolute",
+                                                                    minWidth: "550px",
+                                                                    maxWidth: Math.min(900, window.innerWidth - 40) + "px",
+                                                                    width: "max-content",
+                                                                }}
+                                                            >
+                                                                <div className="max-h-96 overflow-y-auto w-full grid grid-cols-2 gap-3">
+                                                                    {technicianGroups.map((group) => {
+                                                                        const primaryTechnician = group.technicians?.[0];
+                                                                        const isGroupSelected =
+                                                                            order.technicianAlias === group.alias || group.technicians?.some((t) => t.technicianId === order.technicianId);
+
+                                                                        if (!group.technicians || group.technicians.length === 0) return null;
+
+                                                                        return (
+                                                                            <div
+                                                                                key={group.alias}
+                                                                                className={`relative p-3 border rounded-lg cursor-pointer transition-all duration-200 text-left hover:bg-gray-50 bg-white ${
+                                                                                    isGroupSelected ? "border-blue-500 ring-1 ring-blue-500 bg-blue-50" : "border-gray-200"
+                                                                                }`}
+                                                                                onClick={() => handleTechnicianChange(order.id, primaryTechnician.technicianId)}
+                                                                            >
+                                                                                <div className="border-b border-gray-200 pb-2 mb-2">
+                                                                                    <p className="font-bold text-gray-800 text-sm">
+                                                                                        {group.alias}: {group.groupName}
+                                                                                    </p>
+                                                                                </div>
+                                                                                <div className="text-xs text-gray-600 flex flex-col gap-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                                                                                    {group.technicians.map((tech) => (
+                                                                                        <div key={tech.technicianId} className="flex items-center gap-2">
+                                                                                            <span
+                                                                                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                                                                                    tech.technicianId === order.technicianId ? "bg-blue-500" : "bg-gray-300"
+                                                                                                }`}
+                                                                                            ></span>
+                                                                                            <span
+                                                                                                className={`${
+                                                                                                    tech.technicianId === order.technicianId ? "font-semibold text-blue-700" : "text-gray-700"
+                                                                                                }`}
+                                                                                            >
+                                                                                                {tech.identityName}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>,
+                                                            document.body,
+                                                        )}
+                                                </td>
                                                 <td
                                                     className="p-1 border text-center relative"
                                                     onDoubleClick={async () => {
