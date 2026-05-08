@@ -4522,7 +4522,7 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                 <div className="rounded-lg mb-2">
                                     <div className="flex justify-start items-start mb-1">
                                         <label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Mã khách hàng</label>
-                                        {renderField("client.clientUID", currentReceipt?.client?.clientUID)}
+                                        {renderField("client.clientId", currentReceipt?.client?.clientId)}
                                     </div>
                                     <div className="flex justify-start items-start mb-1">
                                         <label className="block text-sm font-medium text-gray-700 min-w-32 text-left">Tổ chức/cá nhân</label>
