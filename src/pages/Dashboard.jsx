@@ -1654,8 +1654,8 @@ const Dashboard = () => {
         // If there are no samples, return false
         if (!receipt.samples || receipt.samples.length === 0) return false;
 
-        // Check if all samples have status >= 4 (Hoàn thành)
-        return receipt.samples.every((sample) => sample.status >= 4);
+        // Check if all samples have status === 5 (Hoàn thành)
+        return receipt.samples.every((sample) => sample.status === 5);
     };
 
     // Format deadline as relative time - updated with new formats
@@ -3272,19 +3272,17 @@ const Dashboard = () => {
                                                                     className="p-1 border rounded-md w-full text-sm bg-white"
                                                                     autoFocus
                                                                 >
-                                                                    <option value={0}>Đang chờ</option>
-                                                                    <option value={1}>Khẩn</option>
-                                                                    <option value={2}>Đang thực hiện</option>
-                                                                    <option value={3}>Đủ kết quả</option>
-                                                                    <option value={4}>Khiếu nại</option>
-                                                                    <option value={5}>Hoàn thành</option>
-                                                                    <option value={6}>Hủy bỏ</option>
+                                                                    {status.map((stat, index) => (
+                                                                        <option key={index} value={index}>
+                                                                            {stat}
+                                                                        </option>
+                                                                    ))}
                                                                 </select>
                                                             ) : (
                                                                 <div className="text-sm">
                                                                     <span
                                                                         className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                                                                            sample.status === 4
+                                                                            sample.status === 5
                                                                                 ? "bg-green-100 text-green-800"
                                                                                 : sample.status === 3
                                                                                 ? "bg-emerald-100 text-emerald-800"
@@ -3294,24 +3292,14 @@ const Dashboard = () => {
                                                                                 ? "bg-yellow-200 text-yellow-800"
                                                                                 : sample.status === 0
                                                                                 ? "bg-gray-100 text-gray-800"
-                                                                                : sample.status === 5
+                                                                                : sample.status === 6
                                                                                 ? "bg-red-100 text-red-800"
+                                                                                : sample.status === 4
+                                                                                ? "bg-orange-100 text-orange-800"
                                                                                 : "bg-gray-100 text-gray-800"
                                                                         }`}
                                                                     >
-                                                                        {sample.status === 4
-                                                                            ? "Hoàn thành"
-                                                                            : sample.status === 3
-                                                                            ? "Đủ kết quả"
-                                                                            : sample.status === 2
-                                                                            ? "Đang thực hiện"
-                                                                            : sample.status === 1
-                                                                            ? "Khẩn"
-                                                                            : sample.status === 0
-                                                                            ? "Đang chờ"
-                                                                            : sample.status === 5
-                                                                            ? "Hủy bỏ"
-                                                                            : "Chưa xác định"}
+                                                                        {status[sample.status] || "Chưa xác định"}
                                                                     </span>
                                                                 </div>
                                                             )}

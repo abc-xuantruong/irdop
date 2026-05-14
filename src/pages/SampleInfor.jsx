@@ -171,7 +171,7 @@ const SampleInfor = () => {
         parameterName: true, // Bắt buộc, luôn true
         protocolCode: true,
         protocolSource: true,
-        resultUnit: true,
+        resultUnit: false,
         scientificField: true,
         technicianId: true,
     });
@@ -184,7 +184,7 @@ const SampleInfor = () => {
         parameterName: true,
         protocolCode: true,
         protocolSource: true,
-        resultUnit: true,
+        resultUnit: false,
         scientificField: true,
         technicianId: true,
         matrix: true,
@@ -4783,7 +4783,7 @@ const SampleInfor = () => {
                                     <th className="p-2 border">Chỉ tiêu</th>
                                     <th className="p-2 border">Nền mẫu (Mới)</th>
                                     <th className="p-2 border">Phương pháp (Mới)</th>
-                                    <th className="p-2 border">Đơn vị (Mới)</th>
+
                                     <th className="p-2 border">Lĩnh vực (Mới)</th>
                                     <th className="p-2 border">Kỹ thuật viên (Mới)</th>
                                 </tr>
@@ -4814,7 +4814,7 @@ const SampleInfor = () => {
                                             </td>
                                             <td className="p-2 border">{renderDiff(analyte.matrix, matched.matrix)}</td>
                                             <td className="p-2 border">{renderDiff(analyte.protocolCode, matched.protocolCode)}</td>
-                                            <td className="p-2 border">{renderDiff(analyte.resultUnit, matched.resultUnit || matched.defaultUnit)}</td>
+
                                             <td className="p-2 border">{renderDiff(analyte.scientificField, matched.scientificField)}</td>
                                             <td className="p-2 border">{renderDiff(analyte.technician?.identityName, newTechName)}</td>
                                         </tr>

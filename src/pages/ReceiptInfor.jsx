@@ -270,7 +270,7 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
         parameterName: true,
         protocolCode: true,
         protocolSource: true,
-        resultUnit: true,
+        resultUnit: false,
         scientificField: true,
         technicianId: true,
         matrix: true,
@@ -2189,7 +2189,7 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                     <th className="border p-2 text-left">Chỉ tiêu (Hiện tại)</th>
                                     <th className="border p-2 text-left">Matrix</th>
                                     <th className="border p-2 text-left">Protocol Code</th>
-                                    <th className="border p-2 text-left">Result Unit</th>
+
                                     <th className="border p-2 text-left">Scientific Field</th>
                                     <th className="border p-2 text-left">Technician</th>
                                 </tr>
@@ -2232,7 +2232,7 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                                             </td>
                                             {renderCell(original.matrix, matched?.matrix)}
                                             {renderCell(original.protocolCode, matched?.protocolCode)}
-                                            {renderCell(original.resultUnit, matched?.resultUnit)}
+
                                             {renderCell(original.scientificField, matched?.scientificField)}
                                             <td className={`border p-2 align-top ${isTechDifferent ? "bg-yellow-50" : ""}`}>
                                                 <div className="flex flex-col gap-1">
