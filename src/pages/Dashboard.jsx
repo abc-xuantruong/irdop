@@ -23,6 +23,7 @@ const Dashboard = () => {
     const [currentList, setCurrentList] = useState([]);
     const [originalList, setOriginalList] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
+    const [loadingStatus, setLoadingStatus] = useState("idle"); // 'idle' | 'loading' | 'success' | 'error'
     const [isFilter, setIsFilter] = useState(false); // State to track if filtering is active
     const [searchTerm, setSearchTerm] = useState("");
     const datePickerRef = useRef(null);
@@ -148,6 +149,24 @@ const Dashboard = () => {
     const recordCodeDropdownRef = useRef(null);
     const requestNumberDropdownRef = useRef(null);
     const salesRecorderDropdownRef = useRef(null);
+
+    const callApiWithLoading = async (apiCallFn) => {
+        setLoadingStatus("loading");
+        try {
+            const res = await apiCallFn();
+            setLoadingStatus("success");
+            setTimeout(() => {
+                setLoadingStatus((prev) => prev === "success" ? "idle" : prev);
+            }, 1000);
+            return res;
+        } catch (err) {
+            setLoadingStatus("error");
+            setTimeout(() => {
+                setLoadingStatus((prev) => prev === "error" ? "idle" : prev);
+            }, 1500);
+            throw err;
+        }
+    };
 
     const [activeModal, setActiveModal] = useState({
         type: null, // 'receipt'
@@ -345,7 +364,7 @@ const Dashboard = () => {
                 page: 1,
             };
 
-            const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody);
+            const response = await callApiWithLoading(() => apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody));
             if (response.status === 200) {
                 const receipts = response.data?.result || [];
                 setOriginalList(receipts);
@@ -487,7 +506,7 @@ const Dashboard = () => {
                 payload.status = parseInt(statusParam, 10);
             }
 
-            const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", payload);
+            const response = await callApiWithLoading(() => apiPost("https://red.irdop.org/v1/receipt/get/recent", payload));
 
             if (response.status === 200) {
                 if (response.data && response.data.result && Array.isArray(response.data.result)) {
@@ -696,7 +715,7 @@ const Dashboard = () => {
                 payload.status = parseInt(statusParam, 10);
             }
 
-            const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", payload);
+            const response = await callApiWithLoading(() => apiPost("https://red.irdop.org/v1/receipt/get/recent", payload));
 
             if (response.status === 200) {
                 if (response.data && response.data.result && Array.isArray(response.data.result)) {
@@ -787,7 +806,7 @@ const Dashboard = () => {
                 payload.status = parseInt(statusParam, 10);
             }
 
-            const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", payload);
+            const response = await callApiWithLoading(() => apiPost("https://red.irdop.org/v1/receipt/get/recent", payload));
 
             if (response.status === 200 && response.data && response.data.result && Array.isArray(response.data.result)) {
                 setCurrentList(response.data.result);
@@ -822,7 +841,7 @@ const Dashboard = () => {
                 payload.status = parseInt(statusParam, 10);
             }
 
-            const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", payload);
+            const response = await callApiWithLoading(() => apiPost("https://red.irdop.org/v1/receipt/get/recent", payload));
 
             if (response.status === 200 && response.data && response.data.result && Array.isArray(response.data.result)) {
                 setCurrentList(response.data.result);
@@ -835,6 +854,122 @@ const Dashboard = () => {
             }
         } catch (error) {
             console.error("Error fetching overdue receipts:", error);
+        }
+    };
+
+    // Function to fetch result filled receipts
+    const fetchResultFilledReceipts = async (page = 1) => {
+        try {
+            const requestBody = {
+                columns: ["*"],
+                columnSort: "receiptDate",
+                sortBy: "DESC",
+                itemsPerPage: receiptsPerPage,
+                page: page,
+                resultsFilled: true,
+            };
+
+            // Add status filter if present in URL
+            const queryParams = new URLSearchParams(location.search);
+            const statusParam = queryParams.get("status");
+            if (statusParam !== null) {
+                requestBody.status = parseInt(statusParam, 10);
+            }
+
+            const response = await callApiWithLoading(() => apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody));
+
+            if (response.status === 200) {
+                const receipts = response.data?.result || [];
+                setCurrentList(receipts);
+                setCurrentPage(page);
+
+                // Update pagination info
+                const pagination = response.data.pagination || {};
+                setTotalItems(pagination.totalItems || receipts.length);
+                setTotalPages(pagination.totalPages || Math.ceil((pagination.totalItems || receipts.length) / receiptsPerPage));
+
+                if (page === 1) {
+                    Swal.fire({
+                        position: "top-end",
+                        icon: "info",
+                        title: `Hiển thị ${receipts.length} tiếp nhận có đủ kết quả`,
+                        showConfirmButton: false,
+                        timer: 2000,
+                        toast: true,
+                    });
+                }
+            } else {
+                Swal.fire({
+                    icon: "error",
+                    title: "Lỗi",
+                    text: response.data?.message || "Lỗi khi tải dữ liệu đủ kết quả",
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching result filled receipts:", error);
+            Swal.fire({
+                icon: "error",
+                title: "Lỗi",
+                text: error.message || "Có lỗi xảy ra khi tải dữ liệu đủ kết quả",
+            });
+        }
+    };
+
+    // Function to fetch reviewed receipts
+    const fetchReviewedReceipts = async (page = 1) => {
+        try {
+            const requestBody = {
+                columns: ["*"],
+                columnSort: "receiptDate",
+                sortBy: "DESC",
+                itemsPerPage: receiptsPerPage,
+                page: page,
+                reviewed: true,
+            };
+
+            // Add status filter if present in URL
+            const queryParams = new URLSearchParams(location.search);
+            const statusParam = queryParams.get("status");
+            if (statusParam !== null) {
+                requestBody.status = parseInt(statusParam, 10);
+            }
+
+            const response = await callApiWithLoading(() => apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody));
+
+            if (response.status === 200) {
+                const receipts = response.data?.result || [];
+                setCurrentList(receipts);
+                setCurrentPage(page);
+
+                // Update pagination info
+                const pagination = response.data.pagination || {};
+                setTotalItems(pagination.totalItems || receipts.length);
+                setTotalPages(pagination.totalPages || Math.ceil((pagination.totalItems || receipts.length) / receiptsPerPage));
+
+                if (page === 1) {
+                    Swal.fire({
+                        position: "top-end",
+                        icon: "info",
+                        title: `Hiển thị ${receipts.length} tiếp nhận Đủ TLTN`,
+                        showConfirmButton: false,
+                        timer: 2000,
+                        toast: true,
+                    });
+                }
+            } else {
+                Swal.fire({
+                    icon: "error",
+                    title: "Lỗi",
+                    text: response.data?.message || "Lỗi khi tải dữ liệu Đủ TLTN",
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching reviewed receipts:", error);
+            Swal.fire({
+                icon: "error",
+                title: "Lỗi",
+                text: error.message || "Có lỗi xảy ra khi tải dữ liệu Đủ TLTN",
+            });
         }
     };
 
@@ -860,7 +995,9 @@ const Dashboard = () => {
     };
 
     // Add function to toggle result filled filter
-    const toggleResultFilledFilter = async () => {
+    const toggleResultFilledFilter = () => {
+        const queryParams = new URLSearchParams(location.search);
+
         if (showResultFilledFilter) {
             // Turn off filter - reset to normal view
             setShowResultFilledFilter(false);
@@ -868,80 +1005,26 @@ const Dashboard = () => {
             setCurrentList(originalList);
 
             // Remove from URL
-            const queryParams = new URLSearchParams(location.search);
             queryParams.delete("resultsFilled");
             queryParams.delete("page");
-            navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
         } else {
-            // Turn on filter
-            setShowResultFilledFilter(true);
-
-            try {
-                const requestBody = {
-                    columns: ["*"],
-                    columnSort: "receiptDate",
-                    sortBy: "DESC",
-                    itemsPerPage: receiptsPerPage,
-                    page: 1,
-                    resultsFilled: true,
-                };
-
-                // Add status filter if present
-                const queryParams = new URLSearchParams(location.search);
-                const statusParam = queryParams.get("status");
-                if (statusParam !== null) {
-                    requestBody.status = parseInt(statusParam, 10);
-                }
-
-                const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody);
-
-                if (response.status === 200) {
-                    const receipts = response.data?.result || [];
-                    setCurrentList(receipts);
-                    setOriginalList(receipts);
-                    setIsFilter(true);
-                    setCurrentPage(1);
-
-                    // Update pagination
-                    const pagination = response.data.pagination || {};
-                    setTotalItems(pagination.totalItems || receipts.length);
-                    setTotalPages(pagination.totalPages || Math.ceil((pagination.totalItems || receipts.length) / receiptsPerPage));
-
-                    // Update URL
-                    queryParams.set("resultsFilled", "true");
-                    queryParams.delete("page");
-                    // Remove conflicting filters
-                    queryParams.delete("overdue");
-                    queryParams.delete("deadlineStart");
-                    queryParams.delete("deadlineEnd");
-                    queryParams.delete("reviewed");
-                    navigate(`${location.pathname}?${queryParams.toString()}`);
-
-                    Swal.fire({
-                        position: "top-end",
-                        icon: "info",
-                        title: `Hiển thị ${receipts.length} tiếp nhận có đủ kết quả`,
-                        showConfirmButton: false,
-                        timer: 2000,
-                        toast: true,
-                    });
-                }
-            } catch (error) {
-                console.error("Error fetching result filled receipts:", error);
-                Swal.fire({
-                    position: "top-end",
-                    icon: "error",
-                    title: "Có lỗi xảy ra khi lọc dữ liệu",
-                    showConfirmButton: false,
-                    timer: 2000,
-                    toast: true,
-                });
-            }
+            // Turn on filter - set parameter and remove conflicting ones
+            queryParams.set("resultsFilled", "true");
+            queryParams.delete("page");
+            queryParams.delete("overdue");
+            queryParams.delete("deadlineStart");
+            queryParams.delete("deadlineEnd");
+            queryParams.delete("reviewed");
+            queryParams.delete("searchTerm");
         }
+
+        navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
     };
 
     // Add function to toggle reviewed filter
-    const toggleReviewedFilter = async () => {
+    const toggleReviewedFilter = () => {
+        const queryParams = new URLSearchParams(location.search);
+
         if (showReviewedFilter) {
             // Turn off filter - reset to normal view
             setShowReviewedFilter(false);
@@ -949,76 +1032,20 @@ const Dashboard = () => {
             setCurrentList(originalList);
 
             // Remove from URL
-            const queryParams = new URLSearchParams(location.search);
             queryParams.delete("reviewed");
             queryParams.delete("page");
-            navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
         } else {
-            // Turn on filter
-            setShowReviewedFilter(true);
-
-            try {
-                const requestBody = {
-                    columns: ["*"],
-                    columnSort: "receiptDate",
-                    sortBy: "DESC",
-                    itemsPerPage: receiptsPerPage,
-                    page: 1,
-                    reviewed: true,
-                };
-
-                // Add status filter if present
-                const queryParams = new URLSearchParams(location.search);
-                const statusParam = queryParams.get("status");
-                if (statusParam !== null) {
-                    requestBody.status = parseInt(statusParam, 10);
-                }
-
-                const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody);
-
-                if (response.status === 200) {
-                    const receipts = response.data?.result || [];
-                    setCurrentList(receipts);
-                    setOriginalList(receipts);
-                    setIsFilter(true);
-                    setCurrentPage(1);
-
-                    // Update pagination
-                    const pagination = response.data.pagination || {};
-                    setTotalItems(pagination.totalItems || receipts.length);
-                    setTotalPages(pagination.totalPages || Math.ceil((pagination.totalItems || receipts.length) / receiptsPerPage));
-
-                    // Update URL
-                    queryParams.set("reviewed", "true");
-                    queryParams.delete("page");
-                    // Remove conflicting filters
-                    queryParams.delete("overdue");
-                    queryParams.delete("deadlineStart");
-                    queryParams.delete("deadlineEnd");
-                    queryParams.delete("resultsFilled");
-                    navigate(`${location.pathname}?${queryParams.toString()}`);
-
-                    Swal.fire({
-                        position: "top-end",
-                        icon: "info",
-                        title: `Hiển thị ${receipts.length} tiếp nhận Đủ TLTN`,
-                        showConfirmButton: false,
-                        timer: 2000,
-                        toast: true,
-                    });
-                }
-            } catch (error) {
-                console.error("Error fetching reviewed receipts:", error);
-                Swal.fire({
-                    position: "top-end",
-                    icon: "error",
-                    title: "Có lỗi xảy ra khi lọc dữ liệu",
-                    showConfirmButton: false,
-                    timer: 2000,
-                    toast: true,
-                });
-            }
+            // Turn on filter - set parameter and remove conflicting ones
+            queryParams.set("reviewed", "true");
+            queryParams.delete("page");
+            queryParams.delete("overdue");
+            queryParams.delete("deadlineStart");
+            queryParams.delete("deadlineEnd");
+            queryParams.delete("resultsFilled");
+            queryParams.delete("searchTerm");
         }
+
+        navigate(queryParams.toString() ? `${location.pathname}?${queryParams.toString()}` : location.pathname);
     };
 
     // Clear status filter when changing views or applying other filters
@@ -1062,7 +1089,7 @@ const Dashboard = () => {
                 requestBody.status = parseInt(statusParam, 10);
             }
 
-            const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody);
+            const response = await callApiWithLoading(() => apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody));
             if (response.status === 200) {
 
                 // Handle the new API response structure with pagination
@@ -1135,7 +1162,7 @@ const Dashboard = () => {
                 requestBody.status = parseInt(statusParam, 10);
             }
 
-            const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody);
+            const response = await callApiWithLoading(() => apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody));
             if (response.status === 200) {
                 // Store search results in current list using new API response structure
                 const receipts = response.data?.result || [];
@@ -1191,7 +1218,7 @@ const Dashboard = () => {
                 requestBody.status = parseInt(statusParam, 10);
             }
 
-            const response = await apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody);
+            const response = await callApiWithLoading(() => apiPost("https://red.irdop.org/v1/receipt/get/recent", requestBody));
 
             if (response.status === 200 && response.data && response.data.result && Array.isArray(response.data.result)) {
                 setCurrentList(response.data.result);
@@ -1304,8 +1331,8 @@ const Dashboard = () => {
             setStatusFilter(statusParam ? parseInt(statusParam, 10) : null);
             setIsFilter(true);
             setSearchTerm("");
-            // The filter will be applied by the toggleResultFilledFilter function
-            // No need to call API here as it's already called when button is clicked
+            
+            fetchResultFilledReceipts(pageNumber);
         } else if (queryParams.get("reviewed") === "true") {
             // Reviewed filter is active
             setShowReviewedFilter(true);
@@ -1315,8 +1342,8 @@ const Dashboard = () => {
             setStatusFilter(statusParam ? parseInt(statusParam, 10) : null);
             setIsFilter(true);
             setSearchTerm("");
-            // The filter will be applied by the toggleReviewedFilter function
-            // No need to call API here as it's already called when button is clicked
+            
+            fetchReviewedReceipts(pageNumber);
         } else if (statusParam !== null) {
             // Only status filter is active
             const statusValue = parseInt(statusParam, 10);
@@ -2442,6 +2469,19 @@ const Dashboard = () => {
                 :global(.custom-note-popup textarea) {
                     font-size: 0.875rem !important;
                 }
+                @keyframes scaleIn {
+                    0% {
+                        transform: scale(0);
+                        opacity: 0;
+                    }
+                    100% {
+                        transform: scale(1);
+                        opacity: 1;
+                    }
+                }
+                .animate-scale-in {
+                    animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+                }
             `}</style>
             {/* Add tooltip element that shows when hovering */}
             {tooltipState.visible && (
@@ -2454,6 +2494,37 @@ const Dashboard = () => {
                 >
                     <p className="font-semibold mb-1">Ghi chú:</p>
                     <p>{tooltipState.content}</p>
+                </div>
+            )}
+            {/* Loading Indicator */}
+            {loadingStatus !== "idle" && (
+                <div className={`fixed top-4 right-4 z-[9999] flex items-center gap-3 px-4 py-2.5 rounded-full shadow-lg border backdrop-blur-md transition-all duration-500 ease-in-out ${
+                    loadingStatus === "loading"
+                        ? "bg-white/90 border-blue-200 text-blue-600 shadow-blue-100/50"
+                        : loadingStatus === "success"
+                        ? "bg-white/90 border-green-200 text-green-600 shadow-green-100/50"
+                        : "bg-white/90 border-red-200 text-red-600 shadow-red-100/50"
+                }`}>
+                    {loadingStatus === "loading" && (
+                        <div className="w-5 h-5 border-3 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div>
+                    )}
+                    {loadingStatus === "success" && (
+                        <div className="flex items-center justify-center w-5 h-5 rounded-full bg-green-50 text-green-600 animate-scale-in">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                        </div>
+                    )}
+                    {loadingStatus === "error" && (
+                        <div className="flex items-center justify-center w-5 h-5 rounded-full bg-red-50 text-red-600 animate-scale-in">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </div>
+                    )}
+                    <span className="text-xs font-semibold tracking-wide uppercase select-none">
+                        {loadingStatus === "loading" ? "Đang tải dữ liệu..." : loadingStatus === "success" ? "Đã hoàn thành" : "Lỗi kết nối"}
+                    </span>
                 </div>
             )}
             {/* Add analysis summary tooltip - Interactive and shows all columns */}
