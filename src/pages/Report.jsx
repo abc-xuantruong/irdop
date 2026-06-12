@@ -1,4 +1,4 @@
-﻿import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { GlobalContext } from '../contexts/GlobalContext';
 import { apiPost } from '../contexts/helperFunctionCallAPI';
@@ -742,38 +742,44 @@ const ReportEditor = () => {
 						return result;
 					};
 
+					let defaultText = item.parameter_name || '--';
+					let engText = '';
+
 					if (
 						item.display_style &&
 						typeof item.display_style === 'object' &&
-						!Array.isArray(item.display_style) &&
-						item.display_style.default
+						!Array.isArray(item.display_style)
 					) {
-						const defaultText = formatText(item.display_style.default);
-
-						if (showEnglish && item.display_style.eng) {
-							const engText = formatText(item.display_style.eng);
-							parameterName = `${defaultText}<br>${engText}`;
-						} else {
-							parameterName = defaultText;
+						if (item.display_style.default) {
+							defaultText = formatText(item.display_style.default);
+						} else if (item.parameter_name) {
+							defaultText = formatText(item.parameter_name);
+						}
+						
+						if (item.display_style.eng) {
+							engText = formatText(item.display_style.eng);
 						}
 					} else if (item.display_style && Array.isArray(item.display_style)) {
 						// Old array format support (optional, or can be removed if strictly not needed)
 						const defaultItem = item.display_style.find((style) => style.label === 'default');
 						if (defaultItem && defaultItem.value && defaultItem.value.trim() !== '') {
-							parameterName = defaultItem.value;
+							defaultText = formatText(defaultItem.value);
+						} else if (item.parameter_name) {
+							defaultText = formatText(item.parameter_name);
 						}
 
-						if (showEnglish) {
-							const engItem = item.display_style.find((style) => style.label === 'eng');
-							if (engItem && engItem.value && engItem.value.trim() !== '') {
-								if (parameterName.includes('</p>')) {
-									parameterName = parameterName.replace('</p>', '/</p>');
-								} else {
-									parameterName += '/';
-								}
-								parameterName += engItem.value;
-							}
+						const engItem = item.display_style.find((style) => style.label === 'eng');
+						if (engItem && engItem.value && engItem.value.trim() !== '') {
+							engText = formatText(engItem.value);
 						}
+					} else {
+						defaultText = formatText(defaultText);
+					}
+
+					if (showEnglish && engText) {
+						parameterName = `${defaultText}<br>${engText}`;
+					} else {
+						parameterName = defaultText;
 					}
 
 					const result = item.result_value || '--';

@@ -1851,6 +1851,29 @@ const CreateReceiptFromCRM = () => {
                 setCrmData(transformedData);
                 setError(null);
 
+                // Load sample information from API response
+                if (response.data.samples) {
+                    const loadedCustomerInfo = {};
+                    response.data.samples.forEach((sample, index) => {
+                        if (sample.sampleInformation && Array.isArray(sample.sampleInformation) && sample.sampleInformation.length > 0) {
+                            // Use API data if available
+                            loadedCustomerInfo[index] = sample.sampleInformation.map((info) => ({
+                                fname: info.fname || "",
+                                fvalue: info.fvalue || "",
+                            }));
+                        }
+                    });
+                    // Only set customerInfo if there's data
+                    if (Object.keys(loadedCustomerInfo).length > 0) {
+                        setCustomerInfo(loadedCustomerInfo);
+                    }
+                }
+
+                // Set defaultSampleInformation based on response
+                if (response.data.defaultSampleInformation !== undefined) {
+                    setDefaultSampleInformation(response.data.defaultSampleInformation);
+                }
+
                 // Initialize urgent samples state
                 const initialUrgentState = {};
                 transformedData.samples.forEach((_, index) => {
