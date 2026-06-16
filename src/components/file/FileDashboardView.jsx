@@ -51,7 +51,6 @@ const FileDashboardView = ({ receipts, loading, onFilterByFile, onReceiptClick, 
             isOpen: true,
             analyses: sample.analyses || sample.analysis || [],
             sampleName: sample.sampleName || sample.sample_name || "",
-            sampleName: sample.sampleName || sample.sample_name || "",
             sampleId: sample.id || sample.sampleId || "",
             files: sample.files || [],
         });

@@ -167,57 +167,27 @@ const CreateReceiptFromCRM = () => {
     };
 
     // Apply matrix to all samples and update analyses
-    const applyGlobalMatrix = async (matrix) => {
+    const applyGlobalMatrix = (matrix) => {
         if (!crmData || !matrix) return;
 
-        // First update all sample matrices
-        const updatedSamples = crmData.samples.map((sample) => ({
-            ...sample,
-            matrix: matrix,
-        }));
+        // Update all sample matrices and update matrix in analyses as well
+        const updatedSamples = crmData.samples.map((sample) => {
+            const updatedAnalysis = sample.analysis.map((item) => ({
+                ...item,
+                matrix: matrix,
+            }));
+            return {
+                ...sample,
+                matrix: matrix,
+                analysis: updatedAnalysis,
+                analyses: updatedAnalysis,
+            };
+        });
 
         setCrmData({
             ...crmData,
             samples: updatedSamples,
         });
-        // Then update analyses for each sample
-        for (let index = 0; index < updatedSamples.length; index++) {
-            try {
-                // Check auth cookies before making API call
-                if (!hasAuthCookies()) {
-                    return; // hasAuthCookies will handle redirect
-                }
-
-                const sample = updatedSamples[index];
-                // Create list of analyses with their parameter names and the new matrix
-                const analyses = sample.analysis.map((item) => ({
-                    parameterId: item.parameterId,
-                    analysis: item.parameterName,
-                    matrix: matrix,
-                }));
-
-                // Send API request to match analyses with matrix
-                const response = await apiPost("https://red.irdop.org/v1/analysis/match/parameter", {
-                    analyses,
-                });
-
-                // Update the sample with the response data
-                if (response && response.data) {
-                    updatedSamples[index] = {
-                        ...updatedSamples[index],
-                        analysis: response.data,
-                        analyses: response.data,
-                    };
-
-                    setCrmData({
-                        ...crmData,
-                        samples: updatedSamples,
-                    });
-                }
-            } catch (error) {
-                console.error("Error updating analyses based on matrix:", error);
-            }
-        }
     };
 
     const openModal = () => {
@@ -378,10 +348,13 @@ const CreateReceiptFromCRM = () => {
                                     protocolCode: analysis.protocolCode || "",
                                     parameterId: currentParameterId,
                                     protocolSource: analysis.protocolSource || "IRDOP",
-                                    resultUnit: analysis.resultUnit || "",
+                                    resultUnit: analysis.analysisUnit || analysis.resultUnit || "",
+                                    analysisUnit: analysis.analysisUnit || analysis.resultUnit || "",
+                                    technicianId: analysis.technicianId || "",
+                                    technicianIds: analysis.technicianIds || (analysis.technicianId ? [analysis.technicianId] : []),
+                                    technician: analysis.technician || null,
+                                    technicians: analysis.technicians || [],
                                     field: analysis.field || "",
-                                    matrix: analysis.matrix || sample.matrix || "",
-                                    params: analysis.params || null,
                                     matrix: analysis.matrix || sample.matrix || "",
                                     params: analysis.params || null,
                                     fromParams: !!analysis.params,
@@ -543,17 +516,24 @@ const CreateReceiptFromCRM = () => {
         setIsCreating(true); // Add status property to samples based on urgentSamples state and ensure all analysis items have required properties
         const samplesWithStatus = crmData.samples.map((sample, index) => {
             // Make sure each analysis has all required properties
-            const updatedAnalyses = sample.analysis.map((item) => ({
-                parameterId: item.parameterId || "",
-                parameterName: item.parameterName || "",
-                protocolSource: item.protocolSource || "",
-                protocolCode: item.protocolCode || "",
-                matrix: item.matrix || sample.matrix || "",
-                field: item.field || "",
-                resultUnit: item.resultUnit || "",
-                // Keep any other properties that might be present
-                ...item,
-            }));
+            const updatedAnalyses = sample.analysis.map((item) => {
+                const resultUnitVal = item.resultUnit || item.analysisUnit || "";
+                return {
+                    ...item,
+                    parameterId: item.parameterId || "",
+                    parameterName: item.parameterName || "",
+                    protocolSource: item.protocolSource || "",
+                    protocolCode: item.protocolCode || "",
+                    matrix: item.matrix || sample.matrix || "",
+                    field: item.field || "",
+                    resultUnit: resultUnitVal,
+                    analysisUnit: resultUnitVal,
+                    technicianId: item.technicianId || "",
+                    technicianIds: item.technicianIds || (item.technicianId ? [item.technicianId] : []),
+                    technician: item.technician || null,
+                    technicians: item.technicians || [],
+                };
+            });
 
             // Prepare sample information by combining custom customer and receipt info
             let sampleInformation = [];
@@ -677,8 +657,29 @@ const CreateReceiptFromCRM = () => {
                     },
                 );
 
+                const cleanAnalyses = (sample.analysis || []).map((item) => {
+                    const resultUnitVal = item.resultUnit || item.analysisUnit || "";
+                    return {
+                        ...item,
+                        parameterId: item.parameterId || "",
+                        parameterName: item.parameterName || "",
+                        protocolSource: item.protocolSource || "",
+                        protocolCode: item.protocolCode || "",
+                        matrix: item.matrix || sample.matrix || "",
+                        field: item.field || "",
+                        resultUnit: resultUnitVal,
+                        analysisUnit: resultUnitVal,
+                        technicianId: item.technicianId || "",
+                        technicianIds: item.technicianIds || (item.technicianId ? [item.technicianId] : []),
+                        technician: item.technician || null,
+                        technicians: item.technicians || [],
+                    };
+                });
+
                 return {
                     ...sample,
+                    analysis: cleanAnalyses,
+                    analyses: cleanAnalyses,
                     sampleInformation: sampleInformation,
                 };
             });
@@ -910,6 +911,12 @@ const CreateReceiptFromCRM = () => {
             parameterName: suggestion.parameterName,
             displayStyle: suggestion.displayStyle || "",
             originalParameterName: originalParamName,
+            resultUnit: suggestion.analysisUnit || suggestion.resultUnit || currentAnalysis.resultUnit || "",
+            analysisUnit: suggestion.analysisUnit || suggestion.resultUnit || currentAnalysis.analysisUnit || "",
+            technicianId: suggestion.technicianId || currentAnalysis.technicianId || "",
+            technicianIds: suggestion.technicianIds || (suggestion.technicianId ? [suggestion.technicianId] : []) || currentAnalysis.technicianIds || [],
+            technician: suggestion.technician || currentAnalysis.technician || null,
+            technicians: suggestion.technicians || currentAnalysis.technicians || [],
         };
 
         // Also update analyses to keep them in sync
@@ -971,6 +978,12 @@ const CreateReceiptFromCRM = () => {
             parameterName: suggestion.parameterName,
             displayStyle: suggestion.displayStyle || "",
             originalParameterName: originalParamName,
+            resultUnit: suggestion.analysisUnit || suggestion.resultUnit || currentAnalysis.resultUnit || "",
+            analysisUnit: suggestion.analysisUnit || suggestion.resultUnit || currentAnalysis.analysisUnit || "",
+            technicianId: suggestion.technicianId || currentAnalysis.technicianId || "",
+            technicianIds: suggestion.technicianIds || (suggestion.technicianId ? [suggestion.technicianId] : []) || currentAnalysis.technicianIds || [],
+            technician: suggestion.technician || currentAnalysis.technician || null,
+            technicians: suggestion.technicians || currentAnalysis.technicians || [],
         }));
 
         // Insert new rows after the current index
@@ -1112,13 +1125,17 @@ const CreateReceiptFromCRM = () => {
             analysis: [
                 ...updatedSamples[currentSampleIndex].analysis,
                 ...selectedParameters.map((param) => ({
-                    parameterId: param.id,
+                    parameterId: param.parameterId || param.id || "",
                     parameterName: param.parameterName,
-                    parameterId: param.parameterId || "",
                     matrix: param.matrix || updatedSamples[currentSampleIndex].matrix,
                     protocolCode: param.protocolCode,
                     protocolSource: param.protocolSource || "IRDOP",
-                    resultUnit: param.resultUnit || "",
+                    resultUnit: param.resultUnit || param.analysisUnit || "",
+                    analysisUnit: param.analysisUnit || param.resultUnit || "",
+                    technicianId: param.technicianId || "",
+                    technicianIds: param.technicianIds || (param.technicianId ? [param.technicianId] : []),
+                    technician: param.technician || null,
+                    technicians: param.technicians || [],
                 })),
             ],
         };
@@ -1339,64 +1356,38 @@ const CreateReceiptFromCRM = () => {
             samples: updatedSamples,
         });
     }; // Handle matrix input completion (on Enter key or blur)
-    const handleMatrixComplete = async (index, matrixParam) => {
+    // Handle matrix input completion (on Enter key or blur)
+    const handleMatrixComplete = (index, matrixParam) => {
         if (!crmData) return;
 
         const sample = crmData.samples[index];
         const matrix = matrixParam !== undefined ? matrixParam : sample.matrix;
 
         if (!matrix) return;
-        try {
-            // Check auth cookies before making API call
-            if (!hasAuthCookies()) {
-                return; // hasAuthCookies will handle redirect
-            }
 
-            // First ensure the sample matrix is correctly set in state
-            const updatedSamples = [...crmData.samples];
-            updatedSamples[index] = {
-                ...updatedSamples[index],
-                matrix: matrix,
-            };
+        // Ensure the sample matrix is correctly set in state
+        const updatedSamples = [...crmData.samples];
+        const updatedAnalysis = sample.analysis.map((item) => ({
+            ...item,
+            matrix: matrix,
+        }));
+        updatedSamples[index] = {
+            ...sample,
+            matrix: matrix,
+            analysis: updatedAnalysis,
+            analyses: updatedAnalysis,
+        };
 
-            // Update the sample matrix value first before any API call
-            setCrmData({
-                ...crmData,
-                samples: updatedSamples,
-            });
+        // Update the sample matrix value first
+        setCrmData({
+            ...crmData,
+            samples: updatedSamples,
+        });
 
-            // Also make sure the input field displays the correct value
-            const inputField = document.getElementById(`matrix-${index}`);
-            if (inputField && inputField.value !== matrix) {
-                inputField.value = matrix;
-            }
-
-            // Create list of analyses with their parameter names and the new matrix
-            const analyses = sample.analysis.map((item) => ({
-                analysis: item.parameterName,
-                matrix: matrix,
-            }));
-
-            // Send API request to match analyses with matrix
-            const response = await apiPost("https://red.irdop.org/v1/analysis/match/parameter", {
-                analyses,
-            });
-
-            // Update the sample with the response data
-            if (response && response.data) {
-                updatedSamples[index] = {
-                    ...updatedSamples[index],
-                    matrix: matrix, // Ensure matrix value is preserved
-                    analysis: response.data,
-                };
-
-                setCrmData({
-                    ...crmData,
-                    samples: updatedSamples,
-                });
-            }
-        } catch (error) {
-            console.error("Error updating analyses based on matrix:", error);
+        // Also make sure the input field displays the correct value
+        const inputField = document.getElementById(`matrix-${index}`);
+        if (inputField && inputField.value !== matrix) {
+            inputField.value = matrix;
         }
     };
     // Search parameters
@@ -1452,10 +1443,16 @@ const CreateReceiptFromCRM = () => {
                 };
             } else {
                 // Regular field updates
-                updatedSamples[sampleIndex].analysis[analysisIndex] = {
+                const updatedItem = {
                     ...updatedSamples[sampleIndex].analysis[analysisIndex],
                     [field]: editAnalysisValue,
                 };
+
+                if (field === "resultUnit") {
+                    updatedItem.analysisUnit = editAnalysisValue;
+                }
+
+                updatedSamples[sampleIndex].analysis[analysisIndex] = updatedItem;
 
                 // If editing parameterName manually, remove fromParams flag and selectedParamId
                 if (field === "parameterName") {
@@ -1824,7 +1821,12 @@ const CreateReceiptFromCRM = () => {
                                     protocolCode: analysis.protocolCode || "",
                                     parameterId: currentParameterId,
                                     protocolSource: analysis.protocolSource || "IRDOP",
-                                    resultUnit: analysis.resultUnit || "",
+                                    resultUnit: analysis.analysisUnit || analysis.resultUnit || "",
+                                    analysisUnit: analysis.analysisUnit || analysis.resultUnit || "",
+                                    technicianId: analysis.technicianId || "",
+                                    technicianIds: analysis.technicianIds || (analysis.technicianId ? [analysis.technicianId] : []),
+                                    technician: analysis.technician || null,
+                                    technicians: analysis.technicians || [],
                                     field: analysis.field || "",
                                     matrix: analysis.matrix || sample.matrix || "",
                                     params: analysis.params || null,
@@ -2723,8 +2725,8 @@ const CreateReceiptFromCRM = () => {
                                                                             <th className="p-1 text-start">Chỉ tiêu</th>
                                                                             <th className="p-1 text-start">Nguồn</th>
                                                                             <th className="p-1 text-start">Mã Phương pháp</th>
-                                                                            <th className="p-1 text-start">KNV</th>
-                                                                            <th className="p-1 text-start">Họ tên</th>
+                                                                            <th className="p-1 text-start">Đơn vị</th>
+                                                                            <th className="p-1 text-start">Người thực hiện</th>
                                                                             <th className="p-1 text-start w-10">Xóa</th>
                                                                         </tr>
                                                                     </thead>
@@ -2872,7 +2874,7 @@ const CreateReceiptFromCRM = () => {
                                                                                 <td className="p-1 text-start w-24">
                                                                                     {editingAnalysis.sampleIndex === index &&
                                                                                     editingAnalysis.analysisIndex === idx &&
-                                                                                    editingAnalysis.field === "technicianAlias" ? (
+                                                                                    editingAnalysis.field === "resultUnit" ? (
                                                                                         <input
                                                                                             type="text"
                                                                                             value={editAnalysisValue}
@@ -2881,15 +2883,15 @@ const CreateReceiptFromCRM = () => {
                                                                                             onBlur={saveAnalysisEdit}
                                                                                             autoFocus
                                                                                             className="w-full border p-1 rounded bg-white"
-                                                                                            placeholder="KNV"
+                                                                                            placeholder="Đơn vị"
                                                                                         />
                                                                                     ) : (
                                                                                         <span
                                                                                             className="cursor-pointer hover:bg-gray-100 py-1 px-2 -ml-2 rounded block w-full"
-                                                                                            onClick={() => startEditingAnalysis(index, idx, "technicianAlias", item.technicianAlias)}
-                                                                                            title="Nhấn để chỉnh sửa KNV"
+                                                                                            onClick={() => startEditingAnalysis(index, idx, "resultUnit", item.analysisUnit || item.resultUnit)}
+                                                                                            title="Nhấn để chỉnh sửa đơn vị"
                                                                                         >
-                                                                                            {item.technicianAlias || "--"}
+                                                                                            {item.analysisUnit || item.resultUnit || "--"}
                                                                                         </span>
                                                                                     )}
                                                                                 </td>
