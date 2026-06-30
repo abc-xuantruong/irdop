@@ -139,12 +139,46 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
             return item;
         });
         setListAnalytes(updatedAnalytes);
+
+        // Also optimistically update currentReceipt.samples' analyses
+        if (currentReceipt && currentReceipt.samples) {
+            const updatedSamples = currentReceipt.samples.map((sample) => {
+                const analyses = sample.analyses || sample.analysis;
+                if (analyses) {
+                    const updatedSampleAnalyses = analyses.map((item) => {
+                        if (item.id === analysisId) {
+                            return {
+                                ...item,
+                                technicianId: technicianId,
+                                technicianUid: technicianId,
+                                technician: {
+                                    identityId: technicianId,
+                                    identityName: selectedTech.identityName,
+                                },
+                                technicianAlias: selectedGroup.alias,
+                                technicianIds: selectedGroup.technicians.map((t) => t.technicianId),
+                            };
+                        }
+                        return item;
+                    });
+                    return {
+                        ...sample,
+                        analyses: updatedSampleAnalyses,
+                        analysis: updatedSampleAnalyses
+                    };
+                }
+                return sample;
+            });
+            setCurrentReceipt({
+                ...currentReceipt,
+                samples: updatedSamples
+            });
+        }
         setTechnicianDropdownVisible(null);
 
         try {
-            const analysis = listAnalytes.find((item) => item.id === analysisId);
             const updateData = {
-                id: analysis.id,
+                id: analysisId,
                 technicianId: technicianId,
                 technicianIds: selectedGroup.technicians.map((t) => t.technicianId),
                 technicianAlias: selectedGroup.alias,
@@ -160,6 +194,58 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
             });
 
             if (response.status === 200) {
+                // Ensure state is updated/synchronized with response data
+                const updatedResponseAnalytes = listAnalytes.map((item) => {
+                    if (item.id === analysisId) {
+                        return {
+                            ...item,
+                            technicianId: technicianId,
+                            technicianUid: technicianId,
+                            technicianAlias: selectedGroup.alias,
+                            technicianIds: selectedGroup.technicians.map((t) => t.technicianId),
+                            technician: {
+                                identityId: technicianId,
+                                identityName: selectedTech.identityName,
+                            },
+                        };
+                    }
+                    return item;
+                });
+                setListAnalytes(updatedResponseAnalytes);
+
+                if (currentReceipt && currentReceipt.samples) {
+                    const updatedSamples = currentReceipt.samples.map((sample) => {
+                        const analyses = sample.analyses || sample.analysis;
+                        if (analyses) {
+                            const updatedSampleAnalyses = analyses.map((item) => {
+                                if (item.id === analysisId) {
+                                    return {
+                                        ...item,
+                                        technicianId: technicianId,
+                                        technicianUid: technicianId,
+                                        technicianAlias: selectedGroup.alias,
+                                        technicianIds: selectedGroup.technicians.map((t) => t.technicianId),
+                                        technician: {
+                                            identityId: technicianId,
+                                            identityName: selectedTech.identityName,
+                                        },
+                                    };
+                                }
+                                return item;
+                            });
+                            return {
+                                ...sample,
+                                analyses: updatedSampleAnalyses,
+                                analysis: updatedSampleAnalyses
+                            };
+                        }
+                        return sample;
+                    });
+                    setCurrentReceipt({
+                        ...currentReceipt,
+                        samples: updatedSamples
+                    });
+                }
                 showToast(`Đã gán ${selectedTech.identityName} thực hiện`);
             } else {
                 throw new Error(response.data?.message || "Lỗi cập nhật");
@@ -1625,11 +1711,14 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
             // Find technician information
             const technicianInfo = technicians.find((tech) => tech.identity_uid === selectedTechnician);
 
-            // Find group info
+            // Find group info + technician name directly from technicianGroups
             let selectedGroup = null;
+            let selectedTechName = '';
             for (const group of technicianGroups) {
-                if (group.technicians?.some((t) => t.technicianId === selectedTechnician)) {
+                const foundTech = group.technicians?.find((t) => t.technicianId === selectedTechnician);
+                if (foundTech) {
                     selectedGroup = group;
+                    selectedTechName = foundTech.identityName || group.groupName || '';
                     break;
                 }
             }
@@ -1643,7 +1732,7 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                 technicianUid: selectedTechnician,
                 technician: {
                     identityId: selectedTechnician,
-                    identityName: technicianInfo?.identityName || "Unknown",
+                    identityName: selectedTechName || "Chưa xác định",
                 },
                 technicianAlias: selectedGroup?.alias,
                 technicianIds: selectedGroup?.technicians?.map((t) => t.technicianId) || [],
@@ -1667,9 +1756,11 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                             ...analyte,
                             technicianUid: selectedTechnician,
                             technicianId: selectedTechnician,
+                            technicianAlias: selectedGroup?.alias,
+                            technicianIds: selectedGroup?.technicians?.map((t) => t.technicianId) || [],
                             technician: {
                                 identityId: selectedTechnician,
-                                identityName: technicianInfo?.identityName || "Unknown",
+                                identityName: selectedTechName || "Chưa xác định",
                             },
                         };
                     }
@@ -1677,6 +1768,42 @@ const ReceiptInfor = ({ receipt, onSampleClick }) => {
                 });
 
                 setListAnalytes(newAnalytesList);
+
+                // Also update currentReceipt.samples' analyses for bulk edit
+                if (currentReceipt && currentReceipt.samples) {
+                    const updatedSamples = currentReceipt.samples.map((sample) => {
+                        const analyses = sample.analyses || sample.analysis;
+                        if (analyses) {
+                            const updatedSampleAnalyses = analyses.map((item) => {
+                                if (selectedAnalytes.includes(item.id)) {
+                                    return {
+                                        ...item,
+                                        technicianUid: selectedTechnician,
+                                        technicianId: selectedTechnician,
+                                        technicianAlias: selectedGroup?.alias,
+                                        technicianIds: selectedGroup?.technicians?.map((t) => t.technicianId) || [],
+                                        technician: {
+                                            identityId: selectedTechnician,
+                                            identityName: selectedTechName || "Chưa xác định",
+                                        },
+                                    };
+                                }
+                                return item;
+                            });
+                            return {
+                                ...sample,
+                                analyses: updatedSampleAnalyses,
+                                analysis: updatedSampleAnalyses
+                            };
+                        }
+                        return sample;
+                    });
+                    setCurrentReceipt({
+                        ...currentReceipt,
+                        samples: updatedSamples
+                    });
+                }
+
                 setSelectedAnalytes([]);
 
                 showToast(`Đã cập nhật kỹ thuật viên cho ${analysesToUpdate.length} phân tích thành công!`);

@@ -502,6 +502,7 @@ export const generatePreviewHTML = (
 	footerHTML,
 	refNumber = null,
 	sampleIds = null,
+	isGrayscale = false,
 ) => {
 	const { A4, headerHeight, footerHeight } = measurements;
 
@@ -617,7 +618,7 @@ export const generatePreviewHTML = (
 		
 		table { 
 			border-collapse: collapse; 
-			table-layout: fixed; 
+			table-layout: auto; 
 			width: 100%; 
 			page-break-inside: avoid;
 		}
@@ -642,8 +643,12 @@ export const generatePreviewHTML = (
 		
 		@media print { 
 			.a4-page { border: none; } 
-			body { -webkit-print-color-adjust: exact; }
+			body { 
+				-webkit-print-color-adjust: exact; 
+				${isGrayscale ? 'filter: grayscale(100%) !important;' : ''}
+			}
 			.watermark { color: rgba(255, 0, 0, 0.15) !important; }
+			.blank-page-placeholder * { display: none !important; }
 		}
 	`;
 
@@ -693,23 +698,29 @@ export const generatePreviewHTML = (
 
 		// Extract refNumber from header's ref_code element
 		const parser = new DOMParser();
-		const headerDoc = parser.parseFromString(headerHTML, 'text/html');
-		const refCodeElement = headerDoc.querySelector('.ref_code');
-		const extractedRefNumber = refCodeElement ? refCodeElement.textContent.trim() : '';
+		let extractedRefNumber = '';
+		if (headerHTML && headerHTML.trim() !== '') {
+			const headerDoc = parser.parseFromString(headerHTML, 'text/html');
+			const refCodeElement = headerDoc.querySelector('.ref_code');
+			extractedRefNumber = refCodeElement ? refCodeElement.textContent.trim() : '';
 
-		// Replace content inside <p class="ref_code"> with actual refNumber
-		if (extractedRefNumber && refCodeElement) {
-			refCodeElement.textContent = extractedRefNumber;
-			headerHTML = headerDoc.body.innerHTML;
+			// Replace content inside <p class="ref_code"> with actual refNumber
+			if (extractedRefNumber && refCodeElement) {
+				refCodeElement.textContent = extractedRefNumber;
+				headerHTML = headerDoc.body.innerHTML;
+			}
 		}
 
 		// Add barcode canvas before the page numbers div
-		const footerDoc = parser.parseFromString(pageFooter, 'text/html');
+		let footerDoc = null;
+		if (pageFooter && pageFooter.trim() !== '') {
+			footerDoc = parser.parseFromString(pageFooter, 'text/html');
+		}
 
 		// Find the parent container that has flex-direction: column
-		const containerDiv = footerDoc.querySelector('div[style*="flex-direction: column"]');
+		const containerDiv = footerDoc ? footerDoc.querySelector('div[style*="flex-direction: column"]') : null;
 
-		if (containerDiv) {
+		if (containerDiv && footerDoc) {
 			// Check if canvas already exists
 			let canvas = containerDiv.querySelector('canvas.barcode-canvas');
 
@@ -743,8 +754,7 @@ export const generatePreviewHTML = (
 			// Get the updated HTML
 			pageFooter = footerDoc.body.innerHTML;
 		} else {
-			console.error('❌ Could not find container div in footer!');
-			console.log('Footer HTML for debug:', pageFooter.substring(0, 1000));
+			console.log('Skipping footer container check for page:', pageNumber);
 		}
 
 		// Generate content for this page - add spacing between sections but NOT after the last one
@@ -760,7 +770,15 @@ export const generatePreviewHTML = (
 		// Add watermark if needed
 		const watermarkHTML = shouldShowWatermark ? '<div class="watermark">DRAFT - SƠ BỘ</div>' : '';
 
-		pagesHTML += `
+		// Check if this page is a blank page placeholder
+		const isBlankPage = page.sections.some(s => s.html && s.html.includes('blank-page-placeholder'));
+
+		if (isBlankPage) {
+			pagesHTML += `
+<div class="a4-page blank-page-placeholder" style="position: relative; width: 794px; height: 1122px; box-sizing: border-box; page-break-after: always; background-color: white; padding: 0; overflow: hidden; border: 1px solid #000;">
+</div>`;
+		} else {
+			pagesHTML += `
 <div class="a4-page" style="position: relative; width: 794px; height: 1122px; box-sizing: border-box; page-break-after: always; background-color: white; padding: 0; overflow: hidden; border: 1px solid #000;">
 	${watermarkHTML}
 	<div class="header" style="position: absolute; top: ${headerTop}px; left: ${leftMarginPx}px; width: ${contentWidth}px; box-sizing: border-box; z-index: 2;">
@@ -773,6 +791,7 @@ export const generatePreviewHTML = (
 		${pageFooter}
 	</div>
 </div>`;
+		}
 	});
 
 	// Format title for PDF filename
@@ -843,6 +862,12 @@ export const generatePreviewHTML = (
 					}
 				}
 			});
+
+			// Auto open print dialog and close window on complete
+			setTimeout(function() {
+				window.print();
+				window.close();
+			}, 500);
 		});
 	</script>
 </body>

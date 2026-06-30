@@ -55,6 +55,7 @@ const ReportEditor = () => {
 	const [selectedReport, setSelectedReport] = useState(null);
 	const [currentRefNumber, setCurrentRefNumber] = useState(refNumberFromUrl || ''); // Track current refNumber
 	const [userClearedReport, setUserClearedReport] = useState(false); // Track if user manually cleared report selection
+	const [replaceReportRef, setReplaceReportRef] = useState(''); // Track replacement report reference
 
 	// Multi-sample mode states
 	const [viewMode, setViewMode] = useState('single'); // 'single' or 'all'
@@ -68,6 +69,8 @@ const ReportEditor = () => {
 	const [showEnglish, setShowEnglish] = useState(false);
 	const [showKN, setShowKN] = useState(false);
 	const [showSign, setShowSign] = useState(true);
+	const [isPublishedReportRef, setIsPublishedReportRef] = useState(false);
+	const [searchSampleId, setSearchSampleId] = useState('');
 
 	// Editor refs for TinyMCE
 	const headerEditorRef = useRef(null);
@@ -240,6 +243,7 @@ const ReportEditor = () => {
 					contentEditorRef: null,
 					footerEditorRef: null,
 					selectedReportIndex: null,
+					replaceReportRef: '',
 				};
 
 				// Check for VLAS protocol
@@ -444,12 +448,42 @@ const ReportEditor = () => {
 		}
 	}, [sampleData, refNumberFromUrl, reportId, selectedReport, userClearedReport]);
 
+	// Handle search and redirect to another sample report
+	const handleSearchAndRedirect = async () => {
+		if (!searchSampleId || searchSampleId.trim() === '') {
+			alert('Vui lòng nhập mã mẫu!');
+			return;
+		}
+
+		const cleanSampleId = searchSampleId.trim();
+		try {
+			setLoading(true);
+			const response = await apiPost('https://red.irdop.org/v1/sample/get/full', {
+				sampleId: cleanSampleId,
+			});
+
+			if (response.status === 200 && response.data && response.data.sampleId) {
+				// Navigate to the target report page
+				window.location.href = `/report?sampleId=${cleanSampleId}`;
+			} else {
+				alert('Mã mẫu không tồn tại trong hệ thống!');
+			}
+			setLoading(false);
+		} catch (error) {
+			console.error('Error finding sample for redirect:', error);
+			alert('Có lỗi xảy ra hoặc mã mẫu không tồn tại!');
+			setLoading(false);
+		}
+	};
+
 	// Handle sample selection change
 	const handleSampleChange = (e) => {
 		const newSampleId = e.target.value;
 		setSelectedSampleId(newSampleId);
 		setSelectedReport(null); // Reset report selection
+		setIsPublishedReportRef(false); // Reset published report flag
 		setUserClearedReport(false); // Reset flag when changing sample
+		setReplaceReportRef(''); // Reset replacement report selection
 
 		// Update URL with new sampleId
 		const newUrl = new URL(window.location.href);
@@ -471,6 +505,7 @@ const ReportEditor = () => {
 		// Check if user selected default option (empty string or "")
 		if (reportIndex === '' || reportIndex === undefined || reportIndex === null) {
 			setSelectedReport(null);
+			setIsPublishedReportRef(false); // Reset published report flag
 			setUserClearedReport(true); // Mark that user manually cleared selection
 
 			// Remove refNumber from URL
@@ -480,6 +515,7 @@ const ReportEditor = () => {
 
 			// Clear current refNumber state
 			setCurrentRefNumber('');
+			setReplaceReportRef(''); // Reset replacement report reference
 			return;
 		}
 
@@ -537,11 +573,25 @@ const ReportEditor = () => {
 				if (reportData.headerSection) {
 					const headerWithId = ensureSectionId(reportData.headerSection, 'header-section');
 					setHeader(headerWithId);
+
+					// Extract replaceReportRef
+					try {
+						const doc = new DOMParser().parseFromString(headerWithId, 'text/html');
+						const replaceElement = doc.querySelector('.replace-report-row');
+						const replacedRef = replaceElement ? replaceElement.getAttribute('data-replace-ref') : '';
+						setReplaceReportRef(replacedRef || '');
+					} catch (e) {
+						console.error('Error parsing replaceReportRef from header:', e);
+						setReplaceReportRef('');
+					}
+
 					setTimeout(() => {
 						if (headerEditorRef.current) {
 							headerEditorRef.current.setContent(headerWithId);
 						}
 					}, 100);
+				} else {
+					setReplaceReportRef('');
 				}
 
 				// Load footer section
@@ -603,6 +653,8 @@ const ReportEditor = () => {
 						setSelectedReport(matchingReport);
 					}
 				}
+
+				setIsPublishedReportRef(true);
 			}
 
 			setLoading(false);
@@ -825,22 +877,22 @@ const ReportEditor = () => {
 <table style="width: 100%; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px;">
 	<thead>
 		<tr>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 45px; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 6.5%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>STT</strong> <br> <span style="font-size: 12px; color: #444444;">/ No.</span>
 			</th>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 23%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444;">/ Tests</span>
 			</th>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 18%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>${resultHeader}</strong> <br> <span style="font-size: 12px; color: #444444;">${resultHeaderEng}</span>
 			</th>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 11.5%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>Đơn vị</strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
 			</th>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 23%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
 			</th>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 18%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>Phạm vi công nhận</strong> <br> <span style="font-size: 12px; color: #444444;">/ Accreditation scope</span>
 			</th>${referenceHeader}
 		</tr>
@@ -933,10 +985,15 @@ ${tableHTML}
 	};
 
 	// Generate header section for a sample with custom showVlas
-	const generateHeaderForSample = (sampleShowVlas, refNumber = null, sampleShowKN = false) => {
+	const generateHeaderForSample = (sampleShowVlas, refNumber = null, sampleShowKN = false, replaceRefNumber = null) => {
 		const displayVlas = sampleShowVlas ? '' : 'display:none;';
 		const refCode = refNumber || 'SƠ BỘ / DRAFT';
 		const title = sampleShowKN ? 'PHIẾU KẾT QUẢ KIỂM NGHIỆM' : 'PHIẾU KẾT QUẢ THỬ NGHIỆM';
+		const replaceRow = replaceRefNumber ? `
+			<div class="replace-report-row" data-replace-ref="${replaceRefNumber}" style="display: flex; align-items: center; gap: 2mm; font-size:12px; margin-top: 0px; height: 20px;">
+				<span>Thay thế cho phiếu có mã xuất bản / Replaced for Ref. No:</span>
+				<span style="min-width: 5pt; margin: 0;">${replaceRefNumber}</span>
+			</div>` : '';
 
 		return `
 <div id="header-section" style="position:relative; height: fit-content;">
@@ -966,7 +1023,7 @@ ${tableHTML}
 				<span>Xuất bản / ref.:</span>
 				<p class="ref_code" style="min-width:5pt; margin: 0; margin-right: 2mm;">${refCode}</p>
 				<span style="min-width:5pt; margin: 0;">Ngày / Date: ${formatDate(new Date())}</span>
-			</div>
+			</div>${replaceRow}
 		</div>
 		<div class="vlas_icon" style="position:absolute; right:0mm; top:0.2cm; ${displayVlas}">
 			<img src="data:image/png;base64,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"
@@ -1069,14 +1126,20 @@ ${tableHTML}
 	// Update content when toggle states change
 	useEffect(() => {
 		if (sampleData) {
+			if (isPublishedReportRef) {
+				return;
+			}
 			updateContentWithData(sampleData);
 		}
-	}, [showComment, showSign, showReference, showKN, sampleData]);
+	}, [showComment, showSign, showReference, showKN, sampleData, isPublishedReportRef]);
 
 	// Update header based on all dependencies
 	useEffect(() => {
+		if (isPublishedReportRef) {
+			return;
+		}
 		// Generate new header HTML with current state
-		const newHeaderHTML = generateHeaderForSample(showVlas, currentRefNumber, showKN);
+		const newHeaderHTML = generateHeaderForSample(showVlas, currentRefNumber, showKN, replaceReportRef);
 
 		// Update the header state
 		setHeader(newHeaderHTML);
@@ -1116,7 +1179,12 @@ ${tableHTML}
 		}, 100);
 
 		return () => clearTimeout(timeout);
-	}, [showVlas, showKN, currentRefNumber]);
+	}, [showVlas, showKN, currentRefNumber, replaceReportRef, isPublishedReportRef]);
+
+	// Reset isPublishedReportRef when toggles are manually changed
+	useEffect(() => {
+		setIsPublishedReportRef(false);
+	}, [showComment, showSign, showReference, showKN, showVlas, replaceReportRef]);
 
 	// Helper function to add computed widths to table columns
 	const normalizeTableWidths = (htmlContent, editorRef) => {
@@ -1131,6 +1199,11 @@ ${tableHTML}
 			const tables = doc.querySelectorAll('table');
 
 			tables.forEach((table) => {
+				// Skip auto-resizing for the analysis table to preserve fixed percentage widths
+				if (table.closest('#analysis-section') || table.id === 'analysis-section') {
+					return;
+				}
+
 				// Find corresponding table in editor
 				const tableId = table.id || table.querySelector('[id]')?.closest('table')?.id;
 				let editorTable = null;
@@ -1204,7 +1277,7 @@ ${tableHTML}
 	};
 
 	// Preview for single sample mode
-	const handleSinglePreview = async () => {
+	const handleSinglePreview = async (isTwoSided = false, isGrayscale = false) => {
 		try {
 			const headerHTML = headerEditorRef.current?.getContent() || header;
 			let contentHTML = contentEditorRef.current?.getContent() || content;
@@ -1214,7 +1287,19 @@ ${tableHTML}
 			contentHTML = normalizeTableWidths(contentHTML, contentEditorRef.current);
 
 			const measurementData = await measureSectionsInDOM(headerHTML, contentHTML, footerHTML);
-			const paginatedPages = applyClientSidePagination(headerHTML, contentHTML, footerHTML, measurementData);
+			let paginatedPages = applyClientSidePagination(headerHTML, contentHTML, footerHTML, measurementData);
+
+			if (isTwoSided && paginatedPages.length % 2 !== 0) {
+				paginatedPages = [...paginatedPages, {
+					pageNumber: paginatedPages.length + 1,
+					sections: [{
+						html: '<div class="blank-page-placeholder" style="height: 100%; display: flex; align-items: center; justify-content: center;"></div>',
+						height: 0,
+						isTable: false,
+						tableInfo: null
+					}]
+				}];
+			}
 
 			// Get sample ID for filename
 			const currentSampleId = sampleData?.sampleId || selectedSampleId || sampleId;
@@ -1226,6 +1311,7 @@ ${tableHTML}
 				footerHTML,
 				currentRefNumber,
 				currentSampleId,
+				isGrayscale,
 			);
 			openPreviewWindow(finalHTML, currentSampleId);
 		} catch (error) {
@@ -1235,7 +1321,7 @@ ${tableHTML}
 	};
 
 	// Preview for all samples mode
-	const handleAllSamplesPreview = async () => {
+	const handleAllSamplesPreview = async (isTwoSided = false, isGrayscale = false) => {
 		try {
 			// Wait a bit for editors to be ready
 			await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1320,6 +1406,8 @@ ${tableHTML}
 						headerHTML,
 						footerHTML,
 						sampleRefNumber,
+						null,
+						isGrayscale,
 					);
 
 					// Extract only the pages (body content) from the generated HTML
@@ -1338,6 +1426,13 @@ ${tableHTML}
 						pages.forEach((page, pageIndex) => {
 							allSamplesHTML.push(page.outerHTML);
 						});
+
+						// Add blank page for odd page count in 2-sided mode
+						if (isTwoSided && pages.length % 2 !== 0) {
+							allSamplesHTML.push(
+								`<div class="a4-page blank-page-placeholder" style="background: white; border: 1px solid #000; display: flex; align-items: center; justify-content: center; height: 1122px; width: 794px;"></div>`
+							);
+						}
 					}
 				} catch (sampleError) {
 					console.error(`❌ Error processing sample ${sample.sampleId}:`, sampleError);
@@ -1438,6 +1533,7 @@ ${tableHTML}
 				background: white;
 				padding: 0;
 				gap: 0;
+				${isGrayscale ? 'filter: grayscale(100%) !important;' : ''}
 			}
 			.a4-page {
 				box-shadow: none;
@@ -1481,6 +1577,12 @@ ${tableHTML}
 					}
 				}
 			});
+
+			// Auto open print dialog and close window on complete
+			setTimeout(function() {
+				window.print();
+				window.close();
+			}, 500);
 		});
 	</script>
 </body>
@@ -2185,6 +2287,7 @@ ${tableHTML}
 
 		if (reportIndex === '') {
 			sample.selectedReportIndex = null;
+			sample.replaceReportRef = ''; // Clear replacement reference
 			setAllSamplesData(updatedSamples);
 			return;
 		}
@@ -2213,6 +2316,17 @@ ${tableHTML}
 
 				// Update sample with report data
 				sample.headerContent = ensureSectionId(reportData.headerSection || '', 'header-section');
+
+				// Extract replaceReportRef
+				try {
+					const doc = new DOMParser().parseFromString(sample.headerContent, 'text/html');
+					const replaceElement = doc.querySelector('.replace-report-row');
+					const replacedRef = replaceElement ? replaceElement.getAttribute('data-replace-ref') : '';
+					sample.replaceReportRef = replacedRef || '';
+				} catch (e) {
+					console.error('Error parsing replaceReportRef for sample:', e);
+					sample.replaceReportRef = '';
+				}
 
 				const contentParts = [];
 				if (reportData.customerSection)
@@ -2255,6 +2369,32 @@ ${tableHTML}
 		}
 	};
 
+	// Handle replace report selection change for a specific sample in "all" mode
+	const handleSampleReplaceReportChange = (sampleIndex, replaceRef) => {
+		const updatedSamples = [...allSamplesData];
+		const sample = updatedSamples[sampleIndex];
+		sample.replaceReportRef = replaceRef;
+
+		// Regenerate the header content with the new replaceReportRef
+		const newHeaderContent = generateHeaderForSample(
+			sample.showVlas,
+			sample.currentRefNumber,
+			sample.showKN,
+			replaceRef
+		);
+
+		// Update stored header content
+		sample.headerContent = newHeaderContent;
+		setAllSamplesData(updatedSamples);
+
+		// Update editor if it exists
+		setTimeout(() => {
+			if (sample.headerEditorRef && typeof sample.headerEditorRef.setContent === 'function') {
+				sample.headerEditorRef.setContent(newHeaderContent);
+			}
+		}, 50);
+	};
+
 	// Handle toggle change for a specific sample in "all" mode
 	const handleSampleToggleChange = (sampleIndex, toggleName, value) => {
 		const updatedSamples = [...allSamplesData];
@@ -2268,6 +2408,7 @@ ${tableHTML}
 				toggleName === 'showVlas' ? value : sample.showVlas,
 				sample.currentRefNumber,
 				toggleName === 'showKN' ? value : sample.showKN,
+				sample.replaceReportRef,
 			);
 
 			// Update stored header content
@@ -2396,22 +2537,22 @@ ${tableHTML}
 <table style="width: 100%; border-collapse: collapse; text-align: left; margin:0; padding:0; font-size:12px;">
 	<thead>
 		<tr>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 45px; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 6.5%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>STT</strong> <br> <span style="font-size: 12px; color: #444444;">/ No.</span>
 			</th>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 23%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>Phép thử</strong> <br> <span style="font-size: 12px; color: #444444;">/ Tests</span>
 			</th>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 18%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>${resultHeader}</strong> <br> <span style="font-size: 12px; color: #444444;">${resultHeaderEng}</span>
 			</th>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 11.5%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>Đơn vị</strong><br> <span style="font-size: 12px; color: #444444;">/ Unit</span>
 			</th>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 23%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>Phương pháp</strong> <br> <span style="font-size: 12px; color: #444444;">/ Protocol</span>
 			</th>
-			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
+			<th style="border: 1px solid black; padding: 4px 8px; background-color: #f2f2f2; font-weight: 500; width: 18%; text-align:left; font-size:12px; vertical-align: middle; line-height: 1.2; box-sizing: border-box;">
 				<strong>Phạm vi công nhận</strong> <br> <span style="font-size: 12px; color: #444444;">/ Accreditation scope</span>
 			</th>${referenceHeader}
 		</tr>
@@ -2918,7 +3059,7 @@ ${tableHTML}
 										<TinyMCEEditor
 											value={
 												sample.headerContent ||
-												generateHeaderForSample(sample.showVlas, sample.currentRefNumber, sample.showKN)
+												generateHeaderForSample(sample.showVlas, sample.currentRefNumber, sample.showKN, sample.replaceReportRef)
 											}
 											onEditorChange={(content) => {
 												const updated = [...allSamplesData];
@@ -3134,40 +3275,66 @@ ${tableHTML}
 				<h2 className="text-2xl font-bold text-primary mb-6">Phiếu phân tích</h2>
 
 				{/* View Mode Selection */}
-				<div className="mb-6">
-					<label className="text-sm font-semibold mb-2 block">Chế độ xem:</label>
-					<div className="flex gap-2">
-						<button
-							onClick={() => handleViewModeChange('single')}
-							className={`px-4 py-2 rounded-lg transition ${viewMode === 'single' ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-						>
-							Đơn lẻ
-						</button>
-						<button
-							onClick={() => handleViewModeChange('all')}
-							className={`px-4 py-2 rounded-lg transition ${viewMode === 'all' ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-						>
-							Toàn bộ phiếu
-						</button>
-						<button
-							onClick={() => setIsFileFormVisible(true)}
-							className="px-4 py-2 rounded-lg transition bg-gray-200 text-gray-700 hover:bg-gray-300"
-						>
-							Files
-						</button>
-						<button
-							onClick={handleInvoiceClick}
-							disabled={!invoiceFile}
-							className={`px-4 py-2 rounded-lg transition ${invoiceFile ? 'bg-green-500 text-white hover:bg-green-600 cursor-pointer' : 'bg-gray-400 text-gray-200 cursor-not-allowed'}`}
-						>
-							Hóa đơn
-						</button>
-						<button
-							onClick={handleOpenAllLabTestFiles}
-							className="px-4 py-2 rounded-lg transition bg-orange-500 text-white hover:bg-orange-600"
-						>
-							Tài liệu thử nghiệm
-						</button>
+				<div className="mb-6 flex justify-between items-center flex-wrap gap-4">
+					<div>
+						<label className="text-sm font-semibold mb-2 block">Chế độ xem:</label>
+						<div className="flex gap-2">
+							<button
+								onClick={() => handleViewModeChange('single')}
+								className={`px-4 py-2 rounded-lg transition ${viewMode === 'single' ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+							>
+								Đơn lẻ
+							</button>
+							<button
+								onClick={() => handleViewModeChange('all')}
+								className={`px-4 py-2 rounded-lg transition ${viewMode === 'all' ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+							>
+								Toàn bộ phiếu
+							</button>
+							<button
+								onClick={() => setIsFileFormVisible(true)}
+								className="px-4 py-2 rounded-lg transition bg-gray-200 text-gray-700 hover:bg-gray-300"
+							>
+								Files
+							</button>
+							<button
+								onClick={handleInvoiceClick}
+								disabled={!invoiceFile}
+								className={`px-4 py-2 rounded-lg transition ${invoiceFile ? 'bg-green-500 text-white hover:bg-green-600 cursor-pointer' : 'bg-gray-400 text-gray-200 cursor-not-allowed'}`}
+							>
+								Hóa đơn
+							</button>
+							<button
+								onClick={handleOpenAllLabTestFiles}
+								className="px-4 py-2 rounded-lg transition bg-orange-500 text-white hover:bg-orange-600"
+							>
+								Tài liệu thử nghiệm
+							</button>
+						</div>
+					</div>
+
+					<div className="flex flex-col items-end">
+						<label className="text-sm font-semibold mb-2 block">Tìm nhanh mã mẫu:</label>
+						<div className="flex gap-2">
+							<input
+								type="text"
+								placeholder="Nhập mã mẫu (Ví dụ: SP...)"
+								value={searchSampleId}
+								onChange={(e) => setSearchSampleId(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter') {
+										handleSearchAndRedirect();
+									}
+								}}
+								className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 w-48 text-sm bg-white text-black"
+							/>
+							<button
+								onClick={handleSearchAndRedirect}
+								className="px-4 py-2 rounded-lg transition bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium"
+							>
+								Chuyển tiếp
+							</button>
+						</div>
 					</div>
 				</div>
 
@@ -3212,6 +3379,27 @@ ${tableHTML}
 											{report.refNumber} - {formatDate(new Date(report.createdAt))}
 										</option>
 									))}
+								</select>
+							</div>
+						)}
+
+						{/* Replacement Report Selection */}
+						{sampleData && sampleData.reports && sampleData.reports.length > 0 && (
+							<div className="mb-6 flex items-center gap-4">
+								<label className="text-sm font-semibold whitespace-nowrap">Thay thế báo cáo:</label>
+								<select
+									value={replaceReportRef}
+									onChange={(e) => setReplaceReportRef(e.target.value)}
+									className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+								>
+									<option value="">-- Chọn báo cáo thay thế --</option>
+									{sampleData.reports
+										.filter((report) => !selectedReport || report.refNumber !== selectedReport.refNumber)
+										.map((report, index) => (
+											<option key={report.refNumber} value={report.refNumber}>
+												{report.refNumber} - {formatDate(new Date(report.createdAt))}
+											</option>
+										))}
 								</select>
 							</div>
 						)}
@@ -3294,6 +3482,31 @@ ${tableHTML}
 									</select>
 								</div>
 
+								{!sample.isHidden && sample.reports && sample.reports.length > 0 && (
+									<div className="flex items-center gap-4">
+										<label
+											className="text-sm font-semibold whitespace-nowrap min-w-[120px] text-gray-500"
+										>
+											Thay thế báo cáo:
+										</label>
+										<select
+											value={sample.replaceReportRef || ''}
+											onChange={(e) => handleSampleReplaceReportChange(index, e.target.value)}
+											className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
+											disabled={sample.isHidden}
+										>
+											<option value="">-- Chọn báo cáo thay thế --</option>
+											{sample.reports
+												.filter((report, idx) => sample.selectedReportIndex === null || idx !== sample.selectedReportIndex)
+												.map((report, reportIndex) => (
+													<option key={report.refNumber} value={report.refNumber}>
+														{report.refNumber} - {formatDate(new Date(report.createdAt))}
+													</option>
+												))}
+										</select>
+									</div>
+								)}
+
 								{/* Sample-specific toggles - single row */}
 								<div className="flex gap-2 pl-[136px] flex-wrap">
 									<button
@@ -3372,10 +3585,42 @@ ${tableHTML}
 					</button>
 
 					<button
-						onClick={handlePreview}
+						onClick={() => {
+							if (viewMode === 'single') {
+								handleSinglePreview(false, false);
+							} else {
+								handleAllSamplesPreview(false, false);
+							}
+						}}
 						className="px-4 py-2 flex-1 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition"
 					>
 						PREVIEW
+					</button>
+
+					<button
+						onClick={() => {
+							if (viewMode === 'single') {
+								handleSinglePreview(true, false);
+							} else {
+								handleAllSamplesPreview(true, false);
+							}
+						}}
+						className="px-4 py-2 flex-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+					>
+						PRINT COLOR
+					</button>
+
+					<button
+						onClick={() => {
+							if (viewMode === 'single') {
+								handleSinglePreview(true, true);
+							} else {
+								handleAllSamplesPreview(true, true);
+							}
+						}}
+						className="px-4 py-2 flex-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+					>
+						PRINT GRAYSCALE
 					</button>
 
 					<button
