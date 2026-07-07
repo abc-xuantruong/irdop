@@ -1289,16 +1289,39 @@ ${tableHTML}
 			const measurementData = await measureSectionsInDOM(headerHTML, contentHTML, footerHTML);
 			let paginatedPages = applyClientSidePagination(headerHTML, contentHTML, footerHTML, measurementData);
 
-			if (isTwoSided && paginatedPages.length % 2 !== 0) {
-				paginatedPages = [...paginatedPages, {
-					pageNumber: paginatedPages.length + 1,
-					sections: [{
-						html: '<div class="blank-page-placeholder" style="height: 100%; display: flex; align-items: center; justify-content: center;"></div>',
-						height: 0,
-						isTable: false,
-						tableInfo: null
-					}]
-				}];
+			if (isTwoSided) {
+				if (!isGrayscale) {
+					// COLOR print: insert blank page AFTER EVERY content page so duplex printing
+					// always puts content on one side only (front side), back side is blank
+					const blankPage = {
+						pageNumber: -1, // marker, won't count in totalPages
+						sections: [{
+							html: '<div class="blank-page-placeholder" style="height: 100%; display: flex; align-items: center; justify-content: center;"></div>',
+							height: 0,
+							isTable: false,
+							tableInfo: null
+						}]
+					};
+					const withBlanks = [];
+					paginatedPages.forEach((page) => {
+						withBlanks.push(page);
+						withBlanks.push(blankPage);
+					});
+					paginatedPages = withBlanks;
+				} else {
+					// GRAYSCALE print: only add one blank page at the end if total is odd
+					if (paginatedPages.length % 2 !== 0) {
+						paginatedPages = [...paginatedPages, {
+							pageNumber: paginatedPages.length + 1,
+							sections: [{
+								html: '<div class="blank-page-placeholder" style="height: 100%; display: flex; align-items: center; justify-content: center;"></div>',
+								height: 0,
+								isTable: false,
+								tableInfo: null
+							}]
+						}];
+					}
+				}
 			}
 
 			// Get sample ID for filename
@@ -1422,16 +1445,26 @@ ${tableHTML}
 							allSamplesHTML.push(`<div class="a4-page">${bodyContent}</div>`);
 						}
 					} else {
-						// Collect all page HTML
-						pages.forEach((page, pageIndex) => {
-							allSamplesHTML.push(page.outerHTML);
-						});
-
-						// Add blank page for odd page count in 2-sided mode
-						if (isTwoSided && pages.length % 2 !== 0) {
-							allSamplesHTML.push(
-								`<div class="a4-page blank-page-placeholder" style="background: white; border: 1px solid #000; display: flex; align-items: center; justify-content: center; height: 1122px; width: 794px;"></div>`
-							);
+						if (isTwoSided && !isGrayscale) {
+							// COLOR print: insert blank page after EVERY content page
+							// so duplex printing always puts content on front side only
+							pages.forEach((page) => {
+								allSamplesHTML.push(page.outerHTML);
+								allSamplesHTML.push(
+									`<div class="a4-page blank-page-placeholder" style="background: white; border: 1px solid #000; display: flex; align-items: center; justify-content: center; height: 1122px; width: 794px;"></div>`
+								);
+							});
+						} else {
+							// GRAYSCALE: collect pages as-is, but add ONE blank page at the
+							// end of this sample's pages if its count is odd
+							pages.forEach((page) => {
+								allSamplesHTML.push(page.outerHTML);
+							});
+							if (isTwoSided && isGrayscale && pages.length % 2 !== 0) {
+								allSamplesHTML.push(
+									`<div class="a4-page blank-page-placeholder" style="background: white; border: 1px solid #000; display: flex; align-items: center; justify-content: center; height: 1122px; width: 794px;"></div>`
+								);
+							}
 						}
 					}
 				} catch (sampleError) {

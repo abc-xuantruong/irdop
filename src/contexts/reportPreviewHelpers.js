@@ -653,7 +653,8 @@ export const generatePreviewHTML = (
 	`;
 
 	let pagesHTML = '';
-	const totalPages = pages.length;
+	// Only count real content pages (exclude blank-page placeholders) for page numbering
+	const totalPages = pages.filter((p) => !p.sections.some((s) => s.html && s.html.includes('blank-page-placeholder'))).length;
 	const spacing = `<div style="height: ${measurements.spacingHeight}px;"></div>`;
 
 	pages.forEach((page, index) => {
