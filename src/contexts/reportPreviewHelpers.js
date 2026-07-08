@@ -657,11 +657,16 @@ export const generatePreviewHTML = (
 	const totalPages = pages.filter((p) => !p.sections.some((s) => s.html && s.html.includes('blank-page-placeholder'))).length;
 	const spacing = `<div style="height: ${measurements.spacingHeight}px;"></div>`;
 
+	let realPageCounter = 0;
 	pages.forEach((page, index) => {
-		const pageNumber = (index + 1).toString().padStart(2, '0');
+		const isCurrentPageBlank = page.sections.some(s => s.html && s.html.includes('blank-page-placeholder'));
+		if (!isCurrentPageBlank) {
+			realPageCounter++;
+		}
+		const pageNumber = realPageCounter.toString().padStart(2, '0');
 		const totalPagesStr = totalPages.toString().padStart(2, '0');
 
-		console.log('Processing page:', { index, pageNumber, totalPagesStr, totalPages });
+		console.log('Processing page:', { index, pageNumber, totalPagesStr, totalPages, isCurrentPageBlank });
 
 		// Update footer with correct page numbers - replace entire div containing page numbers
 		let pageFooter = footerHTML;
